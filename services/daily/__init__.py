@@ -1,0 +1,1 @@
+"""Daily login service package."""

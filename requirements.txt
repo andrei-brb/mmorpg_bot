@@ -1,0 +1,22 @@
+# Core
+discord.py==2.3.2
+# Python 3.13 removed stdlib `audioop`, which discord.py imports for voice support
+audioop-lts==0.2.2; python_version >= "3.13"
+asyncpg==0.31.0
+python-dotenv==1.0.0
+
+# Cache & sessions
+redis==5.0.1
+aioredis==2.0.1
+
+# Monetization
+stripe==7.8.0
+
+# Profile card image generation
+Pillow==12.1.0
+
+# Scheduling (world events, daily resets)
+apscheduler==3.10.4
+
+# Utilities
+aiohttp==3.9.3
