@@ -172,9 +172,12 @@ class InventoryService:
     async def get_all(self, char_id: UUID) -> List[dict]:
         rows = await self.db.fetch(
             """SELECT i.*, t.name, t.description, t.item_type, t.rarity,
-                     t.equip_slot, t.icon, t.vendor_sell, t.soulbound,
-                      t.s_str,t.s_agi,t.s_int,t.s_spi,t.s_sta,t.s_armor,
-                      t.s_dmg_min,t.s_dmg_max
+                     t.equip_slot, t.icon, t.vendor_sell, t.soulbound, t.level_req,
+                     t.s_str,t.s_agi,t.s_int,t.s_spi,t.s_sta,t.s_armor,
+                     t.s_dmg_min,t.s_dmg_max,
+                     t.s_haste,t.s_lifesteal,t.s_resistance,t.s_hit_rating,
+                     i.r_str,i.r_agi,i.r_int,i.r_spi,i.r_sta,
+                     i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating
                FROM inventory i JOIN item_templates t ON i.template_id=t.id
                WHERE i.character_id=$1
                ORDER BY i.is_equipped DESC, t.rarity DESC, t.name""",

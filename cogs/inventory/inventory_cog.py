@@ -175,8 +175,102 @@ class InventoryCog(commands.Cog, name="Inventory"):
             lines = [f"{RARITIES[i['rarity']].emoji} {i['icon']} **{i['name']}** [{i['rarity'].title()}] x{i['quantity']}\n  `ID: {i['id']}`" for i in unequipped[:12]]
             if len(unequipped) > 12: lines.append(f"*…and {len(unequipped)-12} more*")
             embed.add_field(name="📦 Bag", value="\n".join(lines), inline=False)
-        embed.set_footer(text="Use /equip (dropdown)  /sell <id>  /use <id>")
+        embed.set_footer(text="Use /equip (dropdown)  /sell <id>  /use <id>  /inspect <id> to see stats")
         await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="inspect", description="Inspect an item to see its stats")
+    @app_commands.describe(item_id="Item UUID from /inventory")
+    async def inspect(self, interaction: discord.Interaction, item_id: str):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "inventory"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+        try:
+            uid = UUID(item_id)
+        except ValueError:
+            return await interaction.followup.send("❌ Invalid item ID.", ephemeral=True)
+        
+        items = await self.inv_svc.get_all(char["id"])
+        item = next((i for i in items if i["id"] == uid), None)
+        if not item:
+            return await interaction.followup.send("❌ Item not found in your inventory.", ephemeral=True)
+        
+        # Build stats display
+        rarity = RARITIES.get(item.get("rarity", "common"), RARITIES["common"])
+        embed = discord.Embed(
+            title=f"{rarity.emoji} {item['name']}",
+            description=item.get("description", "No description."),
+            color=rarity.color if hasattr(rarity, "color") else 0x808080,
+        )
+        
+        # Item info
+        embed.add_field(
+            name="📋 Item Info",
+            value=(
+                f"**Type:** {item.get('item_type', 'unknown').title()}\n"
+                f"**Rarity:** {item.get('rarity', 'common').title()}\n"
+                f"**Level Req:** {item.get('level_req', 1)}\n"
+                f"**Durability:** {item.get('durability', 100)}/100"
+            ),
+            inline=True,
+        )
+        
+        # Primary stats
+        stats_lines = []
+        if item.get("s_str", 0) or item.get("r_str", 0):
+            total = (item.get("s_str", 0) or 0) + (item.get("r_str", 0) or 0)
+            stats_lines.append(f"💪 **Strength:** +{total}")
+        if item.get("s_agi", 0) or item.get("r_agi", 0):
+            total = (item.get("s_agi", 0) or 0) + (item.get("r_agi", 0) or 0)
+            stats_lines.append(f"⚡ **Agility:** +{total}")
+        if item.get("s_int", 0) or item.get("r_int", 0):
+            total = (item.get("s_int", 0) or 0) + (item.get("r_int", 0) or 0)
+            stats_lines.append(f"🧠 **Intellect:** +{total}")
+        if item.get("s_spi", 0) or item.get("r_spi", 0):
+            total = (item.get("s_spi", 0) or 0) + (item.get("r_spi", 0) or 0)
+            stats_lines.append(f"✨ **Spirit:** +{total}")
+        if item.get("s_sta", 0) or item.get("r_sta", 0):
+            total = (item.get("s_sta", 0) or 0) + (item.get("r_sta", 0) or 0)
+            stats_lines.append(f"❤️ **Stamina:** +{total}")
+        if item.get("s_armor", 0):
+            stats_lines.append(f"🛡️ **Armor:** +{item.get('s_armor', 0)}")
+        if item.get("s_dmg_min", 0) or item.get("s_dmg_max", 0):
+            stats_lines.append(f"⚔️ **Damage:** {item.get('s_dmg_min', 0)}-{item.get('s_dmg_max', 0)}")
+        
+        # Secondary stats
+        if item.get("s_haste", 0) or item.get("r_haste", 0):
+            total = (item.get("s_haste", 0) or 0) + (item.get("r_haste", 0) or 0)
+            stats_lines.append(f"⚡ **Haste:** +{total}%")
+        if item.get("s_lifesteal", 0) or item.get("r_lifesteal", 0):
+            total = (item.get("s_lifesteal", 0) or 0) + (item.get("r_lifesteal", 0) or 0)
+            stats_lines.append(f"🩸 **Lifesteal:** +{total}%")
+        if item.get("s_resistance", 0) or item.get("r_resistance", 0):
+            total = (item.get("s_resistance", 0) or 0) + (item.get("r_resistance", 0) or 0)
+            stats_lines.append(f"🛡️ **Resistance:** +{total}")
+        if item.get("s_hit_rating", 0) or item.get("r_hit_rating", 0):
+            total = (item.get("s_hit_rating", 0) or 0) + (item.get("r_hit_rating", 0) or 0)
+            stats_lines.append(f"🎯 **Hit Rating:** +{total}%")
+        
+        if stats_lines:
+            embed.add_field(name="📊 Stats", value="\n".join(stats_lines), inline=True)
+        else:
+            embed.add_field(name="📊 Stats", value="*No stats*", inline=True)
+        
+        # Equip info
+        if item.get("equip_slot"):
+            status = "✅ Equipped" if item.get("is_equipped") else f"📦 Slot: {item.get('equip_slot', 'unknown')}"
+            embed.add_field(name="⚔️ Equipment", value=status, inline=True)
+        
+        # Value
+        if item.get("vendor_sell", 0):
+            embed.add_field(name="💰 Value", value=f"{item.get('vendor_sell', 0)}🪙", inline=True)
+        
+        embed.set_footer(text=f"Item ID: {item_id}")
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="equip", description="Equip an item")
     @app_commands.describe(item_id="Item UUID from /inventory (optional)")
