@@ -99,7 +99,17 @@ class _SellItemSelect(discord.ui.Select):
             rarity = i.get("rarity", "common")
             emoji = getattr(RARITIES.get(rarity), "emoji", "⬜")
             qty = i.get("quantity", 1)
-            price_each = int(i.get("vendor_sell") or 0)
+            # Calculate actual sell value based on rarity
+            base_value = int(i.get("vendor_sell") or 0)
+            rarity_mult = RARITIES.get(rarity, RARITIES["common"]).stat_multiplier
+            bonus_stats = (
+                (i.get("r_str", 0) or 0) + (i.get("r_agi", 0) or 0) +
+                (i.get("r_int", 0) or 0) + (i.get("r_spi", 0) or 0) +
+                (i.get("r_sta", 0) or 0) + (i.get("r_haste", 0) or 0) +
+                (i.get("r_lifesteal", 0) or 0) + (i.get("r_resistance", 0) or 0) +
+                (i.get("r_hit_rating", 0) or 0)
+            )
+            price_each = int(base_value * rarity_mult) + (bonus_stats * 2)
             label = f"{i.get('name', 'Item')} (x{qty})" if qty > 1 else f"{i.get('name', 'Item')}"
             desc = f"{rarity.title()} • sells: {price_each}🪙 ea"
             options.append(
@@ -265,9 +275,24 @@ class InventoryCog(commands.Cog, name="Inventory"):
             status = "✅ Equipped" if item.get("is_equipped") else f"📦 Slot: {item.get('equip_slot', 'unknown')}"
             embed.add_field(name="⚔️ Equipment", value=status, inline=True)
         
-        # Value
-        if item.get("vendor_sell", 0):
-            embed.add_field(name="💰 Value", value=f"{item.get('vendor_sell', 0)}🪙", inline=True)
+        # Value (calculated based on rarity)
+        base_value = int(item.get("vendor_sell", 0) or 0)
+        if base_value > 0:
+            actual_rarity = item.get("rarity", "common")
+            rarity_mult = RARITIES.get(actual_rarity, RARITIES["common"]).stat_multiplier
+            bonus_stats = (
+                (item.get("r_str", 0) or 0) + (item.get("r_agi", 0) or 0) +
+                (item.get("r_int", 0) or 0) + (item.get("r_spi", 0) or 0) +
+                (item.get("r_sta", 0) or 0) + (item.get("r_haste", 0) or 0) +
+                (item.get("r_lifesteal", 0) or 0) + (item.get("r_resistance", 0) or 0) +
+                (item.get("r_hit_rating", 0) or 0)
+            )
+            calculated_value = int(base_value * rarity_mult) + (bonus_stats * 2)
+            embed.add_field(
+                name="💰 Vendor Value",
+                value=f"**{calculated_value}**🪙\n(Base: {base_value} × {rarity_mult:.2f}x + {bonus_stats * 2} bonus)",
+                inline=True
+            )
         
         embed.set_footer(text=f"Item ID: {item_id}")
         await interaction.followup.send(embed=embed, ephemeral=True)

@@ -232,7 +232,8 @@ class InventoryService:
 
     async def sell(self, char_id: UUID, item_id: UUID) -> Tuple[bool, str, int]:
         item = await self.db.fetchrow(
-            """SELECT i.*, t.vendor_sell, t.name, t.soulbound
+            """SELECT i.*, t.vendor_sell, t.name, t.soulbound, t.rarity as template_rarity,
+                      COALESCE(i.rarity, t.rarity) as rarity
                FROM inventory i JOIN item_templates t ON i.template_id=t.id
                WHERE i.id=$1 AND i.character_id=$2""",
             item_id, char_id,
@@ -242,6 +243,28 @@ class InventoryService:
         if item["soulbound"]:return False, "Soulbound items cannot be sold.", 0
         if item["is_equipped"]: return False, "Unequip the item before selling.", 0
 
-        gold = item["vendor_sell"] * item["quantity"]
+        # Calculate value based on actual rarity (not template rarity)
+        base_value = item["vendor_sell"] or 0
+        actual_rarity = item.get("rarity") or "common"
+        rarity_mult = RARITIES.get(actual_rarity, RARITIES["common"]).stat_multiplier
+        
+        # Scale value by rarity multiplier
+        # Also add bonus for extra stats (sum of all bonus stats)
+        bonus_stats_total = (
+            (item.get("r_str", 0) or 0) +
+            (item.get("r_agi", 0) or 0) +
+            (item.get("r_int", 0) or 0) +
+            (item.get("r_spi", 0) or 0) +
+            (item.get("r_sta", 0) or 0) +
+            (item.get("r_haste", 0) or 0) +
+            (item.get("r_lifesteal", 0) or 0) +
+            (item.get("r_resistance", 0) or 0) +
+            (item.get("r_hit_rating", 0) or 0)
+        )
+        
+        # Base value scaled by rarity, plus small bonus for extra stats
+        value = int(base_value * rarity_mult) + (bonus_stats_total * 2)
+        gold = value * item["quantity"]
+        
         await self.db.execute("DELETE FROM inventory WHERE id=$1", item_id)
-        return True, f"Sold **{item['name']}** for **{gold}**🪙.", gold
+        return True, f"Sold **{item['name']}** [{actual_rarity.title()}] for **{gold}**🪙.", gold
