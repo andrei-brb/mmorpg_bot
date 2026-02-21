@@ -1,9 +1,10 @@
 # ── World of Discord — Docker Image ──────────────────────────────────────────
-FROM python:3.13-slim
+FROM python:3.11-slim
 
-# System deps for Pillow image generation
+# System deps for Pillow image generation and build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6-dev libjpeg62-turbo-dev libpng-dev \
+    gcc g++ libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

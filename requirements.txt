@@ -17,6 +17,3 @@ Pillow>=10.0.0
 
 # Scheduling (world events, daily resets)
 apscheduler==3.10.4
-
-# Utilities
-aiohttp>=3.9.0
