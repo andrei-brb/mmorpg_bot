@@ -33,26 +33,91 @@ class InventoryService:
     def roll_bonus_stats(self, template: dict, rarity: str) -> Dict[str, int]:
         mult = RARITIES[rarity].stat_multiplier
         bonus = {}
-        # Primary stats
+        
+        # Calculate total stat budget based on template and rarity
+        # Sum all primary stats from template
+        total_base_stats = sum([
+            template.get("s_str", 0),
+            template.get("s_agi", 0),
+            template.get("s_int", 0),
+            template.get("s_spi", 0),
+            template.get("s_sta", 0),
+        ])
+        
+        # Calculate stat budget: base stats × multiplier × random variation
+        # This gives us a pool of stat points to distribute
+        stat_budget = int(total_base_stats * mult * random.uniform(0.90, 1.20))
+        
+        # For items with no base stats, give a minimum budget based on rarity
+        if stat_budget == 0:
+            min_budgets = {
+                "common": 5, "uncommon": 8, "rare": 15,
+                "epic": 25, "legendary": 40, "artifact": 60
+            }
+            stat_budget = random.randint(
+                min_budgets.get(rarity, 5),
+                int(min_budgets.get(rarity, 5) * 1.5)
+            )
+        
+        # Determine which stats can receive bonuses
+        # For rare+ items, all stats can get bonuses even if template has 0
+        can_roll_stats = []
         for stat in ("s_str", "s_agi", "s_int", "s_spi", "s_sta"):
             base = template.get(stat, 0)
-            if base > 0:
-                rolled = int(base * random.uniform(0.85, 1.15) * mult)
-                bonus[stat.replace("s_", "r_")] = rolled - base
+            if base > 0 or rarity in ("rare", "epic", "legendary", "artifact"):
+                can_roll_stats.append(stat)
+        
+        if not can_roll_stats:
+            can_roll_stats = ["s_str", "s_agi", "s_int", "s_spi", "s_sta"]
+        
+        # Randomly distribute stat budget across available stats
+        # This creates variation - one item might get more STR, another more STA
+        remaining_budget = stat_budget
+        num_stats = len(can_roll_stats)
+        
+        for i, stat in enumerate(can_roll_stats):
+            if i == len(can_roll_stats) - 1:
+                # Last stat gets remaining budget
+                allocated = remaining_budget
             else:
-                bonus[stat.replace("s_", "r_")] = 0
+                # Random allocation (weighted towards higher values for better items)
+                if rarity in ("legendary", "artifact"):
+                    # Higher rarity gets more consistent distribution
+                    min_alloc = int(remaining_budget / (num_stats - i) * 0.6)
+                    max_alloc = int(remaining_budget / (num_stats - i) * 1.4)
+                else:
+                    # Lower rarity gets more random
+                    min_alloc = int(remaining_budget / (num_stats - i) * 0.3)
+                    max_alloc = int(remaining_budget / (num_stats - i) * 1.7)
+                
+                allocated = random.randint(
+                    max(0, min_alloc),
+                    max(1, max_alloc)
+                )
+                allocated = min(allocated, remaining_budget)
+            
+            base = template.get(stat, 0)
+            # Bonus is the allocated amount minus base (if any)
+            bonus[stat.replace("s_", "r_")] = allocated - base
+            remaining_budget -= allocated
+        
         # Secondary stats (can roll even if base is 0 for rare+ items)
         for stat in ("s_haste", "s_lifesteal", "s_resistance", "s_hit_rating"):
             base = template.get(stat, 0)
             if base > 0 or rarity in ("rare", "epic", "legendary", "artifact"):
-                # Secondary stats have lower chance to roll
-                if random.random() < 0.4:  # 40% chance
-                    rolled = int((base + random.randint(1, 3)) * random.uniform(0.85, 1.15) * mult)
+                # Higher chance for higher rarity
+                chance = 0.3 if rarity == "rare" else (0.5 if rarity == "epic" else 0.7)
+                if random.random() < chance:
+                    # Roll value based on rarity
+                    min_val = 1 if rarity in ("rare", "epic") else 3
+                    max_val = int(5 * mult) if rarity in ("rare", "epic") else int(10 * mult)
+                    rolled = random.randint(min_val, max_val)
                     bonus[stat.replace("s_", "r_")] = rolled - base
                 else:
                     bonus[stat.replace("s_", "r_")] = 0
             else:
                 bonus[stat.replace("s_", "r_")] = 0
+        
         return bonus
 
     async def generate_loot(
