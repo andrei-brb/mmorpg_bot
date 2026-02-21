@@ -13,10 +13,10 @@ aioredis==2.0.1
 stripe==7.8.0
 
 # Profile card image generation
-Pillow==12.1.0
+Pillow>=10.0.0
 
 # Scheduling (world events, daily resets)
 apscheduler==3.10.4
 
 # Utilities
-aiohttp==3.9.3
+aiohttp>=3.9.0
