@@ -101,7 +101,8 @@ class _SellItemSelect(discord.ui.Select):
             qty = i.get("quantity", 1)
             # Calculate actual sell value based on rarity
             base_value = int(i.get("vendor_sell") or 0)
-            rarity_mult = RARITIES.get(rarity, RARITIES["common"]).stat_multiplier
+            rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
+            value_mult = rarity_cfg.value_multiplier
             bonus_stats = (
                 (i.get("r_str", 0) or 0) + (i.get("r_agi", 0) or 0) +
                 (i.get("r_int", 0) or 0) + (i.get("r_spi", 0) or 0) +
@@ -109,7 +110,8 @@ class _SellItemSelect(discord.ui.Select):
                 (i.get("r_lifesteal", 0) or 0) + (i.get("r_resistance", 0) or 0) +
                 (i.get("r_hit_rating", 0) or 0)
             )
-            price_each = int(base_value * rarity_mult) + (bonus_stats * 2)
+            stat_bonus_mult = 2 if rarity in ("common", "uncommon") else (3 if rarity in ("rare", "epic") else 5)
+            price_each = int(base_value * value_mult) + (bonus_stats * stat_bonus_mult)
             label = f"{i.get('name', 'Item')} (x{qty})" if qty > 1 else f"{i.get('name', 'Item')}"
             desc = f"{rarity.title()} • sells: {price_each}🪙 ea"
             options.append(
@@ -279,7 +281,8 @@ class InventoryCog(commands.Cog, name="Inventory"):
         base_value = int(item.get("vendor_sell", 0) or 0)
         if base_value > 0:
             actual_rarity = item.get("rarity", "common")
-            rarity_mult = RARITIES.get(actual_rarity, RARITIES["common"]).stat_multiplier
+            rarity_cfg = RARITIES.get(actual_rarity, RARITIES["common"])
+            value_mult = rarity_cfg.value_multiplier
             bonus_stats = (
                 (item.get("r_str", 0) or 0) + (item.get("r_agi", 0) or 0) +
                 (item.get("r_int", 0) or 0) + (item.get("r_spi", 0) or 0) +
@@ -287,10 +290,11 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 (item.get("r_lifesteal", 0) or 0) + (item.get("r_resistance", 0) or 0) +
                 (item.get("r_hit_rating", 0) or 0)
             )
-            calculated_value = int(base_value * rarity_mult) + (bonus_stats * 2)
+            stat_bonus_mult = 2 if actual_rarity in ("common", "uncommon") else (3 if actual_rarity in ("rare", "epic") else 5)
+            calculated_value = int(base_value * value_mult) + (bonus_stats * stat_bonus_mult)
             embed.add_field(
                 name="💰 Vendor Value",
-                value=f"**{calculated_value}**🪙\n(Base: {base_value} × {rarity_mult:.2f}x + {bonus_stats * 2} bonus)",
+                value=f"**{calculated_value}**🪙\n(Base: {base_value} × {value_mult:.2f}x + {bonus_stats * stat_bonus_mult} bonus)",
                 inline=True
             )
         

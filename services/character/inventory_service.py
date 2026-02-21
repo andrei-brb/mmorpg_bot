@@ -246,7 +246,8 @@ class InventoryService:
         # Calculate value based on actual rarity (not template rarity)
         base_value = item["vendor_sell"] or 0
         actual_rarity = item.get("rarity") or "common"
-        rarity_mult = RARITIES.get(actual_rarity, RARITIES["common"]).stat_multiplier
+        rarity_cfg = RARITIES.get(actual_rarity, RARITIES["common"])
+        value_mult = rarity_cfg.value_multiplier  # Use value multiplier, not stat multiplier
         
         # Scale value by rarity multiplier
         # Also add bonus for extra stats (sum of all bonus stats)
@@ -262,8 +263,10 @@ class InventoryService:
             (item.get("r_hit_rating", 0) or 0)
         )
         
-        # Base value scaled by rarity, plus small bonus for extra stats
-        value = int(base_value * rarity_mult) + (bonus_stats_total * 2)
+        # Base value scaled by rarity value multiplier, plus bonus for extra stats
+        # Higher rarity gets more bonus per stat point
+        stat_bonus_mult = 2 if actual_rarity in ("common", "uncommon") else (3 if actual_rarity in ("rare", "epic") else 5)
+        value = int(base_value * value_mult) + (bonus_stats_total * stat_bonus_mult)
         gold = value * item["quantity"]
         
         await self.db.execute("DELETE FROM inventory WHERE id=$1", item_id)

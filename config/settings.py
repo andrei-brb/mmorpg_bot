@@ -91,14 +91,15 @@ class RarityConfig:
     emoji:           str
     drop_weight:     float   # Relative probability (higher = more common)
     stat_multiplier: float   # How much better stats are vs common
+    value_multiplier: float  # How much more valuable vs common (for vendor prices)
 
 RARITIES: Dict[str, RarityConfig] = {
-    "common":    RarityConfig("Common",    0x9D9D9D, "⬜", 50.0, 1.00),
-    "uncommon":  RarityConfig("Uncommon",  0x1EFF00, "🟩", 28.0, 1.30),
-    "rare":      RarityConfig("Rare",      0x0070DD, "🟦", 13.0, 1.70),
-    "epic":      RarityConfig("Epic",      0xA335EE, "🟪",  6.0, 2.20),
-    "legendary": RarityConfig("Legendary", 0xFF8000, "🟧",  2.5, 3.00),
-    "artifact":  RarityConfig("Artifact",  0xE6CC80, "🔶",  0.5, 4.50),
+    "common":    RarityConfig("Common",    0x9D9D9D, "⬜", 50.0, 1.00, 1.00),
+    "uncommon":  RarityConfig("Uncommon",  0x1EFF00, "🟩", 28.0, 1.30, 1.50),
+    "rare":      RarityConfig("Rare",      0x0070DD, "🟦", 13.0, 1.70, 2.50),
+    "epic":      RarityConfig("Epic",      0xA335EE, "🟪",  6.0, 2.20, 4.00),
+    "legendary": RarityConfig("Legendary", 0xFF8000, "🟧",  2.5, 3.00, 8.00),
+    "artifact":  RarityConfig("Artifact",  0xE6CC80, "🔶",  0.5, 4.50, 15.00),
 }
 
 
