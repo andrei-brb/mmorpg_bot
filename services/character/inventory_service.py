@@ -105,11 +105,11 @@ class InventoryService:
         if not tmpl:
             return False, "Item template not found."
 
-        # Stack consumables/materials
+        # Stack consumables/materials (only if same rarity)
         if tmpl["max_stack"] > 1:
             existing = await self.db.fetchrow(
-                "SELECT id, quantity FROM inventory WHERE character_id=$1 AND template_id=$2 LIMIT 1",
-                char_id, template_id,
+                "SELECT id, quantity FROM inventory WHERE character_id=$1 AND template_id=$2 AND rarity=$3 LIMIT 1",
+                char_id, template_id, rarity,
             )
             if existing and existing["quantity"] < tmpl["max_stack"]:
                 new_qty = min(existing["quantity"] + quantity, tmpl["max_stack"])
@@ -118,16 +118,26 @@ class InventoryService:
                 )
                 return True, "Stacked."
 
-        b = bonus or {}
+        # Generate bonus stats based on rarity if not provided
+        if bonus is None:
+            bonus = self.roll_bonus_stats(dict(tmpl), rarity)
+        
+        # Insert with rarity and all bonus stats
         await self.db.execute(
             """INSERT INTO inventory
-               (character_id,template_id,quantity,r_str,r_agi,r_int,r_spi,r_sta,obtained_from)
-               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
-            char_id, template_id, quantity,
-            b.get("r_str",0), b.get("r_agi",0), b.get("r_int",0),
-            b.get("r_spi",0), b.get("r_sta",0), from_,
+               (character_id,template_id,quantity,rarity,
+                r_str,r_agi,r_int,r_spi,r_sta,
+                r_haste,r_lifesteal,r_resistance,r_hit_rating,
+                obtained_from)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
+            char_id, template_id, quantity, rarity,
+            bonus.get("r_str",0), bonus.get("r_agi",0), bonus.get("r_int",0),
+            bonus.get("r_spi",0), bonus.get("r_sta",0),
+            bonus.get("r_haste",0), bonus.get("r_lifesteal",0),
+            bonus.get("r_resistance",0), bonus.get("r_hit_rating",0),
+            from_,
         )
-        return True, "Added."
+        return True, f"Added {RARITIES.get(rarity, RARITIES['common']).name} item."
 
     # ── Equip / unequip ───────────────────────────────────────────────────────
 
@@ -171,16 +181,17 @@ class InventoryService:
 
     async def get_all(self, char_id: UUID) -> List[dict]:
         rows = await self.db.fetch(
-            """SELECT i.*, t.name, t.description, t.item_type, t.rarity,
+            """SELECT i.*, t.name, t.description, t.item_type,
                      t.equip_slot, t.icon, t.vendor_sell, t.soulbound, t.level_req,
                      t.s_str,t.s_agi,t.s_int,t.s_spi,t.s_sta,t.s_armor,
                      t.s_dmg_min,t.s_dmg_max,
                      t.s_haste,t.s_lifesteal,t.s_resistance,t.s_hit_rating,
                      i.r_str,i.r_agi,i.r_int,i.r_spi,i.r_sta,
-                     i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating
+                     i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating,
+                     COALESCE(i.rarity, t.rarity) as rarity
                FROM inventory i JOIN item_templates t ON i.template_id=t.id
                WHERE i.character_id=$1
-               ORDER BY i.is_equipped DESC, t.rarity DESC, t.name""",
+               ORDER BY i.is_equipped DESC, COALESCE(i.rarity, t.rarity) DESC, t.name""",
             char_id,
         )
         return [dict(r) for r in rows]

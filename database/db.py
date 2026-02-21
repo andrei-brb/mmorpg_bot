@@ -82,6 +82,12 @@ class Database:
                 ADD COLUMN IF NOT EXISTS pending_encounter VARCHAR(64);
             """)
             
+            # Add rarity column to inventory (stores actual item rarity, not template rarity)
+            await c.execute("""
+                ALTER TABLE inventory
+                ADD COLUMN IF NOT EXISTS rarity item_rarity;
+            """)
+            
         log.info("Schema initialized.")
 
 
