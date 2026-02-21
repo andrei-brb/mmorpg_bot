@@ -331,6 +331,14 @@ class CombatCog(commands.Cog, name="Combat"):
             await msg.edit(content=f"⚔️ Starting fight with **{ENEMIES.get(target, ENEMIES['kobold']).name}**...", view=None)
 
         enemy_key = target
+        await self._start_combat(interaction, char, enemy_key)
+
+    async def _start_combat(self, interaction, char: dict, enemy_key: str):
+        """Helper method to start combat - can be called from fight command or explore."""
+        zone = ZONES.get(char["current_zone"])
+        if not zone:
+            return await interaction.followup.send("❌ Unknown zone.")
+        
         is_boss   = enemy_key in zone.bosses
         stats     = await self.char_svc.total_stats(char["id"])
 
