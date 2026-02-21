@@ -35,7 +35,6 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         if char["level"] < zone.level_range[0]:
             return await interaction.followup.send(f"❌ Need level **{zone.level_range[0]}** for this zone.")
 
-        await self.svc.set_cooldown(char["id"], "explore", Settings.EXPLORE_COOLDOWN)
         await self.bot.db.execute(
             "UPDATE zone_state SET active_players=active_players+1, kills_today=kills_today+1 WHERE zone_key=$1",
             char["current_zone"]
@@ -43,6 +42,14 @@ class ExplorationCog(commands.Cog, name="Exploration"):
 
         outcome = self._roll(char["level"], zone)
         embed = discord.Embed(title=f"{zone.emoji} Exploring {zone.name}", description=random.choice(zone.ambients), color=0x2F7F3F)
+
+        # Set cooldown based on outcome: 10s for rewards, 30s for encounters
+        if outcome["type"] in ["enemy", "boss"]:
+            cooldown = Settings.EXPLORE_COOLDOWN  # 30 seconds for encounters
+        else:
+            cooldown = 10  # 10 seconds for rewards only (loot/safe)
+        
+        await self.svc.set_cooldown(char["id"], "explore", cooldown)
 
         if outcome["type"] == "enemy":
             embed.add_field(name="⚔️ Enemy Encountered!", value=f"A **{outcome['name']}** attacks!\nUse `/fight {outcome['key']}` to engage.", inline=False)
@@ -60,7 +67,7 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             await self.svc.award_xp(char["id"], xp)
             embed.add_field(name="🌿 Quiet Journey", value=f"Nothing eventful, but the trek builds experience.\n+**{xp}** XP", inline=False)
 
-        embed.set_footer(text=f"Cooldown: {Settings.EXPLORE_COOLDOWN}s | Use /travel to change zones")
+        embed.set_footer(text=f"Cooldown: {cooldown}s | Use /travel to change zones")
         await interaction.followup.send(embed=embed, ephemeral=True)
         
         # Check exploration achievements
