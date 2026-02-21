@@ -25,7 +25,21 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             await interaction.response.defer()
         char = await self.svc.get_character(interaction.user.id)
         if not char: return await interaction.followup.send("❌ No character — use `/character create`.")
-        if char["combat_status"] == "in_combat": return await interaction.followup.send("⚔️ Finish your fight first!")
+        
+        # Auto-fix stuck combat status (no active fight but status says in_combat)
+        if char["combat_status"] == "in_combat":
+            from cogs.combat.combat_cog import ACTIVE
+            channel_has_combat = interaction.channel_id in ACTIVE
+            if not channel_has_combat:
+                # Stuck in combat - clear it automatically
+                await self.bot.db.execute(
+                    "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                    char["id"],
+                )
+                # Refresh char data
+                char = await self.svc.get_character(interaction.user.id)
+            else:
+                return await interaction.followup.send("⚔️ Finish your fight first!")
 
         cd = await self.svc.on_cooldown(char["id"], "explore")
         if cd: return await interaction.followup.send(f"⏳ Explore again in **{int(cd)}s**.", ephemeral=True)

@@ -126,8 +126,9 @@ class MMORPGBot(commands.Bot):
 
         log.info("Syncing application commands...")
         try:
-            await self.tree.sync()
-            log.info("✓ Commands synced")
+            # Sync globally (this will override any guild-specific commands)
+            synced = await self.tree.sync()
+            log.info(f"✓ Commands synced ({len(synced)} commands)")
         except Exception as e:
             log.error(f"Failed to sync commands: {e}")
 

@@ -387,6 +387,21 @@ class AdminCog(commands.Cog, name="Admin"):
         embed.add_field(name="⚔️ Active Fights",     value=str(active_fights),  inline=True)
         await interaction.followup.send(embed=embed)
 
+    @admin.command(name="sync_commands", description="Force re-sync Discord commands (fixes duplicates)")
+    async def sync_commands(self, interaction: discord.Interaction):
+        """Force re-sync all commands to fix duplicates."""
+        if not await self._check_admin(interaction):
+            return
+        try:
+            synced = await self.bot.tree.sync()
+            await interaction.followup.send(
+                f"✅ **Commands re-synced!**\n{len(synced)} commands registered.\n\n"
+                "**Note:** It may take a few minutes for Discord to update. If duplicates persist, wait 5-10 minutes.",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Failed to sync commands: {e}", ephemeral=True)
+
     @admin.command(name="help", description="View all admin commands")
     async def admin_help(self, interaction: discord.Interaction):
         if not await self._check_admin(interaction):
@@ -398,6 +413,7 @@ class AdminCog(commands.Cog, name="Admin"):
         embed.add_field(name="/admin giveitem",      value="Give an item to a player", inline=False)
         embed.add_field(name="/admin spawn_event",   value="Manually trigger a world event", inline=False)
         embed.add_field(name="/admin stats",         value="View server game statistics", inline=False)
+        embed.add_field(name="/admin sync_commands",  value="Force re-sync commands (fixes duplicates)", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot): await bot.add_cog(AdminCog(bot))
