@@ -200,7 +200,7 @@ class AbilityView(discord.ui.View):
 
 class EnemySelectView(discord.ui.View):
     def __init__(self, *, owner_id: int, zone, char_level: int):
-        super().__init__(timeout=60)
+        super().__init__(timeout=30)  # 30 seconds to select enemy
         self.owner_id = owner_id
         self.chosen = None
         self.add_item(_EnemySelect(zone, char_level))
@@ -210,6 +210,11 @@ class EnemySelectView(discord.ui.View):
             await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
             return False
         return True
+
+    async def on_timeout(self):
+        # Timeout handled in fight() method
+        self.chosen = None
+        self.stop()
 
 class _EnemySelect(discord.ui.Select):
     def __init__(self, zone, char_level: int):
@@ -308,13 +313,19 @@ class CombatCog(commands.Cog, name="Combat"):
             view = EnemySelectView(owner_id=interaction.user.id, zone=zone, char_level=char["level"])
             msg = await interaction.followup.send(
                 f"**Select an enemy to fight in {zone.emoji} {zone.name}:**\n"
-                f"⭐ = Boss (better rewards, harder fight)",
+                f"⭐ = Boss (better rewards, harder fight)\n"
+                f"⏰ You have 30 seconds to select, or you'll automatically flee.",
                 view=view,
                 ephemeral=True,
             )
             await view.wait()
             if not view.chosen:
-                return await msg.edit(content="❌ No enemy selected.", view=None)
+                # Auto-flee after timeout
+                await self.bot.db.execute(
+                    "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                    char["id"],
+                )
+                return await msg.edit(content="⏰ **Time's up!** You didn't select an enemy in time. Combat cancelled.", view=None)
             target = view.chosen
             # Edit the message to show selection
             await msg.edit(content=f"⚔️ Starting fight with **{ENEMIES.get(target, ENEMIES['kobold']).name}**...", view=None)
@@ -410,6 +421,11 @@ class CombatCog(commands.Cog, name="Combat"):
                 flee_roll = Settings.FLEE_BASE_CHANCE + player.dodge_chance * 0.01
                 if random.random() < flee_roll:
                     log_lines.append("🏃 You escaped!")
+                    # Clear combat status on successful flee
+                    await self.bot.db.execute(
+                        "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                        char_id,
+                    )
                     break
                 else:
                     log_lines.append("🚫 You couldn't flee!")
@@ -543,6 +559,12 @@ class CombatCog(commands.Cog, name="Combat"):
         else:
             embed.add_field(name="📦 Loot", value="Nothing dropped.", inline=False)
 
+        # Clear combat status on victory
+        await self.bot.db.execute(
+            "UPDATE characters SET combat_status='idle' WHERE id=$1",
+            char["id"],
+        )
+
         # Edit existing message instead of sending new one (saves API call)
         if msg:
             try:
@@ -610,6 +632,50 @@ class CombatCog(commands.Cog, name="Combat"):
         if char["max_res"] > 0:
             embed.add_field(name=res_name, value=f"**{char['max_res']:,}/{char['max_res']:,}**", inline=True)
         embed.set_footer(text=f"Rest cooldown: {Settings.REST_COOLDOWN}s")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # ── /combat_status ────────────────────────────────────────────────────────────
+
+    @app_commands.command(name="combat_status", description="Check your current combat status")
+    async def combat_status(self, interaction: discord.Interaction):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+        
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character found.", ephemeral=True)
+        
+        status = char["combat_status"]
+        if status == "in_combat":
+            # Check if there's actually an active combat session
+            channel_has_combat = interaction.channel_id in ACTIVE
+            if not channel_has_combat:
+                # Stuck in combat - clear it
+                await self.bot.db.execute(
+                    "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                    char["id"],
+                )
+                embed = discord.Embed(
+                    title="⚔️ Combat Status",
+                    description="You were stuck in combat status (no active fight).\n**Status cleared!** You can now use commands again.",
+                    color=0x00FF00,
+                )
+            else:
+                embed = discord.Embed(
+                    title="⚔️ Combat Status",
+                    description="You are currently **in combat**.\nUse `/fight` to continue or flee from the fight.",
+                    color=0xFF4444,
+                )
+        else:
+            embed = discord.Embed(
+                title="⚔️ Combat Status",
+                description=f"Status: **{status.title()}**\nYou are not in combat.",
+                color=0x00FF00,
+            )
+        
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
