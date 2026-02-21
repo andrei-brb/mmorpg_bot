@@ -325,6 +325,91 @@ class CharacterService:
             )
         return actual
 
+    async def boost_stat(self, char_id: UUID, stat: str, amount: int, duration_minutes: int = 0) -> Tuple[bool, str]:
+        """Boost a character stat temporarily or permanently.
+        
+        Args:
+            char_id: Character UUID
+            stat: One of 'str', 'agi', 'int_', 'spi', 'sta', 'max_hp'
+            amount: Amount to boost
+            duration_minutes: 0 = permanent, >0 = temporary (stored in cooldowns table)
+        
+        Returns:
+            (success, message)
+        """
+        if stat not in ("str", "agi", "int_", "spi", "sta", "max_hp"):
+            return False, f"Invalid stat: {stat}"
+        
+        char = await self.get_by_id(char_id)
+        if not char:
+            return False, "Character not found."
+        
+        if duration_minutes == 0:
+            # Permanent boost (for stat potions that permanently increase base stats)
+            if stat == "max_hp":
+                new_max = char["max_hp"] + amount
+                await self.db.execute(
+                    "UPDATE characters SET max_hp=$2, current_hp=LEAST(current_hp+$3, $2) WHERE id=$1",
+                    char_id, new_max, amount
+                )
+                return True, f"Max HP increased by {amount} (now {new_max})"
+            else:
+                await self.db.execute(
+                    f"UPDATE characters SET {stat}={stat}+$2 WHERE id=$1", char_id, amount
+                )
+                # Recalculate max_hp if stamina changed
+                if stat == "sta":
+                    char = await self.get_by_id(char_id)
+                    cls = CLASSES[char["class"]]
+                    new_max_hp = cls.base_hp + char["sta"] * 10
+                    await self.db.execute(
+                        "UPDATE characters SET max_hp=$2 WHERE id=$1", char_id, new_max_hp
+                    )
+                return True, f"{stat.upper()} increased by {amount}"
+        else:
+            # Temporary boost - store in cooldowns table with expiration
+            from datetime import datetime, timedelta
+            expires_at = datetime.utcnow() + timedelta(minutes=duration_minutes)
+            effect_key = f"potion_{stat}_{amount}"
+            
+            # Check if already has this effect
+            existing = await self.db.fetchrow(
+                "SELECT expires_at FROM cooldowns WHERE character_id=$1 AND action_key=$2",
+                char_id, effect_key
+            )
+            if existing and existing["expires_at"] > datetime.utcnow():
+                return False, f"You already have this effect active."
+            
+            # Store the effect
+            await self.db.execute(
+                """INSERT INTO cooldowns (character_id, action_key, expires_at)
+                   VALUES($1, $2, $3)
+                   ON CONFLICT (character_id, action_key) 
+                   DO UPDATE SET expires_at=$3""",
+                char_id, effect_key, expires_at
+            )
+            
+            # Apply the boost
+            if stat == "max_hp":
+                new_max = char["max_hp"] + amount
+                await self.db.execute(
+                    "UPDATE characters SET max_hp=$2 WHERE id=$1", char_id, new_max
+                )
+                return True, f"Max HP increased by {amount} for {duration_minutes} minutes (now {new_max})"
+            else:
+                await self.db.execute(
+                    f"UPDATE characters SET {stat}={stat}+$2 WHERE id=$1", char_id, amount
+                )
+                # Recalculate max_hp if stamina changed
+                if stat == "sta":
+                    char = await self.get_by_id(char_id)
+                    cls = CLASSES[char["class"]]
+                    new_max_hp = cls.base_hp + char["sta"] * 10
+                    await self.db.execute(
+                        "UPDATE characters SET max_hp=$2 WHERE id=$1", char_id, new_max_hp
+                    )
+                return True, f"{stat.upper()} increased by {amount} for {duration_minutes} minutes"
+
     async def full_restore(self, char_id: UUID):
         char = await self.get_by_id(char_id)
         if not char:

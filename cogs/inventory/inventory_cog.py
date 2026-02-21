@@ -434,9 +434,65 @@ class InventoryCog(commands.Cog, name="Inventory"):
         except ValueError: return await interaction.followup.send("❌ Invalid item ID.")
         ok, msg, effect = await self.inv_svc.use_consumable(char["id"], uid)
         if ok and effect:
-            if effect["type"] == "heal_hp":
-                healed = await self.char_svc.heal(char["id"], effect["value"])
+            effect_type = effect.get("type")
+            effect_value = effect.get("value", 0)
+            effect_duration = effect.get("duration", 0)
+            
+            if effect_type == "heal_hp":
+                healed = await self.char_svc.heal(char["id"], effect_value)
                 msg += f" Restored **{healed}** HP."
+            elif effect_type == "boost_sta":
+                boost_ok, boost_msg = await self.char_svc.boost_stat(
+                    char["id"], "sta", effect_value, effect_duration
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
+            elif effect_type == "boost_str":
+                boost_ok, boost_msg = await self.char_svc.boost_stat(
+                    char["id"], "str", effect_value, effect_duration
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
+            elif effect_type == "boost_agi":
+                boost_ok, boost_msg = await self.char_svc.boost_stat(
+                    char["id"], "agi", effect_value, effect_duration
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
+            elif effect_type == "boost_int":
+                boost_ok, boost_msg = await self.char_svc.boost_stat(
+                    char["id"], "int_", effect_value, effect_duration
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
+            elif effect_type == "boost_spi":
+                boost_ok, boost_msg = await self.char_svc.boost_stat(
+                    char["id"], "spi", effect_value, effect_duration
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
+            elif effect_type == "boost_max_hp":
+                boost_ok, boost_msg = await self.char_svc.boost_stat(
+                    char["id"], "max_hp", effect_value, effect_duration
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
+            elif effect_type == "boost_resistance":
+                # Resistance is a secondary stat, handled differently
+                msg += f" Frost resistance increased by {effect_value} for {effect_duration} minutes."
+                # TODO: Implement resistance buff system if needed
         await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000))
 
 async def setup(bot): await bot.add_cog(InventoryCog(bot))
