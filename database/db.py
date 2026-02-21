@@ -76,6 +76,11 @@ class Database:
                 ADD COLUMN IF NOT EXISTS r_hit_rating SMALLINT DEFAULT 0;
             """)
             
+            # Add pending_encounter for boss encounters from explore
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS pending_encounter VARCHAR(64);
+            """)
             
         log.info("Schema initialized.")
 

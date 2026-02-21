@@ -308,27 +308,44 @@ class CombatCog(commands.Cog, name="Combat"):
                 f"❌ This zone requires level **{zone.level_range[0]}**. Use `/travel` to find a safer area."
             )
 
-        # If no target provided, show dropdown
+        # If no target provided, check for pending encounter (boss from explore)
         if not target:
-            view = EnemySelectView(owner_id=interaction.user.id, zone=zone, char_level=char["level"])
-            msg = await interaction.followup.send(
-                f"**Select an enemy to fight in {zone.emoji} {zone.name}:**\n"
-                f"⭐ = Boss (better rewards, harder fight)\n"
-                f"⏰ You have 30 seconds to select, or you'll automatically flee.",
-                view=view,
-                ephemeral=True,
-            )
-            await view.wait()
-            if not view.chosen:
-                # Auto-flee after timeout
+            pending = char.get("pending_encounter")
+            if pending and pending in zone.bosses:
+                # Auto-start with the specific boss found during explore
+                target = pending
+                # Clear pending encounter
                 await self.bot.db.execute(
-                    "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                    "UPDATE characters SET pending_encounter=NULL WHERE id=$1",
                     char["id"],
                 )
-                return await msg.edit(content="⏰ **Time's up!** You didn't select an enemy in time. Combat cancelled.", view=None)
-            target = view.chosen
-            # Edit the message to show selection
-            await msg.edit(content=f"⚔️ Starting fight with **{ENEMIES.get(target, ENEMIES['kobold']).name}**...", view=None)
+            else:
+                # Show selection menu for normal enemies or manual boss selection
+                view = EnemySelectView(owner_id=interaction.user.id, zone=zone, char_level=char["level"])
+                msg = await interaction.followup.send(
+                    f"**Select an enemy to fight in {zone.emoji} {zone.name}:**\n"
+                    f"⭐ = Boss (better rewards, harder fight)\n"
+                    f"⏰ You have 30 seconds to select, or you'll automatically flee.",
+                    view=view,
+                    ephemeral=True,
+                )
+                await view.wait()
+                if not view.chosen:
+                    # Auto-flee after timeout
+                    await self.bot.db.execute(
+                        "UPDATE characters SET combat_status='idle', pending_encounter=NULL WHERE id=$1",
+                        char["id"],
+                    )
+                    return await msg.edit(content="⏰ **Time's up!** You didn't select an enemy in time. Combat cancelled.", view=None)
+                target = view.chosen
+                # Clear pending encounter if it was set
+                if pending:
+                    await self.bot.db.execute(
+                        "UPDATE characters SET pending_encounter=NULL WHERE id=$1",
+                        char["id"],
+                    )
+                # Edit the message to show selection
+                await msg.edit(content=f"⚔️ Starting fight with **{ENEMIES.get(target, ENEMIES['kobold']).name}**...", view=None)
 
         enemy_key = target
         await self._start_combat(interaction, char, enemy_key)
@@ -353,8 +370,9 @@ class CombatCog(commands.Cog, name="Combat"):
         )
         ACTIVE[interaction.channel_id] = session
 
+        # Clear pending_encounter and set combat status
         await self.bot.db.execute(
-            "UPDATE characters SET combat_status='in_combat', last_combat=NOW() WHERE id=$1",
+            "UPDATE characters SET combat_status='in_combat', last_combat=NOW(), pending_encounter=NULL WHERE id=$1",
             char["id"],
         )
 

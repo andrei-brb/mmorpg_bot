@@ -52,10 +52,15 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         await self.svc.set_cooldown(char["id"], "explore", cooldown)
 
         if outcome["type"] == "enemy":
-            embed.add_field(name="⚔️ Enemy Encountered!", value=f"A **{outcome['name']}** attacks!\n**Starting combat...**", inline=False)
+            embed.add_field(name="⚔️ Enemy Encountered!", value=f"A **{outcome['name']}** attacks!\nUse `/fight` to engage.", inline=False)
             embed.color = 0xFF4444
         elif outcome["type"] == "boss":
-            embed.add_field(name="💀 BOSS NEARBY!", value=f"The fearsome **{outcome['name']}** lurks here!\n**Starting combat...**", inline=False)
+            # Store the encountered boss so /fight can auto-start with it
+            await self.bot.db.execute(
+                "UPDATE characters SET pending_encounter=$2 WHERE id=$1",
+                char["id"], outcome["key"]
+            )
+            embed.add_field(name="💀 BOSS NEARBY!", value=f"The fearsome **{outcome['name']}** lurks here!\nUse `/fight` to challenge it!", inline=False)
             embed.color = 0xFF0000
         elif outcome["type"] == "loot":
             xp, gold = random.randint(5, 15 + char["level"]), random.randint(1, 5 + char["level"] // 2)
@@ -69,21 +74,6 @@ class ExplorationCog(commands.Cog, name="Exploration"):
 
         embed.set_footer(text=f"Cooldown: {cooldown}s | Use /travel to change zones")
         await interaction.followup.send(embed=embed, ephemeral=True)
-        
-        # Auto-start combat if enemy/boss encountered
-        if outcome["type"] in ["enemy", "boss"]:
-            # Import combat cog to start fight
-            combat_cog = self.bot.get_cog("Combat")
-            if combat_cog:
-                # Check if already in combat
-                if char["combat_status"] == "in_combat":
-                    return  # Already in combat, don't start another
-                # Check if channel has active combat
-                from cogs.combat.combat_cog import ACTIVE
-                if interaction.channel_id in ACTIVE:
-                    return  # Another combat active in channel
-                # Start the fight automatically
-                await combat_cog._start_combat(interaction, dict(char), outcome["key"])
         
         # Check exploration achievements
         from services.achievement.achievement_service import AchievementService
