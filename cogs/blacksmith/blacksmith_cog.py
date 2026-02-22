@@ -192,11 +192,38 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
             embed.add_field(
                 name=f"{item['emoji']} {item['name']}",
                 value=f"{item['description']}\n"
-                      f"💰 **{item['cost']:,}**🪙",
+                      f"💰 **{item['cost']:,}**🪙\n"
+                      f"`/blacksmith buy {key}`",
                 inline=False
             )
         
-        embed.set_footer(text="Use /blacksmith buy [item] to purchase (coming soon)")
+        embed.set_footer(text="Use /blacksmith buy [item] to purchase")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @blacksmith.command(name="buy", description="Purchase a protection item")
+    @app_commands.describe(item="Protection item to buy")
+    @app_commands.choices(item=[
+        app_commands.Choice(name="Blessing Scroll (🛡️)", value="blessing_scroll"),
+        app_commands.Choice(name="Safety Charm (✨)", value="safety_charm"),
+        app_commands.Choice(name="Enhancement Fragment (💎)", value="enhancement_fragment"),
+    ])
+    async def buy(self, interaction: discord.Interaction, item: str):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "blacksmith"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+        
+        ok, msg = await self.bs_svc.buy_protection(char["id"], item)
+        
+        embed = discord.Embed(
+            description=f"{'✅' if ok else '❌'} {msg}",
+            color=0x00FF7F if ok else 0xFF0000
+        )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @blacksmith.command(name="stats", description="View your enhancement statistics")

@@ -250,7 +250,7 @@ class BlacksmithService:
         # Check gold
         char = await self.db.fetchrow("SELECT gold FROM characters WHERE id = $1", char_id)
         if char["gold"] < item["cost"]:
-            return False, f"Not enough gold. Need {item['cost']:,}🪙."
+            return False, f"Not enough gold. Need {item['cost']:,}🪙, you have {char['gold']:,}🪙."
         
         # Deduct gold
         await self.db.execute(
@@ -258,9 +258,22 @@ class BlacksmithService:
             char_id, item["cost"]
         )
         
-        # Add to inventory (we'll need to create these as item templates)
-        # For now, simplified version
-        return True, f"Purchased {item['emoji']} {item['name']} for {item['cost']:,}🪙!"
+        # Add to inventory using InventoryService
+        from services.character.inventory_service import InventoryService
+        inv_svc = InventoryService(self.db)
+        
+        template_id = f"protection_{protection_key}"
+        ok, msg = await inv_svc.add_item(char_id, template_id, rarity="rare", from_="blacksmith_shop")
+        
+        if ok:
+            return True, f"✅ Purchased {item['emoji']} **{item['name']}** for **{item['cost']:,}**🪙!"
+        else:
+            # Refund gold if adding to inventory failed
+            await self.db.execute(
+                "UPDATE characters SET gold = gold + $2 WHERE id = $1",
+                char_id, item["cost"]
+            )
+            return False, f"Failed to add item to inventory: {msg}"
 
     # ── Item Stats Calculation ────────────────────────────────────────────────
 

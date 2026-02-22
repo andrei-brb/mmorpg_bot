@@ -582,7 +582,14 @@ VALUES
     ('shadowforge_plate','Shadowforge Plate Chest','Dark iron mastery.','armor','legendary','chest',55,
      10,8,5,5,20,180,0,0, NULL,0,0, 450,180,'🖤'),
     ('flask_of_the_titans','Flask of the Titans','Increases max HP by +200 for 60 minutes.','consumable','epic',NULL,50,
-     0,0,0,0,0,0,0,0, 'boost_max_hp',200,60, 200,80,'⚗️')
+     0,0,0,0,0,0,0,0, 'boost_max_hp',200,60, 200,80,'⚗️'),
+    -- Protection items for blacksmith
+    ('protection_blessing_scroll','Blessing Scroll','Prevents item destruction. On fail, item loses 1 enhancement level instead.','consumable','rare',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 10000,5000,'🛡️'),
+    ('protection_safety_charm','Safety Charm','Guarantees success for enhancements +1 through +5.','consumable','rare',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 5000,2500,'✨'),
+    ('protection_enhancement_fragment','Enhancement Fragment','Increases success chance by 10%. Can stack up to 3 times (+30%).','consumable','uncommon',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 2000,1000,'💎')
 ON CONFLICT (id) DO UPDATE SET
     effect_type = EXCLUDED.effect_type,
     effect_value = EXCLUDED.effect_value,
