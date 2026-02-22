@@ -18,16 +18,16 @@ log = logging.getLogger("blacksmith")
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ENHANCEMENT_CONFIG = {
-    1:  {"stat_boost": 0.05, "success_rate": 1.00, "cost": 100,     "can_break": False},
-    2:  {"stat_boost": 0.10, "success_rate": 0.95, "cost": 250,     "can_break": False},
-    3:  {"stat_boost": 0.15, "success_rate": 0.90, "cost": 500,     "can_break": False},
-    4:  {"stat_boost": 0.20, "success_rate": 0.75, "cost": 1000,    "can_break": True},
-    5:  {"stat_boost": 0.25, "success_rate": 0.65, "cost": 2500,    "can_break": True},
-    6:  {"stat_boost": 0.30, "success_rate": 0.55, "cost": 5000,    "can_break": True},
-    7:  {"stat_boost": 0.35, "success_rate": 0.45, "cost": 10000,   "can_break": True},
-    8:  {"stat_boost": 0.40, "success_rate": 0.35, "cost": 25000,   "can_break": True},
-    9:  {"stat_boost": 0.45, "success_rate": 0.25, "cost": 50000,   "can_break": True},
-    10: {"stat_boost": 0.50, "success_rate": 0.15, "cost": 100000,  "can_break": True},
+    1:  {"stat_boost": 0.10, "success_rate": 1.00, "cost": 100,     "can_break": False},  # +10% (was 5%)
+    2:  {"stat_boost": 0.20, "success_rate": 0.95, "cost": 250,     "can_break": False},  # +20% (was 10%)
+    3:  {"stat_boost": 0.30, "success_rate": 0.90, "cost": 500,     "can_break": False},  # +30% (was 15%)
+    4:  {"stat_boost": 0.40, "success_rate": 0.75, "cost": 1000,    "can_break": True},   # +40% (was 20%)
+    5:  {"stat_boost": 0.50, "success_rate": 0.65, "cost": 2500,    "can_break": True},   # +50% (was 25%)
+    6:  {"stat_boost": 0.60, "success_rate": 0.55, "cost": 5000,    "can_break": True},   # +60% (was 30%)
+    7:  {"stat_boost": 0.70, "success_rate": 0.45, "cost": 10000,   "can_break": True},   # +70% (was 35%)
+    8:  {"stat_boost": 0.80, "success_rate": 0.35, "cost": 25000,   "can_break": True},   # +80% (was 40%)
+    9:  {"stat_boost": 0.90, "success_rate": 0.25, "cost": 50000,   "can_break": True},   # +90% (was 45%)
+    10: {"stat_boost": 1.00, "success_rate": 0.15, "cost": 100000,  "can_break": True},   # +100% (was 50%)
 }
 
 # Protection items
