@@ -31,6 +31,7 @@ class _ProtectionSelectView(discord.ui.View):
         self.chosen_protection = None
         self.chosen_fragments = 0
         self.has_fragments = protections.get("enhancement_fragment", 0) > 0
+        self.message = None  # Store the message reference
         
         # Add protection select
         self.add_item(_ProtectionSelect(protections, target_level))
@@ -160,11 +161,10 @@ class _EnhanceButton(discord.ui.Button):
                 description="Processing your enhancement request...",
                 color=0x8B4513
             )
-            await interaction.followup.edit_message(
-                interaction.message.id,
-                embed=embed,
-                view=view
-            )
+            # Try to edit the stored message, or use interaction.message if available
+            msg_to_edit = view.message if view.message else interaction.message
+            if msg_to_edit:
+                await msg_to_edit.edit(embed=embed, view=view)
         except Exception:
             pass
         
@@ -374,7 +374,8 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
                           f"Choose protection (or select 'None' to proceed without protection):",
                 color=0xFFA500
             )
-            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            view.message = msg  # Store message reference
             await view.wait()
             if not view.chosen:
                 return
