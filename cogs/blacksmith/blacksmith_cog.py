@@ -30,12 +30,28 @@ class _ProtectionSelectView(discord.ui.View):
         self.chosen = False
         self.chosen_protection = None
         self.chosen_fragments = 0
+        self.has_fragments = protections.get("enhancement_fragment", 0) > 0
         
         # Add protection select
         self.add_item(_ProtectionSelect(protections, target_level))
         # Add fragment count select if fragments available
-        if protections.get("enhancement_fragment", 0) > 0:
+        if self.has_fragments:
             self.add_item(_FragmentSelect(protections.get("enhancement_fragment", 0)))
+        
+        # Add enhance button (initially disabled)
+        self.add_item(_EnhanceButton())
+    
+    def _update_enhance_button(self):
+        """Enable enhance button if protection is selected (or if no fragments available)"""
+        for item in self.children:
+            if isinstance(item, _EnhanceButton):
+                # Enable if: no fragments available OR (protection selected and fragments selected)
+                if not self.has_fragments:
+                    item.disabled = False
+                else:
+                    # If fragments available, need both selections
+                    item.disabled = (self.chosen_protection is None and self.chosen_fragments == 0)
+                break
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
@@ -112,6 +128,53 @@ class _ProtectionSelectView(discord.ui.View):
                 await interaction.channel.send(embed=announce_embed)
 
 
+class _EnhanceButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(
+            label="🔨 Enhance Now",
+            style=discord.ButtonStyle.primary,
+            disabled=True  # Initially disabled
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if not isinstance(view, _ProtectionSelectView):
+            return await interaction.response.send_message("❌ Internal error.", ephemeral=True)
+        
+        # Disable all items
+        for item in view.children:
+            if isinstance(item, discord.ui.Select):
+                item.disabled = True
+        self.disabled = True
+        
+        view.chosen = True
+        view.stop()
+        
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+        
+        # Update message
+        try:
+            embed = discord.Embed(
+                title="🔨 Enhancing Item...",
+                description="Processing your enhancement request...",
+                color=0x8B4513
+            )
+            await interaction.followup.edit_message(
+                interaction.message.id,
+                embed=embed,
+                view=view
+            )
+        except Exception:
+            pass
+        
+        # Perform enhancement
+        await view._do_enhancement(interaction)
+
+
 class _ProtectionSelect(discord.ui.Select):
     def __init__(self, protections: dict, target_level: int):
         options = [
@@ -156,23 +219,34 @@ class _ProtectionSelect(discord.ui.Select):
         protection = self.values[0]
         view.chosen_protection = None if protection == "none" else protection
         
-        # Check if fragments are available
-        has_fragments = any(isinstance(item, _FragmentSelect) for item in view.children)
+        # Update enhance button state
+        view._update_enhance_button()
         
-        # If no fragments available, proceed immediately
-        if not has_fragments:
-            view.chosen = True
-            self.stop()
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.defer()
-            except Exception:
-                pass
-            # Perform enhancement
-            await view._do_enhancement(interaction)
-        else:
-            # Wait for fragment selection
-            await interaction.response.defer()
+        # Acknowledge selection
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+        
+        # Update message to show selection
+        try:
+            protection_name = "None" if protection == "none" else PROTECTION_ITEMS[protection]["name"]
+            embed = discord.Embed(
+                title="🔨 Select Protection",
+                description=(
+                    f"**Protection:** {protection_name}\n\n"
+                    + ("Select fragments and click **Enhance Now** when ready!" if view.has_fragments else "Click **Enhance Now** to proceed!")
+                ),
+                color=0xFFA500
+            )
+            await interaction.followup.edit_message(
+                interaction.message.id,
+                embed=embed,
+                view=view
+            )
+        except Exception:
+            pass
 
 
 class _FragmentSelect(discord.ui.Select):
@@ -201,17 +275,36 @@ class _FragmentSelect(discord.ui.Select):
             return await interaction.response.send_message("❌ Internal error.", ephemeral=True)
         
         view.chosen_fragments = int(self.values[0])
-        view.chosen = True
-        self.stop()
+        
+        # Update enhance button state
+        view._update_enhance_button()
         
         try:
             if not interaction.response.is_done():
-                await interaction.response.defer()
+                await interaction.response.defer(ephemeral=True)
         except Exception:
             pass
         
-        # Perform enhancement
-        await view._do_enhancement(interaction)
+        # Update message to show fragment selection
+        try:
+            protection_name = "None" if view.chosen_protection is None else PROTECTION_ITEMS[view.chosen_protection]["name"]
+            fragment_text = f"{view.chosen_fragments} fragment{'s' if view.chosen_fragments != 1 else ''}" if view.chosen_fragments > 0 else "No fragments"
+            embed = discord.Embed(
+                title="🔨 Ready to Enhance",
+                description=(
+                    f"**Protection:** {protection_name}\n"
+                    f"**Fragments:** {fragment_text}\n\n"
+                    f"Click **Enhance Now** to proceed!"
+                ),
+                color=0xFFA500
+            )
+            await interaction.followup.edit_message(
+                interaction.message.id,
+                embed=embed,
+                view=view
+            )
+        except Exception:
+            pass
 
 
 class BlacksmithCog(commands.Cog, name="Blacksmith"):
