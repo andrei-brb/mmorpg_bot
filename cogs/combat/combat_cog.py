@@ -256,19 +256,31 @@ class _EnemySelect(discord.ui.Select):
         )
     
     async def callback(self, interaction: discord.Interaction):
-        view = self.view
-        if not isinstance(view, EnemySelectView):
-            return await interaction.response.send_message("❌ Internal error.", ephemeral=True)
-        if interaction.user.id != view.owner_id:
-            return await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
-        
-        view.chosen = self.values[0]
-        self.stop()  # Stop FIRST
         try:
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-        except Exception:
-            pass
+            view = self.view
+            if not isinstance(view, EnemySelectView):
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ Internal error.", ephemeral=True)
+                return
+            if interaction.user.id != view.owner_id:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+                return
+            
+            view.chosen = self.values[0]
+            self.stop()  # Stop FIRST
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True)
+            except Exception as e:
+                log.warning(f"Error deferring enemy selection: {e}")
+        except Exception as e:
+            log.error(f"Error in enemy selection: {e}", exc_info=True)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ An error occurred selecting enemy.", ephemeral=True)
+            except Exception:
+                pass
 
 
 class CombatCog(commands.Cog, name="Combat"):
@@ -438,7 +450,7 @@ class CombatCog(commands.Cog, name="Combat"):
             if msg:
                 await msg.edit(embed=embed, view=view)
             else:
-                msg = await interaction.followup.send(embed=embed, view=view, wait=True, ephemeral=True)
+                msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
             await view.wait()
 
