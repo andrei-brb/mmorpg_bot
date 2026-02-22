@@ -181,7 +181,14 @@ class InventoryCog(commands.Cog, name="Inventory"):
             lines = []
             for i in equipped:
                 enh_level = i.get("enhancement_level", 0) or 0
-                enh_text = f" +{enh_level}" if enh_level > 0 else ""
+                enh_text = f" **+{enh_level}**" if enh_level > 0 else ""
+                # Add sparkles for high enhancements
+                if enh_level >= 7:
+                    enh_text += " ✨✨✨"
+                elif enh_level >= 4:
+                    enh_text += " ✨✨"
+                elif enh_level >= 1:
+                    enh_text += " ✨"
                 lines.append(f"{RARITIES[i['rarity']].emoji} **{i['name']}{enh_text}** *(slot: {i['equip_slot']})*")
             embed.add_field(
                 name="⚔️ Equipped",
@@ -189,7 +196,18 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 inline=False,
             )
         if unequipped:
-            lines = [f"{RARITIES[i['rarity']].emoji} {i['icon']} **{i['name']}** [{i['rarity'].title()}] x{i['quantity']}\n  `ID: {i['id']}`" for i in unequipped[:12]]
+            lines = []
+            for i in unequipped[:12]:
+                enh_level = i.get("enhancement_level", 0) or 0
+                enh_text = f" **+{enh_level}**" if enh_level > 0 else ""
+                # Add sparkles for high enhancements
+                if enh_level >= 7:
+                    enh_text += " ✨✨✨"
+                elif enh_level >= 4:
+                    enh_text += " ✨✨"
+                elif enh_level >= 1:
+                    enh_text += " ✨"
+                lines.append(f"{RARITIES[i['rarity']].emoji} {i['icon']} **{i['name']}{enh_text}** [{i['rarity'].title()}] x{i['quantity']}\n  `ID: {i['id']}`")
             if len(unequipped) > 12: lines.append(f"*…and {len(unequipped)-12} more*")
             embed.add_field(name="📦 Bag", value="\n".join(lines), inline=False)
         embed.set_footer(text="Use /equip (dropdown)  /sell <id>  /use <id>  /inspect <id> to see stats")
