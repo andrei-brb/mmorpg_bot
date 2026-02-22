@@ -42,15 +42,12 @@ class _ProtectionSelectView(discord.ui.View):
         self.add_item(_EnhanceButton())
     
     def _update_enhance_button(self):
-        """Enable enhance button if protection is selected (or if no fragments available)"""
+        """Enable enhance button when protection is selected"""
         for item in self.children:
             if isinstance(item, _EnhanceButton):
-                # Enable if: no fragments available OR (protection selected and fragments selected)
-                if not self.has_fragments:
-                    item.disabled = False
-                else:
-                    # If fragments available, need both selections
-                    item.disabled = (self.chosen_protection is None and self.chosen_fragments == 0)
+                # Enable button as soon as protection is selected (protection can be "None")
+                # Fragments are optional, so button is enabled even if fragments haven't been selected yet
+                item.disabled = (self.chosen_protection is None)
                 break
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
