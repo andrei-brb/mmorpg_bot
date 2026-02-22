@@ -297,43 +297,55 @@ class InventoryService:
     # ── Sell ─────────────────────────────────────────────────────────────────
 
     async def sell(self, char_id: UUID, item_id: UUID) -> Tuple[bool, str, int]:
-        item = await self.db.fetchrow(
-            """SELECT i.*, t.vendor_sell, t.name, t.soulbound, t.rarity as template_rarity,
-                      COALESCE(i.rarity, t.rarity) as rarity
-               FROM inventory i JOIN item_templates t ON i.template_id=t.id
-               WHERE i.id=$1 AND i.character_id=$2""",
-            item_id, char_id,
-        )
-        if not item:         return False, "Item not found.", 0
-        if item["locked"]:   return False, "Item is locked. Unlock it first.", 0
-        if item["soulbound"]:return False, "Soulbound items cannot be sold.", 0
-        if item["is_equipped"]: return False, "Unequip the item before selling.", 0
+        try:
+            item = await self.db.fetchrow(
+                """SELECT i.*, t.vendor_sell, t.name, t.soulbound, t.rarity as template_rarity,
+                          COALESCE(i.rarity, t.rarity) as rarity,
+                          COALESCE(i.enhancement_level, 0) as enhancement_level
+                   FROM inventory i JOIN item_templates t ON i.template_id=t.id
+                   WHERE i.id=$1 AND i.character_id=$2""",
+                item_id, char_id,
+            )
+            if not item:         return False, "Item not found.", 0
+            if item["locked"]:   return False, "Item is locked. Unlock it first.", 0
+            if item["soulbound"]:return False, "Soulbound items cannot be sold.", 0
+            if item["is_equipped"]: return False, "Unequip the item before selling.", 0
 
-        # Calculate value based on actual rarity (not template rarity)
-        base_value = item["vendor_sell"] or 0
-        actual_rarity = item.get("rarity") or "common"
-        rarity_cfg = RARITIES.get(actual_rarity, RARITIES["common"])
-        value_mult = rarity_cfg.value_multiplier  # Use value multiplier, not stat multiplier
-        
-        # Scale value by rarity multiplier
-        # Also add bonus for extra stats (sum of all bonus stats)
-        bonus_stats_total = (
-            (item.get("r_str", 0) or 0) +
-            (item.get("r_agi", 0) or 0) +
-            (item.get("r_int", 0) or 0) +
-            (item.get("r_spi", 0) or 0) +
-            (item.get("r_sta", 0) or 0) +
-            (item.get("r_haste", 0) or 0) +
-            (item.get("r_lifesteal", 0) or 0) +
-            (item.get("r_resistance", 0) or 0) +
-            (item.get("r_hit_rating", 0) or 0)
-        )
-        
-        # Base value scaled by rarity value multiplier, plus bonus for extra stats
-        # Higher rarity gets more bonus per stat point
-        stat_bonus_mult = 2 if actual_rarity in ("common", "uncommon") else (3 if actual_rarity in ("rare", "epic") else 5)
-        value = int(base_value * value_mult) + (bonus_stats_total * stat_bonus_mult)
-        gold = value * item["quantity"]
-        
-        await self.db.execute("DELETE FROM inventory WHERE id=$1", item_id)
-        return True, f"Sold **{item['name']}** [{actual_rarity.title()}] for **{gold}**🪙.", gold
+            # Calculate value based on actual rarity (not template rarity)
+            base_value = item["vendor_sell"] or 0
+            actual_rarity = item.get("rarity") or "common"
+            rarity_cfg = RARITIES.get(actual_rarity, RARITIES["common"])
+            value_mult = rarity_cfg.value_multiplier  # Use value multiplier, not stat multiplier
+            
+            # Scale value by rarity multiplier
+            # Also add bonus for extra stats (sum of all bonus stats)
+            bonus_stats_total = (
+                (item.get("r_str", 0) or 0) +
+                (item.get("r_agi", 0) or 0) +
+                (item.get("r_int", 0) or 0) +
+                (item.get("r_spi", 0) or 0) +
+                (item.get("r_sta", 0) or 0) +
+                (item.get("r_haste", 0) or 0) +
+                (item.get("r_lifesteal", 0) or 0) +
+                (item.get("r_resistance", 0) or 0) +
+                (item.get("r_hit_rating", 0) or 0)
+            )
+            
+            # Base value scaled by rarity value multiplier, plus bonus for extra stats
+            # Higher rarity gets more bonus per stat point
+            stat_bonus_mult = 2 if actual_rarity in ("common", "uncommon") else (3 if actual_rarity in ("rare", "epic") else 5)
+            value = int(base_value * value_mult) + (bonus_stats_total * stat_bonus_mult)
+            
+            # Add enhancement bonus to value (enhanced items worth more)
+            enhancement_level = item.get("enhancement_level", 0) or 0
+            if enhancement_level > 0:
+                # Enhanced items get 10% more value per enhancement level
+                value = int(value * (1 + enhancement_level * 0.10))
+            
+            gold = value * item["quantity"]
+            
+            await self.db.execute("DELETE FROM inventory WHERE id=$1", item_id)
+            return True, f"Sold **{item['name']}** [{actual_rarity.title()}]" + (f" +{enhancement_level}" if enhancement_level > 0 else "") + f" for **{gold}**🪙.", gold
+        except Exception as e:
+            log.error(f"Error selling item {item_id}: {e}", exc_info=True)
+            return False, f"Error selling item: {str(e)}", 0

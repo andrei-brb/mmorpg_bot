@@ -442,15 +442,30 @@ class InventoryCog(commands.Cog, name="Inventory"):
             return await interaction.followup.send(f"Select an item to sell:{extra}", view=view, ephemeral=True)
 
         if not interaction.response.is_done():
-
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
+        
         char = await self.char_svc.get_character(interaction.user.id)
-        if not char: return await interaction.followup.send("❌ No character.")
-        try: uid = UUID(item_id)
-        except ValueError: return await interaction.followup.send("❌ Invalid item ID.")
-        ok, msg, gold = await self.inv_svc.sell(char["id"], uid)
-        if ok: await self.char_svc.add_gold(char["id"], gold, "vendor sale")
-        await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0xFFD700 if ok else 0xFF0000))
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+        
+        try:
+            uid = UUID(item_id)
+        except ValueError:
+            return await interaction.followup.send("❌ Invalid item ID.", ephemeral=True)
+        
+        try:
+            ok, msg, gold = await self.inv_svc.sell(char["id"], uid)
+            if ok and gold:
+                await self.char_svc.add_gold(char["id"], gold, "vendor sale")
+            
+            embed = discord.Embed(
+                description=f"{'✅' if ok else '❌'} {msg}",
+                color=0xFFD700 if ok else 0xFF0000
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except Exception as e:
+            log.error(f"Error in sell command: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ An error occurred while selling: {str(e)}", ephemeral=True)
 
     @sell.autocomplete("item_id")
     async def sell_autocomplete(self, interaction: discord.Interaction, current: str):
