@@ -251,36 +251,35 @@ class CharacterService:
             else:
                 enh_mult = 1.0
             
-            # Apply enhancement to base stats (not random rolls)
-            base_str = int((it["s_str"] * enh_mult) * df)
-            base_agi = int((it["s_agi"] * enh_mult) * df)
-            base_int = int((it["s_int"] * enh_mult) * df)
-            base_spi = int((it["s_spi"] * enh_mult) * df)
-            base_sta = int((it["s_sta"] * enh_mult) * df)
-            base_armor = int((it["s_armor"] * enh_mult) * df)
-            base_dmg_min = int(it["s_dmg_min"] * enh_mult)
-            base_dmg_max = int(it["s_dmg_max"] * enh_mult)
+            # FIX: Apply enhancement to (base + random rolls), then durability
+            # Primary stats: (base + roll) * enhancement * durability
+            base_str = it["s_str"] + (it.get("r_str", 0) or 0)
+            base_agi = it["s_agi"] + (it.get("r_agi", 0) or 0)
+            base_int = it["s_int"] + (it.get("r_int", 0) or 0)
+            base_spi = it["s_spi"] + (it.get("r_spi", 0) or 0)
+            base_sta = it["s_sta"] + (it.get("r_sta", 0) or 0)
             
-            # Add random roll bonuses (not enhanced)
-            stats["strength"]  += base_str + int((it.get("r_str", 0) or 0) * df)
-            stats["agility"]   += base_agi + int((it.get("r_agi", 0) or 0) * df)
-            stats["intellect"] += base_int + int((it.get("r_int", 0) or 0) * df)
-            stats["spirit"]    += base_spi + int((it.get("r_spi", 0) or 0) * df)
-            stats["stamina"]   += base_sta + int((it.get("r_sta", 0) or 0) * df)
-            stats["armor"]     += base_armor
-            stats["dmg_min"]   += base_dmg_min
-            stats["dmg_max"]   += base_dmg_max
+            stats["strength"]  += int(base_str * enh_mult * df)
+            stats["agility"]   += int(base_agi * enh_mult * df)
+            stats["intellect"] += int(base_int * enh_mult * df)
+            stats["spirit"]    += int(base_spi * enh_mult * df)
+            stats["stamina"]   += int(base_sta * enh_mult * df)
             
-            # Secondary stats (enhanced)
-            base_haste = int((it.get("s_haste", 0) or 0) * enh_mult * df)
-            base_lifesteal = int((it.get("s_lifesteal", 0) or 0) * enh_mult * df)
-            base_resistance = int((it.get("s_resistance", 0) or 0) * enh_mult * df)
-            base_hit_rating = int((it.get("s_hit_rating", 0) or 0) * enh_mult * df)
+            # Armor and damage: (base) * enhancement * durability (damage not affected by durability)
+            stats["armor"]     += int((it["s_armor"] * enh_mult) * df)
+            stats["dmg_min"]   += int(it["s_dmg_min"] * enh_mult)
+            stats["dmg_max"]   += int(it["s_dmg_max"] * enh_mult)
             
-            stats["haste"]      += base_haste + int((it.get("r_haste", 0) or 0) * df)
-            stats["lifesteal"]  += base_lifesteal + int((it.get("r_lifesteal", 0) or 0) * df)
-            stats["resistance"] += base_resistance + int((it.get("r_resistance", 0) or 0) * df)
-            stats["hit_rating"] += base_hit_rating + int((it.get("r_hit_rating", 0) or 0) * df)
+            # Secondary stats: (base + roll) * enhancement * durability
+            base_haste = (it.get("s_haste", 0) or 0) + (it.get("r_haste", 0) or 0)
+            base_lifesteal = (it.get("s_lifesteal", 0) or 0) + (it.get("r_lifesteal", 0) or 0)
+            base_resistance = (it.get("s_resistance", 0) or 0) + (it.get("r_resistance", 0) or 0)
+            base_hit_rating = (it.get("s_hit_rating", 0) or 0) + (it.get("r_hit_rating", 0) or 0)
+            
+            stats["haste"]      += int(base_haste * enh_mult * df)
+            stats["lifesteal"]  += int(base_lifesteal * enh_mult * df)
+            stats["resistance"] += int(base_resistance * enh_mult * df)
+            stats["hit_rating"] += int(base_hit_rating * enh_mult * df)
             
             # Track set pieces
             if it.get("set_id"):
