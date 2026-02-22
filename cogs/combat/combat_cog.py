@@ -176,23 +176,39 @@ class AbilityView(discord.ui.View):
         return True
 
     async def _pick(self, interaction: discord.Interaction):
-        self.chosen = interaction.data["values"][0]
-        self.stop()  # Stop FIRST
         try:
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-        except Exception:
-            pass
+            self.chosen = interaction.data["values"][0]
+            self.stop()  # Stop FIRST
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True)
+            except Exception as e:
+                log.warning(f"Error deferring ability selection: {e}")
+        except Exception as e:
+            log.error(f"Error in ability selection: {e}", exc_info=True)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ An error occurred selecting ability.", ephemeral=True)
+            except Exception:
+                pass
 
     @discord.ui.button(label="🏃 Flee", style=discord.ButtonStyle.grey, row=1)
     async def flee(self, interaction: discord.Interaction, _):
-        self.fled = True
-        self.stop()
         try:
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-        except Exception:
-            pass
+            self.fled = True
+            self.stop()
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True)
+            except Exception as e:
+                log.warning(f"Error deferring flee: {e}")
+        except Exception as e:
+            log.error(f"Error in flee: {e}", exc_info=True)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ An error occurred while fleeing.", ephemeral=True)
+            except Exception:
+                pass
     async def on_timeout(self):
         self.chosen = "auto_attack"
         self.stop()
