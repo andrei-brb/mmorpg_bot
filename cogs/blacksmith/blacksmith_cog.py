@@ -237,11 +237,9 @@ class _ProtectionSelect(discord.ui.Select):
                 ),
                 color=0xFFA500
             )
-            await interaction.followup.edit_message(
-                interaction.message.id,
-                embed=embed,
-                view=view
-            )
+            # Try to edit the stored message
+            if view.message:
+                await view.message.edit(embed=embed, view=view)
         except Exception:
             pass
 
@@ -295,11 +293,9 @@ class _FragmentSelect(discord.ui.Select):
                 ),
                 color=0xFFA500
             )
-            await interaction.followup.edit_message(
-                interaction.message.id,
-                embed=embed,
-                view=view
-            )
+            # Try to edit the stored message
+            if view.message:
+                await view.message.edit(embed=embed, view=view)
         except Exception:
             pass
 
