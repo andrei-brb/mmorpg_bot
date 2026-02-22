@@ -20,6 +20,7 @@ GAME_CHANNELS = {
     "market":      {"name": "🪙-marketplace",  "topic": "Buy & sell items! Use /market"},
     "explore":     {"name": "🗺-exploration",   "topic": "Explore and travel! Use /explore /travel"},
     "general":     {"name": "🎮-game-general",  "topic": "General game commands: /character /inventory /help"},
+    "blacksmith":  {"name": "🔨-blacksmith",    "topic": "Enhance and upgrade items! Use /blacksmith"},
 }
 
 CATEGORY_NAME = "🎮 World of Discord"
@@ -196,6 +197,25 @@ class ChannelManager:
                     "💡 Use dedicated channels for combat, dungeons, market, and exploration",
                     "💡 Each channel has its own rate limit to prevent lag",
                     "💡 Check `/help` for a complete command list",
+                ]
+            },
+            "blacksmith": {
+                "title": "🔨 Blacksmith Channel",
+                "description": "Enhance and upgrade your equipment! Risk and reward system.",
+                "color": 0x8B4513,
+                "commands": [
+                    "`/blacksmith enhance [item]` — Enhance an item (+1 to +10)",
+                    "`/blacksmith info [item]` — View enhancement details",
+                    "`/blacksmith shop` — Buy protection items",
+                    "`/blacksmith stats` — View your enhancement statistics",
+                    "`/blacksmith leaderboard` — Top enhanced items",
+                    "`/blacksmith blessing` — Claim daily free blessing",
+                ],
+                "tips": [
+                    "💡 +1 to +3 are safe (won't break)",
+                    "💡 +4 and above can break on failure",
+                    "💡 Use protection items to prevent destruction",
+                    "💡 Higher enhancements give better stat bonuses",
                 ]
             },
         }
@@ -410,7 +430,8 @@ async def check_channel(interaction: discord.Interaction, command_name: str = No
         "dungeon": "🏰 Dungeons",
         "market": "🪙 Marketplace",
         "explore": "🗺️ Exploration",
-        "general": "🎮 General"
+        "general": "🎮 General",
+        "blacksmith": "🔨 Blacksmith"
     }
     channel_label = channel_names.get(channel_type, "the correct channel")
     

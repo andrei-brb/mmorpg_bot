@@ -178,9 +178,14 @@ class InventoryCog(commands.Cog, name="Inventory"):
         unequipped = [i for i in items if not i["is_equipped"]]
 
         if equipped:
+            lines = []
+            for i in equipped:
+                enh_level = i.get("enhancement_level", 0) or 0
+                enh_text = f" +{enh_level}" if enh_level > 0 else ""
+                lines.append(f"{RARITIES[i['rarity']].emoji} **{i['name']}{enh_text}** *(slot: {i['equip_slot']})*")
             embed.add_field(
                 name="⚔️ Equipped",
-                value="\n".join(f"{RARITIES[i['rarity']].emoji} **{i['name']}** *(slot: {i['equip_slot']})*" for i in equipped),
+                value="\n".join(lines),
                 inline=False,
             )
         if unequipped:
@@ -213,58 +218,98 @@ class InventoryCog(commands.Cog, name="Inventory"):
         
         # Build stats display
         rarity = RARITIES.get(item.get("rarity", "common"), RARITIES["common"])
+        enh_level = item.get("enhancement_level", 0) or 0
+        enh_text = f" +{enh_level}" if enh_level > 0 else ""
         embed = discord.Embed(
-            title=f"{rarity.emoji} {item['name']}",
+            title=f"{rarity.emoji} {item['name']}{enh_text}",
             description=item.get("description", "No description."),
             color=rarity.color if hasattr(rarity, "color") else 0x808080,
         )
         
         # Item info
+        enh_level = item.get("enhancement_level", 0) or 0
+        enh_text = f"\n**Enhancement:** +{enh_level}" if enh_level > 0 else ""
         embed.add_field(
             name="📋 Item Info",
             value=(
                 f"**Type:** {item.get('item_type', 'unknown').title()}\n"
                 f"**Rarity:** {item.get('rarity', 'common').title()}\n"
                 f"**Level Req:** {item.get('level_req', 1)}\n"
-                f"**Durability:** {item.get('durability', 100)}/100"
+                f"**Durability:** {item.get('durability', 100)}/100{enh_text}"
             ),
             inline=True,
         )
         
-        # Primary stats
-        stats_lines = []
-        if item.get("s_str", 0) or item.get("r_str", 0):
-            total = (item.get("s_str", 0) or 0) + (item.get("r_str", 0) or 0)
-            stats_lines.append(f"💪 **Strength:** +{total}")
-        if item.get("s_agi", 0) or item.get("r_agi", 0):
-            total = (item.get("s_agi", 0) or 0) + (item.get("r_agi", 0) or 0)
-            stats_lines.append(f"⚡ **Agility:** +{total}")
-        if item.get("s_int", 0) or item.get("r_int", 0):
-            total = (item.get("s_int", 0) or 0) + (item.get("r_int", 0) or 0)
-            stats_lines.append(f"🧠 **Intellect:** +{total}")
-        if item.get("s_spi", 0) or item.get("r_spi", 0):
-            total = (item.get("s_spi", 0) or 0) + (item.get("r_spi", 0) or 0)
-            stats_lines.append(f"✨ **Spirit:** +{total}")
-        if item.get("s_sta", 0) or item.get("r_sta", 0):
-            total = (item.get("s_sta", 0) or 0) + (item.get("r_sta", 0) or 0)
-            stats_lines.append(f"❤️ **Stamina:** +{total}")
-        if item.get("s_armor", 0):
-            stats_lines.append(f"🛡️ **Armor:** +{item.get('s_armor', 0)}")
-        if item.get("s_dmg_min", 0) or item.get("s_dmg_max", 0):
-            stats_lines.append(f"⚔️ **Damage:** {item.get('s_dmg_min', 0)}-{item.get('s_dmg_max', 0)}")
+        # Calculate enhanced stats
+        enh_level = item.get("enhancement_level", 0) or 0
+        from services.blacksmith.blacksmith_service import BlacksmithService
+        bs_svc = BlacksmithService(self.bot.db)
         
-        # Secondary stats
-        if item.get("s_haste", 0) or item.get("r_haste", 0):
-            total = (item.get("s_haste", 0) or 0) + (item.get("r_haste", 0) or 0)
+        base_stats = {
+            "str": item.get("s_str", 0) or 0,
+            "agi": item.get("s_agi", 0) or 0,
+            "int": item.get("s_int", 0) or 0,
+            "spi": item.get("s_spi", 0) or 0,
+            "sta": item.get("s_sta", 0) or 0,
+            "armor": item.get("s_armor", 0) or 0,
+            "dmg_min": item.get("s_dmg_min", 0) or 0,
+            "dmg_max": item.get("s_dmg_max", 0) or 0,
+            "haste": item.get("s_haste", 0) or 0,
+            "lifesteal": item.get("s_lifesteal", 0) or 0,
+            "resistance": item.get("s_resistance", 0) or 0,
+            "hit_rating": item.get("s_hit_rating", 0) or 0,
+        }
+        enhanced_stats = bs_svc.calculate_enhanced_stats(base_stats, enh_level)
+        
+        # Primary stats (show enhanced + random rolls)
+        stats_lines = []
+        if enhanced_stats.get("str", 0) or item.get("r_str", 0):
+            total = enhanced_stats.get("str", 0) + (item.get("r_str", 0) or 0)
+            base = base_stats["str"]
+            enh_text = f" ({base} base + {enhanced_stats.get('str', 0) - base} enh)" if enh_level > 0 and enhanced_stats.get("str", 0) > base else ""
+            stats_lines.append(f"💪 **Strength:** +{total}{enh_text}")
+        if enhanced_stats.get("agi", 0) or item.get("r_agi", 0):
+            total = enhanced_stats.get("agi", 0) + (item.get("r_agi", 0) or 0)
+            base = base_stats["agi"]
+            enh_text = f" ({base} base + {enhanced_stats.get('agi', 0) - base} enh)" if enh_level > 0 and enhanced_stats.get("agi", 0) > base else ""
+            stats_lines.append(f"⚡ **Agility:** +{total}{enh_text}")
+        if enhanced_stats.get("int", 0) or item.get("r_int", 0):
+            total = enhanced_stats.get("int", 0) + (item.get("r_int", 0) or 0)
+            base = base_stats["int"]
+            enh_text = f" ({base} base + {enhanced_stats.get('int', 0) - base} enh)" if enh_level > 0 and enhanced_stats.get("int", 0) > base else ""
+            stats_lines.append(f"🧠 **Intellect:** +{total}{enh_text}")
+        if enhanced_stats.get("spi", 0) or item.get("r_spi", 0):
+            total = enhanced_stats.get("spi", 0) + (item.get("r_spi", 0) or 0)
+            base = base_stats["spi"]
+            enh_text = f" ({base} base + {enhanced_stats.get('spi', 0) - base} enh)" if enh_level > 0 and enhanced_stats.get("spi", 0) > base else ""
+            stats_lines.append(f"✨ **Spirit:** +{total}{enh_text}")
+        if enhanced_stats.get("sta", 0) or item.get("r_sta", 0):
+            total = enhanced_stats.get("sta", 0) + (item.get("r_sta", 0) or 0)
+            base = base_stats["sta"]
+            enh_text = f" ({base} base + {enhanced_stats.get('sta', 0) - base} enh)" if enh_level > 0 and enhanced_stats.get("sta", 0) > base else ""
+            stats_lines.append(f"❤️ **Stamina:** +{total}{enh_text}")
+        if enhanced_stats.get("armor", 0):
+            base = base_stats["armor"]
+            enh_text = f" ({base} base + {enhanced_stats.get('armor', 0) - base} enh)" if enh_level > 0 and enhanced_stats.get("armor", 0) > base else ""
+            stats_lines.append(f"🛡️ **Armor:** +{enhanced_stats.get('armor', 0)}{enh_text}")
+        if enhanced_stats.get("dmg_min", 0) or enhanced_stats.get("dmg_max", 0):
+            base_min, base_max = base_stats["dmg_min"], base_stats["dmg_max"]
+            enh_min, enh_max = enhanced_stats.get("dmg_min", 0), enhanced_stats.get("dmg_max", 0)
+            enh_text = f" ({base_min}-{base_max} base)" if enh_level > 0 else ""
+            stats_lines.append(f"⚔️ **Damage:** {enh_min}-{enh_max}{enh_text}")
+        
+        # Secondary stats (enhanced + random rolls)
+        if enhanced_stats.get("haste", 0) or item.get("r_haste", 0):
+            total = enhanced_stats.get("haste", 0) + (item.get("r_haste", 0) or 0)
             stats_lines.append(f"⚡ **Haste:** +{total}%")
-        if item.get("s_lifesteal", 0) or item.get("r_lifesteal", 0):
-            total = (item.get("s_lifesteal", 0) or 0) + (item.get("r_lifesteal", 0) or 0)
+        if enhanced_stats.get("lifesteal", 0) or item.get("r_lifesteal", 0):
+            total = enhanced_stats.get("lifesteal", 0) + (item.get("r_lifesteal", 0) or 0)
             stats_lines.append(f"🩸 **Lifesteal:** +{total}%")
-        if item.get("s_resistance", 0) or item.get("r_resistance", 0):
-            total = (item.get("s_resistance", 0) or 0) + (item.get("r_resistance", 0) or 0)
+        if enhanced_stats.get("resistance", 0) or item.get("r_resistance", 0):
+            total = enhanced_stats.get("resistance", 0) + (item.get("r_resistance", 0) or 0)
             stats_lines.append(f"🛡️ **Resistance:** +{total}")
-        if item.get("s_hit_rating", 0) or item.get("r_hit_rating", 0):
-            total = (item.get("s_hit_rating", 0) or 0) + (item.get("r_hit_rating", 0) or 0)
+        if enhanced_stats.get("hit_rating", 0) or item.get("r_hit_rating", 0):
+            total = enhanced_stats.get("hit_rating", 0) + (item.get("r_hit_rating", 0) or 0)
             stats_lines.append(f"🎯 **Hit Rating:** +{total}%")
         
         if stats_lines:

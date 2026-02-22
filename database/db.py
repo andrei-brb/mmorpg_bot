@@ -88,6 +88,39 @@ class Database:
                 ADD COLUMN IF NOT EXISTS rarity item_rarity;
             """)
             
+            # Add enhancement_level to inventory
+            await c.execute("""
+                ALTER TABLE inventory
+                ADD COLUMN IF NOT EXISTS enhancement_level SMALLINT DEFAULT 0 CHECK (enhancement_level BETWEEN 0 AND 10);
+            """)
+            
+            # Add last_blessing_claim to characters
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS last_blessing_claim TIMESTAMPTZ;
+            """)
+            
+            # Create enhancement_log table
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS enhancement_log (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    item_id         UUID,
+                    item_name       VARCHAR(100) NOT NULL,
+                    from_level      SMALLINT NOT NULL,
+                    to_level        SMALLINT NOT NULL,
+                    success         BOOLEAN NOT NULL,
+                    gold_spent      INT NOT NULL,
+                    protection_used VARCHAR(32),
+                    created_at      TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_enhancement_char 
+                ON enhancement_log(character_id, created_at DESC);
+            """)
+            
         log.info("Schema initialized.")
 
 
@@ -275,6 +308,9 @@ CREATE TABLE IF NOT EXISTS inventory (
     -- Equipment state
     is_equipped     BOOLEAN DEFAULT FALSE,
     equip_slot      equip_slot,
+
+    -- Enhancement
+    enhancement_level SMALLINT DEFAULT 0 CHECK (enhancement_level BETWEEN 0 AND 10),
 
     -- Provenance
     locked          BOOLEAN DEFAULT FALSE,

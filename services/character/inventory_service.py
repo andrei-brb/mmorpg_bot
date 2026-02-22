@@ -253,7 +253,8 @@ class InventoryService:
                      t.s_haste,t.s_lifesteal,t.s_resistance,t.s_hit_rating,
                      i.r_str,i.r_agi,i.r_int,i.r_spi,i.r_sta,
                      i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating,
-                     COALESCE(i.rarity, t.rarity) as rarity
+                     COALESCE(i.rarity, t.rarity) as rarity,
+                     COALESCE(i.enhancement_level, 0) as enhancement_level
                FROM inventory i JOIN item_templates t ON i.template_id=t.id
                WHERE i.character_id=$1
                ORDER BY i.is_equipped DESC, COALESCE(i.rarity, t.rarity) DESC, t.name""",

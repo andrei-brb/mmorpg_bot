@@ -115,6 +115,7 @@ class MMORPGBot(commands.Bot):
             "cogs.dungeon.dungeon_cog",
             "cogs.achievements.achievements_cog",
             "cogs.admin.admin_cog",
+            "cogs.blacksmith.blacksmith_cog",
             "cogs.help_cog",
         ]
         for cog in cogs:
@@ -126,9 +127,8 @@ class MMORPGBot(commands.Bot):
 
         log.info("Syncing application commands...")
         try:
-            # Sync globally (this will override any guild-specific commands)
-            synced = await self.tree.sync()
-            log.info(f"✓ Commands synced ({len(synced)} commands)")
+            await self.tree.sync()
+            log.info("✓ Commands synced")
         except Exception as e:
             log.error(f"Failed to sync commands: {e}")
 

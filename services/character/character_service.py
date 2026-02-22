@@ -227,7 +227,8 @@ class CharacterService:
                    t.s_haste,t.s_lifesteal,t.s_resistance,t.s_hit_rating,
                    t.set_id,
                    i.r_str,i.r_agi,i.r_int,i.r_spi,i.r_sta,
-                   i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating
+                   i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating,
+                   COALESCE(i.enhancement_level, 0) as enhancement_level
             FROM inventory i JOIN item_templates t ON i.template_id=t.id
             WHERE i.character_id=$1 AND i.is_equipped=TRUE
             """, char_id,
@@ -236,22 +237,50 @@ class CharacterService:
         # Track sets for set bonuses
         set_counts: Dict[str, int] = {}
         
+        # Import enhancement config
+        from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
+        
         for it in equipped:
             df = it["durability"] / 100
-            stats["strength"]  += int((it["s_str"]  + it.get("r_str", 0))  * df)
-            stats["agility"]   += int((it["s_agi"]  + it.get("r_agi", 0))  * df)
-            stats["intellect"] += int((it["s_int"]  + it.get("r_int", 0))  * df)
-            stats["spirit"]    += int((it["s_spi"]  + it.get("r_spi", 0))  * df)
-            stats["stamina"]   += int((it["s_sta"]  + it.get("r_sta", 0))  * df)
-            stats["armor"]     += int( it["s_armor"] * df)
-            stats["dmg_min"]   += it["s_dmg_min"]
-            stats["dmg_max"]   += it["s_dmg_max"]
+            enhancement_level = it.get("enhancement_level", 0) or 0
             
-            # Secondary stats
-            stats["haste"]      += int((it.get("s_haste", 0) + it.get("r_haste", 0)) * df)
-            stats["lifesteal"]  += int((it.get("s_lifesteal", 0) + it.get("r_lifesteal", 0)) * df)
-            stats["resistance"] += int((it.get("s_resistance", 0) + it.get("r_resistance", 0)) * df)
-            stats["hit_rating"] += int((it.get("s_hit_rating", 0) + it.get("r_hit_rating", 0)) * df)
+            # Calculate enhancement multiplier
+            if enhancement_level > 0:
+                enh_config = ENHANCEMENT_CONFIG.get(enhancement_level, {"stat_boost": 0})
+                enh_mult = 1 + enh_config["stat_boost"]
+            else:
+                enh_mult = 1.0
+            
+            # Apply enhancement to base stats (not random rolls)
+            base_str = int((it["s_str"] * enh_mult) * df)
+            base_agi = int((it["s_agi"] * enh_mult) * df)
+            base_int = int((it["s_int"] * enh_mult) * df)
+            base_spi = int((it["s_spi"] * enh_mult) * df)
+            base_sta = int((it["s_sta"] * enh_mult) * df)
+            base_armor = int((it["s_armor"] * enh_mult) * df)
+            base_dmg_min = int(it["s_dmg_min"] * enh_mult)
+            base_dmg_max = int(it["s_dmg_max"] * enh_mult)
+            
+            # Add random roll bonuses (not enhanced)
+            stats["strength"]  += base_str + int((it.get("r_str", 0) or 0) * df)
+            stats["agility"]   += base_agi + int((it.get("r_agi", 0) or 0) * df)
+            stats["intellect"] += base_int + int((it.get("r_int", 0) or 0) * df)
+            stats["spirit"]    += base_spi + int((it.get("r_spi", 0) or 0) * df)
+            stats["stamina"]   += base_sta + int((it.get("r_sta", 0) or 0) * df)
+            stats["armor"]     += base_armor
+            stats["dmg_min"]   += base_dmg_min
+            stats["dmg_max"]   += base_dmg_max
+            
+            # Secondary stats (enhanced)
+            base_haste = int((it.get("s_haste", 0) or 0) * enh_mult * df)
+            base_lifesteal = int((it.get("s_lifesteal", 0) or 0) * enh_mult * df)
+            base_resistance = int((it.get("s_resistance", 0) or 0) * enh_mult * df)
+            base_hit_rating = int((it.get("s_hit_rating", 0) or 0) * enh_mult * df)
+            
+            stats["haste"]      += base_haste + int((it.get("r_haste", 0) or 0) * df)
+            stats["lifesteal"]  += base_lifesteal + int((it.get("r_lifesteal", 0) or 0) * df)
+            stats["resistance"] += base_resistance + int((it.get("r_resistance", 0) or 0) * df)
+            stats["hit_rating"] += base_hit_rating + int((it.get("r_hit_rating", 0) or 0) * df)
             
             # Track set pieces
             if it.get("set_id"):
