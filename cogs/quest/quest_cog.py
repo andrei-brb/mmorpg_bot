@@ -5,13 +5,15 @@
 
 Commands:
   /interact <npc>       — Talk to a discovered NPC (triggers DM)
-  /quest log            — View active quests
+  /quest log            — View active quests (with timers)
   /quest completed      — View completed quests
   /quest abandon <id>   — Abandon an active quest
   /quest npcs           — See all discovered NPCs
+  /reputation           — View faction standings
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 import discord
@@ -20,7 +22,10 @@ from discord.ext import commands
 
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
-from services.quest.npc_quest_service import NPCQuestService, NPC_TEMPLATES
+from services.quest.npc_quest_service import (
+    NPCQuestService, NPC_TEMPLATES, FACTIONS,
+    get_rep_level, get_dynamic_intro,
+)
 
 log = logging.getLogger("cog.quest")
 
@@ -148,7 +153,6 @@ class QuestCog(commands.Cog, name="Quests"):
             if rewards:
                 await self._grant_rewards(char["id"], rewards)
 
-            # Build completion embed
             dialogue = quest_data["dialogue"].get("completion", "Quest complete!")
             embed = discord.Embed(
                 title=f"🎉 Quest Complete: {quest_data['name']}",
@@ -165,6 +169,18 @@ class QuestCog(commands.Cog, name="Quests"):
                 item_names = [i.replace("_", " ").title() for i in rewards["items"]]
                 reward_text.append(f"🎁 {', '.join(item_names)}")
 
+            # Show reputation gain
+            rep_results = []
+            if rewards.get("reputation"):
+                for faction_id, amount in rewards["reputation"].items():
+                    rep_info = await self.quest_svc.add_reputation(char["id"], faction_id, amount)
+                    faction = FACTIONS.get(faction_id, {})
+                    rep_text = f"{faction.get('emoji', '⭐')} **+{amount}** {faction.get('name', faction_id)}"
+                    if rep_info.get("leveled_up"):
+                        rep_text += f" — 🎊 **{rep_info['level']['name']}** reached!"
+                    rep_results.append(rep_text)
+                    reward_text.append(rep_text)
+
             embed.add_field(name="🏆 Rewards", value="\n".join(reward_text), inline=False)
 
             # Check if NPC has more quests
@@ -179,7 +195,6 @@ class QuestCog(commands.Cog, name="Quests"):
                     inline=False,
                 )
 
-            # Try DM, fallback to channel
             try:
                 dm = await interaction.user.create_dm()
                 await dm.send(embed=embed)
@@ -192,7 +207,6 @@ class QuestCog(commands.Cog, name="Quests"):
             return
 
         elif talk_result and not talk_result["complete"]:
-            # Step advanced, show next objective
             quest_data = talk_result["quest_data"]
             next_step = talk_result["next_step"]
             embed = discord.Embed(
@@ -218,7 +232,6 @@ class QuestCog(commands.Cog, name="Quests"):
 
         # ── No quest step to complete — offer new quest or show intro ────────
 
-        # Get player's completed quests to find next available
         completed_ids = [q["quest_id"] for q in await self.quest_svc.get_completed_quests(char["id"])]
         active_quests = await self.quest_svc.get_active_quests(char["id"])
         active_ids = [q["quest_id"] for q in active_quests]
@@ -226,7 +239,6 @@ class QuestCog(commands.Cog, name="Quests"):
         # Check if player already has a quest from this NPC
         for aq in active_quests:
             if aq["npc_id"] == npc_id:
-                # Show current progress
                 step_idx = aq["current_step"] - 1
                 step = aq["steps"][step_idx] if step_idx < len(aq["steps"]) else None
                 embed = discord.Embed(
@@ -240,6 +252,19 @@ class QuestCog(commands.Cog, name="Quests"):
                         value=f"{step['objective']}\n*{step['hint']}*",
                         inline=False,
                     )
+
+                # Show timer if timed quest
+                if aq.get("expires_at"):
+                    expires_at = aq["expires_at"]
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    ts = int(expires_at.timestamp())
+                    embed.add_field(
+                        name="⏰ Time Remaining",
+                        value=f"Expires <t:{ts}:R>",
+                        inline=True,
+                    )
+
                 try:
                     dm = await interaction.user.create_dm()
                     await dm.send(embed=embed)
@@ -252,7 +277,6 @@ class QuestCog(commands.Cog, name="Quests"):
         next_quest = self.quest_svc.get_next_quest_for_npc(npc_id, completed_ids)
 
         if not next_quest:
-            # All quests done
             embed = discord.Embed(
                 title=f"{npc_data['title']} {npc_data['name']}",
                 description=(
@@ -287,7 +311,7 @@ class QuestCog(commands.Cog, name="Quests"):
                 await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        # ── Offer new quest via DM ───────────────────────────────────────────
+        # ── Offer new quest via DM (with dynamic dialogue) ───────────────────
 
         try:
             dm = await interaction.user.create_dm()
@@ -297,9 +321,14 @@ class QuestCog(commands.Cog, name="Quests"):
                 ephemeral=True,
             )
 
+        # Dynamic intro based on class/level
+        char_class = char.get("class", "warrior")
+        char_level = char.get("level", 1)
+        intro_text = get_dynamic_intro(npc_id, npc_data, char_class, char_level)
+
         embed = discord.Embed(
             title=f"{npc_data['title']} {npc_data['name']}",
-            description=npc_data["introduction"]["text"],
+            description=intro_text,
             color=0x4A90E2,
         )
 
@@ -312,6 +341,15 @@ class QuestCog(commands.Cog, name="Quests"):
         if next_quest.get("level_req", 1) > 1:
             embed.add_field(name="⚔️ Level Required", value=f"Level {next_quest['level_req']}", inline=True)
 
+        # Show time limit if timed quest
+        if next_quest.get("time_limit_hours"):
+            hours = next_quest["time_limit_hours"]
+            if hours >= 24:
+                time_str = f"{hours // 24} day{'s' if hours >= 48 else ''}"
+            else:
+                time_str = f"{hours} hour{'s' if hours > 1 else ''}"
+            embed.add_field(name="⏰ Time Limit", value=f"{time_str} to complete", inline=True)
+
         # Reward preview
         rewards = next_quest["rewards"]
         reward_lines = []
@@ -321,6 +359,10 @@ class QuestCog(commands.Cog, name="Quests"):
             reward_lines.append(f"🪙 {rewards['gold']:,} Gold")
         if rewards.get("items"):
             reward_lines.append(f"🎁 Unique Item Reward")
+        if rewards.get("reputation"):
+            for fid, amt in rewards["reputation"].items():
+                faction = FACTIONS.get(fid, {})
+                reward_lines.append(f"{faction.get('emoji', '⭐')} +{amt} {faction.get('name', fid)} Rep")
         embed.add_field(name="🏆 Rewards", value="\n".join(reward_lines), inline=True)
 
         # Steps preview
@@ -328,6 +370,17 @@ class QuestCog(commands.Cog, name="Quests"):
             f"`{i+1}.` {s['objective']}" for i, s in enumerate(next_quest["steps"])
         )
         embed.add_field(name="📋 Objectives", value=step_text, inline=False)
+
+        # Show faction info
+        faction_id = npc_data.get("faction")
+        if faction_id:
+            faction = FACTIONS.get(faction_id)
+            if faction:
+                current_rep = await self.quest_svc.get_reputation(char["id"], faction_id)
+                level = get_rep_level(current_rep)
+                embed.set_footer(
+                    text=f"{faction['emoji']} {faction['name']}: {level['emoji']} {level['name']} ({current_rep:,} rep)"
+                )
 
         # Send with buttons
         view = QuestOfferView()
@@ -338,10 +391,7 @@ class QuestCog(commands.Cog, name="Quests"):
             ephemeral=True,
         )
 
-        # Update NPC state
         await self.quest_svc.update_npc_state(char["id"], npc_id, "quest_offered")
-
-        # Wait for response
         await view.wait()
 
         if view.choice == "accept":
@@ -359,6 +409,12 @@ class QuestCog(commands.Cog, name="Quests"):
                 value=f"{first_step['objective']}\n*{first_step['hint']}*",
                 inline=False,
             )
+            if next_quest.get("time_limit_hours"):
+                accept_embed.add_field(
+                    name="⏰ Timer Started!",
+                    value=f"You have **{next_quest['time_limit_hours']} hours** to complete this quest!",
+                    inline=False,
+                )
             accept_embed.set_footer(text="Use /quest log to track your progress!")
             await dm_msg.edit(embed=accept_embed, view=None)
 
@@ -383,11 +439,16 @@ class QuestCog(commands.Cog, name="Quests"):
                     value=f"*{step['hint']}*",
                     inline=False,
                 )
+            if next_quest.get("time_limit_hours"):
+                info_embed.add_field(
+                    name="⏰ Time Limit",
+                    value=f"**{next_quest['time_limit_hours']} hours** from acceptance",
+                    inline=False,
+                )
             info_embed.set_footer(text="Use /interact again to accept or decline.")
             await dm_msg.edit(embed=info_embed, view=None)
 
         else:
-            # Timeout
             timeout_embed = discord.Embed(
                 title="⏰ Quest Offer Expired",
                 description="The NPC waits patiently. Use `/interact` again when you're ready.",
@@ -449,6 +510,14 @@ class QuestCog(commands.Cog, name="Quests"):
                     if kill_key:
                         current = meta.get(kill_key, 0)
                         value += f"\n📊 Progress: **{current}/{count}**"
+
+            # Show timer for timed quests
+            if q.get("expires_at"):
+                expires_at = q["expires_at"]
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                ts = int(expires_at.timestamp())
+                value += f"\n⏰ Expires <t:{ts}:R>"
 
             embed.add_field(
                 name=f"📜 {q['quest_name']}",
@@ -522,9 +591,20 @@ class QuestCog(commands.Cog, name="Quests"):
             zone = ZONES.get(n["zone"], None)
             zone_name = zone.name if zone else n["zone"].replace("_", " ").title()
             state_emoji = {"discovered": "🔵", "introduced": "🟡", "quest_offered": "🟢"}.get(n["state"], "⚪")
+
+            # Show faction
+            faction_str = ""
+            if n.get("faction"):
+                faction = FACTIONS.get(n["faction"])
+                if faction:
+                    faction_str = f" | {faction['emoji']} {faction['name']}"
+
             embed.add_field(
                 name=f"{n['title']} {n['name']}",
-                value=f"{state_emoji} {n['state'].replace('_', ' ').title()} | 📍 {zone_name}\n*Use `/interact {n['name'].split()[0].lower()}` to talk*",
+                value=(
+                    f"{state_emoji} {n['state'].replace('_', ' ').title()} | 📍 {zone_name}{faction_str}\n"
+                    f"*Use `/interact {n['name'].split()[0].lower()}` to talk*"
+                ),
                 inline=False,
             )
 
@@ -544,7 +624,6 @@ class QuestCog(commands.Cog, name="Quests"):
             return await interaction.followup.send("❌ No character.", ephemeral=True)
 
         active = await self.quest_svc.get_active_quests(char["id"])
-        # Find quest by partial name match
         target = None
         for q in active:
             if quest_name.lower() in q["quest_name"].lower():
@@ -558,7 +637,6 @@ class QuestCog(commands.Cog, name="Quests"):
                 ephemeral=True,
             )
 
-        # Confirm
         embed = discord.Embed(
             title="⚠️ Abandon Quest?",
             description=(
@@ -587,6 +665,64 @@ class QuestCog(commands.Cog, name="Quests"):
             )
             await msg.edit(embed=keep_embed, view=None)
 
+    # ── /reputation ──────────────────────────────────────────────────────────
+
+    @app_commands.command(name="reputation", description="View your faction standings")
+    async def reputation(self, interaction: discord.Interaction):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+
+        factions = await self.quest_svc.get_all_reputation(char["id"])
+
+        embed = discord.Embed(
+            title="🏛️ Faction Reputation",
+            description="Your standing with the factions of the world.",
+            color=0x9B59B6,
+        )
+
+        for f in factions:
+            level = f["level"]
+            rep = f["reputation"]
+
+            # Calculate progress bar to next level
+            current_threshold = level["threshold"]
+            next_level = None
+            from services.quest.npc_quest_service import REPUTATION_LEVELS
+            for thresh, name, emoji, perks in REPUTATION_LEVELS:
+                if thresh > rep:
+                    next_level = (thresh, name, emoji, perks)
+                    break
+
+            if next_level:
+                progress = rep - current_threshold
+                needed = next_level[0] - current_threshold
+                filled = int((progress / needed) * 10) if needed > 0 else 10
+                bar = "█" * filled + "░" * (10 - filled)
+                progress_text = f"`{bar}` {progress}/{needed} to {next_level[2]} {next_level[1]}"
+            else:
+                progress_text = "`██████████` MAX RANK!"
+
+            faction_info = FACTIONS.get(f["faction_id"], {})
+            embed.add_field(
+                name=f"{f['emoji']} {f['name']}",
+                value=(
+                    f"{level['emoji']} **{level['name']}** ({rep:,} rep)\n"
+                    f"{progress_text}\n"
+                    f"*{level['perks']}*"
+                ),
+                inline=False,
+            )
+
+        embed.set_footer(text="Complete NPC quests to gain reputation!")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     async def _grant_rewards(self, char_id, rewards: dict):
@@ -597,7 +733,6 @@ class QuestCog(commands.Cog, name="Quests"):
             await self.char_svc.add_gold(char_id, rewards["gold"], "quest_reward", "quest_reward")
         if rewards.get("items"):
             for template_id in rewards["items"]:
-                # Get item rarity from template
                 tmpl = await self.bot.db.fetchrow(
                     "SELECT rarity FROM item_templates WHERE id = $1", template_id
                 )
@@ -605,7 +740,6 @@ class QuestCog(commands.Cog, name="Quests"):
                 await self.inv_svc.add_item(char_id, template_id, rarity=rarity)
 
     def _get_progress_dialogue(self, quest_data, step_idx):
-        """Get the dialogue line for current progress."""
         dialogue = quest_data.get("dialogue", {}) if isinstance(quest_data, dict) else {}
         key = f"progress_{step_idx}"
         return dialogue.get(key, "Keep going! You're making good progress.")

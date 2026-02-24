@@ -19,7 +19,7 @@ GAME_CHANNELS = {
     "dungeon":     {"name": "🏰-dungeons",     "topic": "Dungeon runs here! Use /dungeon enter"},
     "market":      {"name": "🪙-marketplace",  "topic": "Buy & sell items! Use /market"},
     "explore":     {"name": "🗺-exploration",   "topic": "Explore and travel! Use /explore /travel"},
-    "quest":       {"name": "📜-quests",        "topic": "NPC Quests! Use /interact /quest log"},
+    "quest":       {"name": "📜-quests",        "topic": "NPC Quests & Reputation! Use /interact /quest log /reputation"},
     "general":     {"name": "🎮-game-general",  "topic": "General game commands: /character /inventory /help"},
 }
 
@@ -323,6 +323,7 @@ COMMAND_CHANNEL_MAP = {
     # Quests (📜 Quests channel)
     "interact": "quest",
     "quest": "quest",
+    "reputation": "quest",
     # General (🎮 Game General channel) - All other commands
     "character": "general",
     "inventory": "general",

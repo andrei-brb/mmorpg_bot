@@ -3,20 +3,178 @@
 ║       services/quest/npc_quest_service.py — NPC Quest System               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-FLOW:
-1. /explore → Public channel shows NPC hint
-2. /interact <npc> → Bot DMs player with introduction
-3. Player chooses quest path in DM
-4. Quest progresses via kills, zone visits, item finds
-5. Completion announced publicly
+Features:
+  • NPC Discovery during /explore
+  • Multi-step quest chains with kill/zone/boss tracking
+  • Timed quests (expire after X hours)
+  • Dynamic dialogue (class/level-based NPC speech)
+  • Reputation system (factions, levels, rewards)
 """
 
 import logging
 import random
-from typing import Optional, Dict, List, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, List
 from uuid import UUID
 
 log = logging.getLogger("npc_quest")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  FACTION / REPUTATION CONFIG
+# ═══════════════════════════════════════════════════════════════════════════════
+
+REPUTATION_LEVELS = [
+    # (min_rep, name, emoji, perks_description)
+    (-3000, "Hated",      "🔴", "NPCs refuse to help you"),
+    (-1000, "Hostile",    "🟠", "NPCs distrust you"),
+    (0,     "Neutral",    "⚪", "Default standing"),
+    (500,   "Friendly",   "🟢", "5% shop discount"),
+    (1500,  "Honored",    "🔵", "10% shop discount, new quests"),
+    (3000,  "Revered",    "🟣", "15% shop discount, special items"),
+    (6000,  "Exalted",    "🟡", "20% shop discount, unique rewards"),
+]
+
+FACTIONS = {
+    "stormwind_guard": {
+        "name": "Stormwind Guard",
+        "emoji": "🛡️",
+        "description": "The protectors of Elwynn Forest and its people.",
+        "zones": ["elwynn_forest"],
+    },
+    "dwarven_explorers": {
+        "name": "Dwarven Explorers' League",
+        "emoji": "⛏️",
+        "description": "Scholars and adventurers mapping the frozen north.",
+        "zones": ["dun_morogh"],
+    },
+    "trade_coalition": {
+        "name": "Merchant Trade Coalition",
+        "emoji": "💰",
+        "description": "A network of traders keeping commerce alive in dangerous lands.",
+        "zones": ["barrens"],
+    },
+    "pirate_fleet": {
+        "name": "Bloodsail Buccaneers",
+        "emoji": "🏴‍☠️",
+        "description": "Seafarers and treasure hunters of Stranglethorn.",
+        "zones": ["stranglethorn"],
+    },
+    "arcane_order": {
+        "name": "Order of the Arcane",
+        "emoji": "🔮",
+        "description": "Ancient scholars seeking forbidden knowledge in the depths.",
+        "zones": ["blackrock_depths"],
+    },
+}
+
+
+def get_rep_level(rep: int) -> dict:
+    """Get the reputation level info for a given rep amount."""
+    result = REPUTATION_LEVELS[0]
+    for threshold, name, emoji, perks in REPUTATION_LEVELS:
+        if rep >= threshold:
+            result = (threshold, name, emoji, perks)
+    return {"threshold": result[0], "name": result[1], "emoji": result[2], "perks": result[3]}
+
+
+def get_rep_discount(rep: int) -> float:
+    """Get shop discount multiplier based on reputation."""
+    level = get_rep_level(rep)
+    discounts = {"Friendly": 0.05, "Honored": 0.10, "Revered": 0.15, "Exalted": 0.20}
+    return discounts.get(level["name"], 0.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  DYNAMIC DIALOGUE — Class & level-specific NPC speech
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Intro overrides keyed by NPC → class
+DYNAMIC_INTRODUCTIONS = {
+    "old_guard_marcus": {
+        "warrior": (
+            "The old soldier's eyes light up as he sees your armor.\n\n"
+            "\"A fellow warrior! I can see it in how you carry yourself.\n"
+            "Name's Marcus. I fought in the Second War—same as your fighting instructors, I'd bet.\n\n"
+            "Those Defias scum have taken over the roads. A warrior like you could handle them easily.\""
+        ),
+        "paladin": (
+            "The old soldier drops to one knee, then catches himself.\n\n"
+            "\"Forgive me—old habits. I served alongside Paladins during the war.\n"
+            "Name's Marcus. The Light brought you here for a reason.\n\n"
+            "The Defias are terrorizing travelers. Will the Light guide your blade against them?\""
+        ),
+        "mage": (
+            "The old soldier eyes your robes with a mix of awe and suspicion.\n\n"
+            "\"A mage, eh? Don't see many spellcasters out here on the roads.\n"
+            "Name's Marcus. Could use someone with your talents.\n\n"
+            "The Defias bandits are a problem steel alone can't solve. Perhaps magic can.\""
+        ),
+        "rogue": (
+            "The old soldier notices you before you notice him. Impressive.\n\n"
+            "\"I see you moving in the shadows—takes one to know one.\n"
+            "Name's Marcus. I did some... reconnaissance work in my younger days.\n\n"
+            "The Defias think they own these roads. Let's remind them who's really watching.\""
+        ),
+        "priest": (
+            "The old soldier winces, clutching an old wound.\n\n"
+            "\"A healer! Thank the Light. This shoulder's been bothering me for years.\n"
+            "Name's Marcus. The roads aren't safe anymore.\n\n"
+            "The Defias are hurting travelers. A priest's presence could help—both in healing and smiting.\""
+        ),
+        "hunter": (
+            "The old soldier watches you and your steady stance with interest.\n\n"
+            "\"A hunter! Your kind can track anything through these woods.\n"
+            "Name's Marcus. I need someone who can find the Defias camps.\n\n"
+            "Those bandits keep moving, but a skilled tracker could pin them down.\""
+        ),
+    },
+    "frostbeard_sage": {
+        "warrior": "The dwarf looks at your heavy armor and sighs.\n\n\"A warrior? Bah, I needed a scholar, not a brute. ...Well, you CAN smash troggs. That's useful enough. I'm Frostbeard.\"",
+        "mage": "The dwarf's eyes widen with delight.\n\n\"A fellow practitioner of the arcane! Excellent! I'm Frostbeard, and I've been DYING for intelligent company.\n\nHelp me study these trogg migration patterns. Your magical insight would be invaluable!\"",
+        "rogue": "The dwarf jumps, nearly dropping his spectacles.\n\n\"GAH! Don't sneak up on a scholar! ...Wait, your stealth skills could be useful.\n\nI'm Frostbeard. I need someone who can observe troggs WITHOUT being seen.\"",
+    },
+    "captain_seafoam": {
+        "rogue": "The pirate grins widely.\n\n\"A rogue! Now THAT'S what I like to see. A kindred spirit!\n\nCaptain Seafoam, at yer service. I've got treasure to dig up, and your... particular skills... would be perfect for the job.\"",
+        "warrior": "The pirate eyes your weapons appreciatively.\n\n\"A proper fighter! Arr, the jungle beasts won't know what hit 'em.\n\nCaptain Seafoam. I need muscle to clear my old treasure sites. You look like just the muscle.\"",
+    },
+    "eldric_wanderer": {
+        "mage": "Eldric's eyes gleam with recognition.\n\n\"A mage! I sense the arcane flowing through you. We are kindred seekers of knowledge.\n\nThe secrets below require both magical skill and raw power. You have both.\"",
+        "priest": "Eldric bows respectfully.\n\n\"A servant of the Light in these dark depths? How fitting.\n\nThe corruption here runs deep. Your spiritual sight may reveal what my eyes cannot.\"",
+    },
+}
+
+# High-level greetings (level 30+, 50+)
+LEVEL_GREETINGS = {
+    "old_guard_marcus": {
+        30: "\n\n*Marcus studies you with new respect.* \"You've grown powerful since we first met. The realm owes you a debt.\"",
+        50: "\n\n*Marcus stands at attention.* \"Commander. I don't use that title lightly. You've earned it a hundred times over.\"",
+    },
+    "frostbeard_sage": {
+        30: "\n\n*Frostbeard adjusts his spectacles.* \"My, you've come a long way from that green adventurer I first met!\"",
+        50: "\n\n*Frostbeard whispers reverently.* \"Your power rivals the ancient heroes of old. Truly remarkable.\"",
+    },
+    "captain_seafoam": {
+        30: "\n\n*Seafoam raises his flask.* \"To a proper adventurer! You've got salt water in yer veins now.\"",
+        50: "\n\n*Seafoam removes his hat.* \"I've sailed every sea, and I've never met anyone as fearsome as you. Legend.\"",
+    },
+}
+
+
+def get_dynamic_intro(npc_id: str, npc_data: dict, char_class: str, char_level: int) -> str:
+    """Get class/level-appropriate introduction text."""
+    # Try class-specific intro
+    class_intros = DYNAMIC_INTRODUCTIONS.get(npc_id, {})
+    base_text = class_intros.get(char_class, npc_data["introduction"]["text"])
+
+    # Append level greeting if applicable
+    level_greets = LEVEL_GREETINGS.get(npc_id, {})
+    for level_threshold in sorted(level_greets.keys(), reverse=True):
+        if char_level >= level_threshold:
+            base_text += level_greets[level_threshold]
+            break
+
+    return base_text
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -31,6 +189,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
         "discovery_hint": "An old man in battered armor sits by a campfire, polishing a rusty sword.",
         "zones": ["elwynn_forest"],
         "discovery_chance": 0.18,
+        "faction": "stormwind_guard",
         "introduction": {
             "text": (
                 "The old soldier looks up, studying you with weary eyes.\n\n"
@@ -64,6 +223,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "xp": 500,
                     "gold": 200,
                     "items": ["iron_sword"],
+                    "reputation": {"stormwind_guard": 250},
                 },
                 "dialogue": {
                     "accept": "\"Good! Those bandits camp near the river bend. Be careful—they fight dirty.\"",
@@ -81,6 +241,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                 "name": "The Captain's Grudge",
                 "description": "A stronger bandit leader has emerged. Track and eliminate the threat.",
                 "level_req": 5,
+                "time_limit_hours": 48,
                 "steps": [
                     {
                         "step": 1,
@@ -105,9 +266,10 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "xp": 1500,
                     "gold": 500,
                     "items": ["leather_cap"],
+                    "reputation": {"stormwind_guard": 500},
                 },
                 "dialogue": {
-                    "accept": "\"This one's dangerous—a former guard who sold us out. Watch your back.\"",
+                    "accept": "\"This one's dangerous—a former guard who sold us out. Watch your back.\n⏰ You have **48 hours** to complete this mission!\"",
                     "decline": "\"Take your time. This isn't an enemy to face unprepared.\"",
                     "progress_1": "\"Good, you found their hideout. Keep pushing forward!\"",
                     "progress_2": "\"You're doing great! Just a bit more to clear out.\"",
@@ -127,6 +289,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
         "discovery_hint": "A dwarf with an icy-white beard studies runes carved into a frozen boulder.",
         "zones": ["dun_morogh"],
         "discovery_chance": 0.15,
+        "faction": "dwarven_explorers",
         "introduction": {
             "text": (
                 "The dwarf squints at you through thick spectacles.\n\n"
@@ -165,6 +328,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "xp": 800,
                     "gold": 300,
                     "items": ["dwarven_axe"],
+                    "reputation": {"dwarven_explorers": 300},
                 },
                 "dialogue": {
                     "accept": "\"Aye! Take this journal—note anything unusual about their behavior.\"",
@@ -188,6 +352,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
         "discovery_hint": "A hooded merchant drags a cart of exotic goods through the dusty wasteland.",
         "zones": ["barrens"],
         "discovery_chance": 0.15,
+        "faction": "trade_coalition",
         "introduction": {
             "text": (
                 "The merchant pushes back her hood and grins.\n\n"
@@ -203,6 +368,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                 "name": "Stolen Shipments",
                 "description": "Recover Kira's stolen goods by defeating the Razormane raiders.",
                 "level_req": 10,
+                "time_limit_hours": 24,
                 "steps": [
                     {
                         "step": 1,
@@ -233,9 +399,10 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "xp": 3000,
                     "gold": 1500,
                     "items": ["raptor_hide_vest"],
+                    "reputation": {"trade_coalition": 500},
                 },
                 "dialogue": {
-                    "accept": "\"Wonderful! Here's a map of their raiding camps. Be ruthless.\"",
+                    "accept": "\"Wonderful! Here's a map of their raiding camps. Be ruthless.\n⏰ Hurry though—I need those goods within **24 hours** before they spoil!\"",
                     "decline": "\"I understand. If you change your mind, I'll be around.\"",
                     "progress_1": "\"Five down? Keep going! Their chief has my best cargo.\"",
                     "progress_2": "\"You're clearing them out! The chief must be getting nervous.\"",
@@ -258,6 +425,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
         "discovery_hint": "A one-eyed pirate captain sits on a log, drawing a treasure map in the dirt.",
         "zones": ["stranglethorn"],
         "discovery_chance": 0.12,
+        "faction": "pirate_fleet",
         "introduction": {
             "text": (
                 "The pirate looks you up and down with his one good eye.\n\n"
@@ -297,6 +465,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "xp": 5000,
                     "gold": 3000,
                     "items": ["corsair_blade"],
+                    "reputation": {"pirate_fleet": 750},
                 },
                 "dialogue": {
                     "accept": "\"That's the spirit! Here's the map—X marks the spot, obviously.\"",
@@ -321,6 +490,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
         "discovery_hint": "A hooded figure sits by the roadside, studying an ancient tome.",
         "zones": ["blackrock_depths"],
         "discovery_chance": 0.10,
+        "faction": "arcane_order",
         "introduction": {
             "text": (
                 "The hooded figure looks up as you approach. His eyes gleam with ancient wisdom.\n\n"
@@ -336,6 +506,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                 "name": "Secrets of Blackrock",
                 "description": "Uncover the ancient secrets hidden within Blackrock Depths.",
                 "level_req": 50,
+                "time_limit_hours": 72,
                 "steps": [
                     {
                         "step": 1,
@@ -360,9 +531,10 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "xp": 10000,
                     "gold": 5000,
                     "items": ["sulfuron_blade"],
+                    "reputation": {"arcane_order": 1000},
                 },
                 "dialogue": {
-                    "accept": "\"Excellent! The depths are treacherous—but the reward is worth any risk.\"",
+                    "accept": "\"Excellent! The depths are treacherous—but the reward is worth any risk.\n⏰ I'll wait **72 hours** for your return. After that, I must move on.\"",
                     "decline": "\"I understand. Only the truly brave dare face what lies below.\"",
                     "progress_1": "\"The dark iron are relentless, but you're making progress!\"",
                     "progress_2": "\"Two bosses felled! The inner sanctum must be close now.\"",
@@ -416,7 +588,6 @@ class NPCQuestService:
         return None
 
     async def discover_npc(self, char_id: UUID, npc_id: str, zone: str):
-        """Mark an NPC as discovered."""
         await self.db.execute(
             """INSERT INTO npc_discoveries (character_id, npc_id, zone_found, state)
                VALUES ($1, $2, $3, 'discovered')
@@ -438,7 +609,6 @@ class NPCQuestService:
         )
 
     async def get_discovered_npcs(self, char_id: UUID) -> List[Dict]:
-        """Get all NPCs a character has discovered."""
         rows = await self.db.fetch(
             "SELECT npc_id, state, zone_found, discovered_at FROM npc_discoveries WHERE character_id = $1",
             char_id,
@@ -453,17 +623,24 @@ class NPCQuestService:
                     "title": npc["title"],
                     "state": r["state"],
                     "zone": r["zone_found"],
+                    "faction": npc.get("faction"),
                 })
         return result
 
     # ── Quest Management ─────────────────────────────────────────────────────
 
     async def offer_quest(self, char_id: UUID, npc_id: str, quest_id: str):
+        # Calculate expiration from time_limit_hours if set
+        quest_data = self._find_quest_template(quest_id)
+        expires_at = None
+        if quest_data and quest_data.get("time_limit_hours"):
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=quest_data["time_limit_hours"])
+
         await self.db.execute(
-            """INSERT INTO quest_progress (character_id, quest_id, npc_id, current_step, state)
-               VALUES ($1, $2, $3, 1, 'offered')
+            """INSERT INTO quest_progress (character_id, quest_id, npc_id, current_step, state, expires_at)
+               VALUES ($1, $2, $3, 1, 'offered', $4)
                ON CONFLICT (character_id, quest_id) DO NOTHING""",
-            char_id, quest_id, npc_id,
+            char_id, quest_id, npc_id, expires_at,
         )
 
     async def accept_quest(self, char_id: UUID, quest_id: str):
@@ -481,7 +658,7 @@ class NPCQuestService:
         return dict(row) if row else None
 
     async def get_active_quests(self, char_id: UUID) -> List[Dict]:
-        """Get all active quests for a character, enriched with template info."""
+        """Get all active quests, auto-failing expired timed quests."""
         rows = await self.db.fetch(
             """SELECT * FROM quest_progress
                WHERE character_id = $1 AND state IN ('active', 'offered')
@@ -489,17 +666,34 @@ class NPCQuestService:
             char_id,
         )
         result = []
+        now = datetime.now(timezone.utc)
+
         for r in rows:
+            # Check for expiration
+            expires_at = r.get("expires_at")
+            if expires_at and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at and now > expires_at:
+                # Quest expired — auto-fail
+                await self.db.execute(
+                    "UPDATE quest_progress SET state = 'expired' WHERE character_id = $1 AND quest_id = $2",
+                    char_id, r["quest_id"],
+                )
+                continue
+
             quest_data = self._find_quest_template(r["quest_id"])
             if quest_data:
-                result.append({
+                entry = {
                     **dict(r),
                     "quest_name": quest_data["name"],
                     "quest_desc": quest_data["description"],
                     "total_steps": len(quest_data["steps"]),
                     "steps": quest_data["steps"],
                     "rewards": quest_data["rewards"],
-                })
+                    "time_limit_hours": quest_data.get("time_limit_hours"),
+                    "dialogue": quest_data.get("dialogue", {}),
+                }
+                result.append(entry)
         return result
 
     async def get_completed_quests(self, char_id: UUID) -> List[Dict]:
@@ -513,26 +707,18 @@ class NPCQuestService:
         for r in rows:
             quest_data = self._find_quest_template(r["quest_id"])
             if quest_data:
-                result.append({
-                    **dict(r),
-                    "quest_name": quest_data["name"],
-                })
+                result.append({**dict(r), "quest_name": quest_data["name"]})
         return result
 
     async def advance_quest(self, char_id: UUID, quest_id: str) -> bool:
-        """Move quest to next step. Returns True if advanced."""
         progress = await self.get_quest_progress(char_id, quest_id)
         if not progress or progress["state"] != "active":
             return False
-
         quest_data = self._find_quest_template(quest_id)
         if not quest_data:
             return False
-
-        current = progress["current_step"]
-        if current >= len(quest_data["steps"]):
-            return False  # Already at last step
-
+        if progress["current_step"] >= len(quest_data["steps"]):
+            return False
         await self.db.execute(
             "UPDATE quest_progress SET current_step = current_step + 1 WHERE character_id = $1 AND quest_id = $2",
             char_id, quest_id,
@@ -540,43 +726,44 @@ class NPCQuestService:
         return True
 
     async def complete_quest(self, char_id: UUID, quest_id: str) -> Optional[Dict]:
-        """
-        Mark quest as completed and return rewards to grant.
-        Does NOT grant rewards (the cog does that).
-        """
+        """Mark quest completed and return rewards dict."""
         progress = await self.get_quest_progress(char_id, quest_id)
         if not progress or progress["state"] != "active":
             return None
-
         quest_data = self._find_quest_template(quest_id)
         if not quest_data:
             return None
 
+        # Check if timed quest expired
+        expires_at = progress.get("expires_at")
+        if expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires_at:
+                await self.db.execute(
+                    "UPDATE quest_progress SET state = 'expired' WHERE character_id = $1 AND quest_id = $2",
+                    char_id, quest_id,
+                )
+                return None
+
         await self.db.execute(
-            """UPDATE quest_progress SET state = 'completed', completed_at = NOW()
-               WHERE character_id = $1 AND quest_id = $2""",
+            "UPDATE quest_progress SET state = 'completed', completed_at = NOW() WHERE character_id = $1 AND quest_id = $2",
             char_id, quest_id,
         )
         return quest_data["rewards"]
 
     async def abandon_quest(self, char_id: UUID, quest_id: str) -> bool:
-        """Abandon an active quest. Returns True if abandoned."""
         result = await self.db.execute(
-            """DELETE FROM quest_progress
-               WHERE character_id = $1 AND quest_id = $2 AND state IN ('active', 'offered')""",
+            "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state IN ('active', 'offered')",
             char_id, quest_id,
         )
         return "DELETE 1" in result
 
-    # ── Quest Completion Checks (called from combat / explore hooks) ─────────
+    # ── Kill Progress Check ──────────────────────────────────────────────────
 
     async def check_kill_progress(
         self, char_id: UUID, enemy_key: str, zone_key: str, is_boss: bool
     ) -> List[str]:
-        """
-        Called after a kill. Check all active quests and advance if criteria met.
-        Returns list of notification messages.
-        """
         active = await self.db.fetch(
             "SELECT * FROM quest_progress WHERE character_id = $1 AND state = 'active'",
             char_id,
@@ -584,6 +771,19 @@ class NPCQuestService:
         notifications = []
 
         for row in active:
+            # Skip expired quests
+            expires_at = row.get("expires_at")
+            if expires_at:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expires_at:
+                    await self.db.execute(
+                        "UPDATE quest_progress SET state = 'expired' WHERE character_id = $1 AND quest_id = $2",
+                        char_id, row["quest_id"],
+                    )
+                    notifications.append(f"⏰ Quest **{row['quest_id']}** has expired!")
+                    continue
+
             quest_data = self._find_quest_template(row["quest_id"])
             if not quest_data:
                 continue
@@ -596,7 +796,6 @@ class NPCQuestService:
             check = step["completion_check"]
             advanced = False
 
-            # Track kills in metadata
             meta = row.get("metadata") or {}
             if not isinstance(meta, dict):
                 meta = {}
@@ -606,53 +805,39 @@ class NPCQuestService:
                 kill_key = f"kills_{check['value']}"
                 current_kills = meta.get(kill_key, 0) + 1
                 meta[kill_key] = current_kills
-
                 if current_kills >= needed:
                     advanced = True
-                    notifications.append(
-                        f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!"
-                    )
+                    notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
                 else:
-                    notifications.append(
-                        f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})"
-                    )
+                    notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
 
             elif check["type"] == "kill_any_zone" and check["value"] == zone_key:
                 needed = check.get("count", 1)
                 kill_key = f"kills_zone_{check['value']}"
                 current_kills = meta.get(kill_key, 0) + 1
                 meta[kill_key] = current_kills
-
                 if current_kills >= needed:
                     advanced = True
-                    notifications.append(
-                        f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!"
-                    )
+                    notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
                 else:
-                    notifications.append(
-                        f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})"
-                    )
+                    notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
 
             elif check["type"] == "kill_boss_zone" and check["value"] == zone_key and is_boss:
                 needed = check.get("count", 1)
                 kill_key = f"boss_kills_{check['value']}"
                 current_kills = meta.get(kill_key, 0) + 1
                 meta[kill_key] = current_kills
-
                 if current_kills >= needed:
                     advanced = True
-                    notifications.append(
-                        f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!"
-                    )
+                    notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
                 else:
-                    notifications.append(
-                        f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})"
-                    )
+                    notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
 
-            # Save metadata & advance if needed
+            # Save metadata
+            import json
             await self.db.execute(
                 "UPDATE quest_progress SET metadata = $3::jsonb WHERE character_id = $1 AND quest_id = $2",
-                char_id, row["quest_id"], str(meta).replace("'", '"'),
+                char_id, row["quest_id"], json.dumps(meta),
             )
             if advanced:
                 await self.advance_quest(char_id, row["quest_id"])
@@ -660,39 +845,24 @@ class NPCQuestService:
         return notifications
 
     async def check_talk_to_npc(self, char_id: UUID, npc_id: str) -> Optional[Dict]:
-        """
-        Called when player interacts with NPC. Checks if talking completes a step.
-        Returns quest data + rewards if quest is fully complete, else None.
-        """
         active = await self.db.fetch(
             "SELECT * FROM quest_progress WHERE character_id = $1 AND state = 'active'",
             char_id,
         )
-
         for row in active:
             quest_data = self._find_quest_template(row["quest_id"])
             if not quest_data:
                 continue
-
             step_idx = row["current_step"] - 1
             if step_idx >= len(quest_data["steps"]):
                 continue
-
             step = quest_data["steps"][step_idx]
             check = step["completion_check"]
-
             if check["type"] == "talk_to_npc" and check["value"] == npc_id:
-                # This step is complete
                 next_step = row["current_step"] + 1
                 if next_step > len(quest_data["steps"]):
-                    # Quest is fully complete!
-                    return {
-                        "quest_id": row["quest_id"],
-                        "quest_data": quest_data,
-                        "complete": True,
-                    }
+                    return {"quest_id": row["quest_id"], "quest_data": quest_data, "complete": True}
                 else:
-                    # Advance to next step
                     await self.advance_quest(char_id, row["quest_id"])
                     return {
                         "quest_id": row["quest_id"],
@@ -700,24 +870,89 @@ class NPCQuestService:
                         "complete": False,
                         "next_step": quest_data["steps"][next_step - 1],
                     }
-
         return None
 
     def get_next_quest_for_npc(self, npc_id: str, completed_quests: List[str]) -> Optional[Dict]:
-        """Get the next available quest from an NPC (supports quest chains)."""
         npc = NPC_TEMPLATES.get(npc_id)
         if not npc:
             return None
-
         for quest in npc["quests"]:
             if quest["id"] not in completed_quests:
                 return quest
         return None
 
+    # ── Reputation ───────────────────────────────────────────────────────────
+
+    async def add_reputation(self, char_id: UUID, faction_id: str, amount: int) -> Dict:
+        """Add reputation and return new level info."""
+        row = await self.db.fetchrow(
+            "SELECT reputation FROM faction_reputation WHERE character_id = $1 AND faction_id = $2",
+            char_id, faction_id,
+        )
+        old_rep = row["reputation"] if row else 0
+        new_rep = old_rep + amount
+
+        await self.db.execute(
+            """INSERT INTO faction_reputation (character_id, faction_id, reputation)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (character_id, faction_id)
+               DO UPDATE SET reputation = $3, updated_at = NOW()""",
+            char_id, faction_id, new_rep,
+        )
+
+        old_level = get_rep_level(old_rep)
+        new_level = get_rep_level(new_rep)
+        leveled_up = old_level["name"] != new_level["name"]
+
+        return {
+            "faction_id": faction_id,
+            "old_rep": old_rep,
+            "new_rep": new_rep,
+            "level": new_level,
+            "leveled_up": leveled_up,
+        }
+
+    async def get_reputation(self, char_id: UUID, faction_id: str) -> int:
+        row = await self.db.fetchrow(
+            "SELECT reputation FROM faction_reputation WHERE character_id = $1 AND faction_id = $2",
+            char_id, faction_id,
+        )
+        return row["reputation"] if row else 0
+
+    async def get_all_reputation(self, char_id: UUID) -> List[Dict]:
+        """Get all faction standings for a character."""
+        rows = await self.db.fetch(
+            "SELECT faction_id, reputation, updated_at FROM faction_reputation WHERE character_id = $1 ORDER BY reputation DESC",
+            char_id,
+        )
+        result = []
+        for r in rows:
+            faction = FACTIONS.get(r["faction_id"])
+            if faction:
+                level = get_rep_level(r["reputation"])
+                result.append({
+                    "faction_id": r["faction_id"],
+                    "name": faction["name"],
+                    "emoji": faction["emoji"],
+                    "reputation": r["reputation"],
+                    "level": level,
+                })
+        # Add undiscovered factions at 0
+        known_ids = {r["faction_id"] for r in result}
+        for fid, faction in FACTIONS.items():
+            if fid not in known_ids:
+                result.append({
+                    "faction_id": fid,
+                    "name": faction["name"],
+                    "emoji": faction["emoji"],
+                    "reputation": 0,
+                    "level": get_rep_level(0),
+                })
+        return result
+
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def _find_quest_template(self, quest_id: str) -> Optional[Dict]:
-        """Find a quest definition by ID across all NPCs."""
         for npc in NPC_TEMPLATES.values():
             for quest in npc["quests"]:
                 if quest["id"] == quest_id:
@@ -725,18 +960,15 @@ class NPCQuestService:
         return None
 
     def find_npc_by_name(self, search: str) -> Optional[str]:
-        """Find NPC ID by partial name match."""
         search_lower = search.lower().strip()
         for npc_id, npc in NPC_TEMPLATES.items():
             if search_lower in npc["name"].lower():
                 return npc_id
             if search_lower in npc["title"].lower():
                 return npc_id
-            # Match by first word of name
             first_word = npc["name"].split()[0].lower()
             if search_lower == first_word:
                 return npc_id
-            # Match the NPC key
             if search_lower in npc_id:
                 return npc_id
         return None

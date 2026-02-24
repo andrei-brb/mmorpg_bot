@@ -142,6 +142,7 @@ class Database:
                     state           VARCHAR(32) DEFAULT 'active',
                     started_at      TIMESTAMPTZ DEFAULT NOW(),
                     completed_at    TIMESTAMPTZ,
+                    expires_at      TIMESTAMPTZ,
                     metadata        JSONB DEFAULT '{}',
                     PRIMARY KEY (character_id, quest_id)
                 );
@@ -150,6 +151,28 @@ class Database:
             await c.execute("""
                 CREATE INDEX IF NOT EXISTS idx_quest_progress_char
                 ON quest_progress(character_id, state);
+            """)
+
+            # Add expires_at column to existing quest_progress (migration)
+            await c.execute("""
+                ALTER TABLE quest_progress
+                ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+            """)
+
+            # ── Faction Reputation table ─────────────────────────────────
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS faction_reputation (
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    faction_id      VARCHAR(64) NOT NULL,
+                    reputation      INT DEFAULT 0,
+                    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (character_id, faction_id)
+                );
+            """)
+
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_faction_rep_char
+                ON faction_reputation(character_id);
             """)
 
         log.info("Schema initialized.")
