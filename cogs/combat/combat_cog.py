@@ -284,12 +284,12 @@ class _EnemySelect(discord.ui.Select):
                 return
             
             view.chosen = self.values[0]
-            self.stop()  # Stop FIRST
             try:
                 if not interaction.response.is_done():
                     await interaction.response.defer(ephemeral=True)
             except Exception as e:
                 log.warning(f"Error deferring enemy selection: {e}")
+            view.stop()  # Stop the VIEW (not the Select)
         except Exception as e:
             log.error(f"Error in enemy selection: {e}", exc_info=True)
             try:
