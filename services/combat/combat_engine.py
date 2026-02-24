@@ -354,6 +354,7 @@ class CombatResult:
     is_dodge:       bool = False
     effects_added:  List[str] = field(default_factory=list)
     narrative:      str = ""
+    lifesteal_heal: int = 0
 
 
 @dataclass
@@ -513,11 +514,11 @@ class CombatEngine:
 
                 # Lifesteal
                 lifesteal_pct = getattr(attacker, 'lifesteal', 0)
-                if lifesteal_pct > 0:
+                if lifesteal_pct > 0 and r.damage > 0:
                     heal_amount = int(r.damage * lifesteal_pct / 100)
-                    attacker.current_hp = min(attacker.max_hp, attacker.current_hp + heal_amount)
                     if heal_amount > 0:
-                        r.log += f" (💚 +{heal_amount} HP from lifesteal)"
+                        attacker.current_hp = min(attacker.max_hp, attacker.current_hp + heal_amount)
+                        r.lifesteal_heal = heal_amount
 
                 # Rage generation
                 if attacker.res_type == "rage":
@@ -691,4 +692,6 @@ class CombatEngine:
             parts.append(f"restoring **{r.healing}** HP")
         if r.effects_added:
             parts.append(f"applying *{', '.join(r.effects_added)}*")
+        if r.lifesteal_heal:
+            parts.append(f"💚 +{r.lifesteal_heal} HP lifesteal")
         return " — ".join(parts) + "."
