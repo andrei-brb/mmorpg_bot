@@ -507,24 +507,44 @@ class CombatCog(commands.Cog, name="Combat"):
 
                 else:
                     # ── Player action ─────────────────────────────────────────────
-                    ab_key = view.chosen or "auto_attack"
-                    ab = ABILITIES.get(ab_key, ABILITIES["auto_attack"])
-                    cls = CLASSES[char["class"]]
-                    cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
-                    eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
+                    try:
+                        ab_key = view.chosen or "auto_attack"
+                        if not ab_key:
+                            ab_key = "auto_attack"
+                            log.warning(f"No ability chosen, defaulting to auto_attack")
+                        
+                        ab = ABILITIES.get(ab_key)
+                        if not ab:
+                            log.error(f"Ability '{ab_key}' not found, using auto_attack")
+                            ab = ABILITIES.get("auto_attack", ABILITIES["auto_attack"])
+                        
+                        cls = CLASSES[char["class"]]
+                        cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
+                        eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
 
-                    # Resource check
-                    if ab.cost_type in ("mana", "energy", "rage") and player.current_res < eff_cost:
-                        log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}**!")
-                    elif ab_key in player.ability_cooldowns:
-                        log_lines.append(f"⏳ **{ab.name}** is on cooldown!")
-                    else:
-                        if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
-                            player.current_res = max(0, player.current_res - eff_cost)
-                        results = self.engine.use_ability(ab_key, player, [enemy], session=session)
-                        for r in results:
-                            log_lines.append(r.narrative)
-                        session.log.extend(results)
+                        # Resource check
+                        if ab.cost_type in ("mana", "energy", "rage") and player.current_res < eff_cost:
+                            log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}**!")
+                        elif ab_key in player.ability_cooldowns:
+                            log_lines.append(f"⏳ **{ab.name}** is on cooldown!")
+                        else:
+                            if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
+                                player.current_res = max(0, player.current_res - eff_cost)
+                            results = self.engine.use_ability(ab_key, player, [enemy], session=session)
+                            for r in results:
+                                log_lines.append(r.narrative)
+                            session.log.extend(results)
+                    except Exception as e:
+                        log.error(f"Error executing ability: {e}", exc_info=True)
+                        log_lines.append(f"⚠️ Error using ability - using auto attack instead")
+                        # Fallback to auto attack
+                        try:
+                            results = self.engine.use_ability("auto_attack", player, [enemy], session=session)
+                            for r in results:
+                                log_lines.append(r.narrative)
+                            session.log.extend(results)
+                        except Exception as e2:
+                            log.error(f"Error with auto attack fallback: {e2}", exc_info=True)
 
                 if session.over: break
 
