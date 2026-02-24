@@ -474,16 +474,22 @@ class CombatCog(commands.Cog, name="Combat"):
                 if player.is_dead: break
 
                 # ── Show UI ───────────────────────────────────────────────────────
-                fresh = await self.char_svc.get_character(interaction.user.id)
-                view  = AbilityView(dict(fresh), player, owner_id=interaction.user.id)
-                embed = _build_embed(session, log_lines)
+                try:
+                    fresh = await self.char_svc.get_character(interaction.user.id)
+                    view  = AbilityView(dict(fresh), player, owner_id=interaction.user.id)
+                    embed = _build_embed(session, log_lines)
 
-                if msg:
-                    await msg.edit(embed=embed, view=view)
-                else:
-                    msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    if msg:
+                        await msg.edit(embed=embed, view=view)
+                    else:
+                        msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-                await view.wait()
+                    await view.wait()
+                except Exception as e:
+                    log.error(f"Error in combat UI: {e}", exc_info=True)
+                    # If UI fails, default to auto attack and continue
+                    view = type('View', (), {'chosen': 'auto_attack', 'fled': False})()
+                    log_lines.append("⚠️ UI error - using auto attack")
 
                 # ── Flee ──────────────────────────────────────────────────────────
                 if view.fled:
@@ -539,8 +545,20 @@ class CombatCog(commands.Cog, name="Combat"):
                         session.log.extend(e_results)
 
                 # Update the embed with new log
-                if msg:
-                    await msg.edit(embed=_build_embed(session, log_lines), view=None)
+                try:
+                    if msg:
+                        await msg.edit(embed=_build_embed(session, log_lines), view=None)
+                except Exception as e:
+                    log.error(f"Error updating combat embed: {e}", exc_info=True)
+                    # Try to send a new message if edit fails
+                    try:
+                        if interaction.followup:
+                            await interaction.followup.send(
+                                embed=_build_embed(session, log_lines),
+                                ephemeral=True
+                            )
+                    except Exception:
+                        pass
 
         # ── Combat ended ──────────────────────────────────────────────────────
         finally:
