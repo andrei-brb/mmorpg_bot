@@ -40,7 +40,7 @@ class Settings:
     COMBAT_TIMEOUT_SECONDS  = 120
     MAX_PARTY_SIZE          = 5
     MAX_RAID_SIZE           = 20
-    BOSS_HP_SCALE           = 10           # Boss HP = base × this
+    BOSS_HP_SCALE           = 3            # Boss HP = base × this (tuned for solo play)
     FLEE_BASE_CHANCE        = 0.55
     
     # Dungeons
