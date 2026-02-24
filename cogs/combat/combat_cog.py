@@ -323,8 +323,21 @@ class CombatCog(commands.Cog, name="Combat"):
         char = await self.char_svc.get_character(interaction.user.id)
         if not char:
             return await interaction.followup.send("❌ No character. Use `/character create`.")
+        
+        # Check if stuck in combat (status says in_combat but no active session)
         if char["combat_status"] == "in_combat":
-            return await interaction.followup.send("⚔️ You're already in combat!")
+            channel_has_combat = interaction.channel_id in ACTIVE
+            if not channel_has_combat:
+                # Stuck in combat - clear it automatically
+                await self.bot.db.execute(
+                    "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                    char["id"],
+                )
+                # Refresh char data
+                char = await self.char_svc.get_character(interaction.user.id)
+            else:
+                return await interaction.followup.send("⚔️ You're already in combat!")
+        
         if interaction.channel_id in ACTIVE:
             return await interaction.followup.send("⚔️ Another combat is active in this channel.")
 
@@ -447,8 +460,10 @@ class CombatCog(commands.Cog, name="Combat"):
         char_id  = char["id"]
         log_lines: list[str] = []
         msg = None
-
-        while not session.over:
+        
+        # Ensure combat status is cleared even if combat crashes
+        try:
+            while not session.over:
             session.turn += 1
             player = session.alive_players[0]
             enemy  = session.alive_enemies[0]
@@ -528,7 +543,18 @@ class CombatCog(commands.Cog, name="Combat"):
                 await msg.edit(embed=_build_embed(session, log_lines), view=None)
 
         # ── Combat ended ──────────────────────────────────────────────────────
-        ACTIVE.pop(interaction.channel_id, None)
+        finally:
+            # Always clear active combat and combat status, even if there was an error
+            ACTIVE.pop(interaction.channel_id, None)
+            try:
+                # Double-check combat status is cleared
+                await self.bot.db.execute(
+                    "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                    char_id,
+                )
+            except Exception as e:
+                log.error(f"Error clearing combat status: {e}", exc_info=True)
+        
         player = session.players[0]
 
         if session.players_won:
