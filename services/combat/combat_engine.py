@@ -366,6 +366,8 @@ class CombatSession:
     log:          List[CombatResult] = field(default_factory=list)
     is_boss:      bool = False
     boss_phase:   int = 1
+    enemy_key:    str = ""    # template key for quest tracking
+    zone_key:     str = ""    # zone where combat started
 
     @property
     def alive_players(self): return [p for p in self.players if not p.is_dead]

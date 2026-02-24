@@ -86,6 +86,36 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             await self.svc.award_xp(char["id"], xp)
             embed.add_field(name="🌿 Quiet Journey", value=f"Nothing eventful, but the trek builds experience.\n+**{xp}** XP", inline=False)
 
+        # ── NPC Encounter Roll ────────────────────────────────────────────
+        try:
+            from services.quest.npc_quest_service import NPCQuestService
+            npc_svc = NPCQuestService(self.bot.db)
+            npc_encounter = await npc_svc.roll_npc_encounter(char["id"], char["current_zone"])
+
+            if npc_encounter:
+                npc_id = npc_encounter["npc_id"]
+                npc_data = npc_encounter["npc_data"]
+                already_met = npc_encounter["already_met"]
+
+                if not already_met:
+                    embed.add_field(
+                        name="💬 Stranger Sighted!",
+                        value=(
+                            f"*{npc_data['discovery_hint']}*\n\n"
+                            f"Use `/interact {npc_data['name'].split()[0].lower()}` to approach them."
+                        ),
+                        inline=False,
+                    )
+                    await npc_svc.discover_npc(char["id"], npc_id, char["current_zone"])
+                else:
+                    embed.add_field(
+                        name=f"💬 {npc_data['name']}",
+                        value=f"You see a familiar face.\nUse `/interact {npc_data['name'].split()[0].lower()}` to talk.",
+                        inline=False,
+                    )
+        except Exception as e:
+            log.warning(f"NPC encounter roll failed: {e}")
+
         embed.set_footer(text=f"Cooldown: {cooldown}s | Use /travel to change zones")
         await interaction.followup.send(embed=embed, ephemeral=True)
         

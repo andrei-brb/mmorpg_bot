@@ -408,6 +408,8 @@ class CombatCog(commands.Cog, name="Combat"):
             players=[player_c],
             enemies=[enemy_c],
             is_boss=is_boss,
+            enemy_key=enemy_key,
+            zone_key=char["current_zone"],
         )
         ACTIVE[interaction.channel_id] = session
 
@@ -642,6 +644,18 @@ class CombatCog(commands.Cog, name="Combat"):
         except Exception:
             pass
 
+        # ── Quest progress check (non-blocking) ──────────────────────────
+        quest_lines = []
+        try:
+            from services.quest.npc_quest_service import NPCQuestService
+            quest_svc = NPCQuestService(self.bot.db)
+            quest_notes = await quest_svc.check_kill_progress(
+                char["id"], session.enemy_key, session.zone_key, session.is_boss
+            )
+            quest_lines.extend(quest_notes)
+        except Exception as e:
+            log.warning(f"Quest progress check failed: {e}")
+
         embed = discord.Embed(
             title="🏆 Victory!",
             description=f"You defeated **{session.enemies[0].name}**!",
@@ -678,6 +692,9 @@ class CombatCog(commands.Cog, name="Combat"):
             embed.add_field(name="📦 Loot", value="\n".join(loot_lines), inline=False)
         else:
             embed.add_field(name="📦 Loot", value="Nothing dropped.", inline=False)
+
+        if quest_lines:
+            embed.add_field(name="📜 Quest Progress", value="\n".join(quest_lines), inline=False)
 
         # Clear combat status on victory
         await self.bot.db.execute(

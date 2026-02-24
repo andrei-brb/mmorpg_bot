@@ -120,7 +120,38 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_enhancement_char 
                 ON enhancement_log(character_id, created_at DESC);
             """)
-            
+
+            # ── NPC Quest System tables ──────────────────────────────────
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS npc_discoveries (
+                    character_id    UUID REFERENCES characters(id) ON DELETE CASCADE,
+                    npc_id          VARCHAR(64) NOT NULL,
+                    discovered_at   TIMESTAMPTZ DEFAULT NOW(),
+                    state           VARCHAR(32) DEFAULT 'discovered',
+                    zone_found      VARCHAR(64),
+                    PRIMARY KEY (character_id, npc_id)
+                );
+            """)
+
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS quest_progress (
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    quest_id        VARCHAR(64) NOT NULL,
+                    npc_id          VARCHAR(64) NOT NULL,
+                    current_step    INT DEFAULT 1,
+                    state           VARCHAR(32) DEFAULT 'active',
+                    started_at      TIMESTAMPTZ DEFAULT NOW(),
+                    completed_at    TIMESTAMPTZ,
+                    metadata        JSONB DEFAULT '{}',
+                    PRIMARY KEY (character_id, quest_id)
+                );
+            """)
+
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_quest_progress_char
+                ON quest_progress(character_id, state);
+            """)
+
         log.info("Schema initialized.")
 
 
