@@ -464,83 +464,83 @@ class CombatCog(commands.Cog, name="Combat"):
         # Ensure combat status is cleared even if combat crashes
         try:
             while not session.over:
-            session.turn += 1
-            player = session.alive_players[0]
-            enemy  = session.alive_enemies[0]
+                session.turn += 1
+                player = session.alive_players[0]
+                enemy  = session.alive_enemies[0]
 
-            # ── Player start-of-turn ──────────────────────────────────────────
-            ticks = self.engine.tick_turn(player)
-            if ticks: log_lines.extend(ticks)
-            if player.is_dead: break
+                # ── Player start-of-turn ──────────────────────────────────────────
+                ticks = self.engine.tick_turn(player)
+                if ticks: log_lines.extend(ticks)
+                if player.is_dead: break
 
-            # ── Show UI ───────────────────────────────────────────────────────
-            fresh = await self.char_svc.get_character(interaction.user.id)
-            view  = AbilityView(dict(fresh), player, owner_id=interaction.user.id)
-            embed = _build_embed(session, log_lines)
+                # ── Show UI ───────────────────────────────────────────────────────
+                fresh = await self.char_svc.get_character(interaction.user.id)
+                view  = AbilityView(dict(fresh), player, owner_id=interaction.user.id)
+                embed = _build_embed(session, log_lines)
 
-            if msg:
-                await msg.edit(embed=embed, view=view)
-            else:
-                msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                if msg:
+                    await msg.edit(embed=embed, view=view)
+                else:
+                    msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-            await view.wait()
+                await view.wait()
 
-            # ── Flee ──────────────────────────────────────────────────────────
-            if view.fled:
-                flee_roll = Settings.FLEE_BASE_CHANCE + player.dodge_chance * 0.01
-                if random.random() < flee_roll:
-                    log_lines.append("🏃 You escaped!")
-                    # Clear combat status on successful flee
-                    await self.bot.db.execute(
-                        "UPDATE characters SET combat_status='idle' WHERE id=$1",
-                        char_id,
+                # ── Flee ──────────────────────────────────────────────────────────
+                if view.fled:
+                    flee_roll = Settings.FLEE_BASE_CHANCE + player.dodge_chance * 0.01
+                    if random.random() < flee_roll:
+                        log_lines.append("🏃 You escaped!")
+                        # Clear combat status on successful flee
+                        await self.bot.db.execute(
+                            "UPDATE characters SET combat_status='idle' WHERE id=$1",
+                            char_id,
+                        )
+                        break
+                    else:
+                        log_lines.append("🚫 You couldn't flee!")
+
+                else:
+                    # ── Player action ─────────────────────────────────────────────
+                    ab_key = view.chosen or "auto_attack"
+                    ab = ABILITIES.get(ab_key, ABILITIES["auto_attack"])
+                    cls = CLASSES[char["class"]]
+                    cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
+                    eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
+
+                    # Resource check
+                    if ab.cost_type in ("mana", "energy", "rage") and player.current_res < eff_cost:
+                        log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}**!")
+                    elif ab_key in player.ability_cooldowns:
+                        log_lines.append(f"⏳ **{ab.name}** is on cooldown!")
+                    else:
+                        if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
+                            player.current_res = max(0, player.current_res - eff_cost)
+                        results = self.engine.use_ability(ab_key, player, [enemy], session=session)
+                        for r in results:
+                            log_lines.append(r.narrative)
+                        session.log.extend(results)
+
+                if session.over: break
+
+                # ── Enemy start-of-turn ───────────────────────────────────────────
+                e_ticks = self.engine.tick_turn(enemy)
+                if e_ticks: log_lines.extend(e_ticks)
+
+                if not enemy.is_dead:
+                    if session.is_boss:
+                        session.boss_phase = self.engine.boss_phase(enemy)
+                    e_ab, e_targets = self.engine.enemy_turn(
+                        enemy, session.alive_players, session.is_boss, session.boss_phase
                     )
-                    break
-                else:
-                    log_lines.append("🚫 You couldn't flee!")
+                    if e_targets:
+                        e_results = self.engine.use_ability(e_ab, enemy, e_targets, session=session)
+                        for r in e_results:
+                            log_lines.append(r.narrative)
+                        session.log.extend(e_results)
 
-            else:
-                # ── Player action ─────────────────────────────────────────────
-                ab_key = view.chosen or "auto_attack"
-                ab = ABILITIES.get(ab_key, ABILITIES["auto_attack"])
-                cls = CLASSES[char["class"]]
-                cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
-                eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
-
-                # Resource check
-                if ab.cost_type in ("mana", "energy", "rage") and player.current_res < eff_cost:
-                    log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}**!")
-                elif ab_key in player.ability_cooldowns:
-                    log_lines.append(f"⏳ **{ab.name}** is on cooldown!")
-                else:
-                    if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
-                        player.current_res = max(0, player.current_res - eff_cost)
-                    results = self.engine.use_ability(ab_key, player, [enemy], session=session)
-                    for r in results:
-                        log_lines.append(r.narrative)
-                    session.log.extend(results)
-
-            if session.over: break
-
-            # ── Enemy start-of-turn ───────────────────────────────────────────
-            e_ticks = self.engine.tick_turn(enemy)
-            if e_ticks: log_lines.extend(e_ticks)
-
-            if not enemy.is_dead:
-                if session.is_boss:
-                    session.boss_phase = self.engine.boss_phase(enemy)
-                e_ab, e_targets = self.engine.enemy_turn(
-                    enemy, session.alive_players, session.is_boss, session.boss_phase
-                )
-                if e_targets:
-                    e_results = self.engine.use_ability(e_ab, enemy, e_targets, session=session)
-                    for r in e_results:
-                        log_lines.append(r.narrative)
-                    session.log.extend(e_results)
-
-            # Update the embed with new log
-            if msg:
-                await msg.edit(embed=_build_embed(session, log_lines), view=None)
+                # Update the embed with new log
+                if msg:
+                    await msg.edit(embed=_build_embed(session, log_lines), view=None)
 
         # ── Combat ended ──────────────────────────────────────────────────────
         finally:
