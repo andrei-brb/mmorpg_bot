@@ -185,7 +185,18 @@ class MMORPGBot(commands.Bot):
                 return
 
         log.error(f"Command error in '{getattr(interaction.command, 'name', '?')}': {error}", exc_info=True)
-        msg = "An unexpected error occurred. Please try again."
+        
+        # More specific error messages for common issues
+        error_str = str(error).lower()
+        if "interaction" in error_str and "expired" in error_str:
+            msg = "⏰ Interaction expired. Please try the command again."
+        elif "rate limit" in error_str or "429" in error_str:
+            msg = "⏳ Rate limited. Please wait a moment and try again."
+        elif "not found" in error_str:
+            msg = "❌ Command not found. The bot may be restarting."
+        else:
+            msg = "❌ An unexpected error occurred. Please try again."
+        
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(f"❌ {msg}", ephemeral=True)
