@@ -535,8 +535,9 @@ class CombatCog(commands.Cog, name="Combat"):
                                 log_lines.append(r.narrative)
                             session.log.extend(results)
                     except Exception as e:
-                        log.error(f"Error executing ability: {e}", exc_info=True)
-                        log_lines.append(f"⚠️ Error using ability - using auto attack instead")
+                        log.error(f"Error executing ability '{ab_key}': {e}", exc_info=True)
+                        error_msg = str(e)[:100]  # Truncate long errors
+                        log_lines.append(f"⚠️ Error using **{ab.name}**: {error_msg}")
                         # Fallback to auto attack
                         try:
                             results = self.engine.use_ability("auto_attack", player, [enemy], session=session)
@@ -545,6 +546,7 @@ class CombatCog(commands.Cog, name="Combat"):
                             session.log.extend(results)
                         except Exception as e2:
                             log.error(f"Error with auto attack fallback: {e2}", exc_info=True)
+                            log_lines.append(f"💥 Critical: Auto attack also failed!")
 
                 if session.over: break
 

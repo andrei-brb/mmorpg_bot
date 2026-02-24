@@ -393,12 +393,18 @@ class CombatEngine:
     ) -> List[CombatResult]:
         ability = ABILITIES.get(key, ABILITIES["auto_attack"])
         
+        # Validate inputs
+        if not targets:
+            targets = []
+        if not isinstance(targets, list):
+            targets = [targets] if targets else []
+        
         # Determine actual targets based on ability.target type
         if session:
             if ability.target == "all_allies":
-                actual_targets = session.alive_players
+                actual_targets = session.alive_players if session.alive_players else []
             elif ability.target == "all_enemies":
-                actual_targets = session.alive_enemies
+                actual_targets = session.alive_enemies if session.alive_enemies else []
             elif ability.target == "ally":
                 # Target first alive ally (excluding self if possible)
                 allies = [p for p in session.alive_players if p.id != attacker.id]
@@ -407,13 +413,31 @@ class CombatEngine:
                 actual_targets = [attacker]
             elif ability.target == "enemy":
                 # Use provided targets (enemies)
-                actual_targets = targets if ability.is_aoe else [targets[0]] if targets else []
+                if ability.is_aoe:
+                    actual_targets = targets if targets else []
+                else:
+                    actual_targets = [targets[0]] if targets and len(targets) > 0 else []
             else:
                 # Default: use provided targets
-                actual_targets = targets if ability.is_aoe else [targets[0]] if targets else []
+                if ability.is_aoe:
+                    actual_targets = targets if targets else []
+                else:
+                    actual_targets = [targets[0]] if targets and len(targets) > 0 else []
         else:
             # Fallback for backwards compatibility
-            actual_targets = targets if ability.is_aoe else [targets[0]] if targets else []
+            if ability.is_aoe:
+                actual_targets = targets if targets else []
+            else:
+                actual_targets = [targets[0]] if targets and len(targets) > 0 else []
+        
+        # If no valid targets, return empty results
+        if not actual_targets:
+            return [CombatResult(
+                attacker=attacker.name,
+                target="None",
+                ability_name=ability.name,
+                narrative=f"⚠️ **{ability.name}** has no valid targets!"
+            )]
         
         results = []
 
