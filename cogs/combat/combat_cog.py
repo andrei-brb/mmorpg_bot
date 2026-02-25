@@ -654,7 +654,7 @@ class CombatCog(commands.Cog, name="Combat"):
             )
             quest_lines.extend(quest_notes)
         except Exception as e:
-            log.warning(f"Quest progress check failed: {e}")
+            log.error(f"Quest progress check failed: {e}", exc_info=True)  # FIX: Use error level and include traceback
 
         embed = discord.Embed(
             title="🏆 Victory!",

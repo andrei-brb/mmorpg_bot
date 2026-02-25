@@ -764,13 +764,23 @@ class NPCQuestService:
     async def check_kill_progress(
         self, char_id: UUID, enemy_key: str, zone_key: str, is_boss: bool
     ) -> List[str]:
+        # FIX: Include both 'active' and 'offered' quests (offered quests should still track progress)
         active = await self.db.fetch(
-            "SELECT * FROM quest_progress WHERE character_id = $1 AND state = 'active'",
+            "SELECT * FROM quest_progress WHERE character_id = $1 AND state IN ('active', 'offered')",
             char_id,
         )
         notifications = []
 
         for row in active:
+            # Auto-activate offered quests when progress starts
+            if row["state"] == "offered":
+                await self.db.execute(
+                    "UPDATE quest_progress SET state = 'active', started_at = NOW() WHERE character_id = $1 AND quest_id = $2",
+                    char_id, row["quest_id"],
+                )
+                row = dict(row)
+                row["state"] = "active"
+
             # Skip expired quests
             expires_at = row.get("expires_at")
             if expires_at:
@@ -786,6 +796,7 @@ class NPCQuestService:
 
             quest_data = self._find_quest_template(row["quest_id"])
             if not quest_data:
+                log.warning(f"Quest template not found for quest_id: {row['quest_id']}")
                 continue
 
             step_idx = row["current_step"] - 1
@@ -796,15 +807,32 @@ class NPCQuestService:
             check = step["completion_check"]
             advanced = False
 
-            meta = row.get("metadata") or {}
-            if not isinstance(meta, dict):
+            # FIX: Properly parse JSONB metadata (handles dict, string, None cases)
+            import json
+            meta = row.get("metadata")
+            if meta is None:
                 meta = {}
+            elif isinstance(meta, str):
+                try:
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+            elif not isinstance(meta, dict):
+                meta = {}
+
+            # Track if we need to update metadata
+            metadata_updated = False
+
+            # DEBUG: Log what we're checking
+            log.debug(f"Quest {row['quest_id']}: checking kill_enemy={check['type']=='kill_enemy'}, enemy_key={enemy_key}, check_value={check.get('value')}, zone={zone_key}")
 
             if check["type"] == "kill_enemy" and check["value"] == enemy_key:
                 needed = check.get("count", 1)
                 kill_key = f"kills_{check['value']}"
                 current_kills = meta.get(kill_key, 0) + 1
                 meta[kill_key] = current_kills
+                metadata_updated = True
+                log.info(f"Quest {row['quest_id']}: Kill tracked! {current_kills}/{needed} for {enemy_key}")
                 if current_kills >= needed:
                     advanced = True
                     notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
@@ -816,6 +844,8 @@ class NPCQuestService:
                 kill_key = f"kills_zone_{check['value']}"
                 current_kills = meta.get(kill_key, 0) + 1
                 meta[kill_key] = current_kills
+                metadata_updated = True
+                log.info(f"Quest {row['quest_id']}: Zone kill tracked! {current_kills}/{needed} in {zone_key}")
                 if current_kills >= needed:
                     advanced = True
                     notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
@@ -827,18 +857,45 @@ class NPCQuestService:
                 kill_key = f"boss_kills_{check['value']}"
                 current_kills = meta.get(kill_key, 0) + 1
                 meta[kill_key] = current_kills
+                metadata_updated = True
+                log.info(f"Quest {row['quest_id']}: Boss kill tracked! {current_kills}/{needed} in {zone_key}")
                 if current_kills >= needed:
                     advanced = True
                     notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
                 else:
                     notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
 
-            # Save metadata
-            import json
-            await self.db.execute(
-                "UPDATE quest_progress SET metadata = $3::jsonb WHERE character_id = $1 AND quest_id = $2",
-                char_id, row["quest_id"], json.dumps(meta),
-            )
+            # FIX: Re-fetch metadata right before updating to avoid race conditions
+            # This ensures we have the latest kill counts even if multiple kills happen quickly
+            if metadata_updated:
+                fresh_row = await self.db.fetchrow(
+                    "SELECT metadata FROM quest_progress WHERE character_id = $1 AND quest_id = $2",
+                    char_id, row["quest_id"]
+                )
+                if fresh_row and fresh_row.get("metadata"):
+                    fresh_meta = fresh_row["metadata"]
+                    if isinstance(fresh_meta, str):
+                        try:
+                            fresh_meta = json.loads(fresh_meta)
+                        except (json.JSONDecodeError, TypeError):
+                            fresh_meta = {}
+                    elif not isinstance(fresh_meta, dict):
+                        fresh_meta = {}
+                    # Merge with our updates (preserve any concurrent updates)
+                    for key, value in meta.items():
+                        # For kill counters, take the maximum to avoid losing progress
+                        if key.startswith("kills_") or key.startswith("boss_kills_"):
+                            fresh_meta[key] = max(fresh_meta.get(key, 0), value)
+                        else:
+                            fresh_meta[key] = value
+                    meta = fresh_meta
+
+            # Save metadata (only save if we updated it)
+            if metadata_updated:
+                await self.db.execute(
+                    "UPDATE quest_progress SET metadata = $3::jsonb WHERE character_id = $1 AND quest_id = $2",
+                    char_id, row["quest_id"], json.dumps(meta),
+                )
             if advanced:
                 await self.advance_quest(char_id, row["quest_id"])
 
