@@ -514,6 +514,17 @@ class CharacterCog(commands.Cog, name="Character"):
         if not char:
             return await interaction.response.send_message("❌ No character to delete.", ephemeral=True)
 
+        # Check if character is a guildmaster
+        guild = await self.bot.db.fetchrow(
+            "SELECT id, name FROM guilds WHERE guildmaster_id=$1", char["id"]
+        )
+        if guild:
+            return await interaction.response.send_message(
+                f"❌ Cannot delete character: You are the guildmaster of **{guild['name']}**.\n"
+                f"Transfer guildmaster to another member or disband the guild first.",
+                ephemeral=True
+            )
+
         class ConfirmView(discord.ui.View):
             def __init__(self): super().__init__(timeout=30); self.ok = False
             @discord.ui.button(label="Delete Forever", style=discord.ButtonStyle.danger)
@@ -528,10 +539,38 @@ class CharacterCog(commands.Cog, name="Character"):
         )
         await view.wait()
         if view.ok:
-            await self.bot.db.execute("DELETE FROM characters WHERE id=$1", char["id"])
-            await interaction.edit_original_response(
-                content=f"💀 **{char['name']}** has been deleted.", view=None
-            )
+            try:
+                # Clean up references that don't have CASCADE
+                # 1. Remove from guild if member (not guildmaster - already checked)
+                if char.get("guild_id"):
+                    await self.bot.db.execute(
+                        "UPDATE characters SET guild_id=NULL, guild_rank=NULL WHERE id=$1",
+                        char["id"]
+                    )
+                
+                # 2. Cancel/remove active market listings
+                await self.bot.db.execute(
+                    "UPDATE market_listings SET is_active=FALSE WHERE seller_id=$1 AND is_active=TRUE",
+                    char["id"]
+                )
+                
+                # 3. Delete gold_log entries (historical data, safe to remove)
+                await self.bot.db.execute(
+                    "DELETE FROM gold_log WHERE character_id=$1",
+                    char["id"]
+                )
+                
+                # 4. Now delete the character (CASCADE will handle the rest)
+                await self.bot.db.execute("DELETE FROM characters WHERE id=$1", char["id"])
+                await interaction.edit_original_response(
+                    content=f"💀 **{char['name']}** has been deleted.", view=None
+                )
+            except Exception as e:
+                log.error(f"Error deleting character {char['id']}: {e}", exc_info=True)
+                await interaction.edit_original_response(
+                    content=f"❌ An error occurred while deleting your character: {str(e)[:100]}\nPlease try again or contact support.",
+                    view=None
+                )
 
     # ── /character classes ────────────────────────────────────────────────────
 
