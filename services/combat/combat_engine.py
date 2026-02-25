@@ -11,6 +11,8 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
+from config.settings import Settings
+
 log = logging.getLogger("combat")
 
 
@@ -478,7 +480,11 @@ class CombatEngine:
 
                 # Armor reduction (physical only)
                 if not ability.ignores_armor:
-                    reduction = target.armor / (target.armor + 500)
+                    # Make player armor more impactful against boss hits
+                    denom = 500
+                    if session and session.is_boss and not attacker.is_player and target.is_player:
+                        denom = 350
+                    reduction = target.armor / (target.armor + denom)
                     raw = int(raw * (1 - reduction))
 
                 # Shield absorption
@@ -494,6 +500,10 @@ class CombatEngine:
                 vu = target.get_status(StatusEffect.VULNERABILITY)
                 if vu:
                     raw = int(raw * (1 + vu.value / 100))
+
+                # Global boss damage safety valve (bosses vs players only)
+                if session and session.is_boss and not attacker.is_player and target.is_player:
+                    raw = int(raw * Settings.BOSS_DAMAGE_SCALE)
 
                 # Hit rating check (accuracy)
                 hit_chance = 95.0 + getattr(attacker, 'hit_rating', 0) * 0.1

@@ -40,7 +40,8 @@ class Settings:
     COMBAT_TIMEOUT_SECONDS  = 120
     MAX_PARTY_SIZE          = 5
     MAX_RAID_SIZE           = 20
-    BOSS_HP_SCALE           = 3            # Boss HP = base × this (tuned for solo play)
+    BOSS_HP_SCALE           = 3            # Default boss HP scale (used for endgame / dungeons)
+    BOSS_DAMAGE_SCALE       = 0.7          # Boss damage multiplier vs players (global safety valve)
     FLEE_BASE_CHANCE        = 0.55
     
     # Dungeons

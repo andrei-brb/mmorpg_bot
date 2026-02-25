@@ -91,7 +91,7 @@ def _make_player(char, stats) -> Combatant:
 
 
 def _make_enemy(enemy_key: str, level: int) -> Combatant:
-    """Helper to create enemy combatant (same as combat_cog)."""
+    """Helper to create enemy combatant (similar to combat_cog)."""
     from config.settings import ENEMIES, Settings
     from uuid import uuid4
     
@@ -102,7 +102,10 @@ def _make_enemy(enemy_key: str, level: int) -> Combatant:
     scale = 1 + level * 0.06
     hp = int(tmpl.hp_base * scale)
     if tmpl.is_boss:
-        hp *= Settings.BOSS_HP_SCALE
+        # Dungeons are intended to be harder than open‑world, but slightly below
+        # full raid tuning. Keep using BOSS_HP_SCALE, but you can lower it here
+        # independently later if needed.
+        hp = int(hp * Settings.BOSS_HP_SCALE)
     
     return Combatant(
         id=str(uuid4()), name=f"{tmpl.emoji} {tmpl.name}",

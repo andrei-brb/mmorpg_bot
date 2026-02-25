@@ -22,16 +22,40 @@ from services.combat.combat_engine import (
 
 log = logging.getLogger("cog.combat")
 
+
+def _boss_hp_scale_for_zone(zone) -> float:
+    """
+    Boss HP multiplier based on zone difficulty.
+
+    - Starter zones (1–10): much easier solo bosses
+    - Mid zones (10–25): moderate bosses
+    - Late zones (25–45): tough bosses
+    - Endgame (50–60): default BOSS_HP_SCALE (group‑tuned)
+    """
+    try:
+        max_level = zone.level_range[1]
+    except Exception:
+        return Settings.BOSS_HP_SCALE
+
+    if max_level <= 10:
+        return 1.5
+    if max_level <= 25:
+        return 2.0
+    if max_level <= 45:
+        return 2.5
+    return Settings.BOSS_HP_SCALE
+
 # Channel-level lock: channel_id -> CombatSession
 ACTIVE: Dict[int, CombatSession] = {}
 
 
-def _make_enemy(key: str, char_level: int) -> Combatant:
+def _make_enemy(key: str, char_level: int, zone=None) -> Combatant:
     tmpl = ENEMIES.get(key, ENEMIES["kobold"])
     scale = 1 + char_level * 0.06
     hp = int(tmpl.hp_base * scale)
     if tmpl.is_boss:
-        hp *= Settings.BOSS_HP_SCALE
+        boss_scale = _boss_hp_scale_for_zone(zone) if zone is not None else Settings.BOSS_HP_SCALE
+        hp = int(hp * boss_scale)
     return Combatant(
         id=str(uuid4()), name=f"{tmpl.emoji} {tmpl.name}",
         is_player=False, char_id=None,
@@ -129,11 +153,12 @@ def _build_embed(session: CombatSession, log_lines: list[str]) -> discord.Embed:
 
 
 class AbilityView(discord.ui.View):
-    def __init__(self, char, combatant: Combatant, owner_id: int = None):
+    def __init__(self, char, combatant: Combatant, owner_id: int = None, can_use_potion: bool = False):
         super().__init__(timeout=Settings.COMBAT_TIMEOUT_SECONDS)
-        self.chosen   = None
-        self.fled     = False
-        self.owner_id = owner_id
+        self.chosen         = None
+        self.fled           = False
+        self.owner_id       = owner_id
+        self.can_use_potion = can_use_potion
 
         cls = CLASSES[char["class"]]
         keys = ["auto_attack"] + list(cls.starter_abilities)
@@ -164,6 +189,12 @@ class AbilityView(discord.ui.View):
         sel = discord.ui.Select(placeholder="Choose your ability…", options=options[:25])
         sel.callback = self._pick
         self.add_item(sel)
+
+        # Disable potion button if player can't use one this turn
+        if not self.can_use_potion:
+            for item in self.children:
+                if isinstance(item, discord.ui.Button) and getattr(item, "label", "") == "🧪 Potion":
+                    item.disabled = True
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         log.info(f"[COMBAT LOCK] owner_id={self.owner_id}, clicker={interaction.user.id} ({interaction.user.display_name})")
@@ -207,6 +238,33 @@ class AbilityView(discord.ui.View):
             try:
                 if not interaction.response.is_done():
                     await interaction.response.send_message("❌ An error occurred while fleeing.", ephemeral=True)
+            except Exception:
+                pass
+
+    @discord.ui.button(label="🧪 Potion", style=discord.ButtonStyle.green, row=1)
+    async def use_potion(self, interaction: discord.Interaction, _):
+        """Signal that the player wants to use a healing potion this turn."""
+        try:
+            if not self.can_use_potion:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "❌ You can't use a potion right now.", ephemeral=True
+                    )
+                return
+            self.chosen = "__potion__"
+            self.stop()
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer(ephemeral=True)
+            except Exception as e:
+                log.warning(f"Error deferring potion use: {e}")
+        except Exception as e:
+            log.error(f"Error in potion button: {e}", exc_info=True)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "❌ An error occurred while using a potion.", ephemeral=True
+                    )
             except Exception:
                 pass
     async def on_timeout(self):
@@ -256,7 +314,7 @@ class _EnemySelect(discord.ui.Select):
             if not boss:
                 continue
             scale = 1 + char_level * 0.06
-            hp = int(boss.hp_base * scale * Settings.BOSS_HP_SCALE)
+            hp = int(boss.hp_base * scale * _boss_hp_scale_for_zone(zone))
             options.append(discord.SelectOption(
                 label=f"⭐ {boss.name}",
                 description=f"BOSS • ~{hp} HP • Better rewards!",
@@ -401,7 +459,7 @@ class CombatCog(commands.Cog, name="Combat"):
         stats     = await self.char_svc.total_stats(char["id"])
 
         player_c  = _make_player(dict(char), stats)
-        enemy_c   = _make_enemy(enemy_key, char["level"])
+        enemy_c   = _make_enemy(enemy_key, char["level"], zone)
 
         session = CombatSession(
             session_id=uuid4(),
@@ -462,6 +520,7 @@ class CombatCog(commands.Cog, name="Combat"):
         char_id  = char["id"]
         log_lines: list[str] = []
         msg = None
+        potion_used = False  # Limit to one potion per fight for now
         
         # Ensure combat status is cleared even if combat crashes
         try:
@@ -478,7 +537,24 @@ class CombatCog(commands.Cog, name="Combat"):
                 # ── Show UI ───────────────────────────────────────────────────────
                 try:
                     fresh = await self.char_svc.get_character(interaction.user.id)
-                    view  = AbilityView(dict(fresh), player, owner_id=interaction.user.id)
+                    # Check if player has at least one healing potion available
+                    has_potion_row = await self.bot.db.fetchrow(
+                        """
+                        SELECT i.id, t.name, t.effect_value
+                        FROM inventory i
+                        JOIN item_templates t ON i.template_id = t.id
+                        WHERE i.character_id = $1
+                          AND i.quantity > 0
+                          AND t.item_type = 'consumable'
+                          AND t.effect_type = 'heal_hp'
+                        ORDER BY t.effect_value DESC
+                        LIMIT 1
+                        """,
+                        char_id,
+                    )
+                    can_use_potion = bool(has_potion_row) and not potion_used
+
+                    view  = AbilityView(dict(fresh), player, owner_id=interaction.user.id, can_use_potion=can_use_potion)
                     embed = _build_embed(session, log_lines)
 
                     if msg:
@@ -510,6 +586,26 @@ class CombatCog(commands.Cog, name="Combat"):
                 else:
                     # ── Player action ─────────────────────────────────────────────
                     try:
+                        # Potion use has priority over abilities
+                        if view.chosen == "__potion__":
+                            if not has_potion_row:
+                                log_lines.append("❌ You don't have any healing potions!")
+                            else:
+                                from uuid import UUID as _UUID
+                                potion_id = has_potion_row["id"]
+                                ok, msg_text, effect = await self.inv_svc.use_consumable(char_id, potion_id)
+                                healed = 0
+                                if ok and effect and effect.get("type") == "heal_hp":
+                                    healed = await self.char_svc.heal(char_id, effect.get("value", 0))
+                                    # Sync combatant HP with DB state
+                                    player.current_hp = min(player.max_hp, player.current_hp + healed)
+                                    log_lines.append(f"🧪 {msg_text} Restored **{healed}** HP.")
+                                else:
+                                    log_lines.append(f"🧪 {msg_text}")
+                                potion_used = ok or potion_used
+                            # Skip ability casting this turn
+                            continue
+
                         ab_key = view.chosen or "auto_attack"
                         if not ab_key:
                             ab_key = "auto_attack"
