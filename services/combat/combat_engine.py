@@ -11,8 +11,6 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
-from config.settings import Settings, SPECIALIZATIONS
-
 log = logging.getLogger("combat")
 
 
@@ -32,7 +30,7 @@ class StatusEffect(Enum):
     VULNERABILITY = "vulnerability"
     DODGE_UP      = "dodge_up"
     SILENCED      = "silenced"
-    STEALTH       = "stealth"       # Rogue stealth state
+    STEALTH       = "stealth"   # Rogue stealth state
 
 
 @dataclass
@@ -85,7 +83,6 @@ class Combatant:
     combo_points:       int  = 0             # rogue mechanic
     vengeance_stacks:   int  = 0             # retribution paladin passive
     shadow_stacks:      int  = 0             # shadow priest passive
-    specialization:     Optional[str] = None  # spec key for passive effects
 
     @property
     def hp_pct(self) -> float:
@@ -132,7 +129,7 @@ class Ability:
     is_aoe:          bool = False
     ignores_armor:   bool = False
     from_stealth:    bool = False   # Must be in stealth
-    execute_threshold: Optional[float] = None  # Only usable when target HP% <= this (e.g., 0.20 for 20%)
+    execute_threshold: Optional[float] = None  # Only usable when target HP% <= this (e.g. 0.20)
 
 
 ABILITIES: Dict[str, Ability] = {
@@ -247,9 +244,9 @@ ABILITIES: Dict[str, Ability] = {
         "sinister_strike","Sinister Strike","🗡️","Quick precise stab.",
         "energy",40,0,"enemy", dmg_mult=1.1),
     "stealth": Ability(
-        "stealth","Stealth","🌑","Vanish into shadows, boosting dodge.",
+        "stealth","Stealth","🌑","Vanish into shadows, entering stealth for a few turns.",
         "energy",20,8,"self",
-        applies=StatusEffect.STEALTH, effect_val=0, effect_dur=3),  # Stealth lasts 3 turns
+        applies=StatusEffect.STEALTH, effect_val=0, effect_dur=3),
     "eviscerate": Ability(
         "eviscerate","Eviscerate","💉","Rip through the target, causing bleed.",
         "energy",35,2,"enemy", dmg_mult=1.7,
@@ -359,7 +356,6 @@ class CombatResult:
     is_dodge:       bool = False
     effects_added:  List[str] = field(default_factory=list)
     narrative:      str = ""
-    lifesteal_heal: int = 0
 
 
 @dataclass
@@ -371,8 +367,7 @@ class CombatSession:
     log:          List[CombatResult] = field(default_factory=list)
     is_boss:      bool = False
     boss_phase:   int = 1
-    enemy_key:    str = ""    # template key for quest tracking
-    zone_key:     str = ""    # zone where combat started
+    zone_key:     str = ""
 
     @property
     def alive_players(self): return [p for p in self.players if not p.is_dead]
@@ -400,19 +395,13 @@ class CombatEngine:
         session: Optional['CombatSession'] = None,
     ) -> List[CombatResult]:
         ability = ABILITIES.get(key, ABILITIES["auto_attack"])
-        
-        # Validate inputs
-        if not targets:
-            targets = []
-        if not isinstance(targets, list):
-            targets = [targets] if targets else []
-        
+
         # Determine actual targets based on ability.target type
         if session:
             if ability.target == "all_allies":
-                actual_targets = session.alive_players if session.alive_players else []
+                actual_targets = session.alive_players
             elif ability.target == "all_enemies":
-                actual_targets = session.alive_enemies if session.alive_enemies else []
+                actual_targets = session.alive_enemies
             elif ability.target == "ally":
                 # Target first alive ally (excluding self if possible)
                 allies = [p for p in session.alive_players if p.id != attacker.id]
@@ -421,67 +410,51 @@ class CombatEngine:
                 actual_targets = [attacker]
             elif ability.target == "enemy":
                 # Use provided targets (enemies)
-                if ability.is_aoe:
-                    actual_targets = targets if targets else []
-                else:
-                    actual_targets = [targets[0]] if targets and len(targets) > 0 else []
+                actual_targets = targets if ability.is_aoe else [targets[0]] if targets else []
             else:
                 # Default: use provided targets
-                if ability.is_aoe:
-                    actual_targets = targets if targets else []
-                else:
-                    actual_targets = [targets[0]] if targets and len(targets) > 0 else []
+                actual_targets = targets if ability.is_aoe else [targets[0]] if targets else []
         else:
             # Fallback for backwards compatibility
-            if ability.is_aoe:
-                actual_targets = targets if targets else []
-            else:
-                actual_targets = [targets[0]] if targets and len(targets) > 0 else []
-        
-        # If no valid targets, return empty results
-        if not actual_targets:
-            return [CombatResult(
-                attacker=attacker.name,
-                target="None",
-                ability_name=ability.name,
-                narrative=f"⚠️ **{ability.name}** has no valid targets!"
-            )]
-        
-        results = []
+            actual_targets = targets if ability.is_aoe else [targets[0]] if targets else []
 
-        # Stun check — attacker can't act at all
-        if attacker.is_stunned:
-            r = CombatResult(
-                attacker=attacker.name,
-                target=actual_targets[0].name if actual_targets else "None",
-                ability_name=ability.name,
-                narrative=f"⚡ **{attacker.name}** is stunned and cannot act!",
-            )
-            return [r]
+        # ── Ability requirements (execute, stealth) ─────────────────────────────
+        if ability.execute_threshold is not None and actual_targets:
+            primary = actual_targets[0]
+            if primary.hp_pct > ability.execute_threshold * 100:
+                return [CombatResult(
+                    attacker=attacker.name,
+                    target=primary.name,
+                    ability_name=ability.name,
+                    narrative=(
+                        f"❌ **{ability.name}** can only be used when target is below "
+                        f"{int(ability.execute_threshold * 100)}% HP! "
+                        f"(Target: {primary.hp_pct:.1f}%)"
+                    ),
+                )]
+
+        if ability.from_stealth:
+            if not attacker.has(StatusEffect.STEALTH):
+                target_name = actual_targets[0].name if actual_targets else "None"
+                return [CombatResult(
+                    attacker=attacker.name,
+                    target=target_name,
+                    ability_name=ability.name,
+                    narrative=f"❌ **{ability.name}** requires you to be in stealth! Use Stealth first.",
+                )]
+
+        results = []
 
         for target in actual_targets:
             r = CombatResult(attacker=attacker.name, target=target.name, ability_name=ability.name)
-            # Execute requirement (only usable on low HP targets)
-            if ability.execute_threshold is not None:
-                if target.hp_pct > ability.execute_threshold * 100:
-                    return [CombatResult(
-                        attacker=attacker.name,
-                        target=target.name,
-                        ability_name=ability.name,
-                        narrative=f"❌ **{ability.name}** can only be used when target is below {int(ability.execute_threshold * 100)}% HP! (Target: {target.hp_pct:.1f}%)"
-                    )]
-            
-            # Stealth requirement
-            if ability.from_stealth:
-                if not attacker.has(StatusEffect.STEALTH):
-                    return [CombatResult(
-                        attacker=attacker.name,
-                        target=target.name,
-                        ability_name=ability.name,
-                        narrative=f"❌ **{ability.name}** requires you to be in stealth! Use /stealth first."
-                    )]
 
-        # Dodge check (only physical / targeted abilities)
+            # Stun check
+            if attacker.is_stunned:
+                r.narrative = f"⚡ **{attacker.name}** is stunned and cannot act!"
+                results.append(r)
+                continue
+
+            # Dodge check (only physical / targeted abilities)
             if ability.dmg_mult > 0 and not ability.ignores_armor:
                 dodge = target.dodge_chance
                 buff = target.get_status(StatusEffect.DODGE_UP)
@@ -506,11 +479,7 @@ class CombatEngine:
 
                 # Armor reduction (physical only)
                 if not ability.ignores_armor:
-                    # Make player armor more impactful against boss hits
-                    denom = 500
-                    if session and session.is_boss and not attacker.is_player and target.is_player:
-                        denom = 350
-                    reduction = target.armor / (target.armor + denom)
+                    reduction = target.armor / (target.armor + 500)
                     raw = int(raw * (1 - reduction))
 
                 # Shield absorption
@@ -527,10 +496,6 @@ class CombatEngine:
                 if vu:
                     raw = int(raw * (1 + vu.value / 100))
 
-                # Global boss damage safety valve (bosses vs players only)
-                if session and session.is_boss and not attacker.is_player and target.is_player:
-                    raw = int(raw * Settings.BOSS_DAMAGE_SCALE)
-
                 # Hit rating check (accuracy)
                 hit_chance = 95.0 + getattr(attacker, 'hit_rating', 0) * 0.1
                 if random.random() * 100 > hit_chance:
@@ -544,40 +509,25 @@ class CombatEngine:
                 if crit_roll < attacker.crit_chance:
                     raw = int(raw * 1.5)
                     r.is_crit = True
-                
-                # SPEC PASSIVES: Pre-damage modifiers
-                raw = self._apply_spec_passives_pre_damage(
-                    attacker, target, ability, raw, r, session
-                )
-                
-                # SPEC PASSIVES: On-damage-taken (Shield Block, etc.)
-                raw, block_msg = self._apply_spec_passives_on_damage_taken(target, raw, attacker)
-                if block_msg:
-                    r.log = f"{r.log}\n{block_msg}" if r.log else block_msg
 
                 r.damage = max(1, raw)
                 target.current_hp = max(0, target.current_hp - r.damage)
                 if target.current_hp <= 0:
                     target.is_dead = True
-                
-                # Break stealth on damage dealt or taken (standard MMO behavior)
+
+                # Break stealth when dealing or taking damage (standard MMO behavior)
                 if attacker.has(StatusEffect.STEALTH) and ability.key != "stealth":
                     attacker.remove_status(StatusEffect.STEALTH)
                 if target.has(StatusEffect.STEALTH) and r.damage > 0:
                     target.remove_status(StatusEffect.STEALTH)
 
-                # SPEC PASSIVES: Post-damage effects (DoTs, procs, stacks)
-                self._apply_spec_passives_post_damage(
-                    attacker, target, ability, r, session
-                )
-
                 # Lifesteal
                 lifesteal_pct = getattr(attacker, 'lifesteal', 0)
-                if lifesteal_pct > 0 and r.damage > 0:
+                if lifesteal_pct > 0:
                     heal_amount = int(r.damage * lifesteal_pct / 100)
+                    attacker.current_hp = min(attacker.max_hp, attacker.current_hp + heal_amount)
                     if heal_amount > 0:
-                        attacker.current_hp = min(attacker.max_hp, attacker.current_hp + heal_amount)
-                        r.lifesteal_heal = heal_amount
+                        r.log += f" (💚 +{heal_amount} HP from lifesteal)"
 
                 # Rage generation
                 if attacker.res_type == "rage":
@@ -592,19 +542,10 @@ class CombatEngine:
                 actual_heal = min(base_heal, target.max_hp - target.current_hp)
                 target.current_hp = min(target.max_hp, target.current_hp + actual_heal)
                 r.healing = actual_heal
-                
-                # SPEC PASSIVES: Post-heal effects (Illumination)
-                self._apply_spec_passives_post_heal(attacker, ability, actual_heal, r, session)
 
             # ── Apply status ──────────────────────────────────────────────────
             if ability.applies:
-                effect_val = ability.effect_val
-                # Assassination Rogue - Master Poisoner (25% more DoT damage)
-                if attacker.is_player and attacker.specialization == "assassination":
-                    if ability.applies in (StatusEffect.POISON, StatusEffect.BLEED):
-                        effect_val = int(effect_val * 1.25)
-                        r.log = f"{r.log}\n☠️ Master Poisoner: +25% DoT damage" if r.log else "☠️ Master Poisoner: +25% DoT damage"
-                target.add_status(ability.applies, effect_val, ability.effect_dur, attacker.name)
+                target.add_status(ability.applies, ability.effect_val, ability.effect_dur, attacker.name)
                 r.effects_added.append(ability.applies.value)
 
             r.narrative = self._narrative(r, ability)
@@ -623,9 +564,6 @@ class CombatEngine:
         msgs = []
         combatant.is_stunned = False
         expired = []
-        
-        # Stealth breaks on taking damage (handled in damage calculation)
-        # But we also tick it down here
 
         for s in combatant.status_effects:
             if s.effect == StatusEffect.BURN:
@@ -641,12 +579,12 @@ class CombatEngine:
                 healed = min(s.value, combatant.max_hp - combatant.current_hp)
                 combatant.current_hp += healed
                 msgs.append(f"💚 **{combatant.name}** regens **{healed}** HP")
-            elif s.effect == StatusEffect.STEALTH:
-                # Stealth just ticks down, no message needed (breaks on damage anyway)
-                pass
             elif s.effect == StatusEffect.STUN:
                 combatant.is_stunned = True
                 msgs.append(f"⚡ **{combatant.name}** is stunned!")
+            elif s.effect == StatusEffect.STEALTH:
+                # Stealth just ticks down; no per-turn effect here
+                pass
 
             s.duration -= 1
             if s.duration <= 0:
@@ -674,183 +612,6 @@ class CombatEngine:
                 combatant.current_res = max(0, combatant.current_res - decay)
 
         return msgs
-
-    # ── Spec Passive System ───────────────────────────────────────────────────
-
-    def _apply_spec_passives_pre_damage(
-        self,
-        attacker: Combatant,
-        target: Combatant,
-        ability: Ability,
-        raw_damage: int,
-        result: CombatResult,
-        session: Optional['CombatSession']
-    ) -> int:
-        """Apply spec passives that modify damage before it's dealt."""
-        if not attacker.is_player or not attacker.specialization:
-            return raw_damage
-        
-        spec = SPECIALIZATIONS.get(attacker.specialization)
-        if not spec:
-            return raw_damage
-        
-        damage = raw_damage
-        
-        # Retribution Paladin - Vengeance (stacking damage bonus)
-        if spec.name == "Retribution":
-            if attacker.vengeance_stacks < 5:
-                attacker.vengeance_stacks += 1
-            bonus_pct = attacker.vengeance_stacks * 3
-            damage = int(damage * (1 + bonus_pct / 100))
-            if attacker.vengeance_stacks > 0:
-                result.log = f"⚔️ Vengeance ({attacker.vengeance_stacks}/5): +{bonus_pct}% damage"
-        
-        # Frost Mage - Shatter (+50% damage vs slowed/stunned)
-        elif spec.name == "Frost":
-            if target.has(StatusEffect.SLOW) or target.has(StatusEffect.STUN):
-                damage = int(damage * 1.5)
-                result.log = "❄️ Shatter: +50% damage to slowed/frozen target"
-        
-        # Subtlety Rogue - Find Weakness (stealth attacks ignore 30% armor)
-        elif spec.name == "Subtlety":
-            if attacker.has(StatusEffect.STEALTH) and not ability.ignores_armor:
-                armor_ignore = int(target.armor * 0.30)
-                # Recalculate armor reduction with ignored armor
-                denom = 500
-                if session and session.is_boss and not attacker.is_player and target.is_player:
-                    denom = 350
-                effective_armor = max(0, target.armor - armor_ignore)
-                reduction = effective_armor / (effective_armor + denom)
-                original_reduction = target.armor / (target.armor + denom)
-                damage = int(damage / (1 - original_reduction) * (1 - reduction))
-                result.log = "🌑 Find Weakness: Ignored 30% armor"
-        
-        # Assassination Rogue - Master Poisoner (25% more DoT damage)
-        # This is handled in post_damage when applying DoTs
-        
-        # Shadow Priest - Shadow Weaving (stacking shadow damage)
-        elif spec.name == "Shadow":
-            if ability.key in ("mind_blast", "vampiric_touch", "void_eruption"):
-                if attacker.shadow_stacks < 5:
-                    attacker.shadow_stacks += 1
-                bonus_pct = attacker.shadow_stacks * 5
-                damage = int(damage * (1 + bonus_pct / 100))
-                if attacker.shadow_stacks > 0:
-                    result.log = f"🌑 Shadow Weaving ({attacker.shadow_stacks}/5): +{bonus_pct}% shadow damage"
-        
-        # Marksmanship Hunter - Trueshot (20% chance for 3x damage on aimed_shot)
-        elif spec.name == "Marksmanship":
-            if ability.key == "aimed_shot":
-                if random.random() < 0.20:
-                    damage = int(damage * 3)
-                    result.log = "🎯 Trueshot: Triple damage!"
-                    result.is_crit = True  # Visual indicator
-        
-        return damage
-
-    def _apply_spec_passives_post_damage(
-        self,
-        attacker: Combatant,
-        target: Combatant,
-        ability: Ability,
-        result: CombatResult,
-        session: Optional['CombatSession']
-    ):
-        """Apply spec passives that trigger after damage is dealt."""
-        if not attacker.is_player or not attacker.specialization:
-            return
-        
-        spec = SPECIALIZATIONS.get(attacker.specialization)
-        if not spec:
-            return
-        
-        # Arms Warrior - Deep Wounds (crits cause bleed)
-        if spec.name == "Arms":
-            if result.is_crit and result.damage > 0:
-                bleed_dmg = max(1, int(result.damage * 0.15))  # 15% of crit damage over 3 turns
-                target.add_status(StatusEffect.BLEED, bleed_dmg, 3, attacker.name)
-                result.log = f"{result.log}\n🩸 Deep Wounds: Target bleeds for {bleed_dmg} dmg/turn (3 turns)"
-        
-        # Fire Mage - Ignite (fire spells apply burn = 10% of damage over 3 turns)
-        elif spec.name == "Fire":
-            if ability.key in ("fireball", "pyroblast", "dragon_breath", "combustion"):
-                if result.damage > 0:
-                    burn_dmg = max(1, int(result.damage * 0.10 / 3))  # 10% total, divided over 3 turns
-                    target.add_status(StatusEffect.BURN, burn_dmg, 3, attacker.name)
-                    result.log = f"{result.log}\n🔥 Ignite: Target burns for {burn_dmg} dmg/turn (3 turns)"
-        
-        # Assassination Rogue - Master Poisoner (handled in status application)
-        
-        # Beast Mastery Hunter - Kindred Spirits (auto attack triggers pet hit)
-        elif spec.name == "Beast Mastery":
-            if ability.key == "auto_attack" and result.damage > 0:
-                pet_damage = int(result.damage * 0.40)
-                target.current_hp = max(0, target.current_hp - pet_damage)
-                if target.current_hp <= 0:
-                    target.is_dead = True
-                result.damage += pet_damage
-                result.log = f"{result.log}\n🐉 Beast attacks: +{pet_damage} damage"
-
-    def _apply_spec_passives_post_heal(
-        self,
-        attacker: Combatant,
-        ability: Ability,
-        heal_amount: int,
-        result: CombatResult,
-        session: Optional['CombatSession']
-    ):
-        """Apply spec passives that trigger after healing."""
-        if not attacker.is_player or not attacker.specialization:
-            return
-        
-        spec = SPECIALIZATIONS.get(attacker.specialization)
-        if not spec:
-            return
-        
-        # Holy Paladin - Illumination (crit heals refund 30% mana)
-        if attacker.specialization == "holy_paladin":
-            if result.is_crit and heal_amount > 0 and attacker.res_type == "mana":
-                refund = int(ability.cost * 0.30)
-                attacker.current_res = min(attacker.max_res, attacker.current_res + refund)
-                result.log = f"{result.log}\n💛 Illumination: Refunded {refund} mana"
-        
-        # Holy Priest - Inspiration (heals grant 10% damage reduction for 1 turn)
-        elif attacker.specialization == "holy_priest":
-            # Grant a small shield that represents damage reduction
-            # We'll use SHIELD with a value that represents the DR effect
-            dr_shield = int(target.max_hp * 0.10)  # 10% of max HP as "DR buffer"
-            existing_shield = target.get_status(StatusEffect.SHIELD)
-            if existing_shield:
-                existing_shield.value += dr_shield
-            else:
-                target.add_status(StatusEffect.SHIELD, dr_shield, 1, attacker.name)
-            result.log = f"{result.log}\n🕊️ Inspiration: +10% damage reduction (1 turn)"
-
-    def _apply_spec_passives_on_damage_taken(
-        self,
-        defender: Combatant,
-        incoming_damage: int,
-        attacker: Combatant
-    ) -> Tuple[int, Optional[str]]:
-        """Apply spec passives when taking damage (e.g., Shield Block). Returns (damage, log_message)."""
-        if not defender.is_player or not defender.specialization:
-            return incoming_damage, None
-        
-        spec = SPECIALIZATIONS.get(defender.specialization)
-        if not spec:
-            return incoming_damage, None
-        
-        damage = incoming_damage
-        log_msg = None
-        
-        # Protection Warrior - Shield Block (25% chance to block, reduce by 40%)
-        if spec.name == "Protection":
-            if random.random() < 0.25:
-                blocked = int(damage * 0.40)
-                damage = max(1, damage - blocked)
-                log_msg = f"🛡️ Shield Block: Reduced damage by {blocked}"
-        
-        return damage, log_msg
 
     # ── Enemy AI ──────────────────────────────────────────────────────────────
 
@@ -943,6 +704,4 @@ class CombatEngine:
             parts.append(f"restoring **{r.healing}** HP")
         if r.effects_added:
             parts.append(f"applying *{', '.join(r.effects_added)}*")
-        if r.lifesteal_heal:
-            parts.append(f"💚 +{r.lifesteal_heal} HP lifesteal")
         return " — ".join(parts) + "."
