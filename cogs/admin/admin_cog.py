@@ -399,7 +399,7 @@ class AdminCog(commands.Cog, name="Admin"):
                    c.player_id, p.username
             FROM characters c
             LEFT JOIN players p ON c.player_id = p.id
-            ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
+            ORDER BY COALESCE(c.last_combat, c.created_at) DESC
             LIMIT 20
             """
         )
