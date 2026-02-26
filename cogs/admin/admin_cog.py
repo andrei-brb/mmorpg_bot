@@ -387,6 +387,48 @@ class AdminCog(commands.Cog, name="Admin"):
         embed.add_field(name="⚔️ Active Fights",     value=str(active_fights),  inline=True)
         await interaction.followup.send(embed=embed)
 
+    @admin.command(name="characters", description="List characters on this server (debug)")
+    async def characters(self, interaction: discord.Interaction):
+        """Show a snapshot of characters (name, level, gold, owner)."""
+        if not await self._check_admin(interaction):
+            return
+
+        rows = await self.bot.db.fetch(
+            """
+            SELECT c.name, c.level, c.gold, c.class, c.is_active,
+                   c.player_id, p.username
+            FROM characters c
+            LEFT JOIN players p ON c.player_id = p.id
+            ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
+            LIMIT 20
+            """
+        )
+
+        if not rows:
+            return await interaction.followup.send(
+                "📋 No characters found in the database yet.",
+                ephemeral=True,
+            )
+
+        lines = []
+        for r in rows:
+            owner_mention = f"<@{r['player_id']}>" if r["player_id"] else "Unknown"
+            owner_name = r["username"] or "Unknown"
+            status = "✅ active" if r["is_active"] else "❌ inactive"
+            lines.append(
+                f"• **{r['name']}** (Lv {r['level']} {r['class']}) — "
+                f"{r['gold']:,}🪙 — {status}\n"
+                f"  Owner: {owner_mention} (`{owner_name}`)"
+            )
+
+        embed = discord.Embed(
+            title="👥 Characters — Snapshot",
+            description="\n".join(lines),
+            color=0x00A86B,
+        )
+        embed.set_footer(text="Showing up to 20 most recently updated characters.")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @admin.command(name="sync_commands", description="Force re-sync Discord commands (fixes duplicates)")
     async def sync_commands(self, interaction: discord.Interaction):
         """Force re-sync all commands to fix duplicates."""
