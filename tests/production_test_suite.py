@@ -1476,6 +1476,14 @@ class CompleteGameTestSuite:
 
     async def cleanup(self):
         """Clean up all test data."""
+        import os
+
+        # Allow keeping test data for Discord inspection:
+        # KEEP_TEST_DATA=1 DATABASE_URL=... python3 -m tests.production_test_suite
+        if os.getenv("KEEP_TEST_DATA") == "1":
+            print("\n🧪 KEEP_TEST_DATA=1 — skipping cleanup, keeping test data in database.")
+            return
+
         print("\n🧹 Cleaning up test data...")
 
         try:

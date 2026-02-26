@@ -378,6 +378,167 @@ class CharacterCog(commands.Cog, name="Character"):
 
         await interaction.followup.send(embed=embed)
 
+    # ── /character overview ───────────────────────────────────────────────────
+    @char.command(name="overview", description="See a full overview: stats, gold, quests, dungeon, daily, etc.")
+    async def overview(self, interaction: discord.Interaction):
+        """Compact debug-style overview of your character state."""
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+        # Core character
+        data = await self.svc.full_profile(interaction.user.id)
+        if not data:
+            return await interaction.followup.send("❌ You don't have a character yet. Use `/character create`.", ephemeral=True)
+
+        char = data["char"]
+        stats = data["stats"]
+        cls = CLASSES[char["class"]]
+
+        # Import auxiliary services lazily
+        from services.quest.npc_quest_service import NPCQuestService
+        from services.dungeon.dungeon_service import DungeonService
+        from services.daily.daily_login_service import DailyLoginService
+        from services.achievement.achievement_service import AchievementService
+
+        quest_svc = NPCQuestService(self.bot.db)
+        dungeon_svc = DungeonService(self.bot.db)
+        daily_svc = DailyLoginService(self.bot.db)
+        ach_svc = AchievementService(self.bot.db)
+
+        # Active / completed quests
+        active_quests = await quest_svc.get_active_quests(char["id"])
+        completed_quests = await quest_svc.get_completed_quests(char["id"])
+
+        # Reputation summary
+        factions = await quest_svc.get_all_reputation(char["id"])
+
+        # Dungeon status
+        active_run = await dungeon_svc.get_active_run(char["id"]) if char.get("in_dungeon") else None
+
+        # Daily streak
+        streak = await daily_svc.get_streak(char["id"])
+
+        # Achievements
+        ach_list = await ach_svc.get_character_achievements(char["id"])
+
+        # Build overview embed
+        embed = discord.Embed(
+            title=f"📊 Overview — {char['name']}",
+            description=f"**Level {char['level']} {cls.name}** — {cls.emoji}",
+            color=0x2F3136,
+        )
+
+        # Core snapshot
+        embed.add_field(
+            name="👤 Character",
+            value=(
+                f"Class: **{cls.name}**\n"
+                f"HP: **{char['current_hp']:,}/{char['max_hp']:,}**\n"
+                f"Gold: **{char['gold']:,} 🪙**\n"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="⚔️ Combat Snapshot",
+            value=(
+                f"ATK: **{stats['attack_power']}**\n"
+                f"SP: **{stats['spell_power']}**\n"
+                f"Armor: **{stats['armor']}**\n"
+                f"Crit: **{stats['crit_chance']:.1f}%**\n"
+            ),
+            inline=True,
+        )
+
+        # Quests
+        if active_quests:
+            active_lines = [
+                f"• {q['quest_name']} (step {q.get('current_step', 1)})"
+                for q in active_quests[:5]
+            ]
+            more = f"\n…and {len(active_quests) - 5} more." if len(active_quests) > 5 else ""
+            embed.add_field(
+                name=f"📜 Active Quests ({len(active_quests)})",
+                value=" \n".join(active_lines) + more,
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name="📜 Active Quests",
+                value="None — use `/explore` and `/interact` to pick some up.",
+                inline=False,
+            )
+
+        if completed_quests:
+            embed.add_field(
+                name="✅ Completed Quests",
+                value=f"Total completed: **{len(completed_quests)}**",
+                inline=True,
+            )
+
+        # Reputation (top few)
+        if factions:
+            from services.quest.npc_quest_service import get_rep_level
+            top_factions = sorted(factions, key=lambda f: f["reputation"], reverse=True)[:3]
+            rep_lines = []
+            for f in top_factions:
+                lvl = get_rep_level(f["reputation"])
+                rep_lines.append(
+                    f"{lvl['emoji']} **{f['faction_name']}** — {f['reputation']} ({lvl['name']})"
+                )
+            embed.add_field(
+                name="🤝 Reputation (Top 3)",
+                value="\n".join(rep_lines),
+                inline=False,
+            )
+
+        # Dungeon
+        if active_run:
+            embed.add_field(
+                name="🏰 Dungeon",
+                value=(
+                    f"Active run: **{active_run['dungeon_key']}**\n"
+                    f"Floor: **{active_run['current_floor']}/{active_run['total_floors']}**\n"
+                    f"Difficulty: **{active_run['difficulty']}**"
+                ),
+                inline=True,
+            )
+        else:
+            embed.add_field(
+                name="🏰 Dungeon",
+                value="Not currently in a dungeon.",
+                inline=True,
+            )
+
+        # Daily login + Achievements
+        embed.add_field(
+            name="📅 Daily Login",
+            value=(
+                f"Current streak: **{streak.get('current_streak', 0)}**\n"
+                f"Total logins: **{streak.get('total_logins', 0)}**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🏆 Achievements",
+            value=f"Total earned: **{len(ach_list)}**",
+            inline=True,
+        )
+
+        # Location / status footer
+        zone_name = char["current_zone"].replace("_", " ").title()
+        zone_emoji = ZONES.get(char["current_zone"]).emoji if ZONES.get(char["current_zone"]) else "🗺️"
+        embed.add_field(
+            name="📍 World",
+            value=f"{zone_emoji} **{zone_name}**",
+            inline=False,
+        )
+
+        embed.set_footer(text=f"World of Discord v{Settings.VERSION} • Overview")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @char.command(name="card", description="Generate a visual profile card image")
     @app_commands.describe(member="View another player's profile card")
     async def card(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
