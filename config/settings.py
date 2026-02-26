@@ -323,6 +323,37 @@ SPECIALIZATIONS: Dict[str, SpecConfig] = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#   ABILITY UNLOCK LEVELS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Abilities unlock at different levels for progression feel
+ABILITY_UNLOCK_LEVELS: Dict[str, int] = {
+    # Starter abilities (level 1)
+    "auto_attack": 1,
+    "strike": 1, "battle_shout": 1, "defensive_stance": 1,
+    "judgment": 1, "holy_light": 1, "divine_shield": 1,
+    "fireball": 1, "frost_bolt": 1, "blink": 1,
+    "sinister_strike": 1, "stealth": 1, "eviscerate": 1,
+    "heal": 1, "smite": 1, "power_word_shield": 1,
+    "aimed_shot": 1, "multi_shot": 1, "hunters_mark": 1,
+    
+    # Level 5 abilities
+    "mortal_strike": 5, "whirlwind": 5, "colossus_smash": 5,
+    "shield_slam": 5, "revenge": 5, "last_stand": 5,
+    "crusader_strike": 5, "divine_storm": 5, "hammer_of_wrath": 5,
+    "holy_shock": 5, "beacon_of_light": 5, "lay_on_hands": 5,
+    "pyroblast": 5, "combustion": 5, "dragon_breath": 5,
+    "ice_lance": 5, "frozen_orb": 5, "frost_nova": 5,
+    "mutilate": 5, "envenom": 5, "vendetta": 5,
+    "shadowstrike": 5, "shadow_dance": 5, "backstab": 5,
+    "mind_blast": 5, "vampiric_touch": 5, "void_eruption": 5,
+    "circle_of_healing": 5, "prayer_of_mending": 5, "guardian_spirit": 5,
+    "careful_aim": 5, "rapid_fire": 5, "double_tap": 5,
+    "bestial_wrath": 5, "dire_beast": 5, "kill_command": 5,
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #   ZONES
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -577,3 +608,30 @@ DUNGEONS: Dict[str, DungeonConfig] = {
         gold_reward=(300, 600),
     ),
 }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#   BOSS SCALING HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _boss_hp_scale_for_zone(zone) -> float:
+    """
+    Boss HP multiplier based on zone difficulty.
+
+    - Starter zones (1–10): much easier solo bosses
+    - Mid zones (10–25): moderate bosses
+    - Late zones (25–45): tough bosses
+    - Endgame (50–60): default BOSS_HP_SCALE (group‑tuned)
+    """
+    try:
+        max_level = zone.level_range[1]
+    except Exception:
+        return Settings.BOSS_HP_SCALE
+
+    if max_level <= 10:
+        return 1.5
+    if max_level <= 25:
+        return 2.0
+    if max_level <= 45:
+        return 2.5
+    return Settings.BOSS_HP_SCALE

@@ -13,7 +13,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from config.settings import CLASSES, ENEMIES, ZONES, RARITIES, Settings
+from config.settings import CLASSES, ENEMIES, ZONES, RARITIES, Settings, ABILITY_UNLOCK_LEVELS
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.combat.combat_engine import (
@@ -23,27 +23,8 @@ from services.combat.combat_engine import (
 log = logging.getLogger("cog.combat")
 
 
-def _boss_hp_scale_for_zone(zone) -> float:
-    """
-    Boss HP multiplier based on zone difficulty.
-
-    - Starter zones (1–10): much easier solo bosses
-    - Mid zones (10–25): moderate bosses
-    - Late zones (25–45): tough bosses
-    - Endgame (50–60): default BOSS_HP_SCALE (group‑tuned)
-    """
-    try:
-        max_level = zone.level_range[1]
-    except Exception:
-        return Settings.BOSS_HP_SCALE
-
-    if max_level <= 10:
-        return 1.5
-    if max_level <= 25:
-        return 2.0
-    if max_level <= 45:
-        return 2.5
-    return Settings.BOSS_HP_SCALE
+# Imported from config.settings to keep the function testable without discord
+from config.settings import _boss_hp_scale_for_zone
 
 # Channel-level lock: channel_id -> CombatSession
 ACTIVE: Dict[int, CombatSession] = {}
@@ -76,6 +57,7 @@ def _make_player(char, stats) -> Combatant:
         is_player=True, char_id=char["id"],
         current_hp=char["current_hp"], max_hp=char["max_hp"],
         current_res=char["current_res"], max_res=char["max_res"],
+        specialization=char.get("specialization"),
         res_type=cls.resource,
         attack_power=stats["attack_power"],
         spell_power=stats["spell_power"],
@@ -170,9 +152,15 @@ class AbilityView(discord.ui.View):
 
         options = []
         cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
+        char_level = char.get("level", 1)
         for key in dict.fromkeys(keys):  # deduplicate, preserve order
             ab = ABILITIES.get(key)
             if not ab: continue
+            
+            # Check if ability is unlocked
+            unlock_level = ABILITY_UNLOCK_LEVELS.get(key, 1)  # Default to level 1 if not specified
+            if char_level < unlock_level:
+                continue  # Skip abilities that aren't unlocked yet
             cd = combatant.ability_cooldowns.get(key, 0)
             eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
             cost = f"({eff_cost} {ab.cost_type})" if eff_cost else ""
