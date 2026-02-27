@@ -20,6 +20,7 @@
    DISCORD_TOKEN=your_discord_bot_token
    DATABASE_URL=your_postgresql_connection_string
    ```
+   Optional: `LOG_LEVEL=WARNING` to reduce log volume and avoid Railway rate limits.
    
    **For Database:**
    - Railway provides PostgreSQL for free

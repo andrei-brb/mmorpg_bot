@@ -4,6 +4,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
+import asyncio
 import logging
 import random
 from typing import Dict, List, Optional
@@ -28,6 +29,21 @@ from config.settings import _boss_hp_scale_for_zone
 
 # Channel-level lock: channel_id -> CombatSession
 ACTIVE: Dict[int, CombatSession] = {}
+
+
+async def _safe_edit(msg, embed, view=None, max_retries=3):
+    """Edit message with retry on Discord 429 rate limit."""
+    for attempt in range(max_retries):
+        try:
+            await msg.edit(embed=embed, view=view)
+            return
+        except discord.errors.HTTPException as e:
+            if e.status == 429 and attempt < max_retries - 1:
+                wait = (attempt + 1) * 2.0  # 2s, 4s, 6s
+                log.warning(f"Discord rate limit (429), waiting {wait}s before retry")
+                await asyncio.sleep(wait)
+            else:
+                raise
 
 
 def _make_enemy(key: str, char_level: int, zone=None) -> Combatant:
@@ -185,9 +201,9 @@ class AbilityView(discord.ui.View):
                     item.disabled = True
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        log.info(f"[COMBAT LOCK] owner_id={self.owner_id}, clicker={interaction.user.id} ({interaction.user.display_name})")
+        log.debug(f"[COMBAT LOCK] owner_id={self.owner_id}, clicker={interaction.user.id} ({interaction.user.display_name})")
         if self.owner_id and interaction.user.id != self.owner_id:
-            log.info(f"[COMBAT LOCK] BLOCKED {interaction.user.display_name} from using {interaction.user.display_name}'s combat")
+            log.debug(f"[COMBAT LOCK] BLOCKED {interaction.user.display_name} from using combat")
             await interaction.response.send_message(
                 "❌ **This isn't your fight!** Only the player in combat can use these buttons.", ephemeral=True
             )
@@ -546,7 +562,7 @@ class CombatCog(commands.Cog, name="Combat"):
                     embed = _build_embed(session, log_lines)
 
                     if msg:
-                        await msg.edit(embed=embed, view=view)
+                        await _safe_edit(msg, embed, view=view)
                     else:
                         msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
@@ -655,7 +671,7 @@ class CombatCog(commands.Cog, name="Combat"):
                 # Update the embed with new log
                 try:
                     if msg:
-                        await msg.edit(embed=_build_embed(session, log_lines), view=None)
+                        await _safe_edit(msg, _build_embed(session, log_lines), view=None)
                 except Exception as e:
                     log.error(f"Error updating combat embed: {e}", exc_info=True)
                     # Try to send a new message if edit fails

@@ -374,7 +374,7 @@ async def check_channel(interaction: discord.Interaction, command_name: str = No
         except Exception:
             pass
     
-    log.info(f"[CHECK_CHANNEL] Detected command='{command_name}' channel={interaction.channel_id}")
+    log.debug(f"[CHECK_CHANNEL] Detected command='{command_name}' channel={interaction.channel_id}")
     
     if not command_name:
         return True  # Can't determine command, allow it (better to allow than block)
@@ -402,7 +402,7 @@ async def check_channel(interaction: discord.Interaction, command_name: str = No
         return True  # Channel manager not initialized, allow anywhere
 
     correct_ch_id = bot.channels.get_channel_id(interaction.guild_id, channel_type)
-    log.info(f"[CHECK_CHANNEL] cmd='{command_name}' type='{channel_type}' correct_ch={correct_ch_id} current_ch={interaction.channel_id} match={interaction.channel_id == correct_ch_id}")
+    log.debug(f"[CHECK_CHANNEL] cmd='{command_name}' type='{channel_type}' correct_ch={correct_ch_id} current_ch={interaction.channel_id} match={interaction.channel_id == correct_ch_id}")
     if not correct_ch_id:
         return True  # Channels not set up yet, allow anywhere
 
