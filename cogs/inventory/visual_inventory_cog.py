@@ -1,22 +1,23 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║         VISUAL INVENTORY - Beautiful Grid Layout for mmorpg_bot             ║
+║      INTERACTIVE INVENTORY - Select items, see details, take actions         ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-Generates inventory images with rarity borders, enhancement levels, and grid layout.
+Interactive inventory with select menu, dynamic embeds, and action buttons.
 Command: /inventory_grid [category]
 """
 
 import io
 import logging
 from typing import List, Dict, Optional
+from uuid import UUID
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFont
 
-from config.settings import Settings
+from config.settings import Settings, RARITIES
 
 log = logging.getLogger("visual_inventory")
 
@@ -103,8 +104,7 @@ class VisualInventoryGenerator:
         character_name: str,
         gold: int,
         max_slots: int = 20,
-        category_filter: Optional[str] = None,
-        selected_item: Optional[Dict] = None,
+        selected_item_id: Optional[str] = None,
     ) -> io.BytesIO:
         width, height = 1000, 1200
         img = Image.new("RGB", (width, height), color=self.COLORS["bg_mid"])
@@ -127,13 +127,10 @@ class VisualInventoryGenerator:
             y = grid_y + row * (cell_size + gap)
             if idx < len(items):
                 item = items[idx]
-                self._draw_item_cell(draw, item, x, y, cell_size, selected_item and str(item.get("id")) == str(selected_item.get("id")))
+                is_selected = selected_item_id and str(item.get("id")) == selected_item_id
+                self._draw_item_cell(draw, item, x, y, cell_size, is_selected)
             else:
                 self._draw_empty_cell(draw, x, y, cell_size)
-
-        # Sidebar (selected item)
-        if selected_item:
-            self._draw_sidebar(draw, selected_item)
 
         output = io.BytesIO()
         img.save(output, format="PNG")
@@ -144,7 +141,8 @@ class VisualInventoryGenerator:
         draw.rounded_rectangle([x, y, x + size, y + size], radius=8, fill=self.COLORS["bg_light"])
         rarity = item.get("rarity", "common")
         rarity_color = self.COLORS.get(rarity, self.COLORS["common"])
-        draw.rounded_rectangle([x - 1, y - 1, x + size + 1, y + size + 1], radius=8, outline=rarity_color, width=4 if is_selected else 3)
+        border_width = 5 if is_selected else 3
+        draw.rounded_rectangle([x - 1, y - 1, x + size + 1, y + size + 1], radius=8, outline=rarity_color, width=border_width)
         icon = item.get("icon", "📦")
         draw.text((x + size // 2 - 18, y + 15), icon, fill=self.COLORS["text_light"], font=self.font_icon)
         enh = item.get("enhancement_level", 0) or 0
@@ -162,32 +160,299 @@ class VisualInventoryGenerator:
         draw.rounded_rectangle([x, y, x + size, y + size], radius=8, fill=self.COLORS["bg_dark"], outline=self.COLORS["border"], width=2)
         draw.text((x + size // 2 - 10, y + size // 2 - 10), "＋", fill=self.COLORS["border"], font=self.font_header)
 
-    def _draw_sidebar(self, draw, item: Dict):
-        sx, sy, sw = 700, 140, 270
-        draw.rounded_rectangle([sx, sy, sx + sw, sy + 550], radius=12, fill=self.COLORS["bg_dark"])
-        draw.text((sx + 10, sy + 20), "📦 Selected Item", fill=self.COLORS["text_gray"], font=self.font_small)
-        rarity_color = self.COLORS.get(item.get("rarity", "common"), self.COLORS["common"])
-        draw.rounded_rectangle([sx + 10, sy + 55, sx + sw - 10, sy + 280], radius=8, fill=self.COLORS["bg_mid"], outline=rarity_color, width=3)
-        icon = item.get("icon", "📦")
-        draw.text((sx + 105, sy + 75), icon, fill=rarity_color, font=self.font_icon_large)
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  INTERACTIVE UI COMPONENTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ItemSelectMenu(discord.ui.Select):
+    """Dropdown to select items from inventory."""
+    
+    def __init__(self, items: List[Dict], current_selected: Optional[str] = None):
+        options = []
+        for item in items[:25]:  # Discord limit
+            rarity = item.get("rarity", "common")
+            rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
+            emoji = rarity_cfg.emoji
+            name = item.get("name", "?")
+            enh = item.get("enhancement_level", 0) or 0
+            qty = item.get("quantity", 1)
+            label = f"{name} +{enh}" if enh > 0 else name
+            if qty > 1:
+                label += f" (x{qty})"
+            desc = f"{rarity.title()} • {item.get('item_type', '?')}"
+            value = str(item.get("id", ""))
+            is_default = current_selected and value == current_selected
+            options.append(
+                discord.SelectOption(
+                    label=label[:100],
+                    description=desc[:100],
+                    value=value,
+                    emoji=emoji,
+                    default=is_default,
+                )
+            )
+        super().__init__(
+            placeholder="🔍 Select an item to view details...",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if not isinstance(view, InteractiveInventoryView):
+            return
+        await view.select_item(interaction, self.values[0])
+
+
+class InteractiveInventoryView(discord.ui.View):
+    """Interactive inventory view with select menu and action buttons."""
+    
+    def __init__(
+        self,
+        *,
+        owner_id: int,
+        char_id: UUID,
+        char_name: str,
+        gold: int,
+        items: List[Dict],
+        inv_svc,
+        char_svc,
+        generator: VisualInventoryGenerator,
+        max_slots: int,
+    ):
+        super().__init__(timeout=300)
+        self.owner_id = owner_id
+        self.char_id = char_id
+        self.char_name = char_name
+        self.gold = gold
+        self.items = items
+        self.inv_svc = inv_svc
+        self.char_svc = char_svc
+        self.generator = generator
+        self.max_slots = max_slots
+        self.selected_item_id: Optional[str] = None
+        self.selected_item: Optional[Dict] = None
+        self.message: Optional[discord.Message] = None
+        
+        # Add select menu
+        self.add_item(ItemSelectMenu(items))
+        
+        # Add action buttons (will be enabled when item selected)
+        self.equip_btn.disabled = True
+        self.sell_btn.disabled = True
+        self.use_btn.disabled = True
+
+    @discord.ui.button(label="⚔️ Equip", style=discord.ButtonStyle.primary, row=1)
+    async def equip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.selected_item:
+            return await interaction.response.send_message("❌ No item selected.", ephemeral=True)
+        await interaction.response.defer()
+        try:
+            item_id = UUID(self.selected_item_id)
+        except (ValueError, TypeError):
+            return await interaction.followup.send("❌ Invalid item ID.", ephemeral=True)
+        ok, msg = await self.inv_svc.equip(self.char_id, item_id)
+        embed = discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        # Refresh inventory
+        await self.refresh_inventory(interaction)
+
+    @discord.ui.button(label="💰 Sell", style=discord.ButtonStyle.success, row=1)
+    async def sell_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.selected_item:
+            return await interaction.response.send_message("❌ No item selected.", ephemeral=True)
+        await interaction.response.defer()
+        try:
+            item_id = UUID(self.selected_item_id)
+        except (ValueError, TypeError):
+            return await interaction.followup.send("❌ Invalid item ID.", ephemeral=True)
+        ok, msg, gold_gained = await self.inv_svc.sell(self.char_id, item_id)
+        if ok:
+            self.gold += gold_gained
+        embed = discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        # Refresh inventory
+        await self.refresh_inventory(interaction)
+
+    @discord.ui.button(label="🧪 Use", style=discord.ButtonStyle.secondary, row=1)
+    async def use_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.selected_item:
+            return await interaction.response.send_message("❌ No item selected.", ephemeral=True)
+        await interaction.response.defer()
+        try:
+            item_id = UUID(self.selected_item_id)
+        except (ValueError, TypeError):
+            return await interaction.followup.send("❌ Invalid item ID.", ephemeral=True)
+        ok, msg, effect = await self.inv_svc.use_consumable(self.char_id, item_id)
+        embed = discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        # Refresh inventory
+        await self.refresh_inventory(interaction)
+
+    @discord.ui.button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, row=1)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await self.refresh_inventory(interaction)
+
+    async def select_item(self, interaction: discord.Interaction, item_id: str):
+        """Handle item selection from dropdown."""
+        item = next((i for i in self.items if str(i.get("id")) == item_id), None)
+        if not item:
+            return await interaction.response.send_message("❌ Item not found.", ephemeral=True)
+        
+        self.selected_item_id = item_id
+        self.selected_item = item
+        
+        # Enable/disable buttons based on item type
+        self.equip_btn.disabled = not item.get("equip_slot")
+        self.sell_btn.disabled = False
+        self.use_btn.disabled = item.get("item_type") != "consumable"
+        
+        # Update embed and image
+        embed = self._build_item_embed(item)
+        image_bytes = self.generator.generate_inventory_image(
+            items=self.items[:40],
+            character_name=self.char_name,
+            gold=self.gold,
+            max_slots=self.max_slots,
+            selected_item_id=item_id,
+        )
+        file = discord.File(fp=image_bytes, filename="inventory.png")
+        
+        # Update select menu to show selected item
+        self.clear_items()
+        self.add_item(ItemSelectMenu(self.items, current_selected=item_id))
+        self.add_item(self.equip_btn)
+        self.add_item(self.sell_btn)
+        self.add_item(self.use_btn)
+        self.add_item(self.refresh_btn)
+        
+        await interaction.response.edit_message(
+            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)} items)",
+            embed=embed,
+            attachments=[file],
+            view=self,
+        )
+
+    def _build_item_embed(self, item: Dict) -> discord.Embed:
+        """Build embed showing item details."""
+        rarity = item.get("rarity", "common")
+        rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
+        color = rarity_cfg.color
+        
         name = item.get("name", "?")
         enh = item.get("enhancement_level", 0) or 0
         if enh > 0:
             name = f"{name} +{enh}"
-        draw.text((sx + 25, sy + 155), name[:22], fill=rarity_color, font=self.font_header)
-        stats_y = sy + 195
-        for label, val in [
-            ("⚔️ Damage:", f"{item.get('s_dmg_min', 0)}-{item.get('s_dmg_max', 0)}" if item.get("s_dmg_min") else "N/A"),
-            ("💪 Str:", f"+{item.get('s_str', 0) or 0}"),
-            ("⚡ Agi:", f"+{item.get('s_agi', 0) or 0}"),
-            ("🧠 Int:", f"+{item.get('s_int', 0) or 0}"),
-        ]:
-            if val != "N/A" and val != "+0":
-                draw.text((sx + 20, stats_y), label, fill=self.COLORS["text_gray"], font=self.font_small)
-                draw.text((sx + 170, stats_y), str(val), fill=self.COLORS["green"], font=self.font_small)
-                stats_y += 22
-        desc = item.get("description", "A mysterious item.")[:120]
-        draw.text((sx + 10, sy + 300), f"📜 {desc}...", fill=self.COLORS["text_dark"], font=self.font_tiny)
+        
+        embed = discord.Embed(
+            title=f"{rarity_cfg.emoji} {name}",
+            description=item.get("description", "No description."),
+            color=color,
+        )
+        
+        # Stats
+        stats = []
+        if item.get("s_dmg_min") and item.get("s_dmg_max"):
+            stats.append(f"⚔️ **Damage:** {item['s_dmg_min']}-{item['s_dmg_max']}")
+        if item.get("s_str"):
+            stats.append(f"💪 **Str:** +{item['s_str']}")
+        if item.get("s_agi"):
+            stats.append(f"⚡ **Agi:** +{item['s_agi']}")
+        if item.get("s_int"):
+            stats.append(f"🧠 **Int:** +{item['s_int']}")
+        if item.get("s_armor"):
+            stats.append(f"🛡️ **Armor:** +{item['s_armor']}")
+        
+        if stats:
+            embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
+        
+        # Metadata
+        meta = []
+        meta.append(f"**Type:** {item.get('item_type', '?').title()}")
+        if item.get("equip_slot"):
+            meta.append(f"**Slot:** {item['equip_slot']}")
+        if item.get("quantity", 1) > 1:
+            meta.append(f"**Quantity:** {item['quantity']}")
+        if item.get("level_req"):
+            meta.append(f"**Level Req:** {item['level_req']}")
+        
+        if meta:
+            embed.add_field(name="ℹ️ Info", value="\n".join(meta), inline=False)
+        
+        embed.set_footer(text=f"Item ID: {item.get('id')}")
+        return embed
+
+    async def refresh_inventory(self, interaction: discord.Interaction):
+        """Reload inventory from database."""
+        raw_items = await self.inv_svc.get_all(self.char_id)
+        char = await self.char_svc.get_by_id(self.char_id)
+        if char:
+            self.gold = int(char.get("gold", 0))
+        
+        # Format items same way as initial load
+        formatted = []
+        for item in raw_items[:40]:
+            formatted.append({
+                "id": str(item["id"]),
+                "name": item.get("name", "?"),
+                "icon": item.get("icon", "📦"),
+                "rarity": item.get("rarity", "common"),
+                "enhancement_level": item.get("enhancement_level", 0) or 0,
+                "quantity": item.get("quantity", 1),
+                "item_type": item.get("item_type", ""),
+                "equip_slot": item.get("equip_slot"),
+                "s_dmg_min": item.get("s_dmg_min"),
+                "s_dmg_max": item.get("s_dmg_max"),
+                "s_str": item.get("s_str"),
+                "s_agi": item.get("s_agi"),
+                "s_int": item.get("s_int"),
+                "s_armor": item.get("s_armor"),
+                "description": item.get("description", ""),
+                "level_req": item.get("level_req"),
+            })
+        self.items = formatted
+        
+        # Update selected item if it still exists
+        if self.selected_item_id:
+            self.selected_item = next((i for i in self.items if str(i.get("id")) == self.selected_item_id), None)
+            if not self.selected_item:
+                self.selected_item_id = None
+        
+        # Rebuild view
+        self.clear_items()
+        self.add_item(ItemSelectMenu(self.items, current_selected=self.selected_item_id))
+        self.add_item(self.equip_btn)
+        self.add_item(self.sell_btn)
+        self.add_item(self.use_btn)
+        self.add_item(self.refresh_btn)
+        
+        # Regenerate image
+        image_bytes = self.generator.generate_inventory_image(
+            items=self.items[:40],
+            character_name=self.char_name,
+            gold=self.gold,
+            max_slots=self.max_slots,
+            selected_item_id=self.selected_item_id,
+        )
+        file = discord.File(fp=image_bytes, filename="inventory.png")
+        
+        # Update message
+        embed = self._build_item_embed(self.selected_item) if self.selected_item else None
+        await interaction.edit_original_response(
+            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)} items)",
+            embed=embed,
+            attachments=[file],
+            view=self,
+        )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ This inventory isn't for you.", ephemeral=True)
+            return False
+        return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -207,7 +472,7 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
         self.char_svc = CharacterService(self.bot.db)
         self.inv_svc = InventoryService(self.bot.db)
 
-    @app_commands.command(name="inventory_grid", description="View your inventory as a visual grid")
+    @app_commands.command(name="inventory_grid", description="View your inventory as an interactive visual grid")
     @app_commands.describe(category="Filter by category (weapon, armor, consumable, material)")
     async def inventory_grid(
         self,
@@ -239,34 +504,49 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
                 "enhancement_level": item.get("enhancement_level", 0) or 0,
                 "quantity": item.get("quantity", 1),
                 "item_type": item.get("item_type", ""),
+                "equip_slot": item.get("equip_slot"),
                 "s_dmg_min": item.get("s_dmg_min"),
                 "s_dmg_max": item.get("s_dmg_max"),
                 "s_str": item.get("s_str"),
                 "s_agi": item.get("s_agi"),
                 "s_int": item.get("s_int"),
+                "s_armor": item.get("s_armor"),
                 "description": item.get("description", ""),
+                "level_req": item.get("level_req"),
             })
 
-        selected = formatted[0] if formatted else None
         player = await self.bot.db.fetchrow(
             "SELECT p.is_premium FROM players p JOIN characters c ON c.player_id=p.id WHERE c.id=$1",
             char["id"],
         )
         max_slots = Settings.PREMIUM_INVENTORY_SLOTS if (player and player["is_premium"]) else Settings.FREE_INVENTORY_SLOTS
 
+        # Generate initial image
         image_bytes = self.generator.generate_inventory_image(
             items=formatted,
             character_name=char["name"],
             gold=int(char.get("gold", 0)),
             max_slots=max_slots,
-            category_filter=category,
-            selected_item=selected,
+        )
+        file = discord.File(fp=image_bytes, filename="inventory.png")
+
+        # Create interactive view
+        view = InteractiveInventoryView(
+            owner_id=interaction.user.id,
+            char_id=char["id"],
+            char_name=char["name"],
+            gold=int(char.get("gold", 0)),
+            items=formatted,
+            inv_svc=self.inv_svc,
+            char_svc=self.char_svc,
+            generator=self.generator,
+            max_slots=max_slots,
         )
 
-        file = discord.File(fp=image_bytes, filename="inventory.png")
         await interaction.followup.send(
-            content=f"🎒 **{char['name']}'s Inventory** ({len(items)} items)",
+            content=f"🎒 **{char['name']}'s Inventory** ({len(items)} items)\n\n**💡 Select an item from the dropdown to see details!**",
             file=file,
+            view=view,
             ephemeral=True,
         )
 
