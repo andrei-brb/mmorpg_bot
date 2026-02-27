@@ -611,7 +611,7 @@ VALUES
      4,2,0,0,2,0,8,14, NULL,0,0, 10,4,'⚔️'),
     ('leather_cap','Leather Cap','Soft leather headgear.','armor','common','head',1,
      0,2,0,1,2,12,0,0, NULL,0,0, 8,3,'🪖'),
-    ('health_potion','Health Potion','Restores 80 HP instantly.','consumable','common',NULL,1,
+    ('health_potion','Health Potion','Restores 25% of max HP (min 80).','consumable','common',NULL,1,
      0,0,0,0,0,0,0,0, 'heal_hp',80,0, 5,2,'🧪'),
     ('dwarven_axe','Dwarven Axe','Forged in Ironforge.','weapon','uncommon','main_hand',5,
      7,2,0,0,3,0,12,20, NULL,0,0, 25,10,'🪓'),

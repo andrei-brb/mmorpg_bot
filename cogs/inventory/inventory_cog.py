@@ -529,7 +529,8 @@ class InventoryCog(commands.Cog, name="Inventory"):
             effect_duration = effect.get("duration", 0)
             
             if effect_type == "heal_hp":
-                healed = await self.char_svc.heal(char["id"], effect_value)
+                heal_val = max(effect_value, char["max_hp"] // 4)  # 25% of max, min 80
+                healed = await self.char_svc.heal(char["id"], heal_val)
                 msg += f" Restored **{healed}** HP."
             elif effect_type == "boost_sta":
                 boost_ok, boost_msg = await self.char_svc.boost_stat(

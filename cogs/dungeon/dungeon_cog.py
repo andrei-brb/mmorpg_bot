@@ -633,6 +633,12 @@ class DungeonCog(commands.Cog, name="Dungeon"):
                 )
                 if ok:
                     loot_lines.append(f"✨ {loot['template']['name']} ({loot['rarity']})")
+
+        # Chance to refill health potion (35% dungeon)
+        if random.random() < 0.35:
+            ok, _ = await inv_svc.add_item(char["id"], "health_potion", "common", from_="combat_drop")
+            if ok:
+                loot_lines.append("🧪 **Health Potion** (refill)")
         
         embed = discord.Embed(
             title=f"✅ Floor {floor} Complete!",

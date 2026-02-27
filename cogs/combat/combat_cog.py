@@ -601,7 +601,9 @@ class CombatCog(commands.Cog, name="Combat"):
                                 ok, msg_text, effect = await self.inv_svc.use_consumable(char_id, potion_id)
                                 healed = 0
                                 if ok and effect and effect.get("type") == "heal_hp":
-                                    healed = await self.char_svc.heal(char_id, effect.get("value", 0))
+                                    base_val = effect.get("value", 80)
+                                    heal_val = max(base_val, player.max_hp // 4)  # 25% of max, min 80
+                                    healed = await self.char_svc.heal(char_id, heal_val)
                                     # Sync combatant HP with DB state
                                     player.current_hp = min(player.max_hp, player.current_hp + healed)
                                     log_lines.append(f"🧪 {msg_text} Restored **{healed}** HP.")
@@ -732,6 +734,13 @@ class CombatCog(commands.Cog, name="Combat"):
                 if ok:
                     rc = RARITIES[loot["rarity"]]
                     loot_lines.append(f"{rc.emoji} **{loot['template']['name']}** [{loot['rarity'].title()}]")
+
+        # Chance to refill health potion after fight (25% base, 35% on boss)
+        potion_chance = 0.35 if session.is_boss else 0.25
+        if random.random() < potion_chance:
+            ok, _ = await self.inv_svc.add_item(char["id"], "health_potion", "common", from_="combat_drop")
+            if ok:
+                loot_lines.append("🧪 **Health Potion** (refill)")
 
         # Check achievements (non-blocking)
         try:
