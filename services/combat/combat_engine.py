@@ -358,6 +358,7 @@ class CombatResult:
     is_dodge:       bool = False
     effects_added:  List[str] = field(default_factory=list)
     narrative:      str = ""
+    log:            str = ""   # extra detail line(s) for spec passives, lifesteal, etc.
 
 
 @dataclass
