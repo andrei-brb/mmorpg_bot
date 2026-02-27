@@ -53,7 +53,8 @@ class HelpCog(commands.Cog, name="Help"):
         embed.add_field(
             name="🎒 Inventory",
             value=(
-                "`/inventory` — View your items (clickable grid)\n"
+                "`/inventory` — View your items (clickable grid, excludes equipped)\n"
+                "`/equipment` — View and manage equipped items (character shape)\n"
                 "`/equip` — Equip an item (dropdown)\n"
                 "`/equip <id>` — Equip by item ID\n"
                 "`/sell <id>` — Sell an item to vendor\n"

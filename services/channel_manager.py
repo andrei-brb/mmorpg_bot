@@ -154,7 +154,7 @@ class ChannelManager:
                 "tips": [
                     "💡 There's a small listing fee when selling items",
                     "💡 Listings expire after 7 days",
-                    "💡 Use `/inventory` in General channel to see your items",
+                    "💡 Use `/inventory` to see your items, `/equipment` to see equipped items",
                 ]
             },
             "explore": {
@@ -181,7 +181,8 @@ class ChannelManager:
                     "`/character profile` — View your stats and gear",
                     "`/character specialize` — Choose your specialization (Lv 10+)",
                     "`/character card` — Generate a visual profile card",
-                    "`/inventory` — View your items",
+                    "`/inventory` — View your items\n"
+                    "`/equipment` — View equipped items",
                     "`/equip [item]` — Equip an item",
                     "`/sell [item]` — Sell an item to vendor",
                     "`/shop browse` — View vendor shop",

@@ -253,15 +253,14 @@ class BoxInventoryView(discord.ui.View):
         )
 
     def _build_item_embed(self, item: Optional[Dict]) -> Optional[discord.Embed]:
-        """Build embed showing item details + equipment panel. Returns None if no item."""
+        """Build embed showing item details."""
         if not item:
-            # Show equipment panel only
+            # Show empty inventory message
             embed = discord.Embed(
                 title="🎒 Inventory",
-                description="Click a slot to view item details",
+                description="Click a slot to view item details\n\n💡 Use `/equipment` to view equipped items",
                 color=0x2F3136,
             )
-            self._add_equipment_panel(embed)
             return embed
         
         rarity = item.get("rarity", "common")
@@ -308,15 +307,130 @@ class BoxInventoryView(discord.ui.View):
         if meta:
             embed.add_field(name="ℹ️ Info", value="\n".join(meta), inline=False)
         
-        # Equipment panel (character paperdoll)
-        self._add_equipment_panel(embed)
-        
         embed.set_footer(text=f"Item ID: {item.get('id')}")
         return embed
     
     def _add_equipment_panel(self, embed: discord.Embed):
-        """Add character equipment display to embed."""
-        # Equipment slot order (character paperdoll layout)
+        """Equipment panel removed - use /equipment command instead."""
+        pass
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ This inventory isn't for you.", ephemeral=True)
+            return False
+        return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  EQUIPMENT VIEW - Character-shaped equipment slots
+# ═══════════════════════════════════════════════════════════════════════════
+
+class EquipmentSlotButton(discord.ui.Button):
+    """Equipment slot button in character shape."""
+    
+    def __init__(self, slot_key: str, slot_label: str, slot_emoji: str, item: Optional[Dict], row: int):
+        self.slot_key = slot_key
+        if item:
+            emoji = item.get("icon", "📦")
+            enh = item.get("enhancement_level", 0) or 0
+            label = f"{item.get('name', '?')[:12]}" + (f" +{enh}" if enh > 0 else "")
+            style = discord.ButtonStyle.primary
+        else:
+            emoji = slot_emoji
+            label = "Empty"
+            style = discord.ButtonStyle.secondary
+        super().__init__(
+            style=style,
+            emoji=emoji,
+            label=label[:20],  # Discord limit
+            custom_id=f"eq_{slot_key}",
+            row=row,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if isinstance(view, EquipmentView):
+            await view.on_equipment_slot_click(interaction, self.slot_key)
+
+
+class EquipmentView(discord.ui.View):
+    """Character equipment display in human shape."""
+    
+    def __init__(
+        self,
+        *,
+        owner_id: int,
+        char_id: UUID,
+        char_name: str,
+        equipped_items: Dict[str, Dict],
+        inv_svc,
+        char_svc,
+    ):
+        super().__init__(timeout=300)
+        self.owner_id = owner_id
+        self.char_id = char_id
+        self.char_name = char_name
+        self.equipped_items = equipped_items
+        self.inv_svc = inv_svc
+        self.char_svc = char_svc
+        self.selected_slot: Optional[str] = None
+        self.message: Optional[discord.Message] = None  # Store message reference
+        
+        self._build_equipment_buttons()
+    
+    def _build_equipment_buttons(self):
+        """Build character-shaped equipment layout (5 buttons max per row)."""
+        self.clear_items()
+        
+        # Character shape layout (compact):
+        # Row 0: [🪖 Head] [📿 Neck] [🥋 Chest] [🧤 Hands] [👖 Legs]
+        # Row 1: [👢 Feet] [⚔️ Main] [🛡️ Off] [💍 Ring] [🔮 Trinket]
+        
+        # Row 0: Head, Neck, Chest, Hands, Legs
+        self.add_item(EquipmentSlotButton("head", "Head", "🪖", self.equipped_items.get("head"), row=0))
+        self.add_item(EquipmentSlotButton("neck", "Neck", "📿", self.equipped_items.get("neck"), row=0))
+        self.add_item(EquipmentSlotButton("chest", "Chest", "🥋", self.equipped_items.get("chest"), row=0))
+        self.add_item(EquipmentSlotButton("hands", "Hands", "🧤", self.equipped_items.get("hands"), row=0))
+        self.add_item(EquipmentSlotButton("legs", "Legs", "👖", self.equipped_items.get("legs"), row=0))
+        
+        # Row 1: Feet, Main Hand, Off Hand, Ring, Trinket
+        self.add_item(EquipmentSlotButton("feet", "Feet", "👢", self.equipped_items.get("feet"), row=1))
+        self.add_item(EquipmentSlotButton("main_hand", "Main", "⚔️", self.equipped_items.get("main_hand"), row=1))
+        self.add_item(EquipmentSlotButton("off_hand", "Off", "🛡️", self.equipped_items.get("off_hand"), row=1))
+        self.add_item(EquipmentSlotButton("ring", "Ring", "💍", self.equipped_items.get("ring"), row=1))
+        self.add_item(EquipmentSlotButton("trinket", "Trinket", "🔮", self.equipped_items.get("trinket"), row=1))
+    
+    async def on_equipment_slot_click(self, interaction: discord.Interaction, slot_key: str):
+        """Handle equipment slot click - show unequip/enhance options."""
+        item = self.equipped_items.get(slot_key)
+        if not item:
+            return await interaction.response.send_message(
+                f"❌ **{slot_key.replace('_', ' ').title()}** slot is empty.",
+                ephemeral=True
+            )
+        
+        # Show item details with actions
+        embed = self._build_item_embed(item)
+        view = EquipmentActionView(
+            owner_id=self.owner_id,
+            char_id=self.char_id,
+            slot_key=slot_key,
+            item_id=UUID(item["id"]),
+            inv_svc=self.inv_svc,
+            char_svc=self.char_svc,
+            equipment_view=self,
+        )
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    
+    def _build_equipment_embed(self) -> discord.Embed:
+        """Build embed showing all equipped items."""
+        embed = discord.Embed(
+            title=f"👤 {self.char_name}'s Equipment",
+            description="Click an equipment slot to manage it",
+            color=0x2F3136,
+        )
+        
         slot_order = [
             ("head", "🪖 Head"),
             ("neck", "📿 Neck"),
@@ -332,29 +446,202 @@ class BoxInventoryView(discord.ui.View):
         
         lines = []
         for slot_key, slot_label in slot_order:
-            equipped = self.equipped_items.get(slot_key)
-            if equipped:
-                name = equipped.get("name", "?")
-                enh = equipped.get("enhancement_level", 0) or 0
-                icon = equipped.get("icon", "📦")
-                rarity = equipped.get("rarity", "common")
+            item = self.equipped_items.get(slot_key)
+            if item:
+                name = item.get("name", "?")
+                enh = item.get("enhancement_level", 0) or 0
+                icon = item.get("icon", "📦")
+                rarity = item.get("rarity", "common")
                 rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
                 enh_text = f" +{enh}" if enh > 0 else ""
                 lines.append(f"{slot_label}: {rarity_cfg.emoji} {icon} **{name}{enh_text}**")
             else:
                 lines.append(f"{slot_label}: `Empty`")
         
+        embed.add_field(name="📋 Equipped Items", value="\n".join(lines), inline=False)
+        return embed
+    
+    def _build_item_embed(self, item: Dict) -> discord.Embed:
+        """Build embed for a single equipped item."""
+        rarity = item.get("rarity", "common")
+        rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
+        color = rarity_cfg.color
+        
+        name = item.get("name", "?")
+        enh = item.get("enhancement_level", 0) or 0
+        if enh > 0:
+            name = f"{name} +{enh}"
+        
+        embed = discord.Embed(
+            title=f"{rarity_cfg.emoji} {name}",
+            description=item.get("description", "No description."),
+            color=color,
+        )
+        
+        # Stats
+        stats = []
+        if item.get("s_dmg_min") and item.get("s_dmg_max"):
+            stats.append(f"⚔️ **Damage:** {item['s_dmg_min']}-{item['s_dmg_max']}")
+        if item.get("s_str"):
+            stats.append(f"💪 **Str:** +{item['s_str']}")
+        if item.get("s_agi"):
+            stats.append(f"⚡ **Agi:** +{item['s_agi']}")
+        if item.get("s_int"):
+            stats.append(f"🧠 **Int:** +{item['s_int']}")
+        if item.get("s_armor"):
+            stats.append(f"🛡️ **Armor:** +{item['s_armor']}")
+        
+        if stats:
+            embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
+        
         embed.add_field(
-            name="👤 Equipped Items",
-            value="\n".join(lines),
+            name="📍 Slot",
+            value=f"**{item.get('equip_slot', '?').replace('_', ' ').title()}**",
             inline=False,
         )
-
+        
+        embed.set_footer(text=f"Item ID: {item.get('id')}")
+        return embed
+    
+    async def refresh_equipment(self):
+        """Reload equipment and refresh view."""
+        all_items = await self.inv_svc.get_all(self.char_id)
+        equipped_items = {item["equip_slot"]: item for item in all_items if item.get("is_equipped") and item.get("equip_slot")}
+        
+        formatted_equipped = {}
+        for slot, item in equipped_items.items():
+            formatted_equipped[slot] = {
+                "id": str(item["id"]),
+                "name": item.get("name", "?"),
+                "icon": item.get("icon", "📦"),
+                "rarity": item.get("rarity", "common"),
+                "enhancement_level": item.get("enhancement_level", 0) or 0,
+                "equip_slot": slot,
+                "s_dmg_min": item.get("s_dmg_min"),
+                "s_dmg_max": item.get("s_dmg_max"),
+                "s_str": item.get("s_str"),
+                "s_agi": item.get("s_agi"),
+                "s_int": item.get("s_int"),
+                "s_armor": item.get("s_armor"),
+                "description": item.get("description", ""),
+                "level_req": item.get("level_req"),
+            }
+        
+        self.equipped_items = formatted_equipped
+        self._build_equipment_buttons()
+        embed = self._build_equipment_embed()
+        
+        if self.message:
+            try:
+                await self.message.edit(
+                    content=f"👤 **{self.char_name}'s Equipment**\n\n**💡 Click an equipment slot to manage it!**",
+                    embed=embed,
+                    view=self,
+                )
+            except Exception:
+                pass
+    
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
-            await interaction.response.send_message("❌ This inventory isn't for you.", ephemeral=True)
+            await interaction.response.send_message("❌ This equipment isn't for you.", ephemeral=True)
             return False
         return True
+
+
+class EquipmentActionView(discord.ui.View):
+    """Actions for an equipped item: Unequip, Enhance, etc."""
+    
+    def __init__(
+        self,
+        *,
+        owner_id: int,
+        char_id: UUID,
+        slot_key: str,
+        item_id: UUID,
+        inv_svc,
+        char_svc,
+        equipment_view: EquipmentView,
+    ):
+        super().__init__(timeout=60)
+        self.owner_id = owner_id
+        self.char_id = char_id
+        self.slot_key = slot_key
+        self.item_id = item_id
+        self.inv_svc = inv_svc
+        self.char_svc = char_svc
+        self.equipment_view = equipment_view
+    
+    @discord.ui.button(label="🔓 Unequip", style=discord.ButtonStyle.danger, row=0)
+    async def unequip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        ok, msg = await self.inv_svc.unequip_slot(self.char_id, self.slot_key)
+        if ok:
+            # Refresh equipment view
+            await self.equipment_view.refresh_equipment()
+            await interaction.followup.send(f"✅ {msg}\n💡 Item moved to inventory. Use `/inventory` to see it.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"❌ {msg}", ephemeral=True)
+    
+    @discord.ui.button(label="✨ Enhance", style=discord.ButtonStyle.primary, row=0)
+    async def enhance_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Redirect to blacksmith enhance
+        await interaction.response.send_message(
+            f"💡 Use `/blacksmith enhance` with item ID: `{self.item_id}`\n"
+            f"Or use `/equipment` and click the slot again after enhancing.",
+            ephemeral=True
+        )
+    
+    @discord.ui.button(label="📋 Inspect", style=discord.ButtonStyle.secondary, row=0)
+    async def inspect_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Show full item details
+        items = await self.inv_svc.get_all(self.char_id)
+        item = next((i for i in items if str(i["id"]) == str(self.item_id)), None)
+        if not item:
+            return await interaction.response.send_message("❌ Item not found.", ephemeral=True)
+        
+        rarity = RARITIES.get(item.get("rarity", "common"), RARITIES["common"])
+        enh_level = item.get("enhancement_level", 0) or 0
+        enh_text = f" +{enh_level}" if enh_level > 0 else ""
+        
+        embed = discord.Embed(
+            title=f"{rarity.emoji} {item['name']}{enh_text}",
+            description=item.get("description", "No description."),
+            color=rarity.color,
+        )
+        
+        stats = []
+        if item.get("s_dmg_min") and item.get("s_dmg_max"):
+            stats.append(f"⚔️ **Damage:** {item['s_dmg_min']}-{item['s_dmg_max']}")
+        if item.get("s_str"):
+            stats.append(f"💪 **Str:** +{item['s_str']}")
+        if item.get("s_agi"):
+            stats.append(f"⚡ **Agi:** +{item['s_agi']}")
+        if item.get("s_int"):
+            stats.append(f"🧠 **Int:** +{item['s_int']}")
+        if item.get("s_armor"):
+            stats.append(f"🛡️ **Armor:** +{item['s_armor']}")
+        
+        if stats:
+            embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
+        
+        embed.add_field(
+            name="ℹ️ Info",
+            value=(
+                f"**Slot:** {item.get('equip_slot', '?').replace('_', ' ').title()}\n"
+                f"**Rarity:** {item.get('rarity', 'common').title()}\n"
+                f"**Level Req:** {item.get('level_req', 1)}"
+            ),
+            inline=False,
+        )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+            return False
+        return True
+
 
 class _EquipSelectView(discord.ui.View):
     def __init__(self, *, owner_id: int, char_id: UUID, inv_svc: InventoryService, items: List[dict]):
@@ -516,6 +803,8 @@ class InventoryCog(commands.Cog, name="Inventory"):
             return await interaction.followup.send("❌ No character found.")
 
         items = await self.inv_svc.get_all(char["id"])
+        # Filter out equipped items - they belong in /equipment, not /inventory
+        items = [i for i in items if not i.get("is_equipped", False)]
         if category:
             cat = category.lower().strip()
             items = [i for i in items if (i.get("item_type") or "").lower() == cat]
@@ -560,15 +849,71 @@ class InventoryCog(commands.Cog, name="Inventory"):
             max_slots=max_slots,
         )
 
-        # Create initial embed with equipment panel
+        # Create initial embed
         initial_embed = view._build_item_embed(None)
 
         await interaction.followup.send(
-            content=f"🎒 **{char['name']}'s Inventory** ({len(items)}/{max_slots} slots • {int(char.get('gold', 0)):,}🪙)\n\n**💡 Click a slot to select an item and see details!**",
+            content=f"🎒 **{char['name']}'s Inventory** ({len(items)}/{max_slots} slots • {int(char.get('gold', 0)):,}🪙)\n\n**💡 Click a slot to select an item and see details!**\n**💡 Use `/equipment` to view equipped items**",
             embed=initial_embed,
             view=view,
             ephemeral=True,
         )
+
+    @app_commands.command(name="equipment", description="View and manage your equipped items (character shape)")
+    async def equipment(self, interaction: discord.Interaction):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "inventory"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character found.")
+
+        # Get only equipped items
+        all_items = await self.inv_svc.get_all(char["id"])
+        equipped_items = {item["equip_slot"]: item for item in all_items if item.get("is_equipped") and item.get("equip_slot")}
+
+        # Format equipped items
+        formatted_equipped = {}
+        for slot, item in equipped_items.items():
+            formatted_equipped[slot] = {
+                "id": str(item["id"]),
+                "name": item.get("name", "?"),
+                "icon": item.get("icon", "📦"),
+                "rarity": item.get("rarity", "common"),
+                "enhancement_level": item.get("enhancement_level", 0) or 0,
+                "equip_slot": slot,
+                "s_dmg_min": item.get("s_dmg_min"),
+                "s_dmg_max": item.get("s_dmg_max"),
+                "s_str": item.get("s_str"),
+                "s_agi": item.get("s_agi"),
+                "s_int": item.get("s_int"),
+                "s_armor": item.get("s_armor"),
+                "description": item.get("description", ""),
+                "level_req": item.get("level_req"),
+            }
+
+        # Create equipment view
+        view = EquipmentView(
+            owner_id=interaction.user.id,
+            char_id=char["id"],
+            char_name=char["name"],
+            equipped_items=formatted_equipped,
+            inv_svc=self.inv_svc,
+            char_svc=self.char_svc,
+        )
+
+        embed = view._build_equipment_embed()
+
+        msg = await interaction.followup.send(
+            content=f"👤 **{char['name']}'s Equipment**\n\n**💡 Click an equipment slot to manage it!**",
+            embed=embed,
+            view=view,
+            ephemeral=True,
+        )
+        view.message = msg
 
     @app_commands.command(name="inspect", description="Inspect an item to see its stats")
     @app_commands.describe(item_id="Item UUID from /inventory")
