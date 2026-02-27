@@ -587,6 +587,13 @@ class CombatCog(commands.Cog, name="Combat"):
                         break
                     else:
                         log_lines.append("🚫 You couldn't flee!")
+                        # Don't give enemy a free hit — flee attempt replaces your turn
+                        try:
+                            if msg:
+                                await _safe_edit(msg, _build_embed(session, log_lines), view=None)
+                        except Exception:
+                            pass
+                        continue
 
                 else:
                     # ── Player action ─────────────────────────────────────────────
