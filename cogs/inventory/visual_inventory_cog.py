@@ -7,7 +7,6 @@ Box-style inventory: grid of clickable slots. Click a slot to select, see detail
 Command: /inventory [category]
 """
 
-import io
 import logging
 from typing import List, Dict, Optional
 from uuid import UUID
@@ -15,150 +14,10 @@ from uuid import UUID
 import discord
 from discord import app_commands
 from discord.ext import commands
-from PIL import Image, ImageDraw, ImageFont
 
 from config.settings import Settings, RARITIES
 
 log = logging.getLogger("visual_inventory")
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  FONT LOADING (cross-platform)
-# ═══════════════════════════════════════════════════════════════════════════
-
-def _load_fonts():
-    """Load fonts with fallbacks for Linux, macOS, Windows."""
-    default = ImageFont.load_default()
-    bold_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "C:/Windows/Fonts/arialbd.ttf",
-    ]
-    reg_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "C:/Windows/Fonts/arial.ttf",
-    ]
-    bold = default
-    for p in bold_paths:
-        try:
-            bold = ImageFont.truetype(p, 32)
-            break
-        except (OSError, TypeError):
-            pass
-    reg = default
-    for p in reg_paths:
-        try:
-            reg = ImageFont.truetype(p, 18)
-            break
-        except (OSError, TypeError):
-            pass
-    return {"bold": bold, "regular": reg}
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  VISUAL INVENTORY GENERATOR
-# ═══════════════════════════════════════════════════════════════════════════
-
-class VisualInventoryGenerator:
-    """Generates beautiful inventory grid images."""
-
-    COLORS = {
-        "bg_dark": "#1E1F22",
-        "bg_mid": "#2B2D31",
-        "bg_light": "#313338",
-        "text_light": "#DCDDDE",
-        "text_gray": "#B5BAC1",
-        "text_dark": "#80848E",
-        "border": "#40444B",
-        "legendary": "#FF8C00",
-        "artifact": "#E6CC80",
-        "epic": "#9B59B6",
-        "rare": "#5865F2",
-        "uncommon": "#57F287",
-        "common": "#B5BAC1",
-        "orange": "#FF8C00",
-        "blue": "#5865F2",
-        "green": "#57F287",
-        "red": "#ED4245",
-        "purple": "#9B59B6",
-        "gold": "#FEE75C",
-    }
-
-    def __init__(self):
-        f = _load_fonts()
-        self.font_title = f.get("bold", ImageFont.load_default())
-        self.font_header = f.get("bold", ImageFont.load_default())
-        self.font_body = f.get("regular", ImageFont.load_default())
-        self.font_small = f.get("regular", ImageFont.load_default())
-        self.font_tiny = f.get("regular", ImageFont.load_default())
-        self.font_icon = f.get("bold", ImageFont.load_default())
-        self.font_icon_large = f.get("bold", ImageFont.load_default())
-
-    def generate_inventory_image(
-        self,
-        items: List[Dict],
-        character_name: str,
-        gold: int,
-        max_slots: int = 20,
-        selected_item_id: Optional[str] = None,
-    ) -> io.BytesIO:
-        width, height = 1000, 1200
-        img = Image.new("RGB", (width, height), color=self.COLORS["bg_mid"])
-        draw = ImageDraw.Draw(img)
-
-        # Top bar
-        draw.rectangle([20, 20, 980, 100], fill=self.COLORS["bg_dark"])
-        draw.text((40, 40), f"🎒 {character_name}'s Inventory", fill=self.COLORS["orange"], font=self.font_title)
-        draw.text((40, 75), f"{len(items)} / {max_slots} slots • {gold:,}🪙", fill=self.COLORS["text_gray"], font=self.font_small)
-
-        # Grid
-        grid_y = 140
-        cell_size = 90
-        gap = 10
-        cols = 10
-        rows = 4
-        for idx in range(cols * rows):
-            row, col = idx // cols, idx % cols
-            x = 30 + col * (cell_size + gap)
-            y = grid_y + row * (cell_size + gap)
-            if idx < len(items):
-                item = items[idx]
-                is_selected = selected_item_id and str(item.get("id")) == selected_item_id
-                self._draw_item_cell(draw, item, x, y, cell_size, is_selected)
-            else:
-                self._draw_empty_cell(draw, x, y, cell_size)
-
-        output = io.BytesIO()
-        img.save(output, format="PNG")
-        output.seek(0)
-        return output
-
-    def _draw_item_cell(self, draw, item: Dict, x: int, y: int, size: int, is_selected: bool = False):
-        draw.rounded_rectangle([x, y, x + size, y + size], radius=8, fill=self.COLORS["bg_light"])
-        rarity = item.get("rarity", "common")
-        rarity_color = self.COLORS.get(rarity, self.COLORS["common"])
-        border_width = 5 if is_selected else 3
-        draw.rounded_rectangle([x - 1, y - 1, x + size + 1, y + size + 1], radius=8, outline=rarity_color, width=border_width)
-        icon = item.get("icon", "📦")
-        draw.text((x + size // 2 - 18, y + 15), icon, fill=self.COLORS["text_light"], font=self.font_icon)
-        enh = item.get("enhancement_level", 0) or 0
-        if enh > 0:
-            draw.rounded_rectangle([x + size - 32, y + 5, x + size - 5, y + 25], radius=4, fill=self.COLORS["bg_dark"])
-            draw.text((x + size - 28, y + 6), f"+{enh}", fill=self.COLORS["orange"], font=self.font_tiny)
-        qty = item.get("quantity", 1)
-        if qty > 1:
-            draw.rounded_rectangle([x + size - 45, y + size - 25, x + size - 5, y + size - 5], radius=4, fill=self.COLORS["bg_dark"])
-            draw.text((x + size - 41, y + size - 22), f"x{qty}", fill=self.COLORS["text_light"], font=self.font_tiny)
-        name = (item.get("name", "?")[:8] + "..") if len(item.get("name", "")) > 10 else item.get("name", "?")
-        draw.text((x + 5, y + size - 22), name, fill=self.COLORS["text_gray"], font=self.font_tiny)
-
-    def _draw_empty_cell(self, draw, x: int, y: int, size: int):
-        draw.rounded_rectangle([x, y, x + size, y + size], radius=8, fill=self.COLORS["bg_dark"], outline=self.COLORS["border"], width=2)
-        draw.text((x + size // 2 - 10, y + size // 2 - 10), "＋", fill=self.COLORS["border"], font=self.font_header)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -208,7 +67,6 @@ class BoxInventoryView(discord.ui.View):
         items: List[Dict],
         inv_svc,
         char_svc,
-        generator: Optional[VisualInventoryGenerator],
         max_slots: int,
     ):
         super().__init__(timeout=300)
@@ -219,7 +77,6 @@ class BoxInventoryView(discord.ui.View):
         self.items = items
         self.inv_svc = inv_svc
         self.char_svc = char_svc
-        self.generator = generator
         self.max_slots = max_slots
         self.page = 0
         self.selected_item_id: Optional[str] = None
@@ -447,10 +304,9 @@ class BoxInventoryView(discord.ui.View):
 #  DISCORD COG
 # ═══════════════════════════════════════════════════════════════════════════
 
-class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
+class VisualInventoryCog(commands.Cog, name="Inventory"):
     def __init__(self, bot):
         self.bot = bot
-        self.generator = VisualInventoryGenerator()
         self.inv_svc = None
         self.char_svc = None
 
@@ -509,7 +365,7 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
         )
         max_slots = Settings.PREMIUM_INVENTORY_SLOTS if (player and player["is_premium"]) else Settings.FREE_INVENTORY_SLOTS
 
-        # Create box-style inventory view (no image, just buttons)
+        # Create box-style inventory view
         view = BoxInventoryView(
             owner_id=interaction.user.id,
             char_id=char["id"],
@@ -518,7 +374,6 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
             items=formatted,
             inv_svc=self.inv_svc,
             char_svc=self.char_svc,
-            generator=None,  # No image generation
             max_slots=max_slots,
         )
 
