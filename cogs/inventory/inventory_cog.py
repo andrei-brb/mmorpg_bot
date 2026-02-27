@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║        cogs/inventory/inventory_cog.py — /inventory /equip /sell /use      ║
+║   cogs/inventory/inventory_cog.py — /inventory /equip /sell /use /shop    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import logging
@@ -14,6 +14,9 @@ from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 
 log = logging.getLogger("cog.inventory")
+
+# Items available in the vendor shop (extend later)
+SHOP_ITEM_IDS = ("health_potion",)
 
 class _EquipSelectView(discord.ui.View):
     def __init__(self, *, owner_id: int, char_id: UUID, inv_svc: InventoryService, items: List[dict]):
@@ -585,5 +588,102 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 msg += f" Frost resistance increased by {effect_value} for {effect_duration} minutes."
                 # TODO: Implement resistance buff system if needed
         await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000))
+
+    # ── /shop ─────────────────────────────────────────────────────────────────
+
+    shop = app_commands.Group(name="shop", description="Buy items from the vendor")
+
+    @shop.command(name="browse", description="View items for sale")
+    async def shop_browse(self, interaction: discord.Interaction):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "inventory"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        rows = await self.bot.db.fetch(
+            """SELECT id, name, description, icon, vendor_buy, level_req
+               FROM item_templates
+               WHERE id = ANY($1::text[]) AND vendor_buy > 0
+               ORDER BY vendor_buy""",
+            list(SHOP_ITEM_IDS),
+        )
+        if not rows:
+            return await interaction.followup.send("🏪 Shop is empty for now.", ephemeral=True)
+        embed = discord.Embed(title="🏪 Vendor Shop", description="Buy items with gold.", color=0xFFD700)
+        for r in rows:
+            embed.add_field(
+                name=f"{r['icon']} **{r['name']}** — {r['vendor_buy']:,}🪙",
+                value=f"{r['description']}\n`/shop buy {r['id']}`",
+                inline=False,
+            )
+        embed.set_footer(text="Use /shop buy <item> to purchase")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @shop.command(name="buy", description="Buy an item from the vendor")
+    @app_commands.describe(item="Item to buy (e.g. health_potion)")
+    async def shop_buy(self, interaction: discord.Interaction, item: str):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "inventory"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        item_id = item.strip().lower().replace(" ", "_")
+        if item_id not in SHOP_ITEM_IDS:
+            return await interaction.followup.send(
+                f"❌ **{item}** is not for sale. Use `/shop browse` to see available items.",
+                ephemeral=True,
+            )
+        tmpl = await self.bot.db.fetchrow(
+            "SELECT id, name, icon, vendor_buy, level_req FROM item_templates WHERE id=$1 AND vendor_buy>0",
+            item_id,
+        )
+        if not tmpl:
+            return await interaction.followup.send("❌ Item not found or not for sale.", ephemeral=True)
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+        if char["level"] < (tmpl["level_req"] or 1):
+            return await interaction.followup.send(
+                f"❌ Requires level **{tmpl['level_req']}**. You are level {char['level']}.",
+                ephemeral=True,
+            )
+        price = int(tmpl["vendor_buy"])
+        if char["gold"] < price:
+            return await interaction.followup.send(
+                f"❌ Not enough gold. Need **{price:,}**🪙, you have **{char['gold']:,}**🪙.",
+                ephemeral=True,
+            )
+        ok = await self.char_svc.deduct_gold(char["id"], price, "vendor purchase")
+        if not ok:
+            return await interaction.followup.send("❌ Failed to deduct gold.", ephemeral=True)
+        ok, msg = await self.inv_svc.add_item(char["id"], item_id, "common", from_="vendor")
+        if not ok:
+            await self.char_svc.add_gold(char["id"], price, "vendor refund")
+            return await interaction.followup.send(f"❌ {msg}", ephemeral=True)
+        await interaction.followup.send(
+            embed=discord.Embed(
+                title="✅ Purchased!",
+                description=f"You bought **{tmpl['icon']} {tmpl['name']}** for **{price:,}**🪙.",
+                color=0x00FF7F,
+            ),
+            ephemeral=True,
+        )
+
+    @shop_buy.autocomplete("item")
+    async def shop_buy_autocomplete(self, interaction: discord.Interaction, current: str):
+        current_l = (current or "").lower()
+        rows = await self.bot.db.fetch(
+            """SELECT id, name, icon, vendor_buy FROM item_templates
+               WHERE id = ANY($1::text[]) AND vendor_buy > 0""",
+            list(SHOP_ITEM_IDS),
+        )
+        choices = []
+        for r in rows:
+            if current_l in r["id"].lower() or current_l in r["name"].lower():
+                choices.append(app_commands.Choice(
+                    name=f"{r['icon']} {r['name']} — {r['vendor_buy']}🪙",
+                    value=r["id"],
+                ))
+        return choices[:25]
 
 async def setup(bot): await bot.add_cog(InventoryCog(bot))

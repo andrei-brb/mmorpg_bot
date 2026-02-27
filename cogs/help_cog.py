@@ -62,6 +62,14 @@ class HelpCog(commands.Cog, name="Help"):
             inline=False,
         )
         embed.add_field(
+            name="🏪 Shop",
+            value=(
+                "`/shop browse` — View items for sale\n"
+                "`/shop buy <item>` — Buy a Health Potion (5🪙)"
+            ),
+            inline=False,
+        )
+        embed.add_field(
             name="🏰 Guild",
             value=(
                 "`/guild create` — Found a guild\n"
