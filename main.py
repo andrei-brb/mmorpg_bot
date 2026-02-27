@@ -142,6 +142,16 @@ class MMORPGBot(commands.Bot):
             )
         )
 
+        # Clear guild-specific commands to prevent duplicates (global + guild = 2x)
+        try:
+            for guild in self.guilds:
+                self.tree.clear_commands(guild=guild)
+                await self.tree.sync(guild=guild)
+            if self.guilds:
+                log.info(f"✓ Cleared guild commands in {len(self.guilds)} server(s)")
+        except Exception as e:
+            log.warning(f"Could not clear guild commands: {e}")
+
         # Auto-create game channels in all connected guilds
         for guild in self.guilds:
             try:

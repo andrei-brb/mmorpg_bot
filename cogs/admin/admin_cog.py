@@ -431,14 +431,22 @@ class AdminCog(commands.Cog, name="Admin"):
 
     @admin.command(name="sync_commands", description="Force re-sync Discord commands (fixes duplicates)")
     async def sync_commands(self, interaction: discord.Interaction):
-        """Force re-sync all commands to fix duplicates."""
+        """Force re-sync all commands and clear guild duplicates."""
         if not await self._check_admin(interaction):
             return
         try:
+            # Sync global commands
             synced = await self.bot.tree.sync()
+            cleared = 0
+            # Clear guild-specific commands (prevents double/triple commands)
+            for guild in self.bot.guilds:
+                self.bot.tree.clear_commands(guild=guild)
+                await self.bot.tree.sync(guild=guild)
+                cleared += 1
             await interaction.followup.send(
-                f"✅ **Commands re-synced!**\n{len(synced)} commands registered.\n\n"
-                "**Note:** It may take a few minutes for Discord to update. If duplicates persist, wait 5-10 minutes.",
+                f"✅ **Commands re-synced!**\n{len(synced)} global commands.\n"
+                f"Cleared guild commands in **{cleared}** server(s).\n\n"
+                "Discord may take 1–2 minutes to update. Duplicates should disappear.",
                 ephemeral=True
             )
         except Exception as e:
