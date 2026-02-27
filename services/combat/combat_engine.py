@@ -79,6 +79,8 @@ class Combatant:
     ability_cooldowns:  Dict[str, int]       = field(default_factory=dict)
     is_stunned:         bool = False
     is_dead:            bool = False
+    is_stealthed:       bool = False
+    specialization:     Optional[str] = None  # e.g. "arms", "subtlety", etc.
     threat:             int  = 0             # aggro for group content
     combo_points:       int  = 0             # rogue mechanic
     vengeance_stacks:   int  = 0             # retribution paladin passive
