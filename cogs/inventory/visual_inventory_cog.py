@@ -208,7 +208,7 @@ class BoxInventoryView(discord.ui.View):
         items: List[Dict],
         inv_svc,
         char_svc,
-        generator: VisualInventoryGenerator,
+        generator: Optional[VisualInventoryGenerator],
         max_slots: int,
     ):
         super().__init__(timeout=300)
@@ -291,19 +291,10 @@ class BoxInventoryView(discord.ui.View):
         
         embed = self._build_item_embed(item)
         self._build_buttons()
-        image_bytes = self.generator.generate_inventory_image(
-            items=self.items[:40],
-            character_name=self.char_name,
-            gold=self.gold,
-            max_slots=self.max_slots,
-            selected_item_id=self.selected_item_id,
-        )
-        file = discord.File(fp=image_bytes, filename="inventory.png")
         
         await interaction.response.edit_message(
-            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)} items) • Page {self.page + 1}",
+            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)}/{self.max_slots} slots • {self.gold:,}🪙) • Page {self.page + 1}",
             embed=embed,
-            attachments=[file],
             view=self,
         )
 
@@ -349,18 +340,9 @@ class BoxInventoryView(discord.ui.View):
         """Refresh the message with current page/selection."""
         self._build_buttons()
         embed = self._build_item_embed(self.selected_item) if self.selected_item else None
-        image_bytes = self.generator.generate_inventory_image(
-            items=self.items[:40],
-            character_name=self.char_name,
-            gold=self.gold,
-            max_slots=self.max_slots,
-            selected_item_id=self.selected_item_id,
-        )
-        file = discord.File(fp=image_bytes, filename="inventory.png")
         await interaction.response.edit_message(
-            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)} items) • Page {self.page + 1}",
+            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)}/{self.max_slots} slots • {self.gold:,}🪙) • Page {self.page + 1}",
             embed=embed,
-            attachments=[file],
             view=self,
         )
 
@@ -397,18 +379,9 @@ class BoxInventoryView(discord.ui.View):
                 self.selected_item_id = None
         self._build_buttons()
         embed = self._build_item_embed(self.selected_item) if self.selected_item else None
-        image_bytes = self.generator.generate_inventory_image(
-            items=self.items[:40],
-            character_name=self.char_name,
-            gold=self.gold,
-            max_slots=self.max_slots,
-            selected_item_id=self.selected_item_id,
-        )
-        file = discord.File(fp=image_bytes, filename="inventory.png")
         await interaction.edit_original_response(
-            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)} items) • Page {self.page + 1}",
+            content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)}/{self.max_slots} slots • {self.gold:,}🪙) • Page {self.page + 1}",
             embed=embed,
-            attachments=[file],
             view=self,
         )
 
@@ -536,16 +509,7 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
         )
         max_slots = Settings.PREMIUM_INVENTORY_SLOTS if (player and player["is_premium"]) else Settings.FREE_INVENTORY_SLOTS
 
-        # Generate initial image
-        image_bytes = self.generator.generate_inventory_image(
-            items=formatted,
-            character_name=char["name"],
-            gold=int(char.get("gold", 0)),
-            max_slots=max_slots,
-        )
-        file = discord.File(fp=image_bytes, filename="inventory.png")
-
-        # Create box-style inventory view
+        # Create box-style inventory view (no image, just buttons)
         view = BoxInventoryView(
             owner_id=interaction.user.id,
             char_id=char["id"],
@@ -554,13 +518,12 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
             items=formatted,
             inv_svc=self.inv_svc,
             char_svc=self.char_svc,
-            generator=self.generator,
+            generator=None,  # No image generation
             max_slots=max_slots,
         )
 
         await interaction.followup.send(
-            content=f"🎒 **{char['name']}'s Inventory** ({len(items)} items)\n\n**💡 Click a slot to select an item and see details!**",
-            file=file,
+            content=f"🎒 **{char['name']}'s Inventory** ({len(items)}/{max_slots} slots • {int(char.get('gold', 0)):,}🪙)\n\n**💡 Click a slot to select an item and see details!**",
             view=view,
             ephemeral=True,
         )
