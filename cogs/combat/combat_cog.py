@@ -525,6 +525,7 @@ class CombatCog(commands.Cog, name="Combat"):
         log_lines: list[str] = []
         msg = None
         potion_used = False  # Limit to one potion per fight for now
+        fled_successfully = False
         
         # Ensure combat status is cleared even if combat crashes
         try:
@@ -578,7 +579,7 @@ class CombatCog(commands.Cog, name="Combat"):
                     flee_roll = Settings.FLEE_BASE_CHANCE + player.dodge_chance * 0.01
                     if random.random() < flee_roll:
                         log_lines.append("🏃 You escaped!")
-                        # Clear combat status on successful flee
+                        fled_successfully = True
                         await self.bot.db.execute(
                             "UPDATE characters SET combat_status='idle' WHERE id=$1",
                             char_id,
@@ -699,7 +700,9 @@ class CombatCog(commands.Cog, name="Combat"):
         
         player = session.players[0]
 
-        if session.players_won:
+        if fled_successfully:
+            await self._fled(interaction, char, player, msg)
+        elif session.players_won:
             await self._victory(interaction, session, char, player, msg)
         else:
             await self._defeat(interaction, char, player, msg)
@@ -829,6 +832,22 @@ class CombatCog(commands.Cog, name="Combat"):
             color=0xFF0000,
         )
         # Edit existing message instead of sending new one (saves API call)
+        if msg:
+            try:
+                await msg.edit(embed=embed, view=None)
+                return
+            except Exception:
+                pass
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def _fled(self, interaction, char, player: Combatant, msg=None):
+        """Handle successful flee — no death penalty, keep current HP."""
+        await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
+        embed = discord.Embed(
+            title="🏃 Escaped!",
+            description="You fled from combat. Your HP is unchanged.",
+            color=0x88AAFF,
+        )
         if msg:
             try:
                 await msg.edit(embed=embed, view=None)
