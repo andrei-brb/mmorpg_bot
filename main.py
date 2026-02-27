@@ -109,6 +109,7 @@ class MMORPGBot(commands.Bot):
             "cogs.combat.combat_cog",
             "cogs.exploration.exploration_cog",
             "cogs.inventory.inventory_cog",
+            "cogs.inventory.visual_inventory_cog",
             "cogs.guild.guild_cog",
             "cogs.economy.economy_cog",
             "cogs.events.events_cog",

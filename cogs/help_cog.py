@@ -54,6 +54,7 @@ class HelpCog(commands.Cog, name="Help"):
             name="🎒 Inventory",
             value=(
                 "`/inventory` — View your items\n"
+                "`/inventory_grid` — Visual grid view\n"
                 "`/equip` — Equip an item (dropdown)\n"
                 "`/equip <id>` — Equip by item ID\n"
                 "`/sell <id>` — Sell an item to vendor\n"
