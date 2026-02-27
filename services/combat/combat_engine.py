@@ -518,11 +518,9 @@ class CombatEngine:
                 if target.current_hp <= 0:
                     target.is_dead = True
 
-                # Break stealth when dealing or taking damage (standard MMO behavior)
+                # Break stealth when the stealthed unit ATTACKS (but not when merely taking damage)
                 if attacker.has(StatusEffect.STEALTH) and ability.key != "stealth":
                     attacker.remove_status(StatusEffect.STEALTH)
-                if target.has(StatusEffect.STEALTH) and r.damage > 0:
-                    target.remove_status(StatusEffect.STEALTH)
 
                 # Lifesteal
                 lifesteal_pct = getattr(attacker, 'lifesteal', 0)
