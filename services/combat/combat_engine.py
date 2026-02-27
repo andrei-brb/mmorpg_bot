@@ -370,6 +370,7 @@ class CombatSession:
     is_boss:      bool = False
     boss_phase:   int = 1
     zone_key:     str = ""
+    enemy_key:    str = ""   # key from ENEMIES used for display / rewards
 
     @property
     def alive_players(self): return [p for p in self.players if not p.is_dead]
