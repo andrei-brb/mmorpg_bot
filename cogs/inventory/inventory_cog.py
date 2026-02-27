@@ -79,8 +79,18 @@ class BoxInventoryView(discord.ui.View):
         self.page = 0
         self.selected_item_id: Optional[str] = None
         self.selected_item: Optional[Dict] = None
+        self.equipped_items: Dict[str, Dict] = {}  # slot -> item dict
         
+        self._load_equipped()
         self._build_buttons()
+    
+    def _load_equipped(self):
+        """Load currently equipped items."""
+        # Get equipped items from the items list
+        self.equipped_items = {}
+        for item in self.items:
+            if item.get("is_equipped") and item.get("equip_slot"):
+                self.equipped_items[item["equip_slot"]] = item
 
     def _build_buttons(self):
         """Build the grid of slot buttons + action row."""
@@ -194,7 +204,7 @@ class BoxInventoryView(discord.ui.View):
     async def _refresh_message(self, interaction: discord.Interaction):
         """Refresh the message with current page/selection."""
         self._build_buttons()
-        embed = self._build_item_embed(self.selected_item) if self.selected_item else None
+        embed = self._build_item_embed(self.selected_item) if self.selected_item else self._build_item_embed(None)
         await interaction.response.edit_message(
             content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)}/{self.max_slots} slots • {self.gold:,}🪙) • Page {self.page + 1}",
             embed=embed,
@@ -218,6 +228,7 @@ class BoxInventoryView(discord.ui.View):
                 "quantity": item.get("quantity", 1),
                 "item_type": item.get("item_type", ""),
                 "equip_slot": item.get("equip_slot"),
+                "is_equipped": item.get("is_equipped", False),
                 "s_dmg_min": item.get("s_dmg_min"),
                 "s_dmg_max": item.get("s_dmg_max"),
                 "s_str": item.get("s_str"),
@@ -228,12 +239,13 @@ class BoxInventoryView(discord.ui.View):
                 "level_req": item.get("level_req"),
             })
         self.items = formatted
+        self._load_equipped()
         if self.selected_item_id:
             self.selected_item = next((i for i in self.items if str(i.get("id")) == self.selected_item_id), None)
             if not self.selected_item:
                 self.selected_item_id = None
         self._build_buttons()
-        embed = self._build_item_embed(self.selected_item) if self.selected_item else None
+        embed = self._build_item_embed(self.selected_item) if self.selected_item else self._build_item_embed(None)
         await interaction.edit_original_response(
             content=f"🎒 **{self.char_name}'s Inventory** ({len(self.items)}/{self.max_slots} slots • {self.gold:,}🪙) • Page {self.page + 1}",
             embed=embed,
@@ -241,9 +253,17 @@ class BoxInventoryView(discord.ui.View):
         )
 
     def _build_item_embed(self, item: Optional[Dict]) -> Optional[discord.Embed]:
-        """Build embed showing item details. Returns None if no item."""
+        """Build embed showing item details + equipment panel. Returns None if no item."""
         if not item:
-            return None
+            # Show equipment panel only
+            embed = discord.Embed(
+                title="🎒 Inventory",
+                description="Click a slot to view item details",
+                color=0x2F3136,
+            )
+            self._add_equipment_panel(embed)
+            return embed
+        
         rarity = item.get("rarity", "common")
         rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
         color = rarity_cfg.color
@@ -288,8 +308,47 @@ class BoxInventoryView(discord.ui.View):
         if meta:
             embed.add_field(name="ℹ️ Info", value="\n".join(meta), inline=False)
         
+        # Equipment panel (character paperdoll)
+        self._add_equipment_panel(embed)
+        
         embed.set_footer(text=f"Item ID: {item.get('id')}")
         return embed
+    
+    def _add_equipment_panel(self, embed: discord.Embed):
+        """Add character equipment display to embed."""
+        # Equipment slot order (character paperdoll layout)
+        slot_order = [
+            ("head", "🪖 Head"),
+            ("neck", "📿 Neck"),
+            ("chest", "🥋 Chest"),
+            ("hands", "🧤 Hands"),
+            ("legs", "👖 Legs"),
+            ("feet", "👢 Feet"),
+            ("main_hand", "⚔️ Main Hand"),
+            ("off_hand", "🛡️ Off Hand"),
+            ("ring", "💍 Ring"),
+            ("trinket", "🔮 Trinket"),
+        ]
+        
+        lines = []
+        for slot_key, slot_label in slot_order:
+            equipped = self.equipped_items.get(slot_key)
+            if equipped:
+                name = equipped.get("name", "?")
+                enh = equipped.get("enhancement_level", 0) or 0
+                icon = equipped.get("icon", "📦")
+                rarity = equipped.get("rarity", "common")
+                rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
+                enh_text = f" +{enh}" if enh > 0 else ""
+                lines.append(f"{slot_label}: {rarity_cfg.emoji} {icon} **{name}{enh_text}**")
+            else:
+                lines.append(f"{slot_label}: `Empty`")
+        
+        embed.add_field(
+            name="👤 Equipped Items",
+            value="\n".join(lines),
+            inline=False,
+        )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
@@ -472,6 +531,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 "quantity": item.get("quantity", 1),
                 "item_type": item.get("item_type", ""),
                 "equip_slot": item.get("equip_slot"),
+                "is_equipped": item.get("is_equipped", False),
                 "s_dmg_min": item.get("s_dmg_min"),
                 "s_dmg_max": item.get("s_dmg_max"),
                 "s_str": item.get("s_str"),
@@ -500,8 +560,12 @@ class InventoryCog(commands.Cog, name="Inventory"):
             max_slots=max_slots,
         )
 
+        # Create initial embed with equipment panel
+        initial_embed = view._build_item_embed(None)
+
         await interaction.followup.send(
             content=f"🎒 **{char['name']}'s Inventory** ({len(items)}/{max_slots} slots • {int(char.get('gold', 0)):,}🪙)\n\n**💡 Click a slot to select an item and see details!**",
+            embed=initial_embed,
             view=view,
             ephemeral=True,
         )
