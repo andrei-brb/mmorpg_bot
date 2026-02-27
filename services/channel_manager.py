@@ -333,7 +333,6 @@ COMMAND_CHANNEL_MAP = {
     "sell": "general",
     "use": "general",
     "shop": "general",
-    "inventory_grid": "general",
     "guild": "general",
     "help": "general",
     "achievements": "general",

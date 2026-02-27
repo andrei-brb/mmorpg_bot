@@ -4,7 +4,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 Box-style inventory: grid of clickable slots. Click a slot to select, see details.
-Command: /inventory_grid [category]
+Command: /inventory [category]
 """
 
 import io
@@ -460,9 +460,9 @@ class VisualInventoryCog(commands.Cog, name="Visual Inventory"):
         self.char_svc = CharacterService(self.bot.db)
         self.inv_svc = InventoryService(self.bot.db)
 
-    @app_commands.command(name="inventory_grid", description="View your inventory as an interactive visual grid")
+    @app_commands.command(name="inventory", description="View your inventory (clickable grid)")
     @app_commands.describe(category="Filter by category (weapon, armor, consumable, material)")
-    async def inventory_grid(
+    async def inventory(
         self,
         interaction: discord.Interaction,
         category: Optional[str] = None,

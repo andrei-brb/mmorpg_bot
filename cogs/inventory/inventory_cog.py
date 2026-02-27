@@ -164,58 +164,6 @@ class InventoryCog(commands.Cog, name="Inventory"):
         self.char_svc = CharacterService(self.bot.db)
         self.inv_svc  = InventoryService(self.bot.db)
 
-    @app_commands.command(name="inventory", description="View your inventory")
-    async def inventory(self, interaction: discord.Interaction):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "inventory"):
-            return
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-        char = await self.char_svc.get_character(interaction.user.id)
-        if not char: return await interaction.followup.send("❌ No character.")
-        items = await self.inv_svc.get_all(char["id"])
-        if not items: return await interaction.followup.send("🎒 Your inventory is empty.")
-
-        embed = discord.Embed(title=f"🎒 {char['name']}'s Inventory", description=f"{len(items)} items", color=0x2F3136)
-        equipped = [i for i in items if i["is_equipped"]]
-        unequipped = [i for i in items if not i["is_equipped"]]
-
-        if equipped:
-            lines = []
-            for i in equipped:
-                enh_level = i.get("enhancement_level", 0) or 0
-                enh_text = f" **+{enh_level}**" if enh_level > 0 else ""
-                # Add sparkles for high enhancements
-                if enh_level >= 7:
-                    enh_text += " ✨✨✨"
-                elif enh_level >= 4:
-                    enh_text += " ✨✨"
-                elif enh_level >= 1:
-                    enh_text += " ✨"
-                lines.append(f"{RARITIES[i['rarity']].emoji} **{i['name']}{enh_text}** *(slot: {i['equip_slot']})*")
-            embed.add_field(
-                name="⚔️ Equipped",
-                value="\n".join(lines),
-                inline=False,
-            )
-        if unequipped:
-            lines = []
-            for i in unequipped[:12]:
-                enh_level = i.get("enhancement_level", 0) or 0
-                enh_text = f" **+{enh_level}**" if enh_level > 0 else ""
-                # Add sparkles for high enhancements
-                if enh_level >= 7:
-                    enh_text += " ✨✨✨"
-                elif enh_level >= 4:
-                    enh_text += " ✨✨"
-                elif enh_level >= 1:
-                    enh_text += " ✨"
-                lines.append(f"{RARITIES[i['rarity']].emoji} {i['icon']} **{i['name']}{enh_text}** [{i['rarity'].title()}] x{i['quantity']}\n  `ID: {i['id']}`")
-            if len(unequipped) > 12: lines.append(f"*…and {len(unequipped)-12} more*")
-            embed.add_field(name="📦 Bag", value="\n".join(lines), inline=False)
-        embed.set_footer(text="Use /equip (dropdown)  /sell <id>  /use <id>  /inspect <id> to see stats")
-        await interaction.followup.send(embed=embed)
-
     @app_commands.command(name="inspect", description="Inspect an item to see its stats")
     @app_commands.describe(item_id="Item UUID from /inventory")
     async def inspect(self, interaction: discord.Interaction, item_id: str):
