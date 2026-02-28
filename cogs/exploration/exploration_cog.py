@@ -182,8 +182,13 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         current = char["current_zone"] if char else None
         embed = discord.Embed(title="🗺️ World Map", description="All zones of the realm.", color=0x2F4F4F)
         for key, z in sorted(ZONES.items(), key=lambda x: x[1].level_range[0]):
-            zs = await self.bot.db.fetchrow("SELECT active_players, boss_alive FROM zone_state WHERE zone_key=$1", key)
-            players = zs["active_players"] if zs else 0
+            # Count actual characters currently in this zone
+            players = await self.bot.db.fetchval(
+                "SELECT COUNT(*) FROM characters WHERE current_zone=$1 AND is_active=TRUE",
+                key
+            ) or 0
+            # Also get boss status
+            zs = await self.bot.db.fetchrow("SELECT boss_alive FROM zone_state WHERE zone_key=$1", key)
             boss = "⚠️ Boss alive" if (not zs or zs["boss_alive"]) else "✅ Boss defeated"
             marker = " 📍 **YOU**" if key == current else ""
             embed.add_field(
