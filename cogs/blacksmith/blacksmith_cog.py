@@ -314,12 +314,10 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
 
     blacksmith = app_commands.Group(name="blacksmith", description="Enhance and upgrade your equipment")
 
-    @blacksmith.command(name="enhance", description="Enhance an item (+1 to +10)")
+    @blacksmith.command(name="enhance", description="Enhance an item (+1 to +10) - Also available in /equipment and /inventory")
     @app_commands.describe(item_id="Item UUID from /inventory")
     async def enhance(self, interaction: discord.Interaction, item_id: str):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - enhancement available everywhere via /equipment and /inventory
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
@@ -489,9 +487,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
     @blacksmith.command(name="info", description="View enhancement details for an item")
     @app_commands.describe(item_id="Item UUID from /inventory")
     async def info(self, interaction: discord.Interaction, item_id: str):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - available everywhere
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
@@ -557,9 +553,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
 
     @blacksmith.command(name="shop", description="Buy protection items")
     async def shop(self, interaction: discord.Interaction):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - available everywhere
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
@@ -589,9 +583,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         app_commands.Choice(name="Enhancement Fragment (💎)", value="enhancement_fragment"),
     ])
     async def buy(self, interaction: discord.Interaction, item: str):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - available everywhere
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
@@ -609,9 +601,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
 
     @blacksmith.command(name="stats", description="View your enhancement statistics")
     async def stats(self, interaction: discord.Interaction):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - available everywhere
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
@@ -656,9 +646,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
 
     @blacksmith.command(name="leaderboard", description="Top enhanced items on the server")
     async def leaderboard(self, interaction: discord.Interaction):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - available everywhere
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
@@ -683,9 +671,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
 
     @blacksmith.command(name="blessing", description="Claim your daily free Blessing Scroll")
     async def blessing(self, interaction: discord.Interaction):
-        from services.channel_manager import check_channel
-        if not await check_channel(interaction, "blacksmith"):
-            return
+        # Channel check removed - available everywhere
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
