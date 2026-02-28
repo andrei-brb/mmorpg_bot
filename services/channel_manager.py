@@ -102,7 +102,27 @@ class ChannelManager:
         
         return channel_map
 
-    async def _send_welcome_messages(self, guild: discord.Guild, channel_map: Dict[str, int]):
+    async def _should_show_welcome(self, channel: discord.TextChannel, guide_title: str) -> bool:
+        """Check if we should show welcome message (if last one is >1 hour old or doesn't exist)."""
+        try:
+            # Check last 50 messages for a welcome message
+            async for msg in channel.history(limit=50):
+                if msg.author == channel.guild.me and msg.embeds:
+                    for embed in msg.embeds:
+                        if embed.title and guide_title in embed.title:
+                            # Found welcome message - check if it's recent (within 1 hour)
+                            age_seconds = (discord.utils.utcnow() - msg.created_at).total_seconds()
+                            if age_seconds < 3600:  # Less than 1 hour old
+                                return False
+                            # Older than 1 hour, we can show a new one
+                            return True
+            # No welcome message found
+            return True
+        except Exception as e:
+            log.debug(f"Error checking welcome message in {channel.name}: {e}")
+            return False
+    
+    async def _send_welcome_messages(self, guild: discord.Guild, channel_map: Dict[str, int], force_general: bool = False):
         """Send welcome/help messages to each game channel."""
         import discord
         
@@ -181,8 +201,8 @@ class ChannelManager:
                     "`/character profile` — View your stats and gear",
                     "`/character specialize` — Choose your specialization (Lv 10+)",
                     "`/character card` — Generate a visual profile card",
-                    "`/inventory` — View your items\n"
-                    "`/equipment` — View equipped items",
+                    "`/inventory` — View your items (clickable grid)",
+                    "`/equipment` — View and manage equipped items",
                     "`/equip [item]` — Equip an item",
                     "`/sell [item]` — Sell an item to vendor",
                     "`/shop browse` — View vendor shop",
@@ -216,20 +236,31 @@ class ChannelManager:
             if not guide:
                 continue
             
-            # Check if channel already has a welcome message (to avoid spam)
-            try:
-                has_welcome = False
-                async for msg in channel.history(limit=20):
-                    if msg.author == guild.me and msg.embeds:
-                        # Check if this embed has the channel's title
-                        for embed in msg.embeds:
-                            if embed.title and guide["title"] in embed.title:
-                                has_welcome = True
-                                break
-                    if has_welcome:
-                        break
-                
-                if not has_welcome:
+            # For general channel, check if we should show (force or old message)
+            # For other channels, only show if no welcome exists
+            should_show = False
+            if ctype == "general" and force_general:
+                should_show = await self._should_show_welcome(channel, guide["title"])
+            else:
+                # Check if channel already has a welcome message (to avoid spam)
+                try:
+                    has_welcome = False
+                    async for msg in channel.history(limit=20):
+                        if msg.author == guild.me and msg.embeds:
+                            # Check if this embed has the channel's title
+                            for embed in msg.embeds:
+                                if embed.title and guide["title"] in embed.title:
+                                    has_welcome = True
+                                    break
+                        if has_welcome:
+                            break
+                    
+                    should_show = not has_welcome
+                except Exception as e:
+                    log.debug(f"Error checking welcome in {channel.name}: {e}")
+                    should_show = False
+            
+            if should_show:
                     # No welcome message found, send one
                     embed = discord.Embed(
                         title=guide["title"],
@@ -278,6 +309,21 @@ class ChannelManager:
             # Channels not set up yet, setup will send messages
             return
         await self._send_welcome_messages(guild, channel_map)
+    
+    async def maybe_show_general_welcome(self, channel: discord.TextChannel):
+        """Check if we should show welcome message in general channel (called on message)."""
+        if not channel or not channel.guild:
+            return
+        
+        guild = channel.guild
+        channel_map = self._cache.get(guild.id, {})
+        if not channel_map:
+            return
+        
+        general_id = channel_map.get("general")
+        if general_id and channel.id == general_id:
+            # This is the general channel, check if we should show welcome
+            await self._send_welcome_messages(guild, { "general": general_id }, force_general=True)
 
 
 # ── Per-user command cooldown ───────────────────────────────────────────────

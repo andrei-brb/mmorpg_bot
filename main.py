@@ -216,6 +216,22 @@ class MMORPGBot(commands.Bot):
         except Exception:
             pass
 
+    async def on_message(self, message: discord.Message):
+        """Handle messages - show welcome in general channel if needed."""
+        # Ignore bot messages
+        if message.author.bot:
+            return
+        
+        # Check if message is in general channel
+        if message.guild and hasattr(self, "channels"):
+            try:
+                await self.channels.maybe_show_general_welcome(message.channel)
+            except Exception as e:
+                log.debug(f"Error checking general welcome: {e}")
+        
+        # Process commands (if any prefix commands exist)
+        await self.process_commands(message)
+    
     async def on_guild_join(self, guild: discord.Guild):
         """Auto-create game channels when bot joins a new server."""
         log.info(f"Joined new guild: {guild.name} (ID: {guild.id})")
