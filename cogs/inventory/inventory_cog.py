@@ -773,6 +773,133 @@ class EquipmentView(discord.ui.View):
 #  ENHANCEMENT PROTECTION VIEW - For enhancement with protection selection
 # ═══════════════════════════════════════════════════════════════════════════
 
+class EnhancementConfirmationView(discord.ui.View):
+    """Confirmation dialog when enhancing without protection."""
+    
+    def __init__(
+        self,
+        *,
+        owner_id: int,
+        char_id: UUID,
+        item_id: UUID,
+        item_name: str,
+        current_level: int,
+        target_level: int,
+        success_rate: float,
+        bs_svc: BlacksmithService,
+        inv_svc: InventoryService,
+        equipment_view: Optional[EquipmentView] = None,
+        inventory_view: Optional[BoxInventoryView] = None,
+    ):
+        super().__init__(timeout=60)
+        self.owner_id = owner_id
+        self.char_id = char_id
+        self.item_id = item_id
+        self.item_name = item_name
+        self.current_level = current_level
+        self.target_level = target_level
+        self.success_rate = success_rate
+        self.bs_svc = bs_svc
+        self.inv_svc = inv_svc
+        self.equipment_view = equipment_view
+        self.inventory_view = inventory_view
+        self.message = None
+    
+    @discord.ui.button(label="✅ Yes, Proceed", style=discord.ButtonStyle.danger, row=0)
+    async def confirm_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.owner_id:
+            return await interaction.response.send_message("❌ This isn't for you.", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        # Perform enhancement without protection
+        result = await self.bs_svc.enhance_item(
+            self.char_id, self.item_id,
+            protection_type=None,
+            fragment_count=0
+        )
+        
+        # Build result embed
+        if self.inventory_view:
+            embed = self.inventory_view._build_enhancement_result_embed(result)
+        elif self.equipment_view:
+            embed = self.equipment_view._build_enhancement_result_embed(result)
+        else:
+            # Fallback embed
+            embed = discord.Embed(
+                title="🔨 Enhancement Result",
+                description=result.get("message", "Enhancement completed."),
+                color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+            )
+        
+        # Edit the existing message
+        if self.message:
+            try:
+                await self.message.edit(embed=embed, view=None)
+                # Update parent view's tracker
+                if self.inventory_view:
+                    self.inventory_view.enhancement_message = self.message
+                elif self.equipment_view:
+                    self.equipment_view.enhancement_message = self.message
+            except Exception:
+                msg = await interaction.followup.send(embed=embed, ephemeral=True)
+                if self.inventory_view:
+                    self.inventory_view.enhancement_message = msg
+                elif self.equipment_view:
+                    self.equipment_view.enhancement_message = msg
+        
+        # Refresh views
+        if self.equipment_view:
+            await self.equipment_view.refresh_equipment()
+        if self.inventory_view:
+            await self.inventory_view._reload_and_refresh(interaction)
+        
+        # Server announcement for legendary +10
+        if result.get("announce"):
+            char_row = await self.inv_svc.db.fetchrow(
+                "SELECT name FROM characters WHERE id = $1", self.char_id
+            )
+            if char_row:
+                announce_embed = discord.Embed(
+                    title="🌟 LEGENDARY ACHIEVEMENT!",
+                    description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
+                    color=0xFFD700
+                )
+                try:
+                    await interaction.channel.send(embed=announce_embed)
+                except Exception:
+                    pass
+        
+        self.stop()
+    
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary, row=0)
+    async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.owner_id:
+            return await interaction.response.send_message("❌ This isn't for you.", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        embed = discord.Embed(
+            title="❌ Enhancement Cancelled",
+            description="You decided not to proceed without protection.",
+            color=0x808080
+        )
+        
+        if self.message:
+            try:
+                await self.message.edit(embed=embed, view=None)
+            except Exception:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        
+        self.stop()
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+            return False
+        return True
+
+
 class EnhancementProtectionView(discord.ui.View):
     """View for selecting protection items during enhancement."""
     
