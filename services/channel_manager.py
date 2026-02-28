@@ -261,7 +261,8 @@ class ChannelManager:
                     should_show = False
             
             if should_show:
-                    # No welcome message found, send one
+                # No welcome message found, send one
+                try:
                     embed = discord.Embed(
                         title=guide["title"],
                         description=guide["description"],
@@ -285,10 +286,10 @@ class ChannelManager:
                     
                     await channel.send(embed=embed)
                     log.info(f"Sent welcome message to #{channel.name} in {guild.name}")
-            except discord.Forbidden:
-                log.warning(f"No permission to send message in #{channel.name}")
-            except Exception as e:
-                log.error(f"Failed to send welcome message to #{channel.name}: {e}")
+                except discord.Forbidden:
+                    log.warning(f"No permission to send message in #{channel.name}")
+                except Exception as e:
+                    log.error(f"Failed to send welcome message to #{channel.name}: {e}")
 
     def get_channel_id(self, guild_id: int, channel_type: str) -> Optional[int]:
         """Get channel ID for a game channel type. Returns None if not set up."""
