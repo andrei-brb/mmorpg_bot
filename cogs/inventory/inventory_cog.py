@@ -283,7 +283,7 @@ class BoxInventoryView(discord.ui.View):
             
             # Server announcement for legendary +10
             if result.get("announce"):
-                char_row = await self.char_svc.get_character_by_id(self.char_id)
+                char_row = await self.char_svc.get_by_id(self.char_id)
                 if char_row:
                     announce_embed = discord.Embed(
                         title="🌟 LEGENDARY ACHIEVEMENT!",
@@ -1140,7 +1140,7 @@ class EquipmentActionView(discord.ui.View):
             
             # Server announcement for legendary +10
             if result.get("announce"):
-                char_row = await self.char_svc.get_character_by_id(self.char_id)
+                char_row = await self.char_svc.get_by_id(self.char_id)
                 if char_row:
                     announce_embed = discord.Embed(
                         title="🌟 LEGENDARY ACHIEVEMENT!",
