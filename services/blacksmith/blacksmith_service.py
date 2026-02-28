@@ -100,9 +100,7 @@ class BlacksmithService:
         if not item:
             return {"success": False, "message": "Item not found."}
         
-        if item["is_equipped"]:
-            return {"success": False, "message": "Unequip the item before enhancing."}
-        
+        # Allow enhancing equipped items - no need to unequip first
         current_level = item.get("enhancement_level", 0)
         
         if current_level >= 10:
