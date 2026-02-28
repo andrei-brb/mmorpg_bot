@@ -798,7 +798,19 @@ class EnhancementProtectionView(discord.ui.View):
         )
         
         if not result.get("success") and "message" in result:
-            await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+            # Edit existing message with error
+            if self.message:
+                try:
+                    error_embed = discord.Embed(
+                        title="❌ Enhancement Failed",
+                        description=result['message'],
+                        color=0xFF0000
+                    )
+                    await self.message.edit(embed=error_embed, view=None)
+                except Exception:
+                    await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+            else:
+                await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
             return
         
         # Consume protection items if used
@@ -807,7 +819,17 @@ class EnhancementProtectionView(discord.ui.View):
         
         # Build result embed
         embed = self._build_result_embed(result)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        
+        # Edit the existing message instead of sending a new one
+        if self.message:
+            try:
+                await self.message.edit(embed=embed, view=None)
+            except Exception:
+                # Fallback: send new message if edit fails
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            # No existing message, send new one
+            await interaction.followup.send(embed=embed, ephemeral=True)
         
         # Refresh views
         if self.equipment_view:
