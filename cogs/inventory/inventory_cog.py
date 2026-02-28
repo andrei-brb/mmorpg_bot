@@ -1341,11 +1341,54 @@ class EquipmentActionView(discord.ui.View):
         
         # Check if we need protection selection UI
         next_config = ENHANCEMENT_CONFIG.get(info["current_level"] + 1)
-        needs_protection = next_config and next_config["can_break"] and (
+        can_break = next_config and next_config.get("can_break", False)
+        has_protection = (
             protections.get("blessing_scroll", 0) > 0 or
             protections.get("safety_charm", 0) > 0 or
             protections.get("enhancement_fragment", 0) > 0
         )
+        needs_protection = can_break and has_protection
+        
+        # If item can break but player has no protection, show confirmation dialog
+        if can_break and not has_protection:
+            # Show confirmation dialog
+            view = EnhancementConfirmationView(
+                owner_id=self.owner_id,
+                char_id=self.char_id,
+                item_id=self.item_id,
+                item_name=info['item']['name'],
+                current_level=info['current_level'],
+                target_level=info['current_level'] + 1,
+                success_rate=next_config.get("success_rate", 0.5),
+                bs_svc=self.bs_svc,
+                inv_svc=self.inv_svc,
+                equipment_view=self.equipment_view,
+            )
+            embed = discord.Embed(
+                title="⚠️ Warning: No Protection Available",
+                description=(
+                    f"**{info['item']['name']}** is currently **+{info['current_level']}**\n"
+                    f"Enhancing to **+{info['current_level'] + 1}** can **BREAK** the item!\n\n"
+                    f"**Success Rate:** {next_config.get('success_rate', 0.5)*100:.0f}%\n"
+                    f"**You have NO protection items** (Blessing Scroll, Safety Charm, or Enhancement Fragments).\n\n"
+                    f"⚠️ **Are you sure you want to proceed without protection?**"
+                ),
+                color=0xFF0000
+            )
+            # Reuse existing enhancement message if available, otherwise create new one
+            if self.enhancement_message:
+                try:
+                    msg = await self.enhancement_message.edit(embed=embed, view=view)
+                    view.message = self.enhancement_message
+                except Exception:
+                    msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    view.message = msg
+                    self.enhancement_message = msg
+            else:
+                msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                view.message = msg
+                self.enhancement_message = msg
+            return
         
         if needs_protection:
             # Show protection selection UI
