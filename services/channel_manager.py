@@ -370,8 +370,8 @@ COMMAND_CHANNEL_MAP = {
     "market": "market",
     "gold": "market",
     "leaderboard": "market",
-    # Quests (📜 Quests channel)
-    "interact": "quest",
+    # Quests (📜 Quests channel) - interact can be used in exploration channel too
+    "interact": "explore",  # Allow in exploration channel since it sends DMs
     "quest": "quest",
     "reputation": "quest",
     # General (🎮 Game General channel) - All other commands
