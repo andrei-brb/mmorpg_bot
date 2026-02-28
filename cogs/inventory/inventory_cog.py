@@ -108,13 +108,12 @@ class BoxInventoryView(discord.ui.View):
             btn = SlotButton(i, item, row)
             self.add_item(btn)
         
-        # Row 4: navigation + actions
+        # Row 4: navigation + primary actions (max 5 buttons)
         prev_btn = discord.ui.Button(emoji="⬅️", style=discord.ButtonStyle.secondary, custom_id="inv_prev", row=4)
         next_btn = discord.ui.Button(emoji="➡️", style=discord.ButtonStyle.secondary, custom_id="inv_next", row=4)
         equip_btn = discord.ui.Button(label="Equip", emoji="⚔️", style=discord.ButtonStyle.primary, custom_id="inv_equip", row=4)
         enhance_btn = discord.ui.Button(label="Enhance", emoji="✨", style=discord.ButtonStyle.primary, custom_id="inv_enhance", row=4)
         sell_btn = discord.ui.Button(label="Sell", emoji="💰", style=discord.ButtonStyle.success, custom_id="inv_sell", row=4)
-        use_btn = discord.ui.Button(label="Use", emoji="🧪", style=discord.ButtonStyle.secondary, custom_id="inv_use", row=4)
         
         max_page = max(0, (len(self.items) - 1) // SLOTS_PER_PAGE)
         prev_btn.disabled = self.page <= 0
@@ -124,7 +123,6 @@ class BoxInventoryView(discord.ui.View):
         equip_btn.disabled = not has_selection or not (self.selected_item and self.selected_item.get("equip_slot"))
         enhance_btn.disabled = not has_selection or not (self.selected_item and self.selected_item.get("equip_slot"))
         sell_btn.disabled = not has_selection
-        use_btn.disabled = not has_selection or (self.selected_item and self.selected_item.get("item_type") != "consumable")
         
         async def prev_cb(interaction: discord.Interaction):
             if self.page > 0:
@@ -141,14 +139,15 @@ class BoxInventoryView(discord.ui.View):
         equip_btn.callback = self._equip_callback
         enhance_btn.callback = self._enhance_callback
         sell_btn.callback = self._sell_callback
-        use_btn.callback = self._use_callback
         
         self.add_item(prev_btn)
         self.add_item(next_btn)
         self.add_item(equip_btn)
         self.add_item(enhance_btn)
         self.add_item(sell_btn)
-        self.add_item(use_btn)
+        
+        # Add "Use" button as a select menu option or remove it
+        # Users can use consumables via /use command if needed
 
     async def on_slot_click(self, interaction: discord.Interaction, slot_index: int):
         """Handle slot button click - select that item."""
