@@ -277,6 +277,10 @@ class QuestCog(commands.Cog, name="Quests"):
         next_quest = self.quest_svc.get_next_quest_for_npc(npc_id, completed_ids)
 
         if not next_quest:
+            # Show which quests were completed from this NPC
+            npc_completed = [q for q in await self.quest_svc.get_completed_quests(char["id"]) 
+                           if q.get("npc_id") == npc_id]
+            
             embed = discord.Embed(
                 title=f"{npc_data['title']} {npc_data['name']}",
                 description=(
@@ -285,6 +289,27 @@ class QuestCog(commands.Cog, name="Quests"):
                 ),
                 color=0x95A5A6,
             )
+            
+            if npc_completed:
+                quest_names = []
+                for q in npc_completed:
+                    quest_template = self.quest_svc._find_quest_template(q["quest_id"])
+                    if quest_template:
+                        quest_names.append(f"✅ **{quest_template['name']}**")
+                
+                if quest_names:
+                    embed.add_field(
+                        name="📜 Completed Quests",
+                        value="\n".join(quest_names),
+                        inline=False,
+                    )
+            
+            embed.add_field(
+                name="💡 Tip",
+                value="Explore other zones to discover new NPCs with quests! Use `/map` to see available zones.",
+                inline=False,
+            )
+            
             try:
                 dm = await interaction.user.create_dm()
                 await dm.send(embed=embed)
