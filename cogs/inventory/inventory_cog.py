@@ -12,6 +12,7 @@ from discord.ext import commands
 from config.settings import RARITIES, Settings
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
+from services.blacksmith.blacksmith_service import BlacksmithService, ENHANCEMENT_CONFIG, PROTECTION_ITEMS
 
 log = logging.getLogger("cog.inventory")
 
@@ -65,6 +66,7 @@ class BoxInventoryView(discord.ui.View):
         items: List[Dict],
         inv_svc,
         char_svc,
+        bs_svc,
         max_slots: int,
     ):
         super().__init__(timeout=300)
@@ -75,6 +77,7 @@ class BoxInventoryView(discord.ui.View):
         self.items = items
         self.inv_svc = inv_svc
         self.char_svc = char_svc
+        self.bs_svc = bs_svc
         self.max_slots = max_slots
         self.page = 0
         self.selected_item_id: Optional[str] = None
@@ -109,6 +112,7 @@ class BoxInventoryView(discord.ui.View):
         prev_btn = discord.ui.Button(emoji="⬅️", style=discord.ButtonStyle.secondary, custom_id="inv_prev", row=4)
         next_btn = discord.ui.Button(emoji="➡️", style=discord.ButtonStyle.secondary, custom_id="inv_next", row=4)
         equip_btn = discord.ui.Button(label="Equip", emoji="⚔️", style=discord.ButtonStyle.primary, custom_id="inv_equip", row=4)
+        enhance_btn = discord.ui.Button(label="Enhance", emoji="✨", style=discord.ButtonStyle.primary, custom_id="inv_enhance", row=4)
         sell_btn = discord.ui.Button(label="Sell", emoji="💰", style=discord.ButtonStyle.success, custom_id="inv_sell", row=4)
         use_btn = discord.ui.Button(label="Use", emoji="🧪", style=discord.ButtonStyle.secondary, custom_id="inv_use", row=4)
         
@@ -118,6 +122,7 @@ class BoxInventoryView(discord.ui.View):
         
         has_selection = self.selected_item is not None
         equip_btn.disabled = not has_selection or not (self.selected_item and self.selected_item.get("equip_slot"))
+        enhance_btn.disabled = not has_selection or not (self.selected_item and self.selected_item.get("equip_slot"))
         sell_btn.disabled = not has_selection
         use_btn.disabled = not has_selection or (self.selected_item and self.selected_item.get("item_type") != "consumable")
         
@@ -134,12 +139,14 @@ class BoxInventoryView(discord.ui.View):
         prev_btn.callback = prev_cb
         next_btn.callback = next_cb
         equip_btn.callback = self._equip_callback
+        enhance_btn.callback = self._enhance_callback
         sell_btn.callback = self._sell_callback
         use_btn.callback = self._use_callback
         
         self.add_item(prev_btn)
         self.add_item(next_btn)
         self.add_item(equip_btn)
+        self.add_item(enhance_btn)
         self.add_item(sell_btn)
         self.add_item(use_btn)
 
@@ -200,6 +207,133 @@ class BoxInventoryView(discord.ui.View):
         ok, msg, _ = await self.inv_svc.use_consumable(self.char_id, item_id)
         await interaction.followup.send(f"{'✅' if ok else '❌'} {msg}", ephemeral=True)
         await self._reload_and_refresh(interaction)
+    
+    async def _enhance_callback(self, interaction: discord.Interaction):
+        if not self.selected_item:
+            return await interaction.response.send_message("❌ Click a slot to select an item first.", ephemeral=True)
+        
+        # Check if item is equippable (has equip_slot)
+        if not self.selected_item.get("equip_slot"):
+            return await interaction.response.send_message("❌ Only equippable items can be enhanced.", ephemeral=True)
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            item_id = UUID(self.selected_item_id)
+        except (ValueError, TypeError):
+            return await interaction.followup.send("❌ Invalid item.", ephemeral=True)
+        
+        # Get enhancement info
+        info = await self.bs_svc.get_enhancement_info(item_id, self.char_id)
+        if not info:
+            return await interaction.followup.send("❌ Item not found.", ephemeral=True)
+        
+        if info["current_level"] >= 10:
+            return await interaction.followup.send("❌ Item is already at maximum enhancement (+10).", ephemeral=True)
+        
+        # Get protection inventory
+        protections = await self.bs_svc.get_protection_inventory(self.char_id)
+        
+        # Check if we need protection selection UI
+        next_config = ENHANCEMENT_CONFIG.get(info["current_level"] + 1)
+        needs_protection = next_config and next_config["can_break"] and (
+            protections.get("blessing_scroll", 0) > 0 or
+            protections.get("safety_charm", 0) > 0 or
+            protections.get("enhancement_fragment", 0) > 0
+        )
+        
+        if needs_protection:
+            # Show protection selection UI
+            view = EnhancementProtectionView(
+                owner_id=self.owner_id,
+                char_id=self.char_id,
+                item_id=item_id,
+                protections=protections,
+                target_level=info["current_level"] + 1,
+                bs_svc=self.bs_svc,
+                inv_svc=self.inv_svc,
+                inventory_view=self,
+            )
+            embed = discord.Embed(
+                title="🔨 Select Protection",
+                description=f"**{info['item']['name']}** is currently **+{info['current_level']}**\n"
+                          f"Enhancing to **+{info['current_level'] + 1}** can break the item!\n\n"
+                          f"Choose protection (or select 'None' to proceed without protection):",
+                color=0xFFA500
+            )
+            msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            view.message = msg
+        else:
+            # Direct enhancement (no protection needed)
+            result = await self.bs_svc.enhance_item(
+                self.char_id, item_id,
+                protection_type=None,
+                fragment_count=0
+            )
+            
+            if not result.get("success") and "message" in result:
+                return await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+            
+            # Build result embed
+            embed = self._build_enhancement_result_embed(result)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            # Refresh inventory view
+            await self._reload_and_refresh(interaction)
+            
+            # Server announcement for legendary +10
+            if result.get("announce"):
+                char_row = await self.char_svc.get_character_by_id(self.char_id)
+                if char_row:
+                    announce_embed = discord.Embed(
+                        title="🌟 LEGENDARY ACHIEVEMENT!",
+                        description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
+                        color=0xFFD700
+                    )
+                    try:
+                        await interaction.channel.send(embed=announce_embed)
+                    except Exception:
+                        pass
+    
+    def _build_enhancement_result_embed(self, result: dict) -> discord.Embed:
+        """Build enhancement result embed."""
+        embed = discord.Embed(
+            title="🔨 Enhancement Result",
+            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+        )
+        
+        if result.get("success"):
+            embed.description = f"✨ **SUCCESS!**\n{result['message']}"
+            embed.add_field(
+                name="📊 Enhancement",
+                value=f"**+{result['old_level']}** → **+{result['new_level']}**\n"
+                      f"Stat boost: **+{result['stat_boost']*100:.0f}%**",
+                inline=True
+            )
+        elif result.get("broke"):
+            embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
+            embed.color = 0xFF0000
+        elif result.get("downgraded"):
+            embed.description = f"🛡️ **Protected!**\n{result['message']}"
+            embed.color = 0xFFA500
+        else:
+            embed.description = f"❌ **Failed**\n{result['message']}"
+            embed.color = 0xFFA500
+        
+        embed.add_field(
+            name="💰 Cost",
+            value=f"**{result['cost']:,}**🪙",
+            inline=True
+        )
+        
+        if result.get("success_rate"):
+            embed.add_field(
+                name="🎲 Success Rate",
+                value=f"**{result['success_rate']:.1f}%**",
+                inline=True
+            )
+        
+        return embed
 
     async def _refresh_message(self, interaction: discord.Interaction):
         """Refresh the message with current page/selection."""
@@ -365,6 +499,7 @@ class EquipmentView(discord.ui.View):
         equipped_items: Dict[str, Dict],
         inv_svc,
         char_svc,
+        bs_svc,
     ):
         super().__init__(timeout=300)
         self.owner_id = owner_id
@@ -373,6 +508,7 @@ class EquipmentView(discord.ui.View):
         self.equipped_items = equipped_items
         self.inv_svc = inv_svc
         self.char_svc = char_svc
+        self.bs_svc = bs_svc
         self.selected_slot: Optional[str] = None
         self.message: Optional[discord.Message] = None  # Store message reference
         
@@ -418,6 +554,7 @@ class EquipmentView(discord.ui.View):
             item_id=UUID(item["id"]),
             inv_svc=self.inv_svc,
             char_svc=self.char_svc,
+            bs_svc=self.bs_svc,
             equipment_view=self,
         )
         
@@ -548,6 +685,361 @@ class EquipmentView(discord.ui.View):
         return True
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  ENHANCEMENT PROTECTION VIEW - For enhancement with protection selection
+# ═══════════════════════════════════════════════════════════════════════════
+
+class EnhancementProtectionView(discord.ui.View):
+    """View for selecting protection items during enhancement."""
+    
+    def __init__(
+        self,
+        *,
+        owner_id: int,
+        char_id: UUID,
+        item_id: UUID,
+        protections: dict,
+        target_level: int,
+        bs_svc: BlacksmithService,
+        inv_svc: InventoryService,
+        equipment_view: Optional[EquipmentView] = None,
+        inventory_view: Optional[BoxInventoryView] = None,
+    ):
+        super().__init__(timeout=60)
+        self.owner_id = owner_id
+        self.char_id = char_id
+        self.item_id = item_id
+        self.bs_svc = bs_svc
+        self.inv_svc = inv_svc
+        self.equipment_view = equipment_view
+        self.inventory_view = inventory_view
+        self.chosen = False
+        self.chosen_protection = None
+        self.chosen_fragments = 0
+        self.has_fragments = protections.get("enhancement_fragment", 0) > 0
+        self.message = None
+        
+        # Add protection select
+        self.add_item(_EnhancementProtectionSelect(protections, target_level))
+        # Add fragment count select if fragments available
+        if self.has_fragments:
+            self.add_item(_EnhancementFragmentSelect(protections.get("enhancement_fragment", 0)))
+        
+        # Add enhance button (initially disabled)
+        self.add_item(_EnhancementButton())
+    
+    def _update_enhance_button(self):
+        """Enable enhance button when protection is selected."""
+        for item in self.children:
+            if isinstance(item, _EnhancementButton):
+                item.disabled = (self.chosen_protection is None)
+                break
+    
+    async def _do_enhancement(self, interaction: discord.Interaction):
+        """Perform the enhancement after protection selection."""
+        result = await self.bs_svc.enhance_item(
+            self.char_id, self.item_id,
+            protection_type=self.chosen_protection,
+            fragment_count=self.chosen_fragments
+        )
+        
+        if not result.get("success") and "message" in result:
+            await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+            return
+        
+        # Consume protection items if used
+        if self.chosen_protection or self.chosen_fragments > 0:
+            await self._consume_protection(self.chosen_protection, self.chosen_fragments)
+        
+        # Build result embed
+        embed = self._build_result_embed(result)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        
+        # Refresh views
+        if self.equipment_view:
+            await self.equipment_view.refresh_equipment()
+        if self.inventory_view:
+            await self.inventory_view._reload_and_refresh(interaction)
+        
+        # Server announcement for legendary +10
+        if result.get("announce"):
+            char_row = await self.inv_svc.db.fetchrow(
+                "SELECT name FROM characters WHERE id = $1", self.char_id
+            )
+            if char_row:
+                announce_embed = discord.Embed(
+                    title="🌟 LEGENDARY ACHIEVEMENT!",
+                    description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
+                    color=0xFFD700
+                )
+                try:
+                    await interaction.channel.send(embed=announce_embed)
+                except Exception:
+                    pass
+    
+    def _build_result_embed(self, result: dict) -> discord.Embed:
+        """Build enhancement result embed."""
+        embed = discord.Embed(
+            title="🔨 Enhancement Result",
+            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+        )
+        
+        if result.get("success"):
+            embed.description = f"✨ **SUCCESS!**\n{result['message']}"
+            embed.add_field(
+                name="📊 Enhancement",
+                value=f"**+{result['old_level']}** → **+{result['new_level']}**\n"
+                      f"Stat boost: **+{result['stat_boost']*100:.0f}%**",
+                inline=True
+            )
+        elif result.get("broke"):
+            embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
+            embed.color = 0xFF0000
+        elif result.get("downgraded"):
+            embed.description = f"🛡️ **Protected!**\n{result['message']}"
+            embed.color = 0xFFA500
+        else:
+            embed.description = f"❌ **Failed**\n{result['message']}"
+            embed.color = 0xFFA500
+        
+        embed.add_field(
+            name="💰 Cost",
+            value=f"**{result['cost']:,}**🪙",
+            inline=True
+        )
+        
+        if result.get("success_rate"):
+            embed.add_field(
+                name="🎲 Success Rate",
+                value=f"**{result['success_rate']:.1f}%**",
+                inline=True
+            )
+        
+        return embed
+    
+    async def _consume_protection(self, protection_type: Optional[str], fragment_count: int):
+        """Consume protection items from inventory after use."""
+        # Consume main protection item
+        if protection_type in ("blessing_scroll", "safety_charm"):
+            items = await self.inv_svc.get_all(self.char_id)
+            protection_items = [
+                i for i in items
+                if i.get("template_id") == f"protection_{protection_type}"
+            ]
+            if protection_items:
+                item = protection_items[0]
+                if item.get("quantity", 1) > 1:
+                    await self.inv_svc.db.execute(
+                        "UPDATE inventory SET quantity = quantity - 1 WHERE id = $1",
+                        item["id"]
+                    )
+                else:
+                    await self.inv_svc.db.execute(
+                        "DELETE FROM inventory WHERE id = $1",
+                        item["id"]
+                    )
+        
+        # Consume fragments
+        if fragment_count > 0:
+            items = await self.inv_svc.get_all(self.char_id)
+            fragment_items = [
+                i for i in items
+                if i.get("template_id") == "protection_enhancement_fragment"
+            ]
+            consumed = 0
+            for item in fragment_items:
+                if consumed >= fragment_count:
+                    break
+                available = item.get("quantity", 1)
+                to_consume = min(available, fragment_count - consumed)
+                if to_consume >= available:
+                    await self.inv_svc.db.execute(
+                        "DELETE FROM inventory WHERE id = $1",
+                        item["id"]
+                    )
+                else:
+                    await self.inv_svc.db.execute(
+                        "UPDATE inventory SET quantity = quantity - $1 WHERE id = $2",
+                        to_consume, item["id"]
+                    )
+                consumed += to_consume
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+            return False
+        return True
+
+
+class _EnhancementProtectionSelect(discord.ui.Select):
+    """Select protection item for enhancement."""
+    
+    def __init__(self, protections: dict, target_level: int):
+        options = [
+            discord.SelectOption(
+                label="None - Proceed without protection",
+                value="none",
+                description="Risk it! (Item can break on failure)",
+                emoji="⚔️"
+            )
+        ]
+        
+        # Add blessing scroll if available
+        if protections.get("blessing_scroll", 0) > 0:
+            options.append(discord.SelectOption(
+                label=f"Blessing Scroll (🛡️) x{protections['blessing_scroll']}",
+                value="blessing_scroll",
+                description="Prevents destruction, downgrades instead",
+                emoji="🛡️"
+            ))
+        
+        # Add safety charm if available and level <= 5
+        if protections.get("safety_charm", 0) > 0 and target_level <= 5:
+            options.append(discord.SelectOption(
+                label=f"Safety Charm (✨) x{protections['safety_charm']}",
+                value="safety_charm",
+                description="Guarantees success (works up to +5)",
+                emoji="✨"
+            ))
+        
+        super().__init__(
+            placeholder="Choose protection...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if not isinstance(view, EnhancementProtectionView):
+            return await interaction.response.send_message("❌ Internal error.", ephemeral=True)
+        
+        protection = self.values[0]
+        view.chosen_protection = None if protection == "none" else protection
+        view._update_enhance_button()
+        
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+        
+        try:
+            protection_name = "None" if protection == "none" else PROTECTION_ITEMS[protection]["name"]
+            embed = discord.Embed(
+                title="🔨 Select Protection",
+                description=(
+                    f"**Protection:** {protection_name}\n\n"
+                    + ("Select fragments and click **Enhance Now** when ready!" if view.has_fragments else "Click **Enhance Now** to proceed!")
+                ),
+                color=0xFFA500
+            )
+            if view.message:
+                await view.message.edit(embed=embed, view=view)
+        except Exception:
+            pass
+
+
+class _EnhancementFragmentSelect(discord.ui.Select):
+    """Select fragment count for enhancement."""
+    
+    def __init__(self, fragment_count: int):
+        max_fragments = min(fragment_count, 3)  # Can stack up to 3
+        options = [
+            discord.SelectOption(
+                label=f"Use {i} Fragment{'s' if i > 1 else ''} (+{i*10}% success)",
+                value=str(i),
+                description=f"Adds {i*10}% to success chance",
+                emoji="💎"
+            )
+            for i in range(max_fragments + 1)
+        ]
+        
+        super().__init__(
+            placeholder="How many fragments? (Optional)",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if not isinstance(view, EnhancementProtectionView):
+            return await interaction.response.send_message("❌ Internal error.", ephemeral=True)
+        
+        view.chosen_fragments = int(self.values[0])
+        view._update_enhance_button()
+        
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+        
+        try:
+            protection_name = "None" if view.chosen_protection is None else PROTECTION_ITEMS[view.chosen_protection]["name"]
+            fragment_text = f"{view.chosen_fragments} fragment{'s' if view.chosen_fragments != 1 else ''}" if view.chosen_fragments > 0 else "No fragments"
+            embed = discord.Embed(
+                title="🔨 Ready to Enhance",
+                description=(
+                    f"**Protection:** {protection_name}\n"
+                    f"**Fragments:** {fragment_text}\n\n"
+                    f"Click **Enhance Now** to proceed!"
+                ),
+                color=0xFFA500
+            )
+            if view.message:
+                await view.message.edit(embed=embed, view=view)
+        except Exception:
+            pass
+
+
+class _EnhancementButton(discord.ui.Button):
+    """Button to confirm enhancement."""
+    
+    def __init__(self):
+        super().__init__(
+            label="🔨 Enhance Now",
+            style=discord.ButtonStyle.primary,
+            disabled=True  # Initially disabled
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if not isinstance(view, EnhancementProtectionView):
+            return await interaction.response.send_message("❌ Internal error.", ephemeral=True)
+        
+        # Disable all items
+        for item in view.children:
+            if isinstance(item, discord.ui.Select):
+                item.disabled = True
+        self.disabled = True
+        
+        view.chosen = True
+        view.stop()
+        
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+        
+        try:
+            embed = discord.Embed(
+                title="🔨 Enhancing Item...",
+                description="Processing your enhancement request...",
+                color=0x8B4513
+            )
+            msg_to_edit = view.message if view.message else interaction.message
+            if msg_to_edit:
+                await msg_to_edit.edit(embed=embed, view=view)
+        except Exception:
+            pass
+        
+        # Perform enhancement
+        await view._do_enhancement(interaction)
+
+
 class EquipmentActionView(discord.ui.View):
     """Actions for an equipped item: Unequip, Enhance, etc."""
     
@@ -560,6 +1052,7 @@ class EquipmentActionView(discord.ui.View):
         item_id: UUID,
         inv_svc,
         char_svc,
+        bs_svc,
         equipment_view: EquipmentView,
     ):
         super().__init__(timeout=60)
@@ -569,6 +1062,7 @@ class EquipmentActionView(discord.ui.View):
         self.item_id = item_id
         self.inv_svc = inv_svc
         self.char_svc = char_svc
+        self.bs_svc = bs_svc
         self.equipment_view = equipment_view
     
     @discord.ui.button(label="🔓 Unequip", style=discord.ButtonStyle.danger, row=0)
@@ -584,12 +1078,119 @@ class EquipmentActionView(discord.ui.View):
     
     @discord.ui.button(label="✨ Enhance", style=discord.ButtonStyle.primary, row=0)
     async def enhance_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Redirect to blacksmith enhance
-        await interaction.response.send_message(
-            f"💡 Use `/blacksmith enhance` with item ID: `{self.item_id}`\n"
-            f"Or use `/equipment` and click the slot again after enhancing.",
-            ephemeral=True
+        await interaction.response.defer(ephemeral=True)
+        
+        # Get enhancement info
+        info = await self.bs_svc.get_enhancement_info(self.item_id, self.char_id)
+        if not info:
+            return await interaction.followup.send("❌ Item not found.", ephemeral=True)
+        
+        if info["current_level"] >= 10:
+            return await interaction.followup.send("❌ Item is already at maximum enhancement (+10).", ephemeral=True)
+        
+        # Get protection inventory
+        protections = await self.bs_svc.get_protection_inventory(self.char_id)
+        
+        # Check if we need protection selection UI
+        next_config = ENHANCEMENT_CONFIG.get(info["current_level"] + 1)
+        needs_protection = next_config and next_config["can_break"] and (
+            protections.get("blessing_scroll", 0) > 0 or
+            protections.get("safety_charm", 0) > 0 or
+            protections.get("enhancement_fragment", 0) > 0
         )
+        
+        if needs_protection:
+            # Show protection selection UI
+            view = EnhancementProtectionView(
+                owner_id=self.owner_id,
+                char_id=self.char_id,
+                item_id=self.item_id,
+                protections=protections,
+                target_level=info["current_level"] + 1,
+                bs_svc=self.bs_svc,
+                inv_svc=self.inv_svc,
+                equipment_view=self.equipment_view,
+            )
+            embed = discord.Embed(
+                title="🔨 Select Protection",
+                description=f"**{info['item']['name']}** is currently **+{info['current_level']}**\n"
+                          f"Enhancing to **+{info['current_level'] + 1}** can break the item!\n\n"
+                          f"Choose protection (or select 'None' to proceed without protection):",
+                color=0xFFA500
+            )
+            msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            view.message = msg
+        else:
+            # Direct enhancement (no protection needed)
+            result = await self.bs_svc.enhance_item(
+                self.char_id, self.item_id,
+                protection_type=None,
+                fragment_count=0
+            )
+            
+            if not result.get("success") and "message" in result:
+                return await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+            
+            # Build result embed
+            embed = self._build_enhancement_result_embed(result)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            # Refresh equipment view
+            await self.equipment_view.refresh_equipment()
+            
+            # Server announcement for legendary +10
+            if result.get("announce"):
+                char_row = await self.char_svc.get_character_by_id(self.char_id)
+                if char_row:
+                    announce_embed = discord.Embed(
+                        title="🌟 LEGENDARY ACHIEVEMENT!",
+                        description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
+                        color=0xFFD700
+                    )
+                    try:
+                        await interaction.channel.send(embed=announce_embed)
+                    except Exception:
+                        pass
+    
+    def _build_enhancement_result_embed(self, result: dict) -> discord.Embed:
+        """Build enhancement result embed."""
+        embed = discord.Embed(
+            title="🔨 Enhancement Result",
+            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+        )
+        
+        if result.get("success"):
+            embed.description = f"✨ **SUCCESS!**\n{result['message']}"
+            embed.add_field(
+                name="📊 Enhancement",
+                value=f"**+{result['old_level']}** → **+{result['new_level']}**\n"
+                      f"Stat boost: **+{result['stat_boost']*100:.0f}%**",
+                inline=True
+            )
+        elif result.get("broke"):
+            embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
+            embed.color = 0xFF0000
+        elif result.get("downgraded"):
+            embed.description = f"🛡️ **Protected!**\n{result['message']}"
+            embed.color = 0xFFA500
+        else:
+            embed.description = f"❌ **Failed**\n{result['message']}"
+            embed.color = 0xFFA500
+        
+        embed.add_field(
+            name="💰 Cost",
+            value=f"**{result['cost']:,}**🪙",
+            inline=True
+        )
+        
+        if result.get("success_rate"):
+            embed.add_field(
+                name="🎲 Success Rate",
+                value=f"**{result['success_rate']:.1f}%**",
+                inline=True
+            )
+        
+        return embed
     
     @discord.ui.button(label="📋 Inspect", style=discord.ButtonStyle.secondary, row=0)
     async def inspect_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -784,10 +1385,11 @@ class _SellItemSelect(discord.ui.Select):
 
 
 class InventoryCog(commands.Cog, name="Inventory"):
-    def __init__(self, bot): self.bot = bot; self.char_svc = self.inv_svc = None
+    def __init__(self, bot): self.bot = bot; self.char_svc = self.inv_svc = self.bs_svc = None
     async def cog_load(self):
         self.char_svc = CharacterService(self.bot.db)
         self.inv_svc  = InventoryService(self.bot.db)
+        self.bs_svc   = BlacksmithService(self.bot.db)
 
     @app_commands.command(name="inventory", description="View your inventory (clickable grid)")
     @app_commands.describe(category="Filter by category (weapon, armor, consumable, material)")
@@ -846,6 +1448,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
             items=formatted,
             inv_svc=self.inv_svc,
             char_svc=self.char_svc,
+            bs_svc=self.bs_svc,
             max_slots=max_slots,
         )
 
@@ -903,6 +1506,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
             equipped_items=formatted_equipped,
             inv_svc=self.inv_svc,
             char_svc=self.char_svc,
+            bs_svc=self.bs_svc,
         )
 
         embed = view._build_equipment_embed()
