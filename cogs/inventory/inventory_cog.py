@@ -712,6 +712,9 @@ class EquipmentView(discord.ui.View):
                 "s_agi": item.get("s_agi"),
                 "s_int": item.get("s_int"),
                 "s_armor": item.get("s_armor"),
+                "r_str": item.get("r_str", 0) or 0,
+                "r_agi": item.get("r_agi", 0) or 0,
+                "r_int": item.get("r_int", 0) or 0,
                 "description": item.get("description", ""),
                 "level_req": item.get("level_req"),
             }
