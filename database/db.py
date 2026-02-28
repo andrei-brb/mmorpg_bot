@@ -174,6 +174,20 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_faction_rep_char
                 ON faction_reputation(character_id);
             """)
+            
+            # Load additional items migration (500 items: 10 per rarity per slot)
+            try:
+                import os
+                migration_path = os.path.join(os.path.dirname(__file__), "migrate_add_items.sql")
+                if os.path.exists(migration_path):
+                    with open(migration_path, "r") as f:
+                        items_migration = f.read()
+                        await c.execute(items_migration)
+                        log.info("Loaded 500 additional items from migration.")
+                else:
+                    log.warning(f"migrate_add_items.sql not found at {migration_path}, skipping additional items.")
+            except Exception as e:
+                log.error(f"Error loading items migration: {e}")
 
         log.info("Schema initialized.")
 
