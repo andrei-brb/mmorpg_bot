@@ -83,6 +83,7 @@ class BoxInventoryView(discord.ui.View):
         self.selected_item_id: Optional[str] = None
         self.selected_item: Optional[Dict] = None
         self.equipped_items: Dict[str, Dict] = {}  # slot -> item dict
+        self.enhancement_message: Optional[discord.Message] = None  # Track enhancement result message
         
         self._load_equipped()
         self._build_buttons()
@@ -260,8 +261,19 @@ class BoxInventoryView(discord.ui.View):
                           f"Choose protection (or select 'None' to proceed without protection):",
                 color=0xFFA500
             )
-            msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-            view.message = msg
+            # Reuse existing enhancement message if available, otherwise create new one
+            if self.enhancement_message:
+                try:
+                    msg = await self.enhancement_message.edit(embed=embed, view=view)
+                    view.message = self.enhancement_message
+                except Exception:
+                    msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    view.message = msg
+                    self.enhancement_message = msg
+            else:
+                msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                view.message = msg
+                self.enhancement_message = msg
         else:
             # Direct enhancement (no protection needed)
             result = await self.bs_svc.enhance_item(
@@ -271,11 +283,28 @@ class BoxInventoryView(discord.ui.View):
             )
             
             if not result.get("success") and "message" in result:
-                return await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+                error_msg = f"❌ {result['message']}"
+                if self.enhancement_message:
+                    try:
+                        error_embed = discord.Embed(title="❌ Enhancement Failed", description=result['message'], color=0xFF0000)
+                        await self.enhancement_message.edit(embed=error_embed, view=None)
+                        return
+                    except Exception:
+                        pass
+                return await interaction.followup.send(error_msg, ephemeral=True)
             
             # Build result embed
             embed = self._build_enhancement_result_embed(result)
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            # Reuse existing enhancement message if available
+            if self.enhancement_message:
+                try:
+                    await self.enhancement_message.edit(embed=embed, view=None)
+                except Exception:
+                    # Fallback: send new message if edit fails
+                    self.enhancement_message = await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                self.enhancement_message = await interaction.followup.send(embed=embed, ephemeral=True)
             
             # Refresh inventory view
             await self._reload_and_refresh(interaction)
@@ -535,6 +564,7 @@ class EquipmentView(discord.ui.View):
         self.char_svc = char_svc
         self.bs_svc = bs_svc
         self.selected_slot: Optional[str] = None
+        self.enhancement_message: Optional[discord.Message] = None  # Track enhancement result message
         self.message: Optional[discord.Message] = None  # Store message reference
         
         self._build_equipment_buttons()
@@ -821,15 +851,29 @@ class EnhancementProtectionView(discord.ui.View):
         embed = self._build_result_embed(result)
         
         # Edit the existing message instead of sending a new one
+        # Also update parent view's enhancement_message tracker
         if self.message:
             try:
                 await self.message.edit(embed=embed, view=None)
+                # Update parent view's tracker
+                if self.inventory_view:
+                    self.inventory_view.enhancement_message = self.message
+                elif self.equipment_view:
+                    self.equipment_view.enhancement_message = self.message
             except Exception:
                 # Fallback: send new message if edit fails
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                msg = await interaction.followup.send(embed=embed, ephemeral=True)
+                if self.inventory_view:
+                    self.inventory_view.enhancement_message = msg
+                elif self.equipment_view:
+                    self.equipment_view.enhancement_message = msg
         else:
             # No existing message, send new one
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            msg = await interaction.followup.send(embed=embed, ephemeral=True)
+            if self.inventory_view:
+                self.inventory_view.enhancement_message = msg
+            elif self.equipment_view:
+                self.equipment_view.enhancement_message = msg
         
         # Refresh views
         if self.equipment_view:
@@ -1140,6 +1184,7 @@ class EquipmentActionView(discord.ui.View):
         self.char_svc = char_svc
         self.bs_svc = bs_svc
         self.equipment_view = equipment_view
+        self.enhancement_message: Optional[discord.Message] = None  # Track enhancement result message
     
     @discord.ui.button(label="🔓 Unequip", style=discord.ButtonStyle.danger, row=0)
     async def unequip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1194,8 +1239,19 @@ class EquipmentActionView(discord.ui.View):
                           f"Choose protection (or select 'None' to proceed without protection):",
                 color=0xFFA500
             )
-            msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-            view.message = msg
+            # Reuse existing enhancement message if available, otherwise create new one
+            if self.enhancement_message:
+                try:
+                    msg = await self.enhancement_message.edit(embed=embed, view=view)
+                    view.message = self.enhancement_message
+                except Exception:
+                    msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    view.message = msg
+                    self.enhancement_message = msg
+            else:
+                msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                view.message = msg
+                self.enhancement_message = msg
         else:
             # Direct enhancement (no protection needed)
             result = await self.bs_svc.enhance_item(
@@ -1205,11 +1261,28 @@ class EquipmentActionView(discord.ui.View):
             )
             
             if not result.get("success") and "message" in result:
-                return await interaction.followup.send(f"❌ {result['message']}", ephemeral=True)
+                error_msg = f"❌ {result['message']}"
+                if self.enhancement_message:
+                    try:
+                        error_embed = discord.Embed(title="❌ Enhancement Failed", description=result['message'], color=0xFF0000)
+                        await self.enhancement_message.edit(embed=error_embed, view=None)
+                        return
+                    except Exception:
+                        pass
+                return await interaction.followup.send(error_msg, ephemeral=True)
             
             # Build result embed
             embed = self._build_enhancement_result_embed(result)
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+            # Reuse existing enhancement message if available
+            if self.enhancement_message:
+                try:
+                    await self.enhancement_message.edit(embed=embed, view=None)
+                except Exception:
+                    # Fallback: send new message if edit fails
+                    self.enhancement_message = await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                self.enhancement_message = await interaction.followup.send(embed=embed, ephemeral=True)
             
             # Refresh equipment view
             await self.equipment_view.refresh_equipment()
