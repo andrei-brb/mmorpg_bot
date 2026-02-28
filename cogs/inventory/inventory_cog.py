@@ -412,18 +412,44 @@ class BoxInventoryView(discord.ui.View):
             color=color,
         )
         
+        # Calculate enhanced stats (base + roll) * enhancement multiplier
+        from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
+        
+        enh_level = item.get("enhancement_level", 0) or 0
+        if enh_level > 0:
+            enh_config = ENHANCEMENT_CONFIG.get(enh_level, {"stat_boost": 0})
+            enh_mult = 1 + enh_config["stat_boost"]
+        else:
+            enh_mult = 1.0
+        
+        # Base stats + random rolls
+        base_dmg_min = (item.get("s_dmg_min", 0) or 0)
+        base_dmg_max = (item.get("s_dmg_max", 0) or 0)
+        base_str = (item.get("s_str", 0) or 0) + (item.get("r_str", 0) or 0)
+        base_agi = (item.get("s_agi", 0) or 0) + (item.get("r_agi", 0) or 0)
+        base_int = (item.get("s_int", 0) or 0) + (item.get("r_int", 0) or 0)
+        base_armor = (item.get("s_armor", 0) or 0)
+        
+        # Apply enhancement multiplier
+        final_dmg_min = int(base_dmg_min * enh_mult) if base_dmg_min > 0 else 0
+        final_dmg_max = int(base_dmg_max * enh_mult) if base_dmg_max > 0 else 0
+        final_str = int(base_str * enh_mult) if base_str > 0 else 0
+        final_agi = int(base_agi * enh_mult) if base_agi > 0 else 0
+        final_int = int(base_int * enh_mult) if base_int > 0 else 0
+        final_armor = int(base_armor * enh_mult) if base_armor > 0 else 0
+        
         # Stats
         stats = []
-        if item.get("s_dmg_min") and item.get("s_dmg_max"):
-            stats.append(f"⚔️ **Damage:** {item['s_dmg_min']}-{item['s_dmg_max']}")
-        if item.get("s_str"):
-            stats.append(f"💪 **Str:** +{item['s_str']}")
-        if item.get("s_agi"):
-            stats.append(f"⚡ **Agi:** +{item['s_agi']}")
-        if item.get("s_int"):
-            stats.append(f"🧠 **Int:** +{item['s_int']}")
-        if item.get("s_armor"):
-            stats.append(f"🛡️ **Armor:** +{item['s_armor']}")
+        if final_dmg_min > 0 and final_dmg_max > 0:
+            stats.append(f"⚔️ **Damage:** {final_dmg_min}-{final_dmg_max}")
+        if final_str > 0:
+            stats.append(f"💪 **Str:** +{final_str}")
+        if final_agi > 0:
+            stats.append(f"⚡ **Agi:** +{final_agi}")
+        if final_int > 0:
+            stats.append(f"🧠 **Int:** +{final_int}")
+        if final_armor > 0:
+            stats.append(f"🛡️ **Armor:** +{final_armor}")
         
         if stats:
             embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
@@ -615,18 +641,44 @@ class EquipmentView(discord.ui.View):
             color=color,
         )
         
+        # Calculate enhanced stats (base + roll) * enhancement multiplier
+        from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
+        
+        enh_level = item.get("enhancement_level", 0) or 0
+        if enh_level > 0:
+            enh_config = ENHANCEMENT_CONFIG.get(enh_level, {"stat_boost": 0})
+            enh_mult = 1 + enh_config["stat_boost"]
+        else:
+            enh_mult = 1.0
+        
+        # Base stats + random rolls
+        base_dmg_min = (item.get("s_dmg_min", 0) or 0)
+        base_dmg_max = (item.get("s_dmg_max", 0) or 0)
+        base_str = (item.get("s_str", 0) or 0) + (item.get("r_str", 0) or 0)
+        base_agi = (item.get("s_agi", 0) or 0) + (item.get("r_agi", 0) or 0)
+        base_int = (item.get("s_int", 0) or 0) + (item.get("r_int", 0) or 0)
+        base_armor = (item.get("s_armor", 0) or 0)
+        
+        # Apply enhancement multiplier
+        final_dmg_min = int(base_dmg_min * enh_mult) if base_dmg_min > 0 else 0
+        final_dmg_max = int(base_dmg_max * enh_mult) if base_dmg_max > 0 else 0
+        final_str = int(base_str * enh_mult) if base_str > 0 else 0
+        final_agi = int(base_agi * enh_mult) if base_agi > 0 else 0
+        final_int = int(base_int * enh_mult) if base_int > 0 else 0
+        final_armor = int(base_armor * enh_mult) if base_armor > 0 else 0
+        
         # Stats
         stats = []
-        if item.get("s_dmg_min") and item.get("s_dmg_max"):
-            stats.append(f"⚔️ **Damage:** {item['s_dmg_min']}-{item['s_dmg_max']}")
-        if item.get("s_str"):
-            stats.append(f"💪 **Str:** +{item['s_str']}")
-        if item.get("s_agi"):
-            stats.append(f"⚡ **Agi:** +{item['s_agi']}")
-        if item.get("s_int"):
-            stats.append(f"🧠 **Int:** +{item['s_int']}")
-        if item.get("s_armor"):
-            stats.append(f"🛡️ **Armor:** +{item['s_armor']}")
+        if final_dmg_min > 0 and final_dmg_max > 0:
+            stats.append(f"⚔️ **Damage:** {final_dmg_min}-{final_dmg_max}")
+        if final_str > 0:
+            stats.append(f"💪 **Str:** +{final_str}")
+        if final_agi > 0:
+            stats.append(f"⚡ **Agi:** +{final_agi}")
+        if final_int > 0:
+            stats.append(f"🧠 **Int:** +{final_int}")
+        if final_armor > 0:
+            stats.append(f"🛡️ **Armor:** +{final_armor}")
         
         if stats:
             embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
@@ -1210,17 +1262,43 @@ class EquipmentActionView(discord.ui.View):
             color=rarity.color,
         )
         
+        # Calculate enhanced stats
+        from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
+        
+        enh_level = item.get("enhancement_level", 0) or 0
+        if enh_level > 0:
+            enh_config = ENHANCEMENT_CONFIG.get(enh_level, {"stat_boost": 0})
+            enh_mult = 1 + enh_config["stat_boost"]
+        else:
+            enh_mult = 1.0
+        
+        # Base stats + random rolls
+        base_dmg_min = (item.get("s_dmg_min", 0) or 0)
+        base_dmg_max = (item.get("s_dmg_max", 0) or 0)
+        base_str = (item.get("s_str", 0) or 0) + (item.get("r_str", 0) or 0)
+        base_agi = (item.get("s_agi", 0) or 0) + (item.get("r_agi", 0) or 0)
+        base_int = (item.get("s_int", 0) or 0) + (item.get("r_int", 0) or 0)
+        base_armor = (item.get("s_armor", 0) or 0)
+        
+        # Apply enhancement multiplier
+        final_dmg_min = int(base_dmg_min * enh_mult) if base_dmg_min > 0 else 0
+        final_dmg_max = int(base_dmg_max * enh_mult) if base_dmg_max > 0 else 0
+        final_str = int(base_str * enh_mult) if base_str > 0 else 0
+        final_agi = int(base_agi * enh_mult) if base_agi > 0 else 0
+        final_int = int(base_int * enh_mult) if base_int > 0 else 0
+        final_armor = int(base_armor * enh_mult) if base_armor > 0 else 0
+        
         stats = []
-        if item.get("s_dmg_min") and item.get("s_dmg_max"):
-            stats.append(f"⚔️ **Damage:** {item['s_dmg_min']}-{item['s_dmg_max']}")
-        if item.get("s_str"):
-            stats.append(f"💪 **Str:** +{item['s_str']}")
-        if item.get("s_agi"):
-            stats.append(f"⚡ **Agi:** +{item['s_agi']}")
-        if item.get("s_int"):
-            stats.append(f"🧠 **Int:** +{item['s_int']}")
-        if item.get("s_armor"):
-            stats.append(f"🛡️ **Armor:** +{item['s_armor']}")
+        if final_dmg_min > 0 and final_dmg_max > 0:
+            stats.append(f"⚔️ **Damage:** {final_dmg_min}-{final_dmg_max}")
+        if final_str > 0:
+            stats.append(f"💪 **Str:** +{final_str}")
+        if final_agi > 0:
+            stats.append(f"⚡ **Agi:** +{final_agi}")
+        if final_int > 0:
+            stats.append(f"🧠 **Int:** +{final_int}")
+        if final_armor > 0:
+            stats.append(f"🛡️ **Armor:** +{final_armor}")
         
         if stats:
             embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
