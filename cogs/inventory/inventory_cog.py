@@ -597,6 +597,8 @@ class EquipmentView(discord.ui.View):
         inv_svc,
         char_svc,
         bs_svc,
+        char_data: Optional[Dict] = None,
+        stats_data: Optional[Dict] = None,
     ):
         super().__init__(timeout=300)
         self.owner_id = owner_id
@@ -606,6 +608,8 @@ class EquipmentView(discord.ui.View):
         self.inv_svc = inv_svc
         self.char_svc = char_svc
         self.bs_svc = bs_svc
+        self.char_data = char_data
+        self.stats_data = stats_data
         self.selected_slot: Optional[str] = None
         self.enhancement_message: Optional[discord.Message] = None  # Track enhancement result message
         self.message: Optional[discord.Message] = None  # Store message reference
@@ -659,13 +663,77 @@ class EquipmentView(discord.ui.View):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
     def _build_equipment_embed(self) -> discord.Embed:
-        """Build embed showing all equipped items."""
+        """Build embed showing character info and all equipped items."""
+        from config.settings import CLASSES
+        
+        # Get character data if available
+        char = self.char_data
+        stats = self.stats_data
+        
+        if char:
+            cls = CLASSES.get(char.get("class", ""))
+            if cls:
+                # Dynamic Colors by Class/Spec (same as character profile)
+                color_map = {
+                    "fire": 0xFF4500, "frost": 0x00CED1,
+                    "retribution": 0xFF6347, "holy_paladin": 0xFFD700,
+                    "holy_priest": 0xFFFFE0, "shadow": 0x8B008B,
+                    "arms": 0xDC143C, "protection": 0x4682B4,
+                    "assassination": 0x8B0000, "subtlety": 0x2F4F4F,
+                    "marksmanship": 0x228B22, "beast_mastery": 0x8B4513,
+                }
+                class_colors = {
+                    "warrior": 0xC79C6E, "paladin": 0xF58CBA,
+                    "mage": 0x69CCF0, "rogue": 0xFFF569,
+                    "priest": 0xFFFFFF, "hunter": 0xABD473,
+                }
+                color = color_map.get(char.get("specialization"), class_colors.get(char.get("class"), 0x2F3136))
+            else:
+                color = 0x2F3136
+        else:
+            color = 0x2F3136
+        
         embed = discord.Embed(
             title=f"👤 {self.char_name}'s Equipment",
-            description="Click an equipment slot to manage it",
-            color=0x2F3136,
+            description="**💡 Click an equipment slot button below to view item details and manage it!**",
+            color=color,
         )
         
+        # Add character info panel if available
+        if char and stats:
+            cls = CLASSES.get(char.get("class", ""))
+            if cls:
+                # Character header
+                title_parts = [f"{cls.emoji} **{self.char_name}**"]
+                if char.get("specialization"):
+                    from config.settings import SPECIALIZATIONS
+                    spec = SPECIALIZATIONS.get(char.get("specialization"))
+                    if spec:
+                        title_parts.append(f"{spec.emoji} {spec.name}")
+                
+                embed.add_field(
+                    name="👤 Character",
+                    value=f"**Level {char.get('level', 1)} {cls.name}**\n"
+                          f"❤️ HP: {char.get('current_hp', 0):,}/{char.get('max_hp', 0):,}\n"
+                          f"🪙 Gold: {char.get('gold', 0):,}",
+                    inline=True,
+                )
+                
+                # Combat stats
+                if stats:
+                    stats_text = (
+                        f"⚔️ Attack: **{stats.get('attack_power', 0)}**\n"
+                        f"🛡️ Armor: **{stats.get('armor', 0)}**\n"
+                        f"💥 Crit: **{stats.get('crit_chance', 0):.1f}%**\n"
+                        f"⚡ Dodge: **{stats.get('dodge_chance', 0):.1f}%**"
+                    )
+                    embed.add_field(
+                        name="⚔️ Combat Stats",
+                        value=stats_text,
+                        inline=True,
+                    )
+        
+        # Equipped items display (visual character shape)
         slot_order = [
             ("head", "🪖 Head"),
             ("neck", "📿 Neck"),
@@ -693,11 +761,13 @@ class EquipmentView(discord.ui.View):
             else:
                 lines.append(f"{slot_label}: `Empty`")
         
-        embed.add_field(name="📋 Equipped Items", value="\n".join(lines), inline=False)
+        embed.add_field(name="🎒 Equipped Items", value="\n".join(lines), inline=False)
+        
+        embed.set_footer(text="💡 Click any equipment slot button below to see detailed stats and manage items!")
         return embed
     
     def _build_item_embed(self, item: Dict) -> discord.Embed:
-        """Build embed for a single equipped item."""
+        """Build embed for a single equipped item with detailed stats."""
         rarity = item.get("rarity", "common")
         rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
         color = rarity_cfg.color
@@ -729,7 +799,13 @@ class EquipmentView(discord.ui.View):
         base_str = (item.get("s_str", 0) or 0) + (item.get("r_str", 0) or 0)
         base_agi = (item.get("s_agi", 0) or 0) + (item.get("r_agi", 0) or 0)
         base_int = (item.get("s_int", 0) or 0) + (item.get("r_int", 0) or 0)
+        base_spi = (item.get("s_spi", 0) or 0) + (item.get("r_spi", 0) or 0)
+        base_sta = (item.get("s_sta", 0) or 0) + (item.get("r_sta", 0) or 0)
         base_armor = (item.get("s_armor", 0) or 0)
+        base_haste = (item.get("s_haste", 0) or 0) + (item.get("r_haste", 0) or 0)
+        base_lifesteal = (item.get("s_lifesteal", 0) or 0) + (item.get("r_lifesteal", 0) or 0)
+        base_resistance = (item.get("s_resistance", 0) or 0) + (item.get("r_resistance", 0) or 0)
+        base_hit_rating = (item.get("s_hit_rating", 0) or 0) + (item.get("r_hit_rating", 0) or 0)
         
         # Apply enhancement multiplier
         final_dmg_min = int(base_dmg_min * enh_mult) if base_dmg_min > 0 else 0
@@ -737,31 +813,60 @@ class EquipmentView(discord.ui.View):
         final_str = int(base_str * enh_mult) if base_str > 0 else 0
         final_agi = int(base_agi * enh_mult) if base_agi > 0 else 0
         final_int = int(base_int * enh_mult) if base_int > 0 else 0
+        final_spi = int(base_spi * enh_mult) if base_spi > 0 else 0
+        final_sta = int(base_sta * enh_mult) if base_sta > 0 else 0
         final_armor = int(base_armor * enh_mult) if base_armor > 0 else 0
+        final_haste = int(base_haste * enh_mult) if base_haste > 0 else 0
+        final_lifesteal = int(base_lifesteal * enh_mult) if base_lifesteal > 0 else 0
+        final_resistance = int(base_resistance * enh_mult) if base_resistance > 0 else 0
+        final_hit_rating = int(base_hit_rating * enh_mult) if base_hit_rating > 0 else 0
         
-        # Stats
-        stats = []
+        # Primary stats
+        primary_stats = []
         if final_dmg_min > 0 and final_dmg_max > 0:
-            stats.append(f"⚔️ **Damage:** {final_dmg_min}-{final_dmg_max}")
+            primary_stats.append(f"⚔️ **Damage:** {final_dmg_min}-{final_dmg_max}")
         if final_str > 0:
-            stats.append(f"💪 **Str:** +{final_str}")
+            primary_stats.append(f"💪 **Strength:** +{final_str}")
         if final_agi > 0:
-            stats.append(f"⚡ **Agi:** +{final_agi}")
+            primary_stats.append(f"⚡ **Agility:** +{final_agi}")
         if final_int > 0:
-            stats.append(f"🧠 **Int:** +{final_int}")
+            primary_stats.append(f"🧠 **Intellect:** +{final_int}")
+        if final_spi > 0:
+            primary_stats.append(f"✨ **Spirit:** +{final_spi}")
+        if final_sta > 0:
+            primary_stats.append(f"❤️ **Stamina:** +{final_sta}")
         if final_armor > 0:
-            stats.append(f"🛡️ **Armor:** +{final_armor}")
+            primary_stats.append(f"🛡️ **Armor:** +{final_armor}")
         
-        if stats:
-            embed.add_field(name="📊 Stats", value="\n".join(stats), inline=False)
+        if primary_stats:
+            embed.add_field(name="📊 Primary Stats", value="\n".join(primary_stats), inline=False)
         
-        embed.add_field(
-            name="📍 Slot",
-            value=f"**{item.get('equip_slot', '?').replace('_', ' ').title()}**",
-            inline=False,
-        )
+        # Secondary stats
+        secondary_stats = []
+        if final_haste > 0:
+            secondary_stats.append(f"⚡ **Haste:** +{final_haste}%")
+        if final_lifesteal > 0:
+            secondary_stats.append(f"🩸 **Lifesteal:** +{final_lifesteal}%")
+        if final_resistance > 0:
+            secondary_stats.append(f"🛡️ **Resistance:** +{final_resistance}")
+        if final_hit_rating > 0:
+            secondary_stats.append(f"🎯 **Hit Rating:** +{final_hit_rating}")
         
-        embed.set_footer(text=f"Item ID: {item.get('id')}")
+        if secondary_stats:
+            embed.add_field(name="⭐ Secondary Stats", value="\n".join(secondary_stats), inline=False)
+        
+        # Item info
+        info_lines = []
+        info_lines.append(f"**Slot:** {item.get('equip_slot', '?').replace('_', ' ').title()}")
+        info_lines.append(f"**Rarity:** {rarity.title()}")
+        if enh_level > 0:
+            info_lines.append(f"**Enhancement:** +{enh_level}")
+        if item.get("level_req"):
+            info_lines.append(f"**Level Required:** {item.get('level_req')}")
+        
+        embed.add_field(name="ℹ️ Item Info", value="\n".join(info_lines), inline=False)
+        
+        embed.set_footer(text=f"Item ID: {item.get('id')} • Click buttons below to manage this item")
         return embed
     
     async def refresh_equipment(self):
@@ -783,22 +888,43 @@ class EquipmentView(discord.ui.View):
                 "s_str": item.get("s_str"),
                 "s_agi": item.get("s_agi"),
                 "s_int": item.get("s_int"),
+                "s_spi": item.get("s_spi"),
+                "s_sta": item.get("s_sta"),
                 "s_armor": item.get("s_armor"),
+                "s_haste": item.get("s_haste"),
+                "s_lifesteal": item.get("s_lifesteal"),
+                "s_resistance": item.get("s_resistance"),
+                "s_hit_rating": item.get("s_hit_rating"),
                 "r_str": item.get("r_str", 0) or 0,
                 "r_agi": item.get("r_agi", 0) or 0,
                 "r_int": item.get("r_int", 0) or 0,
+                "r_spi": item.get("r_spi", 0) or 0,
+                "r_sta": item.get("r_sta", 0) or 0,
+                "r_haste": item.get("r_haste", 0) or 0,
+                "r_lifesteal": item.get("r_lifesteal", 0) or 0,
+                "r_resistance": item.get("r_resistance", 0) or 0,
+                "r_hit_rating": item.get("r_hit_rating", 0) or 0,
                 "description": item.get("description", ""),
                 "level_req": item.get("level_req"),
             }
         
         self.equipped_items = formatted_equipped
         self._build_equipment_buttons()
+        
+        # Refresh character data and stats
+        if self.char_svc:
+            char = await self.char_svc.get_by_id(self.char_id)
+            if char:
+                self.char_data = dict(char)
+                stats = await self.char_svc.total_stats(self.char_id)
+                self.stats_data = stats
+        
         embed = self._build_equipment_embed()
         
         if self.message:
             try:
                 await self.message.edit(
-                    content=f"👤 **{self.char_name}'s Equipment**\n\n**💡 Click an equipment slot to manage it!**",
+                    content=f"👤 **{self.char_name}'s Equipment**\n\n**💡 Click an equipment slot button below to view item details and manage it!**",
                     embed=embed,
                     view=self,
                 )
@@ -1862,11 +1988,15 @@ class InventoryCog(commands.Cog, name="Inventory"):
         if not char:
             return await interaction.followup.send("❌ No character found.")
 
+        # Get character data and stats
+        char_data = await self.char_svc.get_by_id(char["id"])
+        stats_data = await self.char_svc.total_stats(char["id"])
+
         # Get only equipped items
         all_items = await self.inv_svc.get_all(char["id"])
         equipped_items = {item["equip_slot"]: item for item in all_items if item.get("is_equipped") and item.get("equip_slot")}
 
-        # Format equipped items
+        # Format equipped items with all stats
         formatted_equipped = {}
         for slot, item in equipped_items.items():
             formatted_equipped[slot] = {
@@ -1881,15 +2011,27 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 "s_str": item.get("s_str"),
                 "s_agi": item.get("s_agi"),
                 "s_int": item.get("s_int"),
+                "s_spi": item.get("s_spi"),
+                "s_sta": item.get("s_sta"),
                 "s_armor": item.get("s_armor"),
+                "s_haste": item.get("s_haste"),
+                "s_lifesteal": item.get("s_lifesteal"),
+                "s_resistance": item.get("s_resistance"),
+                "s_hit_rating": item.get("s_hit_rating"),
                 "r_str": item.get("r_str", 0) or 0,
                 "r_agi": item.get("r_agi", 0) or 0,
                 "r_int": item.get("r_int", 0) or 0,
+                "r_spi": item.get("r_spi", 0) or 0,
+                "r_sta": item.get("r_sta", 0) or 0,
+                "r_haste": item.get("r_haste", 0) or 0,
+                "r_lifesteal": item.get("r_lifesteal", 0) or 0,
+                "r_resistance": item.get("r_resistance", 0) or 0,
+                "r_hit_rating": item.get("r_hit_rating", 0) or 0,
                 "description": item.get("description", ""),
                 "level_req": item.get("level_req"),
             }
 
-        # Create equipment view
+        # Create equipment view with character data
         view = EquipmentView(
             owner_id=interaction.user.id,
             char_id=char["id"],
@@ -1898,12 +2040,14 @@ class InventoryCog(commands.Cog, name="Inventory"):
             inv_svc=self.inv_svc,
             char_svc=self.char_svc,
             bs_svc=self.bs_svc,
+            char_data=dict(char_data) if char_data else None,
+            stats_data=stats_data if stats_data else None,
         )
 
         embed = view._build_equipment_embed()
 
         msg = await interaction.followup.send(
-            content=f"👤 **{char['name']}'s Equipment**\n\n**💡 Click an equipment slot to manage it!**",
+            content=f"👤 **{char['name']}'s Equipment**\n\n**💡 Click an equipment slot button below to view item details and manage it!**",
             embed=embed,
             view=view,
             ephemeral=True,
