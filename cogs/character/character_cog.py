@@ -99,9 +99,15 @@ class CharacterCog(commands.Cog, name="Character"):
     def __init__(self, bot):
         self.bot = bot
         self.svc: CharacterService = None
+        self.inv_svc = None
+        self._unified_generator = None
 
     async def cog_load(self):
         self.svc = CharacterService(self.bot.db)
+        from services.character.inventory_service import InventoryService
+        from cogs.character.unified_character_panel import UnifiedCharacterGenerator
+        self.inv_svc = InventoryService(self.bot.db)
+        self._unified_generator = UnifiedCharacterGenerator()
 
     char = app_commands.Group(name="character", description="Manage your character")
 
@@ -377,6 +383,91 @@ class CharacterCog(commands.Cog, name="Character"):
         embed.timestamp = discord.utils.utcnow()
 
         await interaction.followup.send(embed=embed)
+
+    # ── /character panel ──────────────────────────────────────────────────────
+
+    @char.command(name="panel", description="Unified equipment + inventory panel (single message)")
+    async def panel(self, interaction: discord.Interaction):
+        """Single-message equipment/inventory panel with toggle buttons."""
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "character"):
+            return
+
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+        char = await self.svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ You don't have a character yet. Use `/character create`.", ephemeral=True)
+
+        from cogs.character.unified_character_panel import UnifiedCharacterView
+
+        view = UnifiedCharacterView(
+            owner_id=interaction.user.id,
+            character_id=char["id"],
+            generator=self._unified_generator,
+            char_service=self.svc,
+            inv_service=self.inv_svc,
+        )
+
+        # Force an initial render in equipment mode
+        stats = await self.svc.total_stats(char["id"])
+        equipped = await self.inv_svc.get_equipped(char["id"])
+        bag = [i for i in (await self.inv_svc.get_all(char["id"])) if not i.get("is_equipped")]
+
+        character_data = {
+            "name": char.get("name", "Unknown"),
+            "level": int(char.get("level", 1) or 1),
+            "gold": int(char.get("gold", 0) or 0),
+            "class": char.get("class", "warrior"),
+            "stats": {
+                "strength": int(stats.get("strength", 0) or 0),
+                "agility": int(stats.get("agility", 0) or 0),
+                "intellect": int(stats.get("intellect", 0) or 0),
+                "stamina": int(stats.get("stamina", 0) or 0),
+                "attack": int(stats.get("attack_power", 0) or 0),
+                "armor": int(stats.get("armor", 0) or 0),
+            },
+        }
+
+        equipment_data = {
+            slot: {"id": str(it.get("id")), "name": it.get("name", "?"), "rarity": it.get("rarity", "common"), "icon": it.get("icon", "📦")}
+            for slot, it in (equipped or {}).items()
+        }
+        inventory_items = []
+        for item in bag[:112]:
+            dmg_min = int(item.get("s_dmg_min", 0) or 0)
+            dmg_max = int(item.get("s_dmg_max", 0) or 0)
+            inventory_items.append(
+                {
+                    "id": str(item.get("id")),
+                    "name": item.get("name", "?"),
+                    "rarity": item.get("rarity", "common"),
+                    "icon": item.get("icon", "📦"),
+                    "quantity": int(item.get("quantity", 1) or 1),
+                    "enhancement_level": int(item.get("enhancement_level", 0) or 0),
+                    "equip_slot": item.get("equip_slot"),
+                    "is_equipped": bool(item.get("is_equipped", False)),
+                    "s_str": int(item.get("s_str", 0) or 0),
+                    "s_agi": int(item.get("s_agi", 0) or 0),
+                    "damage": (dmg_min + dmg_max) // 2 if (dmg_min or dmg_max) else 0,
+                }
+            )
+
+        image_bytes = self._unified_generator.generate_view(
+            view_mode="equipment",
+            character_data=character_data,
+            equipment_data=equipment_data,
+            inventory_items=inventory_items,
+            selected_item=None,
+        )
+
+        await interaction.followup.send(
+            content=f"🧩 **{char['name']}'s Panel** — toggle views below. (This message updates in-place.)",
+            file=discord.File(fp=image_bytes, filename="character.png"),
+            view=view,
+            ephemeral=True,
+        )
 
     # ── /character overview ───────────────────────────────────────────────────
     @char.command(name="overview", description="See a full overview: stats, gold, quests, dungeon, daily, etc.")
