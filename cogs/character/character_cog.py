@@ -476,6 +476,7 @@ class CharacterCog(commands.Cog, name="Character"):
                     "main_hand": "mainhand",
                     "off_hand": "offhand",
                     "ring": "ring1",
+                    "trinket": "trinket",
                 }
 
                 equipped_payload = {}
