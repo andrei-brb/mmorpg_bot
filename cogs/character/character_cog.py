@@ -444,6 +444,7 @@ class CharacterCog(commands.Cog, name="Character"):
                     "name": item.get("name", "?"),
                     "rarity": item.get("rarity", "common"),
                     "icon": item.get("icon", "📦"),
+                    "template_id": item.get("template_id"),
                     "quantity": int(item.get("quantity", 1) or 1),
                     "enhancement_level": int(item.get("enhancement_level", 0) or 0),
                     "equip_slot": item.get("equip_slot"),
@@ -454,13 +455,70 @@ class CharacterCog(commands.Cog, name="Character"):
                 }
             )
 
-        image_bytes = self._unified_generator.generate_view(
-            view_mode="equipment",
-            character_data=character_data,
-            equipment_data=equipment_data,
-            inventory_items=inventory_items,
-            selected_item=None,
-        )
+        # Prefer Vercel renderer for the *initial* panel render (avoids the "old image first" flash).
+        image_bytes = None
+        render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
+        if render_base:
+            try:
+                from services.render_api import post_png, icon_url_for_item_name, icon_url_for_template
+
+                # Map bot equip slots -> renderer slot ids
+                slot_map = {
+                    "head": "head",
+                    "neck": "neck",
+                    "shoulders": "shoulder",
+                    "chest": "chest",
+                    "hands": "gloves",
+                    "waist": "belt",
+                    "legs": "legs",
+                    "feet": "boots",
+                    "main_hand": "mainhand",
+                    "off_hand": "offhand",
+                    "ring": "ring1",
+                }
+
+                equipped_payload = {}
+                for bot_slot, it in (equipped or {}).items():
+                    renderer_slot = slot_map.get(str(bot_slot))
+                    if not renderer_slot:
+                        continue
+                    item_name = it.get("name") or ""
+                    icon_url = (
+                        icon_url_for_item_name(item_name)
+                        or icon_url_for_template(it.get("template_id") or "")
+                        or ""
+                    )
+                    equipped_payload[renderer_slot] = {
+                        "slot": renderer_slot,
+                        "name": it.get("name", "?"),
+                        "icon": icon_url,
+                        "rarity": it.get("rarity", "common"),
+                    }
+
+                payload = {
+                    "equipped": equipped_payload,
+                    "stats": {
+                        "attack": int(stats.get("attack_power", 0) or 0),
+                        "defense": int(stats.get("armor", 0) or 0),
+                        "hp": int(char.get("max_hp", 0) or 0),
+                        "speed": int(stats.get("haste", 0) or 0),
+                        "level": int(char.get("level", 1) or 1),
+                        "class": (char.get("class") or "Adventurer").title(),
+                        "name": char.get("name", "Adventurer"),
+                    },
+                }
+                image_bytes = await post_png("/api/render-equipment", payload)
+            except Exception:
+                image_bytes = None
+
+        if image_bytes is None:
+            image_bytes = self._unified_generator.generate_view(
+                view_mode="equipment",
+                character_data=character_data,
+                equipment_data=equipment_data,
+                inventory_items=inventory_items,
+                selected_item=None,
+            )
 
         await interaction.followup.send(
             content=f"🧩 **{char['name']}'s Panel** — toggle views below. (This message updates in-place.)",
