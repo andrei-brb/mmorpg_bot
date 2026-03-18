@@ -346,7 +346,7 @@ class ProfileCardGenerator:
         y += panel_h + 20
 
         # ── Equipment list + footer info like reference ─────────────────────
-        self._draw_panel(draw, [MARGIN, y, W - MARGIN, y + 220], fill="#141316", border="#3c2b17", radius=14)
+        self._draw_panel(draw, [MARGIN, y, W - MARGIN, y + 280], fill="#141316", border="#3c2b17", radius=14)
         draw.text((MARGIN + 16, y + 12), "Equipment", fill=(235, 205, 150), font=fonts["header"])
 
         equipped = character_data.get("equipped", {}) or {}
@@ -362,7 +362,11 @@ class ProfileCardGenerator:
                 item = equipped[slot]
                 rarity = (item.get("rarity") or "common").lower()
                 color = rarity_colors.get(rarity, (200, 200, 200))
-                draw.text((MARGIN + 24, gy), f"• {item.get('name','?')}", fill=color, font=fonts["body"])
+                icon = item.get("icon", "")
+                name = item.get("name", "?")
+                # Render icon + name (matches reference where each line has a small colored glyph)
+                draw.text((MARGIN + 22, gy), f"{icon} ", fill=color, font=fonts["body"])
+                draw.text((MARGIN + 62, gy), str(name), fill=color, font=fonts["body"])
                 gy += 30
 
         # Zone + gold like reference
@@ -370,12 +374,16 @@ class ProfileCardGenerator:
         zone = ZONES.get(zone_key)
         zone_name = zone.name if zone else zone_key.replace("_", " ").title()
         gold = int(character_data.get("gold", 0) or 0)
-        draw.text((MARGIN + 22, y + 150), f"🌼  {zone_name}", fill=(235, 205, 150), font=fonts["body"])
+        zone_emoji = zone.emoji if zone else "🗺️"
+        draw.text((MARGIN + 22, y + 150), f"{zone_emoji}  {zone_name}", fill=(235, 205, 150), font=fonts["body"])
         draw.text((MARGIN + 22, y + 180), f"🪙  Gold: {gold:,}", fill=(235, 205, 150), font=fonts["body"])
 
         # Flavor + passive (bottom)
         if spec:
-            draw.text((MARGIN + 22, y + 212), f"“{spec.flavor}”", fill=(190, 185, 170), font=fonts["small"])
+            draw.text((MARGIN + 22, y + 208), f"“{spec.flavor}”", fill=(190, 185, 170), font=fonts["small"])
+            # Passive line directly under flavor quote
+            passive = f"{spec.emoji} {spec.passive_desc}"
+            draw.text((MARGIN + 22, y + 236), passive, fill=(200, 205, 215), font=fonts["small"])
 
         # Convert to RGB for PNG
         final = Image.new("RGB", (W, H), (12, 13, 18))
