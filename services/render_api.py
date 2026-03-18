@@ -1,5 +1,6 @@
 import io
 import os
+import re
 from urllib.parse import quote
 from typing import Any, Dict, Optional
 
@@ -52,7 +53,17 @@ def icon_url_for_item_name(name: Optional[str]) -> Optional[str]:
         return None
     if not (name and str(name).strip()):
         return f"{base}/icons/unknown.png"
-    encoded = quote(str(name).strip(), safe="")
+
+    # Normalize common in-game suffixes/prefixes so filenames match.
+    # Examples:
+    # - "Iron Sword +4" -> "Iron Sword"
+    # - "Shadowforge Plate Chest +3" -> "Shadow Forge Plate"
+    raw = str(name).strip()
+    raw = re.sub(r"\s*\+\s*\d+\s*$", "", raw)  # strip enhancement suffix
+    raw = raw.replace("Shadowforge", "Shadow Forge")
+    raw = re.sub(r"\s+Chest$", "", raw)
+
+    encoded = quote(raw.strip(), safe="")
     return f"{base}/icons/{encoded}.png"
 
 
