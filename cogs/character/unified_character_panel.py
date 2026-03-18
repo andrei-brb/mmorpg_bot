@@ -351,7 +351,8 @@ class _InventorySelect(discord.ui.Select):
             enh = int(i.get("enhancement_level", 0) or 0)
             enh_txt = f" +{enh}" if enh > 0 else ""
             label = f"{name}{enh_txt}"
-            desc = f"{rarity}" + (f" • x{qty}" if qty > 1 else "")
+            status = "Equipped" if i.get("is_equipped") else "Bag"
+            desc = f"{status} • {rarity}" + (f" • x{qty}" if qty > 1 else "")
             options.append(
                 discord.SelectOption(
                     label=label[:100],
@@ -468,8 +469,12 @@ class UnifiedCharacterView(discord.ui.View):
         equipped = await self.inv_service.get_equipped(self.character_id)
         all_items = await self.inv_service.get_all(self.character_id)
 
-        # Inventory panel generally means "bag": hide equipped items there (matches your /inventory behavior)
+        # Build separate sets for clearer UX:
+        # - Inventory: only unequipped items (matches /inventory behavior)
+        # - Equipment: only equipped items (so you can see what is equipped when toggling)
+        equipped_items = [i for i in all_items if i.get("is_equipped") and i.get("equip_slot")]
         bag_items = [i for i in all_items if not i.get("is_equipped")]
+        selection_items = equipped_items if self.view_mode == "equipment" else bag_items
 
         character_data = {
             "name": char.get("name", "Unknown"),
@@ -496,7 +501,7 @@ class UnifiedCharacterView(discord.ui.View):
             }
 
         inventory_items: List[Dict] = []
-        for item in bag_items[:112]:
+        for item in selection_items[:112]:
             inv = {
                 "id": str(item.get("id")),
                 "name": item.get("name", "?"),
@@ -516,22 +521,14 @@ class UnifiedCharacterView(discord.ui.View):
             inv["damage"] = (dmg_min + dmg_max) // 2 if (dmg_min or dmg_max) else 0
             inventory_items.append(inv)
 
-        # Rebuild inventory select when in inventory mode
-        if self.view_mode == "inventory":
-            if self._select:
-                try:
-                    self.remove_item(self._select)
-                except Exception:
-                    pass
-            self._select = _InventorySelect(owner_id=self.owner_id, items=inventory_items)
-            self.add_item(self._select)
-        else:
-            if self._select:
-                try:
-                    self.remove_item(self._select)
-                except Exception:
-                    pass
-                self._select = None
+        # Rebuild the dropdown whenever the view changes so it matches what you want to see.
+        if self._select:
+            try:
+                self.remove_item(self._select)
+            except Exception:
+                pass
+        self._select = _InventorySelect(owner_id=self.owner_id, items=inventory_items)
+        self.add_item(self._select)
 
         # Update toggle styles (children[0] and children[1] are the toggle buttons)
         try:
