@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple
 from uuid import UUID
 
 import aiohttp
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 
 log = logging.getLogger("profile_card")
 
