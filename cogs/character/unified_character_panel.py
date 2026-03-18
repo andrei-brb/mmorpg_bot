@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -501,6 +502,7 @@ class UnifiedCharacterView(discord.ui.View):
                 "name": item.get("name", "?"),
                 "rarity": item.get("rarity", "common"),
                 "icon": item.get("icon", "📦"),
+                "template_id": item.get("template_id"),
                 "quantity": int(item.get("quantity", 1) or 1),
                 "enhancement_level": int(item.get("enhancement_level", 0) or 0),
                 "equip_slot": item.get("equip_slot"),
@@ -538,13 +540,94 @@ class UnifiedCharacterView(discord.ui.View):
         except Exception:
             pass
 
-        image_bytes = self.generator.generate_view(
-            view_mode=self.view_mode,
-            character_data=character_data,
-            equipment_data=equipment_data,
-            inventory_items=inventory_items,
-            selected_item=self.selected_item,
-        )
+        # Prefer Vercel renderer if configured; fall back to local Pillow generator.
+        image_bytes = None
+        render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
+        if render_base:
+            try:
+                from services.render_api import post_png, icon_url_for_template, icon_url_for_item_name
+
+                base = render_base.rstrip("/")
+
+                if self.view_mode == "inventory":
+                    max_slots = int(os.getenv("RENDER_INVENTORY_MAX_SLOTS", "40") or 40)
+                    items_payload = []
+                    for idx, it in enumerate(inventory_items[:max_slots]):
+                        # Icons are named by display name (e.g. "Iron Sword.png"); fallback to template_id
+                        item_name = it.get("name") or ""
+                        icon_url = (icon_url_for_item_name(item_name) or icon_url_for_template(it.get("template_id") or "") or "")
+                        items_payload.append(
+                            {
+                                "id": it.get("id", str(idx)),
+                                "name": it.get("name", "Item"),
+                                "icon": icon_url,
+                                "rarity": it.get("rarity", "common"),
+                                "quantity": int(it.get("quantity", 1) or 1),
+                                "slotIndex": idx,
+                            }
+                        )
+                    payload = {
+                        "items": items_payload,
+                        "maxSlots": max_slots,
+                        "gold": int(character_data.get("gold", 0) or 0),
+                        "playerName": character_data.get("name", "Adventurer"),
+                    }
+                    image_bytes = await post_png("/api/render-inventory", payload)
+                else:
+                    # Map bot equip slots -> renderer slot ids (see lib/game-types.ts in renderer)
+                    slot_map = {
+                        "head": "head",
+                        "neck": "neck",
+                        "shoulders": "shoulder",
+                        "chest": "chest",
+                        "hands": "gloves",
+                        "waist": "belt",
+                        "legs": "legs",
+                        "feet": "boots",
+                        "main_hand": "mainhand",
+                        "off_hand": "offhand",
+                        "ring": "ring1",
+                    }
+
+                    equipped_payload: Dict[str, Dict] = {}
+                    for bot_slot, item in (equipped or {}).items():
+                        renderer_slot = slot_map.get(str(bot_slot))
+                        if not renderer_slot:
+                            continue
+                        # Icons are named by display name (e.g. "Iron Sword.png")
+                        item_name = item.get("name") or ""
+                        icon_url = (icon_url_for_item_name(item_name) or icon_url_for_template(item.get("template_id") or "") or "")
+                        equipped_payload[renderer_slot] = {
+                            "slot": renderer_slot,
+                            "name": item.get("name", "?"),
+                            "icon": icon_url,
+                            "rarity": item.get("rarity", "common"),
+                        }
+
+                    payload = {
+                        "equipped": equipped_payload,
+                        "stats": {
+                            "attack": int(stats.get("attack_power", 0) or 0),
+                            "defense": int(stats.get("armor", 0) or 0),
+                            "hp": int(char.get("max_hp", 0) or 0),
+                            "speed": int(stats.get("haste", 0) or 0),
+                            "level": int(char.get("level", 1) or 1),
+                            "class": (char.get("class") or "Adventurer").title(),
+                            "name": char.get("name", "Adventurer"),
+                        },
+                    }
+                    image_bytes = await post_png("/api/render-equipment", payload)
+            except Exception:
+                image_bytes = None
+
+        if image_bytes is None:
+            image_bytes = self.generator.generate_view(
+                view_mode=self.view_mode,
+                character_data=character_data,
+                equipment_data=equipment_data,
+                inventory_items=inventory_items,
+                selected_item=self.selected_item,
+            )
 
         # Ensure we edit the same message (ephemeral or not)
         if interaction.response.is_done():

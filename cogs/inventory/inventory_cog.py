@@ -4,6 +4,8 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import logging
+import io
+import os
 from uuid import UUID
 from typing import Optional, List, Dict
 import discord
@@ -1969,10 +1971,50 @@ class InventoryCog(commands.Cog, name="Inventory"):
         # Create initial embed
         initial_embed = view._build_item_embed(None)
 
+        # Optional: attach a rendered inventory PNG from Vercel (fallback is the existing interactive embed UI)
+        file = None
+        render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
+        if render_base:
+            try:
+                from services.render_api import post_png, icon_url_for_template, icon_url_for_item_name
+
+                base = render_base.rstrip("/")
+                max_slots_render = int(os.getenv("RENDER_INVENTORY_MAX_SLOTS", str(max_slots)) or max_slots)
+
+                items_payload = []
+                for idx, it in enumerate(items[:max_slots_render]):
+                    # Icons are named by display name (e.g. "Iron Sword.png")
+                    item_name = it.get("name") or ""
+                    icon_url = (icon_url_for_item_name(item_name) or icon_url_for_template(it.get("template_id") or "") or "")
+                    items_payload.append(
+                        {
+                            "id": str(it.get("id", idx)),
+                            "name": it.get("name", "Item"),
+                            "icon": icon_url,
+                            "rarity": it.get("rarity", "common"),
+                            "quantity": int(it.get("quantity", 1) or 1),
+                            "slotIndex": idx,
+                        }
+                    )
+
+                payload = {
+                    "items": items_payload,
+                    "maxSlots": int(max_slots_render),
+                    "gold": int(char.get("gold", 0) or 0),
+                    "playerName": char.get("name", "Adventurer"),
+                }
+
+                png_bytes: io.BytesIO = await post_png("/api/render-inventory", payload)
+                file = discord.File(fp=png_bytes, filename="inventory.png")
+                initial_embed.set_image(url="attachment://inventory.png")
+            except Exception:
+                file = None
+
         await interaction.followup.send(
             content=f"🎒 **{char['name']}'s Inventory** ({len(items)}/{max_slots} slots • {int(char.get('gold', 0)):,}🪙)\n\n**💡 Click a slot to select an item and see details!**\n**💡 Use `/equipment` to view equipped items**",
             embed=initial_embed,
             view=view,
+            file=file,
             ephemeral=True,
         )
 
