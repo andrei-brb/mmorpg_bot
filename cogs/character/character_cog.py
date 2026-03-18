@@ -730,6 +730,7 @@ class CharacterCog(commands.Cog, name="Character"):
             **dict(char),
             **guild_info,
             "equipped": equipped,
+            "avatar_url": getattr(target.display_avatar, "url", None),
             "res_type": CLASSES[char["class"]].resource,
             "xp_current": data.get("xp_current", 0),
             "xp_needed": data.get("xp_needed", 0),
