@@ -183,6 +183,7 @@ class ProfileCardGenerator:
                 W,
                 H,
             )
+            log.warning("PROFILE_CARD_HEADER_V2_ACTIVE")
         else:
             log.warning("Profile card template not found: %s", template_path)
             card = Image.new("RGBA", (W, H), (0, 0, 0, 255))
@@ -302,12 +303,12 @@ class ProfileCardGenerator:
         # Use a dark stroke behind glyphs so dynamic text cleanly replaces template placeholders.
         # This avoids large black rectangles while still hiding "Character Name / Level / Specialty".
         stroke_bg = (28, 22, 18)
-        # Subtle localized masks behind the 3 header lines to fully cover baked placeholders
-        # (especially when player name is shorter than "Character Name").
-        header_mask_fill = (36, 28, 22, 190)
-        draw.rounded_rectangle([228, 50, 650, 104], radius=8, fill=header_mask_fill)
-        draw.rounded_rectangle([228, 110, 650, 148], radius=8, fill=header_mask_fill)
-        draw.rounded_rectangle([228, 156, 650, 198], radius=8, fill=header_mask_fill)
+        # Strong localized masks behind the 3 header lines to fully cover baked placeholders.
+        # Kept line-shaped so background stays intact elsewhere.
+        header_mask_fill = (34, 26, 20, 245)
+        draw.rounded_rectangle([228, 50, 650, 106], radius=8, fill=header_mask_fill)
+        draw.rounded_rectangle([228, 108, 650, 150], radius=8, fill=header_mask_fill)
+        draw.rounded_rectangle([228, 154, 650, 202], radius=8, fill=header_mask_fill)
         draw.text(
             NAME_POS,
             c_name,
