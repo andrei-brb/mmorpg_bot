@@ -986,7 +986,25 @@ class UnifiedCharacterView(discord.ui.View):
                 selected_item=self.selected_item,
             )
 
-        base_text = f"View: **{self.view_mode.title()}**"
+        selected_text = ""
+        if self.selected_item:
+            sel_name = str(self.selected_item.get("name", "Unknown"))
+            sel_enh = int(self.selected_item.get("enhancement_level", 0) or 0)
+            if sel_enh > 0:
+                sel_name = f"{sel_name} +{sel_enh}"
+            selected_text = f"\nSelected: **{sel_name}**"
+
+            verdict = str(self.selected_item.get("comparison_verdict", "") or "").strip()
+            if verdict:
+                selected_text += f" • **{verdict}**"
+
+            comparison_lines = self.selected_item.get("comparison_lines", []) or []
+            if comparison_lines:
+                selected_text += "\nComparison:"
+                for line in comparison_lines[:8]:
+                    selected_text += f"\n• {line}"
+
+        base_text = f"View: **{self.view_mode.title()}**{selected_text}"
 
         # Ensure we edit the same message (ephemeral or not)
         if interaction.response.is_done():
