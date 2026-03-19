@@ -692,10 +692,10 @@ class CharacterCog(commands.Cog, name="Character"):
 
     @char.command(name="card", description="Generate a visual profile card image")
     @app_commands.describe(member="View another player's profile card")
+    @app_commands.checks.cooldown(1, 12.0, key=lambda i: i.user.id)
     async def card(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
         if not interaction.response.is_done():
-            if not interaction.response.is_done():
-                await interaction.response.defer()
+            await interaction.response.defer()
         target = member or interaction.user
         data = await self.svc.full_profile(target.id)
 
@@ -753,7 +753,23 @@ class CharacterCog(commands.Cog, name="Character"):
             embed.set_image(url=f"attachment://profile_{char['name']}.png")
             embed.set_footer(text=f"World of Discord v{Settings.VERSION}")
             
-            await interaction.followup.send(embed=embed, file=file)
+            # Sending an embed+image can occasionally hit Discord 429s; retry instead of timing out.
+            for attempt in range(3):
+                try:
+                    await interaction.followup.send(embed=embed, file=file)
+                    break
+                except discord.HTTPException as e:
+                    if getattr(e, "status", None) != 429:
+                        raise
+                    retry_after = getattr(e, "retry_after", None)
+                    sleep_s = float(retry_after) if retry_after else (2.0 * (attempt + 1))
+                    log.warning(
+                        "Rate limited while sending profile card (attempt %s/3). Sleeping %.2fs",
+                        attempt + 1,
+                        sleep_s,
+                    )
+                    import asyncio
+                    await asyncio.sleep(min(15.0, sleep_s))
         except Exception as e:
             log.error(f"Failed to generate profile card: {e}", exc_info=True)
             await interaction.followup.send(
