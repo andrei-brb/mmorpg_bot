@@ -777,6 +777,29 @@ class UnifiedCharacterView(discord.ui.View):
             if verdict:
                 selected_text += f" • {verdict}"
 
+            # Show readable details in text too, since image fallback can be hard to read on Discord.
+            desc = str(self.selected_item.get("description", "") or "").strip()
+            if desc:
+                selected_text += f"\n{desc[:200]}"
+
+            comparison_lines = self.selected_item.get("comparison_lines", []) or []
+            if comparison_lines:
+                selected_text += "\nComparison:"
+                for line in comparison_lines[:5]:
+                    selected_text += f"\n• {line}"
+            else:
+                # Show core stats when no comparison target exists.
+                stat_lines: List[str] = []
+                dmg = int(self.selected_item.get("damage", 0) or 0)
+                if dmg > 0:
+                    stat_lines.append(f"⚔️ Damage {dmg}")
+                for key, label in (("s_str", "💪 STR"), ("s_agi", "⚡ AGI"), ("s_int", "🧠 INT"), ("s_sta", "❤️ STA"), ("s_armor", "🛡️ Armor")):
+                    val = int(self.selected_item.get(key, 0) or 0)
+                    if val > 0:
+                        stat_lines.append(f"{label} +{val}")
+                if stat_lines:
+                    selected_text += "\nStats: " + " | ".join(stat_lines[:4])
+
         base_text = f"View: **{self.view_mode.title()}**{selected_text}"
 
         # Ensure we edit the same message (ephemeral or not)
