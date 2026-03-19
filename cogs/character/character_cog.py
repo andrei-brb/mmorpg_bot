@@ -695,6 +695,13 @@ class CharacterCog(commands.Cog, name="Character"):
     @app_commands.checks.cooldown(1, 12.0, key=lambda i: i.user.id)
     async def card(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
         if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "🛠️ `/character card` is temporarily disabled. Please use `/character profile` for now.",
+                ephemeral=True,
+            )
+        return
+
+        if not interaction.response.is_done():
             await interaction.response.defer()
         target = member or interaction.user
         data = await self.svc.full_profile(target.id)
