@@ -259,7 +259,7 @@ class ProfileCardGenerator:
 
         # Template-native layout coordinates (measured from the 703x1024 image)
         AVATAR_BBOX = (11, 14, 259, 259)
-        NAME_POS = (236, 60)
+        NAME_POS = (236, 58)
         META_POS = (236, 118)
         SPEC_POS = (236, 164)
 
@@ -298,10 +298,34 @@ class ProfileCardGenerator:
             avatar_c = self._circle_crop(avatar, av_d)
         card.paste(avatar_c, (cx - av_d // 2, cy - av_d // 2), avatar_c)
 
-        # Header text
-        draw.text(NAME_POS, c_name, fill=COL_TEXT, font=font_name)
-        draw.text(META_POS, f"Level {c_level}  |  {c_class}", fill=COL_MUTED, font=font_meta)
-        draw.text(SPEC_POS, f"★ {c_specialty}", fill=COL_TEXT, font=font_special)
+        # Header text:
+        # Use a dark stroke behind glyphs so dynamic text cleanly replaces template placeholders.
+        # This avoids large black rectangles while still hiding "Character Name / Level / Specialty".
+        stroke_bg = (28, 22, 18)
+        draw.text(
+            NAME_POS,
+            c_name,
+            fill=COL_TEXT,
+            font=font_name,
+            stroke_width=7,
+            stroke_fill=stroke_bg,
+        )
+        draw.text(
+            META_POS,
+            f"Level {c_level}  |  Class {c_class}",
+            fill=COL_MUTED,
+            font=font_meta,
+            stroke_width=5,
+            stroke_fill=stroke_bg,
+        )
+        draw.text(
+            SPEC_POS,
+            f"★ Specialty  {c_specialty}",
+            fill=COL_TEXT,
+            font=font_special,
+            stroke_width=5,
+            stroke_fill=stroke_bg,
+        )
 
         # Bars: fill + values
         def fill_bar(fill_box, cur, maxv, color):
