@@ -756,13 +756,10 @@ class UnifiedCharacterView(discord.ui.View):
             pass
 
         # Prefer Vercel renderer if configured; fall back to local Pillow generator.
-        # Important UX fix:
-        # The remote inventory renderer does not currently show selected-item preview,
-        # so force local rendering when an item is selected in inventory mode.
+        # Keep renderer style consistent before/after selection to avoid visual jumping.
         image_bytes = None
         render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
-        use_local_preview = self.view_mode == "inventory" and self.selected_item is not None
-        if render_base and not use_local_preview:
+        if render_base:
             try:
                 from services.render_api import post_png, icon_url_for_template, icon_url_for_item_name
 
