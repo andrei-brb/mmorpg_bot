@@ -175,6 +175,22 @@ class CharacterCog(commands.Cog, name="Character"):
                   f"• Reach level **{Settings.SPEC_UNLOCK_LEVEL}** → choose a Specialization",
             inline=False,
         )
+
+        # Server milestone hook: population
+        if interaction.guild_id:
+            try:
+                from services.milestones.milestone_service import MilestoneService
+                ms = MilestoneService(self.bot.db)
+                completed = await ms.increment(
+                    interaction.guild_id,
+                    "characters_created",
+                    1,
+                    source="character_create",
+                    actor_id=interaction.user.id,
+                )
+                await ms.announce_completions(self.bot, interaction.guild_id, completed)
+            except Exception:
+                pass
         await interaction.edit_original_response(embed=embed, view=None)
 
     # ── /character profile ────────────────────────────────────────────────────

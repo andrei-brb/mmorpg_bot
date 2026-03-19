@@ -724,6 +724,17 @@ class CombatCog(commands.Cog, name="Combat"):
         xp_mult   = server_cfg["xp_multiplier"]   if server_cfg else 1.0
         gold_mult = server_cfg["gold_multiplier"]  if server_cfg else 1.0
 
+        # Apply active server milestone buffs.
+        if interaction.guild_id:
+            try:
+                from services.milestones.milestone_service import MilestoneService
+                ms = MilestoneService(self.bot.db)
+                bonus = await ms.get_active_multipliers(interaction.guild_id)
+                xp_mult *= bonus["xp_multiplier"]
+                gold_mult *= bonus["gold_multiplier"]
+            except Exception:
+                pass
+
         rewards = self.engine.calculate_rewards(session, xp_mult, gold_mult)
 
         xp_result = await self.char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
@@ -814,6 +825,69 @@ class CombatCog(commands.Cog, name="Combat"):
 
         if quest_lines:
             embed.add_field(name="📜 Quest Progress", value="\n".join(quest_lines), inline=False)
+
+        # Milestone updates from combat outcomes.
+        if interaction.guild_id:
+            try:
+                from services.milestones.milestone_service import MilestoneService
+                ms = MilestoneService(self.bot.db)
+                completed = []
+                completed.extend(
+                    await ms.increment(
+                        interaction.guild_id,
+                        "kills_total",
+                        1,
+                        source="combat_kill",
+                        actor_id=interaction.user.id,
+                    )
+                )
+                if session.is_boss:
+                    completed.extend(
+                        await ms.increment(
+                            interaction.guild_id,
+                            "boss_kills",
+                            1,
+                            source="combat_boss_kill",
+                            actor_id=interaction.user.id,
+                        )
+                    )
+                if rewards.get("gold", 0) > 0:
+                    completed.extend(
+                        await ms.increment(
+                            interaction.guild_id,
+                            "gold_earned",
+                            int(rewards["gold"]),
+                            source="combat_gold",
+                            actor_id=interaction.user.id,
+                        )
+                    )
+                if xp_result.get("levels_gained", 0) > 0:
+                    completed.extend(
+                        await ms.increment(
+                            interaction.guild_id,
+                            "levels_gained",
+                            int(xp_result["levels_gained"]),
+                            source="level_up",
+                            actor_id=interaction.user.id,
+                        )
+                    )
+
+                if completed:
+                    lines = []
+                    for c in completed:
+                        reward = c.get("reward", {})
+                        reward_label = reward.get("label", reward.get("type", "reward"))
+                        lines.append(
+                            f"• **{c['title']}** Tier {c['tier']} reached ({c['target']:,}) — {reward_label}"
+                        )
+                    embed.add_field(
+                        name="🏁 Server Milestones",
+                        value="\n".join(lines[:4]),
+                        inline=False,
+                    )
+                    await ms.announce_completions(self.bot, interaction.guild_id, completed)
+            except Exception:
+                pass
 
         # Clear combat status on victory
         await self.bot.db.execute(

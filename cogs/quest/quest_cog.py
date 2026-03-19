@@ -183,6 +183,44 @@ class QuestCog(commands.Cog, name="Quests"):
 
             embed.add_field(name="🏆 Rewards", value="\n".join(reward_text), inline=False)
 
+            # Server milestone hook: quest completion (+ optional reward-side progress).
+            if interaction.guild_id:
+                try:
+                    from services.milestones.milestone_service import MilestoneService
+                    ms = MilestoneService(self.bot.db)
+                    completed = []
+                    completed.extend(
+                        await ms.increment(
+                            interaction.guild_id,
+                            "quests_completed",
+                            1,
+                            source="quest_complete",
+                            actor_id=interaction.user.id,
+                        )
+                    )
+                    if rewards.get("gold", 0) > 0:
+                        completed.extend(
+                            await ms.increment(
+                                interaction.guild_id,
+                                "gold_earned",
+                                int(rewards["gold"]),
+                                source="quest_gold",
+                                actor_id=interaction.user.id,
+                            )
+                        )
+                    if completed:
+                        lines = []
+                        for c in completed:
+                            reward = c.get("reward", {})
+                            reward_label = reward.get("label", reward.get("type", "reward"))
+                            lines.append(
+                                f"• **{c['title']}** Tier {c['tier']} reached ({c['target']:,}) — {reward_label}"
+                            )
+                        embed.add_field(name="🏁 Server Milestones", value="\n".join(lines[:3]), inline=False)
+                        await ms.announce_completions(self.bot, interaction.guild_id, completed)
+                except Exception:
+                    pass
+
             # Check if NPC has more quests
             completed_quest_ids = [
                 q["quest_id"] for q in await self.quest_svc.get_completed_quests(char["id"])

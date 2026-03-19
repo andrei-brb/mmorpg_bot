@@ -117,6 +117,7 @@ class MMORPGBot(commands.Bot):
             "cogs.admin.admin_cog",
             "cogs.blacksmith.blacksmith_cog",
             "cogs.quest.quest_cog",
+            "cogs.milestones.milestones_cog",
             "cogs.help_cog",
         ]
         for cog in cogs:

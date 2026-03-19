@@ -174,6 +174,50 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_faction_rep_char
                 ON faction_reputation(character_id);
             """)
+
+            # ── Server Milestones v1 ──────────────────────────────────────
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS server_milestones (
+                    guild_id        BIGINT NOT NULL,
+                    key             VARCHAR(64) NOT NULL,
+                    value           BIGINT DEFAULT 0,
+                    tier_reached    SMALLINT DEFAULT 0,
+                    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, key)
+                );
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS server_buffs (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id        BIGINT NOT NULL,
+                    buff_type       VARCHAR(32) NOT NULL,   -- xp_multiplier | gold_multiplier
+                    buff_value      DOUBLE PRECISION NOT NULL,
+                    source_key      VARCHAR(64),
+                    created_at      TIMESTAMPTZ DEFAULT NOW(),
+                    expires_at      TIMESTAMPTZ NOT NULL
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_server_buffs_active
+                ON server_buffs(guild_id, expires_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS milestone_log (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id        BIGINT NOT NULL,
+                    key             VARCHAR(64) NOT NULL,
+                    amount          BIGINT NOT NULL,
+                    before_value    BIGINT NOT NULL,
+                    after_value     BIGINT NOT NULL,
+                    source          VARCHAR(64) DEFAULT 'system',
+                    actor_id        BIGINT,
+                    created_at      TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_milestone_log_guild_created
+                ON milestone_log(guild_id, created_at DESC);
+            """)
             
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:
