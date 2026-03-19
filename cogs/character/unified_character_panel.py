@@ -672,9 +672,13 @@ class UnifiedCharacterView(discord.ui.View):
             pass
 
         # Prefer Vercel renderer if configured; fall back to local Pillow generator.
+        # Important UX fix:
+        # The remote inventory renderer does not currently show selected-item preview,
+        # so force local rendering when an item is selected in inventory mode.
         image_bytes = None
         render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
-        if render_base:
+        use_local_preview = self.view_mode == "inventory" and self.selected_item is not None
+        if render_base and not use_local_preview:
             try:
                 from services.render_api import post_png, icon_url_for_template, icon_url_for_item_name
 
@@ -761,9 +765,31 @@ class UnifiedCharacterView(discord.ui.View):
                 selected_item=self.selected_item,
             )
 
+        # Show clear selected-item feedback in message text as well.
+        selected_text = ""
+        if self.selected_item:
+            sel_name = str(self.selected_item.get("name", "Unknown"))
+            sel_enh = int(self.selected_item.get("enhancement_level", 0) or 0)
+            if sel_enh > 0:
+                sel_name = f"{sel_name} +{sel_enh}"
+            selected_text = f"\nSelected: **{sel_name}**"
+            verdict = self.selected_item.get("comparison_verdict")
+            if verdict:
+                selected_text += f" • {verdict}"
+
+        base_text = f"View: **{self.view_mode.title()}**{selected_text}"
+
         # Ensure we edit the same message (ephemeral or not)
         if interaction.response.is_done():
-            await interaction.edit_original_response(attachments=[discord.File(fp=image_bytes, filename="character.png")], view=self)
+            await interaction.edit_original_response(
+                content=base_text,
+                attachments=[discord.File(fp=image_bytes, filename="character.png")],
+                view=self,
+            )
         else:
-            await interaction.response.edit_message(attachments=[discord.File(fp=image_bytes, filename="character.png")], view=self)
+            await interaction.response.edit_message(
+                content=base_text,
+                attachments=[discord.File(fp=image_bytes, filename="character.png")],
+                view=self,
+            )
 
