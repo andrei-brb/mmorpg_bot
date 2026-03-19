@@ -325,6 +325,37 @@ class UnifiedCharacterGenerator:
                 draw.text((200, detail_y), str(stat_value), fill=self.COLORS["green"], font=self.font_small)
                 detail_y += 22
 
+        comparison_lines = item.get("comparison_lines", []) or []
+        verdict = item.get("comparison_verdict")
+        compared_name = item.get("compared_item_name")
+
+        if comparison_lines:
+            right_x = 420
+            comp_y = preview_y + 60
+            title = "📈 Compare vs Equipped"
+            if compared_name:
+                title = f"📈 Compare vs {compared_name[:24]}"
+            draw.text((right_x, comp_y), title, fill=self.COLORS["text_gray"], font=self.font_body)
+            comp_y += 30
+
+            for line in comparison_lines[:7]:
+                color = self.COLORS["text_light"]
+                if " +" in line or line.endswith("+"):
+                    color = self.COLORS["green"]
+                elif " -" in line or line.endswith("-"):
+                    color = self.COLORS["red"]
+                draw.text((right_x + 10, comp_y), line, fill=color, font=self.font_small)
+                comp_y += 22
+
+        if verdict:
+            verdict_color = self.COLORS["blue"]
+            if "Upgrade" in verdict:
+                verdict_color = self.COLORS["green"]
+            elif "Downgrade" in verdict:
+                verdict_color = self.COLORS["red"]
+            draw.text((860, preview_y + 60), "🧭 Verdict", fill=self.COLORS["text_gray"], font=self.font_body)
+            draw.text((860, preview_y + 90), verdict, fill=verdict_color, font=self.font_body)
+
     def _get_character_emoji(self, class_name: str) -> str:
         emojis = {
             "warrior": "⚔️",
@@ -500,6 +531,45 @@ class UnifiedCharacterView(discord.ui.View):
                 "icon": item.get("icon", "📦"),
             }
 
+        def enhancement_multiplier(src_item: Dict) -> float:
+            from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
+
+            enh_level = int(src_item.get("enhancement_level", 0) or 0)
+            if enh_level <= 0:
+                return 1.0
+            cfg = ENHANCEMENT_CONFIG.get(enh_level, {"stat_boost": 0})
+            return 1 + cfg["stat_boost"]
+
+        def final_stats(src_item: Dict) -> Dict[str, float]:
+            mult = enhancement_multiplier(src_item)
+
+            def calc(base_key: str, roll_key: Optional[str] = None) -> int:
+                base = int(src_item.get(base_key, 0) or 0)
+                roll = int(src_item.get(roll_key, 0) or 0) if roll_key else 0
+                total = base + roll
+                return int(total * mult) if total > 0 and mult > 1.0 else total
+
+            dmg_min = calc("s_dmg_min")
+            dmg_max = calc("s_dmg_max")
+            return {
+                "dmg_avg": (dmg_min + dmg_max) / 2 if (dmg_min or dmg_max) else 0,
+                "armor": calc("s_armor"),
+                "str": calc("s_str", "r_str"),
+                "agi": calc("s_agi", "r_agi"),
+                "int": calc("s_int", "r_int"),
+                "sta": calc("s_sta", "r_sta"),
+                "haste": calc("s_haste", "r_haste"),
+                "lifesteal": calc("s_lifesteal", "r_lifesteal"),
+                "hit": calc("s_hit_rating", "r_hit_rating"),
+            }
+
+        def verdict_from_score(score: float) -> str:
+            if score > 4.0:
+                return "Upgrade for DPS"
+            if score < -4.0:
+                return "Downgrade"
+            return "Sidegrade"
+
         inventory_items: List[Dict] = []
         for item in selection_items[:112]:
             inv = {
@@ -515,11 +585,75 @@ class UnifiedCharacterView(discord.ui.View):
                 # Extra fields for preview stats
                 "s_str": int(item.get("s_str", 0) or 0),
                 "s_agi": int(item.get("s_agi", 0) or 0),
+                "s_int": int(item.get("s_int", 0) or 0),
+                "s_sta": int(item.get("s_sta", 0) or 0),
+                "s_armor": int(item.get("s_armor", 0) or 0),
+                "s_haste": int(item.get("s_haste", 0) or 0),
+                "s_lifesteal": int(item.get("s_lifesteal", 0) or 0),
+                "s_hit_rating": int(item.get("s_hit_rating", 0) or 0),
+                "r_str": int(item.get("r_str", 0) or 0),
+                "r_agi": int(item.get("r_agi", 0) or 0),
+                "r_int": int(item.get("r_int", 0) or 0),
+                "r_sta": int(item.get("r_sta", 0) or 0),
+                "r_haste": int(item.get("r_haste", 0) or 0),
+                "r_lifesteal": int(item.get("r_lifesteal", 0) or 0),
+                "r_hit_rating": int(item.get("r_hit_rating", 0) or 0),
+                "s_dmg_min": int(item.get("s_dmg_min", 0) or 0),
+                "s_dmg_max": int(item.get("s_dmg_max", 0) or 0),
             }
             dmg_min = int(item.get("s_dmg_min", 0) or 0)
             dmg_max = int(item.get("s_dmg_max", 0) or 0)
             inv["damage"] = (dmg_min + dmg_max) // 2 if (dmg_min or dmg_max) else 0
             inventory_items.append(inv)
+
+        # Keep selected item synced with latest data and attach comparison info for panel preview.
+        if self.selected_item:
+            selected_id = str(self.selected_item.get("id", ""))
+            refreshed = next((it for it in inventory_items if str(it.get("id")) == selected_id), None)
+            self.selected_item = refreshed
+
+        if self.selected_item and self.selected_item.get("equip_slot"):
+            slot = self.selected_item.get("equip_slot")
+            equipped_item = next(
+                (
+                    e for e in all_items
+                    if e.get("is_equipped") and e.get("equip_slot") == slot and str(e.get("id")) != str(self.selected_item.get("id"))
+                ),
+                None,
+            )
+            if equipped_item:
+                cand = final_stats(self.selected_item)
+                eq = final_stats(equipped_item)
+                compare = [
+                    ("⚔️ Damage", "dmg_avg"),
+                    ("🛡️ Armor", "armor"),
+                    ("💪 STR", "str"),
+                    ("⚡ AGI", "agi"),
+                    ("🧠 INT", "int"),
+                    ("❤️ STA", "sta"),
+                    ("⚡ Haste", "haste"),
+                    ("🩸 Lifesteal", "lifesteal"),
+                    ("🎯 Hit", "hit"),
+                ]
+
+                lines: List[str] = []
+                score = 0.0
+                weights = {"dmg_avg": 1.4, "str": 1.0, "agi": 1.0, "int": 1.0, "sta": 0.6, "armor": 0.7, "haste": 1.0, "lifesteal": 0.9, "hit": 1.0}
+                for label, key in compare:
+                    delta = cand.get(key, 0) - eq.get(key, 0)
+                    score += delta * weights.get(key, 0.0)
+                    if delta > 0:
+                        lines.append(f"{label}: +{int(delta)}")
+                    elif delta < 0:
+                        lines.append(f"{label}: -{abs(int(delta))}")
+
+                self.selected_item["comparison_lines"] = lines[:8]
+                self.selected_item["comparison_verdict"] = verdict_from_score(score)
+                self.selected_item["compared_item_name"] = str(equipped_item.get("name", "equipped"))
+            else:
+                self.selected_item["comparison_lines"] = []
+                self.selected_item["comparison_verdict"] = "No item equipped in this slot"
+                self.selected_item["compared_item_name"] = None
 
         # Rebuild the dropdown whenever the view changes so it matches what you want to see.
         if self._select:

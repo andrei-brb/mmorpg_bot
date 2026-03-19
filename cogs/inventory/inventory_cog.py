@@ -11,7 +11,7 @@ from typing import Optional, List, Dict
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.settings import RARITIES, Settings
+from config.settings import RARITIES, Settings, CLASSES
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.blacksmith.blacksmith_service import BlacksmithService, ENHANCEMENT_CONFIG, PROTECTION_ITEMS
@@ -1907,6 +1907,90 @@ class InventoryCog(commands.Cog, name="Inventory"):
         self.inv_svc  = InventoryService(self.bot.db)
         self.bs_svc   = BlacksmithService(self.bot.db)
 
+    @staticmethod
+    def _enhancement_multiplier(item: Dict) -> float:
+        """Return enhancement stat multiplier for an item."""
+        from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
+
+        enh_level = item.get("enhancement_level", 0) or 0
+        if enh_level <= 0:
+            return 1.0
+        enh_config = ENHANCEMENT_CONFIG.get(enh_level, {"stat_boost": 0})
+        return 1 + enh_config["stat_boost"]
+
+    def _final_item_stats(self, item: Dict) -> Dict[str, float]:
+        """Compute final inspect/comparison stats for one item."""
+        enh_mult = self._enhancement_multiplier(item)
+
+        def calc(base_key: str, roll_key: Optional[str] = None) -> int:
+            base = item.get(base_key, 0) or 0
+            roll = (item.get(roll_key, 0) or 0) if roll_key else 0
+            total_base = base + roll
+            if total_base > 0 and enh_mult > 1.0:
+                return int(total_base * enh_mult)
+            return total_base
+
+        dmg_min = calc("s_dmg_min")
+        dmg_max = calc("s_dmg_max")
+        return {
+            "dmg_min": dmg_min,
+            "dmg_max": dmg_max,
+            "dmg_avg": (dmg_min + dmg_max) / 2 if (dmg_min or dmg_max) else 0,
+            "str": calc("s_str", "r_str"),
+            "agi": calc("s_agi", "r_agi"),
+            "int": calc("s_int", "r_int"),
+            "spi": calc("s_spi", "r_spi"),
+            "sta": calc("s_sta", "r_sta"),
+            "armor": calc("s_armor"),
+            "haste": calc("s_haste", "r_haste"),
+            "lifesteal": calc("s_lifesteal", "r_lifesteal"),
+            "resistance": calc("s_resistance", "r_resistance"),
+            "hit_rating": calc("s_hit_rating", "r_hit_rating"),
+        }
+
+    def _comparison_weights(self, char_class: Optional[str]) -> Dict[str, float]:
+        """Return stat weights for verdict scoring."""
+        # Default DPS-biased fallback.
+        weights = {
+            "dmg_avg": 1.4,
+            "str": 0.8,
+            "agi": 0.8,
+            "int": 0.8,
+            "spi": 0.5,
+            "sta": 0.6,
+            "armor": 0.7,
+            "haste": 1.0,
+            "lifesteal": 0.9,
+            "resistance": 0.6,
+            "hit_rating": 1.0,
+        }
+
+        if not char_class:
+            return weights
+
+        cls_cfg = CLASSES.get(char_class)
+        if not cls_cfg:
+            return weights
+
+        primary = getattr(cls_cfg, "primary_stat", None)
+        if primary == "strength":
+            weights["str"] = 1.2
+        elif primary == "agility":
+            weights["agi"] = 1.2
+        elif primary == "intellect":
+            weights["int"] = 1.2
+
+        return weights
+
+    def _verdict_from_score(self, score: float) -> str:
+        """Map weighted score to a simple verdict label."""
+        threshold = 4.0
+        if score > threshold:
+            return "Upgrade for DPS"
+        if score < -threshold:
+            return "Downgrade"
+        return "Sidegrade"
+
     @app_commands.command(name="inventory", description="View your inventory (clickable grid)")
     @app_commands.describe(category="Filter by category (weapon, armor, consumable, material)")
     async def inventory(self, interaction: discord.Interaction, category: Optional[str] = None):
@@ -2142,23 +2226,26 @@ class InventoryCog(commands.Cog, name="Inventory"):
         )
         
         # Calculate enhanced stats correctly
-        enh_level = item.get("enhancement_level", 0) or 0
-        from services.blacksmith.blacksmith_service import ENHANCEMENT_CONFIG
-        
-        # Get enhancement multiplier
-        enh_mult = 1.0
-        if enh_level > 0:
-            enh_config = ENHANCEMENT_CONFIG.get(enh_level, {"stat_boost": 0})
-            enh_mult = 1 + enh_config["stat_boost"]
+        enh_mult = self._enhancement_multiplier(item)
+        final_stats = self._final_item_stats(item)
         
         # Calculate final stats: (base + random) * enhancement_multiplier
         def calc_final_stat(base_key: str, roll_key: str = None) -> int:
-            base = item.get(base_key, 0) or 0
-            roll = (item.get(roll_key, 0) or 0) if roll_key else 0
-            total_base = base + roll
-            if total_base > 0 and enh_level > 0:
-                return int(total_base * enh_mult)
-            return total_base
+            key_map = {
+                ("s_str", "r_str"): "str",
+                ("s_agi", "r_agi"): "agi",
+                ("s_int", "r_int"): "int",
+                ("s_spi", "r_spi"): "spi",
+                ("s_sta", "r_sta"): "sta",
+                ("s_armor", None): "armor",
+                ("s_haste", "r_haste"): "haste",
+                ("s_lifesteal", "r_lifesteal"): "lifesteal",
+                ("s_resistance", "r_resistance"): "resistance",
+                ("s_hit_rating", "r_hit_rating"): "hit_rating",
+                ("s_dmg_min", None): "dmg_min",
+                ("s_dmg_max", None): "dmg_max",
+            }
+            return int(final_stats.get(key_map.get((base_key, roll_key), ""), 0))
         
         # Primary stats
         stats_lines = []
@@ -2234,6 +2321,65 @@ class InventoryCog(commands.Cog, name="Inventory"):
         if item.get("equip_slot"):
             status = "✅ Equipped" if item.get("is_equipped") else f"📦 Slot: {item.get('equip_slot', 'unknown')}"
             embed.add_field(name="⚔️ Equipment", value=status, inline=True)
+
+            equipped = next(
+                (
+                    i for i in items
+                    if i.get("is_equipped")
+                    and i.get("equip_slot") == item.get("equip_slot")
+                    and i["id"] != item["id"]
+                ),
+                None,
+            )
+
+            if equipped:
+                candidate_stats = self._final_item_stats(item)
+                equipped_stats = self._final_item_stats(equipped)
+                weights = self._comparison_weights(char.get("class"))
+
+                compare_keys = [
+                    ("dmg_avg", "⚔️ Damage"),
+                    ("armor", "🛡️ Armor"),
+                    ("str", "💪 Strength"),
+                    ("agi", "⚡ Agility"),
+                    ("int", "🧠 Intellect"),
+                    ("spi", "✨ Spirit"),
+                    ("sta", "❤️ Stamina"),
+                    ("haste", "⚡ Haste%"),
+                    ("lifesteal", "🩸 Lifesteal%"),
+                    ("resistance", "🛡️ Resistance"),
+                    ("hit_rating", "🎯 Hit Rating"),
+                ]
+
+                delta_lines = []
+                score = 0.0
+                for stat_key, label in compare_keys:
+                    cand_val = candidate_stats.get(stat_key, 0)
+                    eq_val = equipped_stats.get(stat_key, 0)
+                    delta = cand_val - eq_val
+                    score += delta * weights.get(stat_key, 0.0)
+                    if delta > 0:
+                        delta_lines.append(f"{label}: `+{int(delta) if float(delta).is_integer() else delta:.0f}`")
+                    elif delta < 0:
+                        delta_lines.append(f"{label}: `-{abs(int(delta)) if float(delta).is_integer() else abs(delta):.0f}`")
+
+                if delta_lines:
+                    embed.add_field(
+                        name=f"📈 Comparison vs Equipped ({equipped.get('name', 'Item')})",
+                        value="\n".join(delta_lines[:10]),
+                        inline=False,
+                    )
+                    embed.add_field(
+                        name="🧭 Verdict",
+                        value=f"**{self._verdict_from_score(score)}**",
+                        inline=True,
+                    )
+                else:
+                    embed.add_field(
+                        name="🧭 Verdict",
+                        value="**Sidegrade** (no stat change)",
+                        inline=True,
+                    )
         
         # Value (calculated based on rarity)
         base_value = int(item.get("vendor_sell", 0) or 0)
