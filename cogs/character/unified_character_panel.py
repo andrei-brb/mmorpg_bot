@@ -130,6 +130,107 @@ class UnifiedCharacterGenerator:
         output.seek(0)
         return output
 
+    def add_inventory_side_panel_to_rendered(self, base_png: io.BytesIO, selected_item: Optional[Dict]) -> io.BytesIO:
+        """
+        Keep remote renderer style and append a right-side selected/comparison panel.
+        """
+        base_png.seek(0)
+        img = Image.open(base_png).convert("RGB")
+        src_w, src_h = img.size
+
+        panel_w = 360
+        out = Image.new("RGB", (src_w + panel_w, src_h), color=self.COLORS["bg_mid"])
+        out.paste(img, (0, 0))
+        draw = ImageDraw.Draw(out)
+
+        panel_x = src_w + 10
+        panel_y = 10
+        panel_w_inner = panel_w - 20
+        panel_h = src_h - 20
+        draw.rounded_rectangle(
+            [panel_x, panel_y, panel_x + panel_w_inner, panel_y + panel_h],
+            radius=12,
+            fill=self.COLORS["bg_dark"],
+            outline=self.COLORS["border"],
+            width=2,
+        )
+        draw.text((panel_x + 14, panel_y + 12), "Selected Item", fill=self.COLORS["text_light"], font=self.font_header)
+
+        if not selected_item:
+            draw.text(
+                (panel_x + 14, panel_y + 54),
+                "Select an item to view\ncomparison here.",
+                fill=self.COLORS["text_gray"],
+                font=self.font_small,
+            )
+            output = io.BytesIO()
+            out.save(output, format="PNG")
+            output.seek(0)
+            return output
+
+        y = panel_y + 56
+        item_name = str(selected_item.get("name", "Unknown"))
+        enh = int(selected_item.get("enhancement_level", 0) or 0)
+        if enh > 0:
+            item_name = f"{item_name} +{enh}"
+        rarity_key = str(selected_item.get("rarity", "common"))
+        rarity_color = self.COLORS.get(rarity_key, self.COLORS["common"])
+        draw.text((panel_x + 14, y), item_name[:28], fill=rarity_color, font=self.font_body)
+        y += 26
+
+        verdict = str(selected_item.get("comparison_verdict", "") or "")
+        if verdict:
+            verdict_color = self.COLORS["blue"]
+            if "Upgrade" in verdict:
+                verdict_color = self.COLORS["green"]
+            elif "Downgrade" in verdict:
+                verdict_color = self.COLORS["red"]
+            draw.text((panel_x + 14, y), f"Verdict: {verdict}", fill=verdict_color, font=self.font_small)
+            y += 24
+
+        desc = str(selected_item.get("description", "") or "").strip()
+        if desc:
+            draw.text((panel_x + 14, y), "Description:", fill=self.COLORS["text_gray"], font=self.font_small)
+            y += 20
+            words = desc.split()
+            line = ""
+            desc_lines: List[str] = []
+            for word in words:
+                nxt = f"{line} {word}".strip()
+                if len(nxt) <= 38:
+                    line = nxt
+                else:
+                    desc_lines.append(line)
+                    line = word
+                if len(desc_lines) >= 4:
+                    break
+            if line and len(desc_lines) < 4:
+                desc_lines.append(line)
+            for ln in desc_lines:
+                draw.text((panel_x + 14, y), ln, fill=self.COLORS["text_light"], font=self.font_tiny)
+                y += 18
+            y += 8
+
+        draw.text((panel_x + 14, y), "Comparison:", fill=self.COLORS["text_gray"], font=self.font_small)
+        y += 22
+        cmp_lines = selected_item.get("comparison_lines", []) or []
+        if cmp_lines:
+            for ln in cmp_lines[:16]:
+                color = self.COLORS["text_light"]
+                if "+" in ln:
+                    color = self.COLORS["green"]
+                elif "-" in ln:
+                    color = self.COLORS["red"]
+                draw.text((panel_x + 14, y), str(ln)[:40], fill=color, font=self.font_tiny)
+                y += 18
+        else:
+            draw.text((panel_x + 14, y), "No equipped item in same slot", fill=self.COLORS["text_dark"], font=self.font_tiny)
+
+        output = io.BytesIO()
+        out.save(output, format="PNG")
+        output.seek(0)
+        return output
+
     def _draw_header(self, draw: ImageDraw.ImageDraw, character_data: Dict):
         name = character_data.get("name", "Unknown")
         level = character_data.get("level", 1)
@@ -756,11 +857,9 @@ class UnifiedCharacterView(discord.ui.View):
             pass
 
         # Prefer Vercel renderer if configured; fall back to local Pillow generator.
-        # Inventory view uses local renderer to guarantee the right-side selected/comparison panel.
         image_bytes = None
         render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
-        use_local_inventory_renderer = self.view_mode == "inventory"
-        if render_base and not use_local_inventory_renderer:
+        if render_base:
             try:
                 from services.render_api import post_png, icon_url_for_template, icon_url_for_item_name
 
@@ -790,6 +889,8 @@ class UnifiedCharacterView(discord.ui.View):
                         "playerName": character_data.get("name", "Adventurer"),
                     }
                     image_bytes = await post_png("/api/render-inventory", payload)
+                    if self.selected_item:
+                        image_bytes = self.generator.add_inventory_side_panel_to_rendered(image_bytes, self.selected_item)
                 else:
                     # Map bot equip slots -> renderer slot ids (see lib/game-types.ts in renderer)
                     slot_map = {
@@ -847,42 +948,7 @@ class UnifiedCharacterView(discord.ui.View):
                 selected_item=self.selected_item,
             )
 
-        # Show clear selected-item feedback in message text as well.
-        selected_text = ""
-        if self.selected_item:
-            sel_name = str(self.selected_item.get("name", "Unknown"))
-            sel_enh = int(self.selected_item.get("enhancement_level", 0) or 0)
-            if sel_enh > 0:
-                sel_name = f"{sel_name} +{sel_enh}"
-            selected_text = f"\nSelected: **{sel_name}**"
-            verdict = self.selected_item.get("comparison_verdict")
-            if verdict:
-                selected_text += f" • {verdict}"
-
-            # Show readable details in text too, since image fallback can be hard to read on Discord.
-            desc = str(self.selected_item.get("description", "") or "").strip()
-            if desc:
-                selected_text += f"\n{desc[:200]}"
-
-            comparison_lines = self.selected_item.get("comparison_lines", []) or []
-            if comparison_lines:
-                selected_text += "\nComparison:"
-                for line in comparison_lines[:5]:
-                    selected_text += f"\n• {line}"
-            else:
-                # Show core stats when no comparison target exists.
-                stat_lines: List[str] = []
-                dmg = int(self.selected_item.get("damage", 0) or 0)
-                if dmg > 0:
-                    stat_lines.append(f"⚔️ Damage {dmg}")
-                for key, label in (("s_str", "💪 STR"), ("s_agi", "⚡ AGI"), ("s_int", "🧠 INT"), ("s_sta", "❤️ STA"), ("s_armor", "🛡️ Armor")):
-                    val = int(self.selected_item.get(key, 0) or 0)
-                    if val > 0:
-                        stat_lines.append(f"{label} +{val}")
-                if stat_lines:
-                    selected_text += "\nStats: " + " | ".join(stat_lines[:4])
-
-        base_text = f"View: **{self.view_mode.title()}**{selected_text}"
+        base_text = f"View: **{self.view_mode.title()}**"
 
         # Ensure we edit the same message (ephemeral or not)
         if interaction.response.is_done():
