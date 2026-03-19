@@ -302,6 +302,12 @@ class ProfileCardGenerator:
         # Use a dark stroke behind glyphs so dynamic text cleanly replaces template placeholders.
         # This avoids large black rectangles while still hiding "Character Name / Level / Specialty".
         stroke_bg = (28, 22, 18)
+        # Subtle localized masks behind the 3 header lines to fully cover baked placeholders
+        # (especially when player name is shorter than "Character Name").
+        header_mask_fill = (36, 28, 22, 190)
+        draw.rounded_rectangle([228, 50, 650, 104], radius=8, fill=header_mask_fill)
+        draw.rounded_rectangle([228, 110, 650, 148], radius=8, fill=header_mask_fill)
+        draw.rounded_rectangle([228, 156, 650, 198], radius=8, fill=header_mask_fill)
         draw.text(
             NAME_POS,
             c_name,
