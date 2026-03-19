@@ -191,20 +191,30 @@ class ProfileCardGenerator:
 
         # Fonts sized for 703x1024 template
         def f(sz: int):
-            paths = [
+            # Try explicit filesystem paths first, then common font names that
+            # Pillow can often resolve from bundled/system fonts on Linux.
+            candidates = [
                 "/System/Library/Fonts/Times.ttc",
                 "/System/Library/Fonts/Helvetica.ttc",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf",
+                "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+                "DejaVuSerif.ttf",
+                "DejaVuSans.ttf",
+                "LiberationSerif-Regular.ttf",
+                "LiberationSans-Regular.ttf",
             ]
-            font_path = next((p for p in paths if os.path.exists(p)), None)
-            if font_path:
-                return ImageFont.truetype(font_path, sz)
+            for candidate in candidates:
+                try:
+                    return ImageFont.truetype(candidate, sz)
+                except OSError:
+                    continue
             return ImageFont.load_default()
 
-        font_name = f(52)
-        font_meta = f(30)
-        font_special = f(32)
+        font_name = f(46)
+        font_meta = f(24)
+        font_special = f(26)
         font_bar_val = f(22)
         font_stat_lbl = f(20)
         font_stat_val = f(22)
@@ -249,9 +259,9 @@ class ProfileCardGenerator:
 
         # Template-native layout coordinates (measured from the 703x1024 image)
         AVATAR_BBOX = (11, 14, 259, 259)
-        NAME_POS = (236, 42)
-        META_POS = (236, 106)
-        SPEC_POS = (236, 154)
+        NAME_POS = (236, 60)
+        META_POS = (236, 118)
+        SPEC_POS = (236, 164)
 
         HP_BORDER = (88, 253, 646, 339)
         EN_BORDER = (88, 313, 646, 417)
@@ -275,7 +285,10 @@ class ProfileCardGenerator:
         avatar_url = character_data.get("avatar_url") or ""
         avatar = await self._fetch_image(str(avatar_url)) if avatar_url else None
         ax1, ay1, ax2, ay2 = AVATAR_BBOX
-        av_d = min(ax2 - ax1, ay2 - ay1) - 22
+        # Keep avatar smaller than the ornate ring and centered.
+        av_d = 170
+        cx = (ax1 + ax2) // 2
+        cy = (ay1 + ay2) // 2
         if avatar is None:
             ph = Image.new("RGBA", (av_d, av_d), (30, 30, 34, 255))
             pd = ImageDraw.Draw(ph)
@@ -283,7 +296,7 @@ class ProfileCardGenerator:
             avatar_c = self._circle_crop(ph, av_d)
         else:
             avatar_c = self._circle_crop(avatar, av_d)
-        card.paste(avatar_c, (ax1 + 11, ay1 + 11), avatar_c)
+        card.paste(avatar_c, (cx - av_d // 2, cy - av_d // 2), avatar_c)
 
         # Header text
         draw.text(NAME_POS, c_name, fill=COL_TEXT, font=font_name)
