@@ -271,9 +271,6 @@ class ProfileCardGenerator:
 
         LORE_POS = (96, 948)
 
-        # Mask placeholder header so the real text is readable
-        draw.rectangle([250, 35, 680, 215], fill=COL_SHADOW)
-
         # Avatar
         avatar_url = character_data.get("avatar_url") or ""
         avatar = await self._fetch_image(str(avatar_url)) if avatar_url else None
