@@ -20,6 +20,7 @@ GAME_CHANNELS = {
     "market":      {"name": "🪙-marketplace",  "topic": "Buy & sell items! Use /market"},
     "explore":     {"name": "🗺-exploration",   "topic": "Explore and travel! Use /explore /travel"},
     "quest":       {"name": "📜-quests",        "topic": "NPC Quests & Reputation! Use /interact /quest log /reputation"},
+    "announce":    {"name": "📣-announcements","topic": "Server milestones and world announcements"},
     "general":     {"name": "🎮-game-general",  "topic": "General game commands: /character /inventory /help"},
 }
 
@@ -220,6 +221,18 @@ class ChannelManager:
                     "💡 Use dedicated channels for combat, dungeons, market, and exploration",
                     "💡 Each channel has its own rate limit to prevent lag",
                     "💡 Check `/help` for a complete command list",
+                ]
+            },
+            "announce": {
+                "title": "📣 Announcements Channel",
+                "description": "Server milestone unlocks and major world updates appear here.",
+                "color": 0xF1C40F,
+                "commands": [
+                    "`/milestones` — View server milestone progress",
+                ],
+                "tips": [
+                    "💡 Milestone tier unlocks are posted automatically",
+                    "💡 Rewards often grant temporary server-wide XP/Gold buffs",
                 ]
             },
         }

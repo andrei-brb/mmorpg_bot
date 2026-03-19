@@ -203,7 +203,10 @@ class MilestoneService:
         channel = None
         try:
             if hasattr(bot, "channels"):
-                ch_id = bot.channels.get_channel_id(guild_id, "general")
+                ch_id = (
+                    bot.channels.get_channel_id(guild_id, "announce")
+                    or bot.channels.get_channel_id(guild_id, "general")
+                )
                 if ch_id:
                     channel = guild.get_channel(ch_id)
         except Exception:
