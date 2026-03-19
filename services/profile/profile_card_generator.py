@@ -184,12 +184,28 @@ class ProfileCardGenerator:
         COL_BROWN = (160, 128, 80)    # #a08050
         COL_PANEL = (26, 20, 16)      # #1a1410
 
-        # Canvas background
-        card = Image.new("RGBA", (W, H), (0, 0, 0, 255))
-        self._draw_gradient_rect(card, (0, 0, W, H), (10, 8, 6), (8, 6, 5))
+        # Use the provided ornate template as the background.
+        template_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../assets/profile_card_template_final.png")
+        )
+        if os.path.exists(template_path):
+            base = Image.open(template_path).convert("RGBA")
+            if base.size != (W, H):
+                base = base.resize((W, H), Image.Resampling.LANCZOS)
+            card = base.copy()
+            log.warning(
+                "PROFILE_CARD_TEMPLATE_USED template=%s size=%sx%s",
+                os.path.basename(template_path),
+                W,
+                H,
+            )
+        else:
+            log.warning("Profile card template not found: %s", template_path)
+            card = Image.new("RGBA", (W, H), (0, 0, 0, 255))
+            self._draw_gradient_rect(card, (0, 0, W, H), (10, 8, 6), (8, 6, 5))
         draw = ImageDraw.Draw(card)
 
-        # Outer frame (p-1) + inner area (p-5)
+        # Outer frame (p-1) + inner area (p-5) — used only for placing elements.
         p_outer = int(round(4 * s))   # p-1 = 4px
         p_inner = int(round(20 * s))  # p-5 = 20px
         inner_x1 = x0 + p_outer
@@ -197,53 +213,13 @@ class ProfileCardGenerator:
         inner_x2 = x0 + card_w - p_outer
         inner_y2 = y0 + H - p_outer
 
-        # Outer background gradient (from-[#2a1f15] via-[#1a1410] to-[#1a1410])
-        outer = Image.new("RGBA", (card_w, H), (0, 0, 0, 0))
-        self._draw_gradient_rect(outer, (0, 0, card_w, H), COL_BG_TOP, COL_BG_MID)
-        card.alpha_composite(outer, (x0, y0))
-        draw = ImageDraw.Draw(card)
-
-        # Corner decorations (approximation of the SVG ornament)
-        corner_size = int(round(64 * s))  # w-16/h-16
-        glow = Image.new("RGBA", (corner_size, corner_size), (0, 0, 0, 0))
-        gd = ImageDraw.Draw(glow)
-        pad = max(2, int(round(2 * s)))
-        gd.rounded_rectangle(
-            [pad, pad, corner_size - pad, corner_size - pad],
-            radius=int(round(10 * s)),
-            outline=COL_GOLD,
-            width=max(1, int(round(2 * s))),
-        )
-        glow = glow.filter(ImageFilter.GaussianBlur(radius=max(1, int(round(2 * s)))))
-        for (cx, cy) in [
-            (x0, y0),
-            (x0 + card_w - corner_size, y0),
-            (x0, y0 + H - corner_size),
-            (x0 + card_w - corner_size, y0 + H - corner_size),
-        ]:
-            card.alpha_composite(glow, (cx, cy))
-
-        # Edge glow top/bottom lines
-        line_h = max(1, int(round(2 * s)))
-        line_y_top = y0
-        line_y_bot = y0 + H - line_h
-        line_x1 = x0 + int(round(card_w * 0.25))
-        line_x2 = x0 + int(round(card_w * 0.75))
-        draw.rectangle([line_x1, line_y_top, line_x2, line_y_top + line_h], fill=(201, 162, 39, 100))
-        draw.rectangle([line_x1, line_y_bot, line_x2, line_y_bot + line_h], fill=(201, 162, 39, 100))
-
-        # Inner content area (bg gradient from-[#1f1812] to-[#150f0a] p-5)
+        # Inner content area (used for placement; template provides the actual visuals)
         content_x1 = inner_x1 + p_inner
         content_y1 = inner_y1 + p_inner
         content_x2 = inner_x2 - p_inner
         content_y2 = inner_y2 - p_inner
         content_w = content_x2 - content_x1
         content_h = content_y2 - content_y1
-
-        content = Image.new("RGBA", (content_w, content_h), (0, 0, 0, 0))
-        self._draw_gradient_rect(content, (0, 0, content_w, content_h), COL_BG_INNER_TOP, COL_BG_INNER_BOT)
-        card.alpha_composite(content, (content_x1, content_y1))
-        draw = ImageDraw.Draw(card)
 
         # Fonts (scaled to match Tailwind sizes from the React component)
         def f(sz: int, *, bold: bool = True):
