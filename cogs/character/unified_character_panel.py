@@ -756,10 +756,11 @@ class UnifiedCharacterView(discord.ui.View):
             pass
 
         # Prefer Vercel renderer if configured; fall back to local Pillow generator.
-        # Keep renderer style consistent before/after selection to avoid visual jumping.
+        # Inventory view uses local renderer to guarantee the right-side selected/comparison panel.
         image_bytes = None
         render_base = (os.getenv("RENDER_API_BASE_URL") or "").strip()
-        if render_base:
+        use_local_inventory_renderer = self.view_mode == "inventory"
+        if render_base and not use_local_inventory_renderer:
             try:
                 from services.render_api import post_png, icon_url_for_template, icon_url_for_item_name
 
