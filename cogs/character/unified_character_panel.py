@@ -118,7 +118,9 @@ class UnifiedCharacterGenerator:
         if view_mode == "equipment":
             self._draw_equipment_view(draw, equipment_data, character_data)
         else:
-            self._draw_inventory_view(draw, inventory_items)
+            self._draw_inventory_view(draw, inventory_items, selected_item)
+            # In inventory mode, selected details are rendered on the right panel.
+            selected_item = None
 
         if selected_item:
             self._draw_item_preview(draw, selected_item)
@@ -252,10 +254,11 @@ class UnifiedCharacterGenerator:
                 draw.text((x + 180, stat_y), str(stat_value), fill=self.COLORS["green"], font=self.font_small)
             stat_y += 28
 
-    def _draw_inventory_view(self, draw: ImageDraw.ImageDraw, inventory_items: List[Dict]):
+    def _draw_inventory_view(self, draw: ImageDraw.ImageDraw, inventory_items: List[Dict], selected_item: Optional[Dict] = None):
         content_y = 200
         grid_x, grid_y = 40, content_y
-        cell_size, gap, cols, rows = 80, 10, 14, 8
+        # Reserve right side for selected-item comparison panel.
+        cell_size, gap, cols, rows = 80, 10, 9, 8
 
         for idx in range(cols * rows):
             row, col = idx // cols, idx % cols
@@ -265,6 +268,87 @@ class UnifiedCharacterGenerator:
                 self._draw_inventory_cell(draw, inventory_items[idx], x, y, cell_size)
             else:
                 self._draw_empty_cell(draw, x, y, cell_size)
+
+        # Right-side selected/comparison panel
+        panel_x = 870
+        panel_y = content_y
+        panel_w = 290
+        panel_h = 920
+        draw.rounded_rectangle(
+            [panel_x, panel_y, panel_x + panel_w, panel_y + panel_h],
+            radius=12,
+            fill=self.COLORS["bg_dark"],
+            outline=self.COLORS["border"],
+            width=2,
+        )
+        draw.text((panel_x + 16, panel_y + 14), "🔍 Selected Item", fill=self.COLORS["text_light"], font=self.font_header)
+
+        if not selected_item:
+            draw.text(
+                (panel_x + 16, panel_y + 60),
+                "Select an item from\nthe dropdown below\nto view stats and\ncomparison here.",
+                fill=self.COLORS["text_gray"],
+                font=self.font_small,
+            )
+            return
+
+        y = panel_y + 60
+        name = str(selected_item.get("name", "Unknown"))
+        enhancement = int(selected_item.get("enhancement_level", 0) or 0)
+        if enhancement > 0:
+            name = f"{name} +{enhancement}"
+        rarity_key = str(selected_item.get("rarity", "common"))
+        rarity_color = self.COLORS.get(rarity_key, self.COLORS["common"])
+        draw.text((panel_x + 16, y), name[:24], fill=rarity_color, font=self.font_body)
+        y += 28
+
+        verdict = selected_item.get("comparison_verdict")
+        if verdict:
+            v_color = self.COLORS["blue"]
+            if "Upgrade" in verdict:
+                v_color = self.COLORS["green"]
+            elif "Downgrade" in verdict:
+                v_color = self.COLORS["red"]
+            draw.text((panel_x + 16, y), f"Verdict: {verdict}", fill=v_color, font=self.font_small)
+            y += 26
+
+        desc = str(selected_item.get("description", "") or "").strip()
+        if desc:
+            draw.text((panel_x + 16, y), "Description:", fill=self.COLORS["text_gray"], font=self.font_small)
+            y += 22
+            words = desc.split()
+            line = ""
+            lines = []
+            for w in words:
+                nxt = f"{line} {w}".strip()
+                if len(nxt) <= 30:
+                    line = nxt
+                else:
+                    lines.append(line)
+                    line = w
+                if len(lines) >= 4:
+                    break
+            if line and len(lines) < 4:
+                lines.append(line)
+            for ln in lines:
+                draw.text((panel_x + 16, y), ln, fill=self.COLORS["text_light"], font=self.font_tiny)
+                y += 18
+            y += 8
+
+        draw.text((panel_x + 16, y), "Comparison:", fill=self.COLORS["text_gray"], font=self.font_small)
+        y += 24
+        comparison_lines = selected_item.get("comparison_lines", []) or []
+        if comparison_lines:
+            for ln in comparison_lines[:14]:
+                color = self.COLORS["text_light"]
+                if "+" in ln:
+                    color = self.COLORS["green"]
+                elif "-" in ln:
+                    color = self.COLORS["red"]
+                draw.text((panel_x + 16, y), ln[:34], fill=color, font=self.font_tiny)
+                y += 18
+        else:
+            draw.text((panel_x + 16, y), "No equipped item in slot", fill=self.COLORS["text_dark"], font=self.font_tiny)
 
     def _draw_inventory_cell(self, draw: ImageDraw.ImageDraw, item: Dict, x: int, y: int, size: int):
         rarity_color = self.COLORS.get(item.get("rarity", "common"), self.COLORS["common"])
