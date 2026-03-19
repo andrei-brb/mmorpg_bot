@@ -335,8 +335,6 @@ class ProfileCardGenerator:
             ("Dodge", f"{stats.get('dodge_chance', 0):.1f}%"),
         ]
 
-        draw.rectangle([105, 430, 640, 640], fill=(10, 8, 6, 110))
-
         for y, (lbl, val) in zip(CORE_ROWS_Y, core_rows):
             draw.text((CORE_LABEL_X, y), str(lbl), fill=COL_MUTED, font=font_stat_lbl)
             v = str(val)
@@ -350,7 +348,6 @@ class ProfileCardGenerator:
             draw.text((COMBAT_VALUE_X - (vb[2] - vb[0]), y - 2), v, fill=COL_TEXT, font=font_stat_val)
 
         # Equipment
-        draw.rectangle([105, 680, 640, 860], fill=(10, 8, 6, 95))
         for y, item in zip(EQUIP_ROWS_Y, equipment_lines[:3]):
             draw.text((EQUIP_TEXT_X, y), str(item), fill=COL_MUTED, font=font_item)
 
