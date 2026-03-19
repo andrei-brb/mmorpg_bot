@@ -138,27 +138,33 @@ class UnifiedCharacterGenerator:
         img = Image.open(base_png).convert("RGB")
         src_w, src_h = img.size
 
-        panel_w = 360
+        panel_w = 520
         out = Image.new("RGB", (src_w + panel_w, src_h), color=self.COLORS["bg_mid"])
         out.paste(img, (0, 0))
         draw = ImageDraw.Draw(out)
 
-        panel_x = src_w + 10
-        panel_y = 10
-        panel_w_inner = panel_w - 20
-        panel_h = src_h - 20
-        draw.rounded_rectangle(
+        panel_x = src_w + 12
+        panel_y = 12
+        panel_w_inner = panel_w - 24
+        panel_h = src_h - 24
+        # Larger rectangular panel (less modal-like, more UI panel feel)
+        draw.rectangle(
             [panel_x, panel_y, panel_x + panel_w_inner, panel_y + panel_h],
-            radius=12,
             fill=self.COLORS["bg_dark"],
+            outline=self.COLORS["orange"],
+            width=3,
+        )
+        draw.rectangle(
+            [panel_x + 12, panel_y + 12, panel_x + panel_w_inner - 12, panel_y + 58],
+            fill=self.COLORS["bg_light"],
             outline=self.COLORS["border"],
             width=2,
         )
-        draw.text((panel_x + 14, panel_y + 12), "Selected Item", fill=self.COLORS["text_light"], font=self.font_header)
+        draw.text((panel_x + 22, panel_y + 22), "Selected Item", fill=self.COLORS["text_light"], font=self.font_header)
 
         if not selected_item:
             draw.text(
-                (panel_x + 14, panel_y + 54),
+                (panel_x + 22, panel_y + 78),
                 "Select an item to view\ncomparison here.",
                 fill=self.COLORS["text_gray"],
                 font=self.font_small,
@@ -168,15 +174,21 @@ class UnifiedCharacterGenerator:
             output.seek(0)
             return output
 
-        y = panel_y + 56
+        y = panel_y + 76
         item_name = str(selected_item.get("name", "Unknown"))
         enh = int(selected_item.get("enhancement_level", 0) or 0)
         if enh > 0:
             item_name = f"{item_name} +{enh}"
         rarity_key = str(selected_item.get("rarity", "common"))
         rarity_color = self.COLORS.get(rarity_key, self.COLORS["common"])
-        draw.text((panel_x + 14, y), item_name[:28], fill=rarity_color, font=self.font_body)
-        y += 26
+        draw.rectangle(
+            [panel_x + 12, y, panel_x + panel_w_inner - 12, y + 44],
+            fill=self.COLORS["bg_light"],
+            outline=rarity_color,
+            width=2,
+        )
+        draw.text((panel_x + 22, y + 12), item_name[:38], fill=rarity_color, font=self.font_body)
+        y += 54
 
         verdict = str(selected_item.get("comparison_verdict", "") or "")
         if verdict:
@@ -185,19 +197,25 @@ class UnifiedCharacterGenerator:
                 verdict_color = self.COLORS["green"]
             elif "Downgrade" in verdict:
                 verdict_color = self.COLORS["red"]
-            draw.text((panel_x + 14, y), f"Verdict: {verdict}", fill=verdict_color, font=self.font_small)
-            y += 24
+            draw.rectangle(
+                [panel_x + 12, y, panel_x + panel_w_inner - 12, y + 40],
+                fill=self.COLORS["bg_light"],
+                outline=self.COLORS["border"],
+                width=2,
+            )
+            draw.text((panel_x + 22, y + 10), f"Verdict: {verdict}", fill=verdict_color, font=self.font_small)
+            y += 50
 
         desc = str(selected_item.get("description", "") or "").strip()
         if desc:
-            draw.text((panel_x + 14, y), "Description:", fill=self.COLORS["text_gray"], font=self.font_small)
-            y += 20
+            draw.text((panel_x + 22, y), "Description", fill=self.COLORS["text_gray"], font=self.font_small)
+            y += 22
             words = desc.split()
             line = ""
             desc_lines: List[str] = []
             for word in words:
                 nxt = f"{line} {word}".strip()
-                if len(nxt) <= 38:
+                if len(nxt) <= 50:
                     line = nxt
                 else:
                     desc_lines.append(line)
@@ -206,13 +224,19 @@ class UnifiedCharacterGenerator:
                     break
             if line and len(desc_lines) < 4:
                 desc_lines.append(line)
+            draw.rectangle(
+                [panel_x + 12, y - 2, panel_x + panel_w_inner - 12, y + 18 * max(1, len(desc_lines)) + 8],
+                fill=self.COLORS["bg_light"],
+                outline=self.COLORS["border"],
+                width=1,
+            )
             for ln in desc_lines:
-                draw.text((panel_x + 14, y), ln, fill=self.COLORS["text_light"], font=self.font_tiny)
+                draw.text((panel_x + 22, y + 4), ln, fill=self.COLORS["text_light"], font=self.font_tiny)
                 y += 18
-            y += 8
+            y += 14
 
-        draw.text((panel_x + 14, y), "Comparison:", fill=self.COLORS["text_gray"], font=self.font_small)
-        y += 22
+        draw.text((panel_x + 22, y), "Comparison", fill=self.COLORS["text_gray"], font=self.font_small)
+        y += 26
         cmp_lines = selected_item.get("comparison_lines", []) or []
         if cmp_lines:
             for ln in cmp_lines[:16]:
@@ -221,10 +245,24 @@ class UnifiedCharacterGenerator:
                     color = self.COLORS["green"]
                 elif "-" in ln:
                     color = self.COLORS["red"]
-                draw.text((panel_x + 14, y), str(ln)[:40], fill=color, font=self.font_tiny)
-                y += 18
+                draw.rectangle(
+                    [panel_x + 12, y - 2, panel_x + panel_w_inner - 12, y + 24],
+                    fill=self.COLORS["bg_light"],
+                    outline=self.COLORS["border"],
+                    width=1,
+                )
+                draw.text((panel_x + 22, y + 4), str(ln)[:52], fill=color, font=self.font_small)
+                y += 30
+                if y > panel_y + panel_h - 34:
+                    break
         else:
-            draw.text((panel_x + 14, y), "No equipped item in same slot", fill=self.COLORS["text_dark"], font=self.font_tiny)
+            draw.rectangle(
+                [panel_x + 12, y - 2, panel_x + panel_w_inner - 12, y + 24],
+                fill=self.COLORS["bg_light"],
+                outline=self.COLORS["border"],
+                width=1,
+            )
+            draw.text((panel_x + 22, y + 4), "No equipped item in same slot", fill=self.COLORS["text_dark"], font=self.font_small)
 
         output = io.BytesIO()
         out.save(output, format="PNG")
