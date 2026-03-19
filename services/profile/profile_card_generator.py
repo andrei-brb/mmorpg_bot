@@ -202,10 +202,10 @@ class ProfileCardGenerator:
                 return ImageFont.truetype(font_path, sz)
             return ImageFont.load_default()
 
-        font_name = f(44)
-        font_meta = f(26)
-        font_special = f(28)
-        font_bar_val = f(20)
+        font_name = f(52)
+        font_meta = f(30)
+        font_special = f(32)
+        font_bar_val = f(22)
         font_stat_lbl = f(20)
         font_stat_val = f(22)
         font_item = f(22)
@@ -249,9 +249,9 @@ class ProfileCardGenerator:
 
         # Template-native layout coordinates (measured from the 703x1024 image)
         AVATAR_BBOX = (11, 14, 259, 259)
-        NAME_POS = (270, 56)
-        META_POS = (270, 120)
-        SPEC_POS = (270, 170)
+        NAME_POS = (236, 42)
+        META_POS = (236, 106)
+        SPEC_POS = (236, 154)
 
         HP_BORDER = (88, 253, 646, 339)
         EN_BORDER = (88, 313, 646, 417)
@@ -306,13 +306,13 @@ class ProfileCardGenerator:
         hb = draw.textbbox((0, 0), hp_txt, font=font_bar_val)
         eb = draw.textbbox((0, 0), en_txt, font=font_bar_val)
         draw.text(
-            (HP_BORDER[2] - 12 - (hb[2] - hb[0]), HP_FILL[1] - 24),
+            (HP_BORDER[2] - 12 - (hb[2] - hb[0]), HP_FILL[1] - 22),
             hp_txt,
             fill=COL_MUTED,
             font=font_bar_val,
         )
         draw.text(
-            (EN_BORDER[2] - 12 - (eb[2] - eb[0]), EN_FILL[1] - 24),
+            (EN_BORDER[2] - 12 - (eb[2] - eb[0]), EN_FILL[1] - 22),
             en_txt,
             fill=COL_MUTED,
             font=font_bar_val,
