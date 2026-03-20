@@ -511,6 +511,7 @@ class UnifiedCharacterView(discord.ui.View):
         self.view_mode = "equipment"
         self.selected_item: Optional[Dict] = None
         self._select: Optional[_InventorySelect] = None
+        self.status_message: str = ""
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
@@ -522,54 +523,65 @@ class UnifiedCharacterView(discord.ui.View):
     async def show_equipment(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if self.view_mode != "equipment":
             self.view_mode = "equipment"
+            self.status_message = ""
             await self.update_view(interaction)
         else:
-            await interaction.response.send_message("Already viewing equipment.", ephemeral=True)
+            self.status_message = "Already viewing equipment."
+            await self.update_view(interaction)
 
     @discord.ui.button(label="🎒 Inventory", style=discord.ButtonStyle.secondary, row=0, custom_id="ucp_inventory")
     async def show_inventory(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if self.view_mode != "inventory":
             self.view_mode = "inventory"
+            self.status_message = ""
             await self.update_view(interaction)
         else:
-            await interaction.response.send_message("Already viewing inventory.", ephemeral=True)
+            self.status_message = "Already viewing inventory."
+            await self.update_view(interaction)
 
     @discord.ui.button(label="⚡ Equip", style=discord.ButtonStyle.success, row=2, custom_id="ucp_equip")
     async def equip_item(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not self.selected_item:
-            return await interaction.response.send_message("Select an item first.", ephemeral=True)
+            self.status_message = "❌ Select an item first."
+            return await self.update_view(interaction)
         if self.selected_item.get("is_equipped"):
-            return await interaction.response.send_message("That item is already equipped.", ephemeral=True)
+            self.status_message = "❌ That item is already equipped."
+            return await self.update_view(interaction)
         if not self.selected_item.get("equip_slot"):
-            return await interaction.response.send_message("That item can’t be equipped.", ephemeral=True)
+            self.status_message = "❌ That item can’t be equipped."
+            return await self.update_view(interaction)
 
         try:
             uid = UUID(str(self.selected_item["id"]))
         except Exception:
-            return await interaction.response.send_message("Invalid item ID.", ephemeral=True)
+            self.status_message = "❌ Invalid item ID."
+            return await self.update_view(interaction)
 
         await interaction.response.defer(ephemeral=True)
         ok, msg = await self.inv_service.equip(self.character_id, uid)
-        await interaction.followup.send(f"{'✅' if ok else '❌'} {msg}", ephemeral=True)
+        self.status_message = f"{'✅' if ok else '❌'} {msg}"
         await self.update_view(interaction)
 
     @discord.ui.button(label="💰 Sell", style=discord.ButtonStyle.secondary, row=2, custom_id="ucp_sell")
     async def sell_item(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not self.selected_item:
-            return await interaction.response.send_message("Select an item first.", ephemeral=True)
+            self.status_message = "❌ Select an item first."
+            return await self.update_view(interaction)
         if self.selected_item.get("is_equipped"):
-            return await interaction.response.send_message("Unequip it first.", ephemeral=True)
+            self.status_message = "❌ Unequip it first."
+            return await self.update_view(interaction)
 
         try:
             uid = UUID(str(self.selected_item["id"]))
         except Exception:
-            return await interaction.response.send_message("Invalid item ID.", ephemeral=True)
+            self.status_message = "❌ Invalid item ID."
+            return await self.update_view(interaction)
 
         await interaction.response.defer(ephemeral=True)
         ok, msg, gold = await self.inv_service.sell(self.character_id, uid)
         if ok and gold:
             await self.char_service.add_gold(self.character_id, gold, "vendor sale")
-        await interaction.followup.send(f"{'✅' if ok else '❌'} {msg}", ephemeral=True)
+        self.status_message = f"{'✅' if ok else '❌'} {msg}"
         if ok:
             self.selected_item = None
         await self.update_view(interaction)
@@ -863,7 +875,8 @@ class UnifiedCharacterView(discord.ui.View):
                 for line in comparison_lines[:8]:
                     selected_text += f"\n• {line}"
 
-        base_text = f"View: **{self.view_mode.title()}**{selected_text}"
+        status_line = f"\n{self.status_message}" if self.status_message else ""
+        base_text = f"View: **{self.view_mode.title()}**{selected_text}{status_line}"
 
         # Ensure we edit the same message (ephemeral or not)
         if interaction.response.is_done():
