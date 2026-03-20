@@ -81,6 +81,7 @@ class Combatant:
     is_dead:            bool = False
     is_stealthed:       bool = False
     specialization:     Optional[str] = None  # e.g. "arms", "subtlety", etc.
+    class_key:          Optional[str] = None  # warrior, paladin, mage, rogue, priest, hunter
     threat:             int  = 0             # aggro for group content
     combo_points:       int  = 0             # rogue mechanic
     vengeance_stacks:   int  = 0             # retribution paladin passive
@@ -475,6 +476,44 @@ class CombatEngine:
                 base = random.randint(attacker.dmg_min, attacker.dmg_max)
                 power = attacker.spell_power if ability.ignores_armor else attacker.attack_power
                 raw = int((base + power * 0.12) * ability.dmg_mult)
+                armor_pen_pct = 0.0
+
+                # Spec/class passive and proc damage hooks.
+                # This keeps class identity in combat without requiring a full skill-tree system.
+                if attacker.specialization == "retribution":
+                    attacker.vengeance_stacks = min(5, attacker.vengeance_stacks + 1)
+                    raw = int(raw * (1 + attacker.vengeance_stacks * 0.03))
+                if attacker.specialization == "shadow" and ability.key in {"smite", "mind_blast", "vampiric_touch", "void_eruption"}:
+                    attacker.shadow_stacks = min(5, attacker.shadow_stacks + 1)
+                    raw = int(raw * (1 + attacker.shadow_stacks * 0.05))
+                if attacker.specialization == "frost" and ability.key in {"frost_bolt", "ice_lance", "frozen_orb", "frost_nova"}:
+                    if target.has(StatusEffect.SLOW) or target.has(StatusEffect.STUN):
+                        raw = int(raw * 1.2)
+                if attacker.specialization == "marksmanship" and ability.key == "aimed_shot":
+                    if random.random() < 0.20:
+                        raw = int(raw * 3.0)
+                        r.log += " 🎯 Trueshot proc!"
+                if attacker.specialization == "subtlety" and attacker.has(StatusEffect.STEALTH):
+                    armor_pen_pct = max(armor_pen_pct, 0.30)
+                if attacker.specialization == "beast_mastery" and ability.key == "auto_attack":
+                    raw = int(raw * 1.4)
+                    r.log += " 🐉 Beast strikes with you!"
+                if ability.key == "shadowstrike" and attacker.has(StatusEffect.STEALTH):
+                    armor_pen_pct = max(armor_pen_pct, 0.30)
+                if ability.key == "backstab" and attacker.has(StatusEffect.STEALTH):
+                    armor_pen_pct = max(armor_pen_pct, 0.30)
+                if ability.key == "strike" and random.random() < 0.25:
+                    target.add_status(StatusEffect.VULNERABILITY, 10, 2, attacker.name)
+                    r.effects_added.append("sunder")
+                if ability.key == "judgment" and random.random() < 0.20:
+                    target.add_status(StatusEffect.VULNERABILITY, 15, 2, attacker.name)
+                    r.effects_added.append("exposed")
+                if ability.key == "sinister_strike" and random.random() < 0.20:
+                    target.add_status(StatusEffect.VULNERABILITY, 12, 1, attacker.name)
+                    r.effects_added.append("find_weakness")
+                if ability.key == "aimed_shot" and random.random() < 0.25:
+                    armor_pen_pct = max(armor_pen_pct, 0.30)
+                    r.log += " 🏹 Piercing hit!"
 
                 # Power-up buff
                 pu = attacker.get_status(StatusEffect.POWER_UP)
@@ -484,6 +523,8 @@ class CombatEngine:
                 # Armor reduction (physical only)
                 if not ability.ignores_armor:
                     reduction = target.armor / (target.armor + 500)
+                    if armor_pen_pct > 0:
+                        reduction = max(0.0, reduction * (1 - armor_pen_pct))
                     raw = int(raw * (1 - reduction))
 
                 # Shield absorption
@@ -513,6 +554,9 @@ class CombatEngine:
                 if crit_roll < attacker.crit_chance:
                     raw = int(raw * 1.5)
                     r.is_crit = True
+                    if attacker.specialization == "arms" and ability.key in {"strike", "mortal_strike", "whirlwind", "colossus_smash"}:
+                        target.add_status(StatusEffect.BLEED, 8, 3, attacker.name)
+                        r.effects_added.append("deep_wounds")
 
                 r.damage = max(1, raw)
                 target.current_hp = max(0, target.current_hp - r.damage)
@@ -544,11 +588,33 @@ class CombatEngine:
                 actual_heal = min(base_heal, target.max_hp - target.current_hp)
                 target.current_hp = min(target.max_hp, target.current_hp + actual_heal)
                 r.healing = actual_heal
+                # Holy priest passive: heals grant small absorb.
+                if attacker.specialization == "holy_priest" and actual_heal > 0:
+                    shield_val = max(6, int(actual_heal * 0.10))
+                    target.add_status(StatusEffect.SHIELD, shield_val, 1, attacker.name)
+                    r.effects_added.append("inspiration")
+                # Holy paladin passive: critical heals refund mana.
+                if attacker.specialization == "holy_paladin":
+                    heal_crit_roll = random.random() * 100
+                    if heal_crit_roll < attacker.crit_chance:
+                        refund = int(ability.cost * 0.30)
+                        if refund > 0 and attacker.max_res > 0:
+                            attacker.current_res = min(attacker.max_res, attacker.current_res + refund)
+                            r.log += f" ✨ Illumination +{refund} mana"
 
             # ── Apply status ──────────────────────────────────────────────────
             if ability.applies:
-                target.add_status(ability.applies, ability.effect_val, ability.effect_dur, attacker.name)
+                effect_val = ability.effect_val
+                # Assassination passive: stronger bleed/poison effects.
+                if attacker.specialization == "assassination" and ability.applies in {StatusEffect.BLEED, StatusEffect.POISON}:
+                    effect_val = int(effect_val * 1.25)
+                target.add_status(ability.applies, effect_val, ability.effect_dur, attacker.name)
                 r.effects_added.append(ability.applies.value)
+                # Fire passive: bonus chance to ignite on fire spells.
+                if attacker.specialization == "fire" and ability.key in {"fireball", "pyroblast", "dragon_breath"}:
+                    if random.random() < 0.30:
+                        target.add_status(StatusEffect.BURN, max(6, int((effect_val or 10) * 0.8)), 3, attacker.name)
+                        r.effects_added.append("ignite")
 
             r.narrative = self._narrative(r, ability)
             results.append(r)
@@ -706,4 +772,7 @@ class CombatEngine:
             parts.append(f"restoring **{r.healing}** HP")
         if r.effects_added:
             parts.append(f"applying *{', '.join(r.effects_added)}*")
-        return " — ".join(parts) + "."
+        msg = " — ".join(parts) + "."
+        if r.log:
+            msg += f" {r.log}"
+        return msg

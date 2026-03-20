@@ -86,6 +86,7 @@ def _make_player(char, stats) -> Combatant:
         lifesteal=stats.get("lifesteal", 0.0),
         resistance=stats.get("resistance", 0),
         hit_rating=stats.get("hit_rating", 0.0),
+        class_key=char.get("class"),
     )
 
 
