@@ -584,14 +584,17 @@ class CombatEngine:
 
             # ── Healing ───────────────────────────────────────────────────────
             if ability.heal_mult > 0:
+                # For offensive abilities that include self-heal (e.g. Divine Storm),
+                # healing should go to the attacker, not the enemy target.
+                heal_target = attacker if ability.target in {"enemy", "all_enemies"} else target
                 base_heal = int(attacker.spell_power * ability.heal_mult + 25)
-                actual_heal = min(base_heal, target.max_hp - target.current_hp)
-                target.current_hp = min(target.max_hp, target.current_hp + actual_heal)
+                actual_heal = min(base_heal, heal_target.max_hp - heal_target.current_hp)
+                heal_target.current_hp = min(heal_target.max_hp, heal_target.current_hp + actual_heal)
                 r.healing = actual_heal
                 # Holy priest passive: heals grant small absorb.
                 if attacker.specialization == "holy_priest" and actual_heal > 0:
                     shield_val = max(6, int(actual_heal * 0.10))
-                    target.add_status(StatusEffect.SHIELD, shield_val, 1, attacker.name)
+                    heal_target.add_status(StatusEffect.SHIELD, shield_val, 1, attacker.name)
                     r.effects_added.append("inspiration")
                 # Holy paladin passive: critical heals refund mana.
                 if attacker.specialization == "holy_paladin":
