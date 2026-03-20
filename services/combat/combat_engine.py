@@ -183,9 +183,10 @@ ABILITIES: Dict[str, Ability] = {
         "holy_light","Holy Light","💛","A powerful heal.",
         "mana",50,0,"self", heal_mult=1.9),
     "divine_shield": Ability(
-        "divine_shield","Divine Shield","🛡️","Become immune for 1 turn.",
+        "divine_shield","Divine Shield","🛡️","Block the next enemy hit (persists until then).",
         "mana",60,10,"self",
-        applies=StatusEffect.SHIELD, effect_val=9999, effect_dur=1),
+        # Duration is not ticked down in tick_turn; removed on first blocked hit.
+        applies=StatusEffect.SHIELD, effect_val=9999, effect_dur=99),
     "crusader_strike": Ability(
         "crusader_strike","Crusader Strike","⚔️","A righteous melee blow.",
         "mana",20,1,"enemy", dmg_mult=1.3),
@@ -355,6 +356,8 @@ class CombatResult:
     ability_name:   str
     damage:         int = 0
     healing:        int = 0
+    # Who actually received HP (may differ from `target` for enemy-target AoE that self-heals).
+    heal_recipient: Optional[str] = None
     is_crit:        bool = False
     is_dodge:       bool = False
     effects_added:  List[str] = field(default_factory=list)
@@ -527,7 +530,31 @@ class CombatEngine:
                         reduction = max(0.0, reduction * (1 - armor_pen_pct))
                     raw = int(raw * (1 - reduction))
 
-                # Shield absorption
+                # Vulnerability
+                vu = target.get_status(StatusEffect.VULNERABILITY)
+                if vu:
+                    raw = int(raw * (1 + vu.value / 100))
+
+                # Hit rating check (accuracy) — before shield consumption so misses don't waste shields
+                hit_chance = 95.0 + getattr(attacker, 'hit_rating', 0) * 0.1
+                if random.random() * 100 > hit_chance:
+                    r.damage = 0
+                    r.log = f"{attacker.name} **missed**!"
+                    results.append(r)
+                    continue
+
+                # Divine Shield: full immunity to the next successful hit (persists through your own turns)
+                sh = target.get_status(StatusEffect.SHIELD)
+                if sh and sh.source == "divine_shield":
+                    target.remove_status(StatusEffect.SHIELD)
+                    r.damage = 0
+                    r.narrative = (
+                        f"🛡️ **Divine Shield** absorbs **{attacker.name}**'s attack — **{target.name}** takes no damage!"
+                    )
+                    results.append(r)
+                    continue
+
+                # Normal shield absorption (Power Word: Shield, Inspiration, etc.)
                 sh = target.get_status(StatusEffect.SHIELD)
                 if sh:
                     absorbed = min(sh.value, raw)
@@ -535,19 +562,6 @@ class CombatEngine:
                     sh.value -= absorbed
                     if sh.value <= 0:
                         target.remove_status(StatusEffect.SHIELD)
-
-                # Vulnerability
-                vu = target.get_status(StatusEffect.VULNERABILITY)
-                if vu:
-                    raw = int(raw * (1 + vu.value / 100))
-
-                # Hit rating check (accuracy)
-                hit_chance = 95.0 + getattr(attacker, 'hit_rating', 0) * 0.1
-                if random.random() * 100 > hit_chance:
-                    r.damage = 0
-                    r.log = f"{attacker.name} **missed**!"
-                    results.append(r)
-                    continue
 
                 # Crit
                 crit_roll = random.random() * 100
@@ -591,10 +605,11 @@ class CombatEngine:
                 actual_heal = min(base_heal, heal_target.max_hp - heal_target.current_hp)
                 heal_target.current_hp = min(heal_target.max_hp, heal_target.current_hp + actual_heal)
                 r.healing = actual_heal
+                r.heal_recipient = heal_target.name
                 # Holy priest passive: heals grant small absorb.
                 if attacker.specialization == "holy_priest" and actual_heal > 0:
                     shield_val = max(6, int(actual_heal * 0.10))
-                    heal_target.add_status(StatusEffect.SHIELD, shield_val, 1, attacker.name)
+                    heal_target.add_status(StatusEffect.SHIELD, shield_val, 1, "inspiration")
                     r.effects_added.append("inspiration")
                 # Holy paladin passive: critical heals refund mana.
                 if attacker.specialization == "holy_paladin":
@@ -611,7 +626,7 @@ class CombatEngine:
                 # Assassination passive: stronger bleed/poison effects.
                 if attacker.specialization == "assassination" and ability.applies in {StatusEffect.BLEED, StatusEffect.POISON}:
                     effect_val = int(effect_val * 1.25)
-                target.add_status(ability.applies, effect_val, ability.effect_dur, attacker.name)
+                target.add_status(ability.applies, effect_val, ability.effect_dur, ability.key)
                 r.effects_added.append(ability.applies.value)
                 # Fire passive: bonus chance to ignite on fire spells.
                 if attacker.specialization == "fire" and ability.key in {"fireball", "pyroblast", "dragon_breath"}:
@@ -657,7 +672,11 @@ class CombatEngine:
                 # Stealth just ticks down; no per-turn effect here
                 pass
 
-            s.duration -= 1
+            # Divine Shield is removed on first blocked hit, not by turn ticks
+            if s.effect == StatusEffect.SHIELD and s.source == "divine_shield":
+                pass
+            else:
+                s.duration -= 1
             if s.duration <= 0:
                 expired.append(s)
 
@@ -772,7 +791,8 @@ class CombatEngine:
             crit = " *(CRIT!)*" if r.is_crit else ""
             parts.append(f"dealing **{r.damage}** dmg to **{r.target}**{crit}")
         if r.healing:
-            parts.append(f"restoring **{r.healing}** HP")
+            who = getattr(r, "heal_recipient", None) or r.target
+            parts.append(f"restoring **{r.healing}** HP to **{who}**")
         if r.effects_added:
             parts.append(f"applying *{', '.join(r.effects_added)}*")
         msg = " — ".join(parts) + "."
