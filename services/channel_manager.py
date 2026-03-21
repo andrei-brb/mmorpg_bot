@@ -397,6 +397,7 @@ COMMAND_CHANNEL_MAP = {
     "guild": "general",
     "help": "general",
     "activity": "general",
+    "open_game": "general",
     "achievements": "general",
     "badges": "general",
     "login": "general",

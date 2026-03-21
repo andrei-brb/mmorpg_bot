@@ -130,7 +130,10 @@ class HelpCog(commands.Cog, name="Help"):
         )
         embed.add_field(
             name="🖥️ Visual client (Activity)",
-            value="`/activity` — How to open the in-Discord game UI (inventory/equipment shell)",
+            value=(
+                "`/open_game` — Open the embedded game UI (Activity) inside Discord\n"
+                "`/activity` — Setup notes if `/open_game` doesn’t work"
+            ),
             inline=False,
         )
         embed.add_field(

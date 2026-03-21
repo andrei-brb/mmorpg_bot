@@ -74,11 +74,16 @@ Output: `activity/dist/`.
 
 ## How to open the Activity in Discord
 
-1. Install the bot in a server.
-2. **Join a voice channel.**
-3. Use the **rocket / Activities** control → launch your app.
+**Easiest (recommended):** In a text channel, run slash command **`/open_game`**.  
+The bot answers with Discord’s **`LAUNCH_ACTIVITY`** response so the client opens your Embedded App (no App Launcher “Launch” entry required).
 
-Use **`/activity`** in Discord for a short reminder.
+Other options:
+
+1. Install the bot in a server.
+2. **Join a voice channel** and use the **rocket / Activities** control (your app may not appear in search).
+3. **App Launcher** (`/` in the message box) — only if Discord created a default Entry Point command.
+
+Use **`/activity`** for setup notes if something fails.
 
 ## API reference (read-only)
 

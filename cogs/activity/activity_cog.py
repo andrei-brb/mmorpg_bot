@@ -1,14 +1,44 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║   cogs/activity/activity_cog.py — /activity (how to open the game client)    ║
+║   /open_game — LAUNCH_ACTIVITY (opens Embedded App in the Discord client)   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
+import logging
 import os
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+from discord.webhook.async_ import async_context, interaction_response_params
+
+log = logging.getLogger("cog.activity")
+
+
+async def respond_launch_activity(interaction: discord.Interaction) -> None:
+    """
+    Tell Discord to open this application's Embedded Activity (iframe).
+    API: interaction response type 12 — LAUNCH_ACTIVITY.
+    See https://docs.discord.com/developers/activities/how-activities-work
+    """
+    if interaction.response.is_done():
+        raise discord.InteractionResponded(interaction)
+
+    adapter = async_context.get()
+    params = interaction_response_params(12)  # LAUNCH_ACTIVITY (no data payload)
+    http = interaction._state.http
+
+    await adapter.create_interaction_response(
+        interaction.id,
+        interaction.token,
+        session=interaction._session,
+        proxy=http.proxy,
+        proxy_auth=http.proxy_auth,
+        params=params,
+    )
+    # discord.py 2.3 has no enum member for type 12 — mark as responded.
+    interaction.response._response_type = discord.InteractionResponseType.channel_message
 
 
 class ActivityCog(commands.Cog, name="Activity"):
@@ -71,8 +101,42 @@ class ActivityCog(commands.Cog, name="Activity"):
             ),
             inline=False,
         )
+        embed.add_field(
+            name="Fastest: slash command",
+            value="Use **`/open_game`** in this server — Discord should open the Activity iframe (no voice search needed).",
+            inline=False,
+        )
         embed.set_footer(text="See ACTIVITY_SETUP.md in the repo for full steps.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="open_game",
+        description="Open the World of Discord embedded app (Activity) in Discord",
+    )
+    async def open_game(self, interaction: discord.Interaction):
+        from services.channel_manager import check_channel
+
+        if not await check_channel(interaction, "activity"):
+            return
+
+        try:
+            await respond_launch_activity(interaction)
+        except discord.HTTPException as e:
+            log.warning("open_game LAUNCH_ACTIVITY failed: %s", e)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "Could not open the Activity. Check the Developer Portal → **Activities** are enabled "
+                    f"for this app, URL mapping is set, and the client is up to date.\n\n"
+                    f"Discord said: `{e}`",
+                    ephemeral=True,
+                )
+        except Exception as e:
+            log.exception("open_game failed")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    f"Something went wrong opening the Activity: `{e}`",
+                    ephemeral=True,
+                )
 
 
 async def setup(bot: commands.Bot):
