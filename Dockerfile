@@ -6,16 +6,19 @@ WORKDIR /app/activity
 COPY activity/package.json activity/package-lock.json ./
 RUN npm ci
 COPY activity/ ./
-ARG VITE_DISCORD_CLIENT_ID=""
-ARG VITE_API_BASE_URL=""
+# Must be passed at docker build time (same as Discord Application ID).
+# Railway: add variable VITE_DISCORD_CLIENT_ID and enable it for **Build**,
+# or set Docker Build Arg in the service settings.
+ARG VITE_DISCORD_CLIENT_ID
+ARG VITE_API_BASE_URL=
 ENV VITE_DISCORD_CLIENT_ID=$VITE_DISCORD_CLIENT_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN if [ -z "$VITE_DISCORD_CLIENT_ID" ]; then \
-      mkdir -p dist && \
-      printf '%s\n' '<!doctype html><meta charset="utf-8"><title>World of Discord</title><p>Rebuild with Docker build-arg VITE_DISCORD_CLIENT_ID to bundle the Activity.</p>' > dist/index.html; \
-    else \
-      npm run build; \
-    fi
+      echo "ERROR: Docker build-arg VITE_DISCORD_CLIENT_ID is required (your Discord Application ID)." >&2; \
+      echo "Railway: Service → Variables → add VITE_DISCORD_CLIENT_ID → enable for **Build**, redeploy." >&2; \
+      exit 1; \
+    fi \
+    && npm run build
 
 # ── Stage 2: Python bot + optional static Activity dist ──────────────────────
 FROM python:3.11-slim

@@ -66,6 +66,21 @@ Output: `activity/dist/`.
 4. `GET https://your-host/health` should return `{"ok": true, ...}`.
 5. `GET https://your-host/` should load the **game UI**, not an “Index of /” directory listing. The bot serves `index.html` at `/` and `/assets/*` from Vite’s `dist/` (rebuild if you only see a file list).
 
+### Railway + Docker: build-time `VITE_DISCORD_CLIENT_ID` (required)
+
+The **Dockerfile** runs `npm run build` in stage `activity-build`. Vite needs **`VITE_DISCORD_CLIENT_ID`** at **build** time (same value as **Application ID**).
+
+If you see a placeholder page like *“Rebuild with Docker build-arg VITE_DISCORD_CLIENT_ID”*, the image was built **without** that variable.
+
+**Fix:**
+
+1. Railway → your **worker** service → **Variables**.
+2. Add **`VITE_DISCORD_CLIENT_ID`** = your Application ID (e.g. `1473559227569279159`).
+3. Enable it for **Build** (Railway: toggle “Available at Build Time” / **Build** scope — exact UI varies).
+4. **Redeploy** so Docker rebuilds with `npm run build` and produces real `activity/dist/assets/*`.
+
+Without this, the container only contains a stub `index.html` and the Activity UI will not load.
+
 ## Split UI + API (optional)
 
 - Host **only** `activity/dist` on Vercel/Netlify.
