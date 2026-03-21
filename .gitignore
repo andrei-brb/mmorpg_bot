@@ -16,3 +16,8 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Discord Activity (Vite)
+activity/node_modules/
+activity/dist/
+activity/.env

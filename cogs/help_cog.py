@@ -129,6 +129,11 @@ class HelpCog(commands.Cog, name="Help"):
             inline=False,
         )
         embed.add_field(
+            name="🖥️ Visual client (Activity)",
+            value="`/activity` — How to open the in-Discord game UI (inventory/equipment shell)",
+            inline=False,
+        )
+        embed.add_field(
             name="⚙️ Admin",
             value="`/admin help` — View admin-only commands",
             inline=False,

@@ -22,6 +22,7 @@ Built with Python, discord.py, and PostgreSQL.
 | **Admin Tools** | GM commands for gold, XP, items, events, server config |
 | **Persistent Cooldowns** | Survive bot restarts via PostgreSQL |
 | **Monetization Hooks** | Stripe-ready premium tiers for servers and players |
+| **Discord Activity (optional)** | In-client web UI (`activity/`) — see `ACTIVITY_SETUP.md` and `/activity` |
 
 ---
 

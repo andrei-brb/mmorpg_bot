@@ -396,6 +396,7 @@ COMMAND_CHANNEL_MAP = {
     "shop": "general",
     "guild": "general",
     "help": "general",
+    "activity": "general",
     "achievements": "general",
     "badges": "general",
     "login": "general",

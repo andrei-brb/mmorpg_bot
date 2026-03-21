@@ -119,6 +119,7 @@ class MMORPGBot(commands.Bot):
             "cogs.quest.quest_cog",
             "cogs.milestones.milestones_cog",
             "cogs.help_cog",
+            "cogs.activity.activity_cog",
         ]
         for cog in cogs:
             try:
