@@ -292,6 +292,17 @@ async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
 
+async def _serve_activity_index(request: web.Request) -> web.StreamResponse:
+    """Serve SPA root — aiohttp add_static(show_index=True) lists dirs instead of index.html."""
+    root = request.app.get("activity_static_root")
+    if not root:
+        raise web.HTTPNotFound()
+    path = os.path.join(root, "index.html")
+    if not os.path.isfile(path):
+        raise web.HTTPNotFound(text="activity/dist/index.html missing — run: cd activity && npm run build")
+    return web.FileResponse(path)
+
+
 def _static_dir() -> Optional[str]:
     env = (os.getenv("ACTIVITY_STATIC_DIR") or "").strip()
     if env and os.path.isdir(env):
@@ -322,7 +333,14 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     serve = (os.getenv("ACTIVITY_SERVE_STATIC") or "1").strip().lower() in ("1", "true", "yes")
     if static_root and serve:
         log.info("Serving Activity static files from %s", static_root)
-        app.router.add_static("/", static_root, show_index=True)
+        app["activity_static_root"] = static_root
+        # GET / must be index.html — NOT directory listing (show_index=True caused "Index of /")
+        app.router.add_get("/", _serve_activity_index)
+        assets_dir = os.path.join(static_root, "assets")
+        if os.path.isdir(assets_dir):
+            app.router.add_static("/assets/", assets_dir, show_index=False)
+        else:
+            log.warning("No activity/dist/assets — run `cd activity && npm run build` before deploy")
 
     runner = web.AppRunner(app)
     await runner.setup()

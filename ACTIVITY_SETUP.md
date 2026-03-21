@@ -64,6 +64,7 @@ Output: `activity/dist/`.
 2. Build `activity` with the same `VITE_DISCORD_CLIENT_ID` and deploy `activity/dist` next to the bot **or** use the multi-stage **Dockerfile** with build-arg `VITE_DISCORD_CLIENT_ID`.
 3. Point **URL mapping** at `https://<your-service>.up.railway.app/` (or your custom domain).
 4. `GET https://your-host/health` should return `{"ok": true, ...}`.
+5. `GET https://your-host/` should load the **game UI**, not an “Index of /” directory listing. The bot serves `index.html` at `/` and `/assets/*` from Vite’s `dist/` (rebuild if you only see a file list).
 
 ## Split UI + API (optional)
 
