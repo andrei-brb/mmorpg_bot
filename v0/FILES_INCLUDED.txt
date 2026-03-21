@@ -1,0 +1,57 @@
+MMORPG Bot - Files Included for v0.app
+========================================
+
+Total Files: 26
+
+DOCUMENTATION (4 files):
+- README.md - Main project overview
+- FEATURES_QUICK_REFERENCE.md - Complete feature checklist
+- QUICK_START.md - Gameplay guide
+- README_FOR_V0.md - Instructions for v0.app
+
+CONFIGURATION (1 file):
+- config/settings.py - ALL game constants (classes, zones, enemies, abilities, rarities)
+
+DATABASE (1 file):
+- database/db.py - Complete database schema and seed data
+
+CORE SERVICES (7 files):
+- services/character/character_service.py - Character management (XP, stats, gold, cooldowns)
+- services/character/inventory_service.py - Inventory and loot system
+- services/combat/combat_engine.py - Combat system with 60+ abilities
+- services/quest/npc_quest_service.py - Quest system (NPCs, quest chains, rewards)
+- services/blacksmith/blacksmith_service.py - Item enhancement system
+- services/dungeon/dungeon_service.py - Dungeon system
+- services/achievement/achievement_service.py - Achievement system
+- services/daily/daily_login_service.py - Daily login rewards
+
+DISCORD COMMANDS/COGS (11 files):
+- cogs/character/character_cog.py - Character commands
+- cogs/combat/combat_cog.py - Combat commands
+- cogs/exploration/exploration_cog.py - Exploration system
+- cogs/inventory/inventory_cog.py - Inventory/equipment commands
+- cogs/quest/quest_cog.py - Quest commands
+- cogs/guild/guild_cog.py - Guild system
+- cogs/economy/economy_cog.py - Marketplace/economy
+- cogs/events/events_cog.py - World events
+- cogs/blacksmith/blacksmith_cog.py - Enhancement commands
+- cogs/dungeon/dungeon_cog.py - Dungeon commands
+- cogs/achievements/achievements_cog.py - Achievement commands
+
+ENTRY POINT (1 file):
+- main.py - Bot initialization
+
+KEY FEATURES COVERED:
+✓ 6 Classes with 12 Specializations
+✓ Turn-based Combat (60+ abilities)
+✓ Boss Fights (phase-based AI)
+✓ 5 Zones with Enemies and World Bosses
+✓ Item System (6 rarity tiers)
+✓ Enhancement/Blacksmith System
+✓ Quest System (NPCs, quest chains)
+✓ Guild System
+✓ Marketplace/Economy
+✓ World Events
+✓ Daily Login Rewards
+✓ Achievement System
+✓ Dungeon System

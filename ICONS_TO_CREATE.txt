@@ -1,0 +1,21 @@
+CONSUMABLES & POTIONS (8 items):
+1. Health Potion
+2. Frost Resist Potion
+3. Stamina Draught
+4. Elixir of Fortitude
+5. Flask of the Titans
+6. Blessing Scroll
+7. Safety Charm
+8. Enhancement Fragment
+
+SPECIAL NAMED ITEMS (10 items):
+1. Iron Sword
+2. Leather Cap
+3. Dwarven Axe
+4. Chain Coif
+5. Bone Club
+6. Raptor Hide Vest
+7. Corsair Blade
+8. Jungle Leather Chest
+9. Sulfuron Blade
+10. Shadowforge Plate
