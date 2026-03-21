@@ -87,6 +87,23 @@ Use **`/activity`** in Discord for a short reminder.
 - `GET /api/game/equipment` — same auth → equipped items by slot.
 - `GET /health` — liveness.
 
+## Troubleshooting: “invalid redirect URI”
+
+Discord compares three things:
+
+1. **OAuth2 → Redirects** in the Developer Portal (allowed list).
+2. The URL your **Activity iframe** loads (URL mapping / public HTTPS URL).
+3. The **`redirect_uri`** your server sends in `POST https://discord.com/api/oauth2/token` (we send what you set in env, plus slash variants, then try without).
+
+**Fix:**
+
+1. Copy your **exact** public Activity URL from the browser bar when the iframe is open (e.g. `https://something.up.railway.app/` or without trailing slash — pick one style).
+2. In **OAuth2 → Redirects**, add **that exact string**. If unsure, add **both** `https://host` and `https://host/`.
+3. On Railway, set **`DISCORD_OAUTH_REDIRECT_URI`** (or **`ACTIVITY_PUBLIC_URL`**) to the **same** string as one of the entries in step 2 (character-for-character: `https`, no wrong port, same slash).
+4. Redeploy and try again.
+
+If you still see the error, check Railway logs for `OAuth token exchange` lines — they show which `redirect_uri` was attempted.
+
 ## See also
 
 - [Discord Activities overview](https://discord.com/developers/docs/activities/overview)

@@ -100,34 +100,84 @@ async def _discord_user_from_token(token: str) -> Optional[Dict[str, Any]]:
             return await resp.json()
 
 
-async def _exchange_oauth_code(code: str, client_id: str, client_secret: str) -> Dict[str, Any]:
-    """Match discord-embedded-app-sdk-examples token exchange (no redirect_uri)."""
-    form: Dict[str, str] = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "grant_type": "authorization_code",
-        "code": code,
-    }
-    redirect_uri = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or "").strip()
-    if redirect_uri:
-        form["redirect_uri"] = redirect_uri
+def _oauth_redirect_attempts() -> list[Optional[str]]:
+    """
+    Discord requires token exchange redirect_uri to match OAuth2 → Redirects exactly.
+    Try: (1) URL with trailing slash, (2) without, (3) omit redirect_uri (embedded-app pattern).
+    """
+    raw = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or os.getenv("ACTIVITY_PUBLIC_URL") or "").strip()
+    out: list[Optional[str]] = []
+    if raw:
+        base = raw.rstrip().rstrip("/")
+        for c in (base + "/", base):
+            if c not in out:
+                out.append(c)
+    if None not in out:
+        out.append(None)
+    return out if out else [None]
 
-    body = urlencode(form)
+
+async def _exchange_oauth_code(code: str, client_id: str, client_secret: str) -> Dict[str, Any]:
+    """
+    Exchange authorization code for tokens. Discord may require redirect_uri to match
+    Developer Portal → OAuth2 → Redirects (same string as Activity public URL).
+    """
     timeout = aiohttp.ClientTimeout(total=20)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(
-            OAUTH_TOKEN_URL,
-            data=body,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        ) as resp:
-            body = await resp.text()
-            if resp.status != 200:
-                log.warning("OAuth token exchange failed: %s %s", resp.status, body[:500])
-                raise web.HTTPBadRequest(
-                    text=json.dumps({"error": "token_exchange_failed", "detail": body[:200]}),
-                    content_type="application/json",
-                )
-            return json.loads(body)
+    last_body = ""
+    last_status = 0
+
+    for redirect_uri in _oauth_redirect_attempts():
+        form: Dict[str, str] = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "authorization_code",
+            "code": code,
+        }
+        if redirect_uri:
+            form["redirect_uri"] = redirect_uri
+
+        body = urlencode(form)
+        log.debug("OAuth token exchange try redirect_uri=%r", redirect_uri)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                OAUTH_TOKEN_URL,
+                data=body,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as resp:
+                text = await resp.text()
+                last_status = resp.status
+                last_body = text
+                if resp.status == 200:
+                    return json.loads(text)
+
+                # Retry next variant if Discord complains about redirect
+                err_lower = text.lower()
+                if "redirect" in err_lower or "invalid_grant" in err_lower:
+                    log.warning(
+                        "OAuth token exchange failed (%s) with redirect_uri=%r: %s",
+                        resp.status,
+                        redirect_uri,
+                        text[:300],
+                    )
+                    continue
+                break
+
+    log.warning("OAuth token exchange failed: %s %s", last_status, last_body[:500])
+    raise web.HTTPBadRequest(
+        text=json.dumps(
+            {
+                "error": "token_exchange_failed",
+                "detail": last_body[:400],
+                "hint": (
+                    "Add your Activity HTTPS URL under Developer Portal → OAuth2 → Redirects "
+                    "(exact match), then set DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL "
+                    "on the server to that same string."
+                ),
+            }
+        ),
+        content_type="application/json",
+    )
 
 
 def _client_id_for_app(bot) -> Optional[str]:
