@@ -42,20 +42,19 @@ class ActivityCog(commands.Cog, name="Activity"):
             color=0x7C5CFF,
         )
         embed.add_field(
-            name="1 · Deploy or tunnel your Activity URL",
+            name="1 · Bot env (OAuth + API)",
             value=(
-                "Build the web app: `cd activity && npm ci && npm run build`\n"
-                "Host the `activity/dist` folder on **HTTPS** (e.g. Vercel, Cloudflare Pages, Netlify), "
-                "or use **ngrok** for local testing."
+                "Set **`DISCORD_CLIENT_SECRET`** (OAuth2 page) and **`DISCORD_APPLICATION_ID`** (same as Application ID).\n"
+                "The bot exposes **`POST /api/token`** and **`GET /api/game/inventory`** on **`PORT`** (e.g. Railway).\n"
+                "See **`ACTIVITY_SETUP.md`** for full list."
             ),
             inline=False,
         )
         embed.add_field(
-            name="2 · Developer Portal → URL Mapping",
+            name="2 · Build & URL mapping",
             value=(
-                "**Discord Developer Portal** → your app → **Activities** → **URL Mappings**\n"
-                "• Prefix: `/` → Target URL: `https://your-site.example` (no trailing slash)\n"
-                "Use the same **Application ID** as `VITE_DISCORD_CLIENT_ID` in `activity/.env`."
+                "Build: `cd activity && npm ci && npm run build` (or Docker build-arg `VITE_DISCORD_CLIENT_ID`).\n"
+                "**Activities** → **URL Mappings**: prefix `/` → your **HTTPS** public URL (same host as API if possible)."
             ),
             inline=False,
         )

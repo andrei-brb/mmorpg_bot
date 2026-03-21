@@ -80,6 +80,7 @@ class MMORPGBot(commands.Bot):
 
         # Injected in setup_hook so cogs can access via self.bot.db
         self.db = None
+        self._activity_runner = None  # aiohttp AppRunner for Embedded App API
 
         # Anti-spam cooldown manager (per-user, 2s default)
         from services.channel_manager import CooldownManager, ChannelManager
@@ -134,6 +135,16 @@ class MMORPGBot(commands.Bot):
             log.info("✓ Commands synced")
         except Exception as e:
             log.error(f"Failed to sync commands: {e}")
+
+        # Optional: HTTP API for Discord Activity (OAuth + inventory JSON)
+        from services.activity_http import start_activity_http
+
+        try:
+            self._activity_runner = await start_activity_http(self)
+        except OSError as e:
+            log.warning("Activity HTTP could not bind: %s", e)
+        except Exception as e:
+            log.error("Activity HTTP failed to start: %s", e, exc_info=True)
 
     async def on_ready(self):
         log.info(f"✓ Online as {self.user} (ID: {self.user.id})")
@@ -265,6 +276,11 @@ class MMORPGBot(commands.Bot):
 
     async def close(self):
         log.info("Shutting down...")
+        if self._activity_runner:
+            from services.activity_http import stop_activity_http
+
+            await stop_activity_http(self._activity_runner)
+            self._activity_runner = None
         if self.db:
             await self.db.close()
         await super().close()

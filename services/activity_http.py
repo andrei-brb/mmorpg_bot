@@ -1,0 +1,290 @@
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║   services/activity_http.py — HTTP API for Discord Embedded App (Activity)  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Endpoints:
+  POST /api/token              — Exchange OAuth code (from Embedded App SDK) for access_token
+  GET  /api/game/inventory     — Bearer token → character + inventory rows
+  GET  /api/game/equipment      — Bearer token → equipped items by slot
+
+Requires DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID (same app as the bot).
+See ACTIVITY_SETUP.md.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Dict, Optional
+from urllib.parse import urlencode
+from uuid import UUID
+
+import aiohttp
+from aiohttp import web
+
+from services.character.character_service import CharacterService
+from services.character.inventory_service import InventoryService
+
+log = logging.getLogger("activity_http")
+
+DISCORD_API = "https://discord.com/api/v10"
+OAUTH_TOKEN_URL = "https://discord.com/api/oauth2/token"
+
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively convert DB values for JSON."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(x) for x in obj]
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (bytes, memoryview)):
+        return None
+    return obj
+
+
+def _cors_headers(request: web.Request) -> Dict[str, str]:
+    origin = request.headers.get("Origin", "*")
+    allowed = (os.getenv("ACTIVITY_CORS_ORIGINS") or "").strip()
+    if allowed:
+        parts = [x.strip() for x in allowed.split(",") if x.strip()]
+        if origin in parts:
+            allow_origin = origin
+        else:
+            allow_origin = parts[0] if parts else "*"
+    else:
+        allow_origin = origin if origin else "*"
+    return {
+        "Access-Control-Allow-Origin": allow_origin,
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        "Access-Control-Max-Age": "86400",
+    }
+
+
+@web.middleware
+async def cors_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return web.Response(status=204, headers=_cors_headers(request))
+    try:
+        response = await handler(request)
+    except web.HTTPException as ex:
+        ex.headers.update(_cors_headers(request))
+        raise
+    for k, v in _cors_headers(request).items():
+        response.headers.setdefault(k, v)
+    return response
+
+
+async def _discord_user_from_token(token: str) -> Optional[Dict[str, Any]]:
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(
+            f"{DISCORD_API}/users/@me",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as resp:
+            if resp.status != 200:
+                log.debug("Discord @me returned %s", resp.status)
+                return None
+            return await resp.json()
+
+
+async def _exchange_oauth_code(code: str, client_id: str, client_secret: str) -> Dict[str, Any]:
+    """Match discord-embedded-app-sdk-examples token exchange (no redirect_uri)."""
+    form: Dict[str, str] = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "authorization_code",
+        "code": code,
+    }
+    redirect_uri = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or "").strip()
+    if redirect_uri:
+        form["redirect_uri"] = redirect_uri
+
+    body = urlencode(form)
+    timeout = aiohttp.ClientTimeout(total=20)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(
+            OAUTH_TOKEN_URL,
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        ) as resp:
+            body = await resp.text()
+            if resp.status != 200:
+                log.warning("OAuth token exchange failed: %s %s", resp.status, body[:500])
+                raise web.HTTPBadRequest(
+                    text=json.dumps({"error": "token_exchange_failed", "detail": body[:200]}),
+                    content_type="application/json",
+                )
+            return json.loads(body)
+
+
+def _client_id_for_app(bot) -> Optional[str]:
+    cid = (os.getenv("DISCORD_APPLICATION_ID") or "").strip()
+    if cid:
+        return cid
+    aid = getattr(bot, "application_id", None)
+    if aid:
+        return str(aid)
+    return None
+
+
+async def handle_token(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    secret = (os.getenv("DISCORD_CLIENT_SECRET") or "").strip()
+    client_id = _client_id_for_app(bot)
+    if not secret or not client_id:
+        raise web.HTTPServiceUnavailable(
+            text=json.dumps({"error": "server_misconfigured", "hint": "Set DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID"}),
+            content_type="application/json",
+        )
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "invalid_json"}), content_type="application/json")
+    code = (body or {}).get("code")
+    if not code or not isinstance(code, str):
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_code"}), content_type="application/json")
+
+    token_payload = await _exchange_oauth_code(code, client_id, secret)
+    access_token = token_payload.get("access_token")
+    if not access_token:
+        raise web.HTTPBadRequest(
+            text=json.dumps({"error": "no_access_token"}),
+            content_type="application/json",
+        )
+    return web.json_response({"access_token": access_token})
+
+
+async def handle_inventory(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(
+            _json_safe(
+                {
+                    "discord": {"id": str(discord_id), "username": user.get("username")},
+                    "character": None,
+                    "items": [],
+                }
+            )
+        )
+
+    items = await inv_svc.get_all(char["id"])
+    char_dict = dict(char)
+    return web.json_response(
+        _json_safe(
+            {
+                "discord": {"id": str(discord_id), "username": user.get("username"), "global_name": user.get("global_name")},
+                "character": char_dict,
+                "items": items,
+            }
+        )
+    )
+
+
+async def handle_equipment(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(_json_safe({"character": None, "equipped": {}}))
+
+    equipped = await inv_svc.get_equipped(char["id"])
+    return web.json_response(_json_safe({"character": dict(char), "equipped": equipped}))
+
+
+async def handle_health(_request: web.Request) -> web.Response:
+    return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
+
+
+def _static_dir() -> Optional[str]:
+    env = (os.getenv("ACTIVITY_STATIC_DIR") or "").strip()
+    if env and os.path.isdir(env):
+        return env
+    here = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "activity", "dist"))
+    if os.path.isdir(here):
+        return here
+    return None
+
+
+async def start_activity_http(bot) -> Optional["web.AppRunner"]:
+    """
+    Bind HTTP server (OAuth + game JSON). Returns AppRunner for cleanup, or None if disabled.
+    """
+    if not (os.getenv("DISCORD_CLIENT_SECRET") or "").strip():
+        log.info("DISCORD_CLIENT_SECRET not set — Activity HTTP API disabled (set it to enable /api/token).")
+        return None
+
+    app = web.Application(middlewares=[cors_middleware])
+    app["bot"] = bot
+
+    app.router.add_post("/api/token", handle_token)
+    app.router.add_get("/api/game/inventory", handle_inventory)
+    app.router.add_get("/api/game/equipment", handle_equipment)
+    app.router.add_get("/health", handle_health)
+
+    static_root = _static_dir()
+    serve = (os.getenv("ACTIVITY_SERVE_STATIC") or "1").strip().lower() in ("1", "true", "yes")
+    if static_root and serve:
+        log.info("Serving Activity static files from %s", static_root)
+        app.router.add_static("/", static_root, show_index=True)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    port = int(os.getenv("PORT", os.getenv("ACTIVITY_HTTP_PORT", "8080")))
+    host = os.getenv("ACTIVITY_HTTP_HOST", "0.0.0.0")
+    site = web.TCPSite(runner, host, port)
+    await site.start()
+    log.info("Activity HTTP listening on http://%s:%s (POST /api/token, GET /api/game/inventory)", host, port)
+    return runner
+
+
+async def stop_activity_http(runner: Optional["web.AppRunner"]) -> None:
+    if runner:
+        await runner.cleanup()

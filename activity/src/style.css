@@ -135,8 +135,23 @@ code {
   border: 1px dashed var(--border);
   border-radius: 8px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
   color: var(--muted);
+  gap: 4px;
+  padding: 6px;
+}
+
+.equip-slot.filled {
+  border-style: solid;
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.equip-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: capitalize;
 }

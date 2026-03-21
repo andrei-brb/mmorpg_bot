@@ -1,68 +1,94 @@
 # Discord Activity (Embedded App) — Setup & how to open
 
-This repo includes a **web client** in `activity/` that runs **inside Discord** as an **Activity** (iframe). The Python bot remains the source of truth for inventory, combat, and economy; the Activity is the visual shell (we’ll wire APIs next).
+The **Activity** (`activity/`) is a web UI inside Discord. The **Python bot** stays authoritative for game data; this document covers **OAuth**, the **HTTP API** on the bot process, and **inventory**.
 
-## What you need
+## Architecture
 
-1. **Same Discord application** as your bot (Developer Portal).
-2. **Application ID** (OAuth2 client id) — *not* the bot token.  
-   Portal → **General Information** → **Application ID**.
-3. A **public HTTPS URL** serving the built files (or **ngrok** for local dev).
+| Piece | Role |
+|--------|------|
+| `activity/dist` | Static UI (Vite) — icons, inventory grid |
+| Bot process (`main.py`) | Discord gateway + **aiohttp** on `PORT`: `POST /api/token`, `GET /api/game/inventory` |
+| PostgreSQL | Same DB as slash commands |
 
-## One-time: configure the portal
+When **URL mapping** points at your public bot URL, you can serve **both** the static files and `/api/*` from one host (recommended for Railway).
 
-1. Open [Discord Developer Portal](https://discord.com/developers/applications) → select your app.
-2. Go to **Activities** (or **Embedded App** / **Rich Presence** depending on UI).
-3. Enable the Activity / Embedded App experience if prompted.
-4. Under **URL Mappings** (sometimes “Activity URL”):
-   - **Prefix:** `/`
-   - **Target URL:** `https://your-deployed-host.example`  
-     (no trailing slash; must be HTTPS in production)
-5. Save. It can take a minute to propagate.
+## Environment variables (bot / `.env`)
+
+| Variable | Required for Activity API | Description |
+|----------|---------------------------|-------------|
+| `DISCORD_TOKEN` | Yes (bot) | Bot token |
+| `DATABASE_URL` | Yes | PostgreSQL |
+| `DISCORD_CLIENT_SECRET` | **Yes** for `/api/token` | Developer Portal → **OAuth2** → Client Secret |
+| `DISCORD_APPLICATION_ID` | Recommended | Same as **Application ID** (General Information). Used if the bot’s `application_id` is not ready at startup. |
+| `DISCORD_OAUTH_REDIRECT_URI` | Rarely | Only if Discord returns `redirect_uri` errors — must match a URI under **OAuth2 → Redirects** exactly. |
+| `PORT` / `ACTIVITY_HTTP_PORT` | Optional | HTTP listen port (default **8080**). **Railway** sets `PORT` automatically. |
+| `ACTIVITY_CORS_ORIGINS` | Optional | Comma-separated origins if the Activity is on another domain than the API (e.g. Vercel → Railway). |
+| `ACTIVITY_SERVE_STATIC` | Optional | `1` (default): serve `activity/dist` when present. Set `0` if you only host the API. |
+| `ACTIVITY_STATIC_DIR` | Optional | Override path to built static files |
+
+Frontend build (`activity/.env`):
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_DISCORD_CLIENT_ID` | Application ID (same app as the bot) |
+| `VITE_API_BASE_URL` | Empty = same origin. Set to your API base if UI and API differ (e.g. `https://your-bot.up.railway.app`). |
+
+## Developer Portal checklist
+
+1. **General Information** — copy **Application ID** → `VITE_DISCORD_CLIENT_ID` and `DISCORD_APPLICATION_ID`.
+2. **OAuth2** — copy **Client Secret** → `DISCORD_CLIENT_SECRET`.
+3. **OAuth2 → Redirects** — add the URL where your Activity is served, e.g. `https://your-public-host/` (no path mismatch). If token exchange fails with redirect errors, set `DISCORD_OAUTH_REDIRECT_URI` to that **exact** string and retry.
+4. **Activities → URL mappings** — prefix `/` → target `https://your-public-host` (same host as above if you use one service).
 
 ## Build the web client
 
 ```bash
 cd activity
 cp .env.example .env
-# Set VITE_DISCORD_CLIENT_ID to your Application ID
+# VITE_DISCORD_CLIENT_ID=...   (Application ID)
 npm ci
 npm run build
 ```
 
-Output is in `activity/dist/`. Upload or deploy that folder to any static host (Vercel, Netlify, Cloudflare Pages, S3+CloudFront, etc.).
+Output: `activity/dist/`.
 
-### Local testing with ngrok
+## Local dev (bot + Vite + proxy)
 
-```bash
-cd activity
-npm run dev
-# In another terminal:
-ngrok http 5173
-```
+1. **Bot** — set `DISCORD_CLIENT_SECRET`, `DISCORD_APPLICATION_ID`, `DATABASE_URL`, `DISCORD_TOKEN`. HTTP listens on **8080** by default (`ACTIVITY_HTTP_PORT` or `PORT`).
+2. **Activity** — `cd activity && npm run dev` (port **5173**). Vite proxies `/api` and `/health` to `http://127.0.0.1:8080` (override with `VITE_DEV_PROXY_TARGET` in `activity/.env`).
+3. **ngrok** — `ngrok http 5173` and put the HTTPS URL in **URL mappings** (not 8080), so the iframe loads Vite and `/api` is proxied to your local bot.
 
-Use the **https** URL ngrok prints as the **URL Mapping** target (e.g. `https://abcd.ngrok.io`). Reload Discord after changing mappings.
+## Production (single host, e.g. Railway)
+
+1. Set env vars on the service (including `DISCORD_CLIENT_SECRET`).
+2. Build `activity` with the same `VITE_DISCORD_CLIENT_ID` and deploy `activity/dist` next to the bot **or** use the multi-stage **Dockerfile** with build-arg `VITE_DISCORD_CLIENT_ID`.
+3. Point **URL mapping** at `https://<your-service>.up.railway.app/` (or your custom domain).
+4. `GET https://your-host/health` should return `{"ok": true, ...}`.
+
+## Split UI + API (optional)
+
+- Host **only** `activity/dist` on Vercel/Netlify.
+- Set **`VITE_API_BASE_URL`** at build time to your Railway API origin.
+- Set **`ACTIVITY_CORS_ORIGINS`** on the bot to your static site origin (e.g. `https://your-app.vercel.app`).
+- Set **`ACTIVITY_SERVE_STATIC=0`** on Railway if you don’t copy `dist` there.
 
 ## How to open the Activity in Discord
 
-1. **Install the bot** in a server (if not already).
-2. **Join a voice channel** in that server (Activities launch from voice context).
-3. Look for the **rocket / Activities** icon in the voice UI (desktop: near mute/deafen; sometimes in the channel sidebar).
-4. Click **Open Activity** / your app name — Discord loads your mapped URL in an iframe.
+1. Install the bot in a server.
+2. **Join a voice channel.**
+3. Use the **rocket / Activities** control → launch your app.
 
-**Notes**
+Use **`/activity`** in Discord for a short reminder.
 
-- If the iframe stays blank: check browser DevTools (hard on mobile); fix mixed content (must be HTTPS); confirm URL mapping matches your deploy URL exactly.
-- Opening `index.html` directly in a browser **won’t** complete `discordSdk.ready()` — you need the Discord client iframe (or use ngrok + portal mapping + launch from voice).
+## API reference (read-only)
 
-## Bot command
+- `POST /api/token` — JSON `{"code": "<oauth code from Embedded App SDK>"}` → `{"access_token": "..."}`.
+- `GET /api/game/inventory` — header `Authorization: Bearer <access_token>` → character + items (same data source as `/inventory`).
+- `GET /api/game/equipment` — same auth → equipped items by slot.
+- `GET /health` — liveness.
 
-Use **`/activity`** in-game (same channel rules as other general commands) for a short checklist and your **Application ID** when available.
+## See also
 
-## Next steps (development)
-
-- Add **OAuth2 token exchange** + `authenticate` so the Activity can call **your** REST API as the logged-in user.
-- Expose read-only **inventory / equipment** JSON from the bot or a small API service.
-- Keep **authoritative** combat/economy logic on the server.
-
-See also: [Discord Activities overview](https://discord.com/developers/docs/activities/overview) and [Embedded App SDK](https://discord.com/developers/docs/developer-tools/embedded-app-sdk).
+- [Discord Activities overview](https://discord.com/developers/docs/activities/overview)
+- [Embedded App SDK](https://discord.com/developers/docs/developer-tools/embedded-app-sdk)
+- [discord-embedded-app-sdk-examples](https://github.com/discord/embedded-app-sdk-examples) (token exchange pattern)
