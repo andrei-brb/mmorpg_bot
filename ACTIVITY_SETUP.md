@@ -92,6 +92,23 @@ Use **`/activity`** for setup notes if something fails.
 - `GET /api/game/equipment` — same auth → equipped items by slot.
 - `GET /health` — liveness.
 
+## Troubleshooting: `50234` / “does not have the EMBEDDED flag”
+
+When using **`/open_game`** (or `LAUNCH_ACTIVITY`), Discord may return:
+
+`Cannot use this interaction callback if the application does not have the EMBEDDED flag`
+
+**Meaning:** Embedded Activities are **not enabled** for that application in the Developer Portal.
+
+**Fix:**
+
+1. [Developer Portal](https://discord.com/developers/applications) → **the same application** as your bot (`DISCORD_APPLICATION_ID`).
+2. **Activities** → **Settings** (not only URL Mappings).
+3. Turn **Enable Activities** on (exact label may vary). You typically need **URL Mappings** configured first.
+4. Save, wait a short time, try **`/open_game`** again.
+
+Without this, OAuth and Railway can still work, but **launching** the Activity from an interaction will fail.
+
 ## Troubleshooting: “invalid redirect URI”
 
 Discord compares three things:

@@ -96,8 +96,8 @@ class ActivityCog(commands.Cog, name="Activity"):
                 "• Pick **this application** — the iframe loads your hosted URL.\n\n"
                 "**Desktop:** Left sidebar → voice channel → rocket icon.\n"
                 "**Mobile:** Voice channel → look for Activities / launcher.\n\n"
-                "If you don’t see it: confirm **Activities** is enabled for the app in the portal "
-                "and that URL mapping is saved."
+                "If **`/open_game`** errors with **50234 / EMBEDDED**: **Activities** → **Settings** → turn **Enable Activities** on "
+                "(after URL mapping is saved)."
             ),
             inline=False,
         )
@@ -124,12 +124,25 @@ class ActivityCog(commands.Cog, name="Activity"):
         except discord.HTTPException as e:
             log.warning("open_game LAUNCH_ACTIVITY failed: %s", e)
             if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "Could not open the Activity. Check the Developer Portal → **Activities** are enabled "
-                    f"for this app, URL mapping is set, and the client is up to date.\n\n"
-                    f"Discord said: `{e}`",
-                    ephemeral=True,
-                )
+                if getattr(e, "code", 0) == 50234 or "EMBEDDED" in (e.text or "").upper():
+                    msg = (
+                        "**Discord blocked `LAUNCH_ACTIVITY`:** this application does not have the **Embedded / Activities** "
+                        "feature turned on yet (API error **50234**).\n\n"
+                        "**Fix:**\n"
+                        "1. [Developer Portal](https://discord.com/developers/applications) → select **this same app** "
+                        f"(ID `{interaction.client.application_id or '…'}`).\n"
+                        "2. Sidebar → **Activities** → **Settings**.\n"
+                        "3. Turn **Enable Activities** on (wording may vary). You usually need **URL Mappings** saved first.\n"
+                        "4. **Save**, wait ~1 minute, try **`/open_game`** again.\n\n"
+                        "If there is no toggle, check **Activities** → **Getting Started** or Discord’s Activities docs."
+                    )
+                else:
+                    msg = (
+                        "Could not open the Activity. Confirm **Activities** → **Settings** in the portal, **URL mapping**, "
+                        "and an up-to-date Discord client.\n\n"
+                        f"Discord said: `{e}`"
+                    )
+                await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
             log.exception("open_game failed")
             if not interaction.response.is_done():
