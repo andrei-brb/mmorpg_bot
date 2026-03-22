@@ -155,3 +155,157 @@ code {
   color: var(--muted);
   text-transform: capitalize;
 }
+
+.hidden {
+  display: none !important;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--slot);
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tab.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--panel);
+}
+
+.tab-pane {
+  animation: fade 0.15s ease;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: linear-gradient(180deg, var(--accent-dim), #3d2b8c);
+  color: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.enemy-select {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--slot);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.select-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.combat-header {
+  margin-bottom: 0.75rem;
+}
+
+.fighters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 0.5rem;
+}
+
+.hpbar {
+  height: 8px;
+  background: var(--slot);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.hpbar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c44, #e66);
+  border-radius: 4px;
+}
+
+.hpbar + .res-line,
+.fighters .res-line {
+  margin-top: 4px;
+}
+
+.combat-log {
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.log-line {
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0;
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.combat-actions {
+  margin-top: 0.75rem;
+}
+
+.abi-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.abi-btn {
+  flex: 1 1 120px;
+  font-size: 0.72rem;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.outcome-panel h2 {
+  color: var(--success);
+}

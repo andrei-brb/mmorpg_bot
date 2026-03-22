@@ -1,16 +1,29 @@
 # Discord Activity (Embedded App) — Setup & how to open
 
-The **Activity** (`activity/`) is a web UI inside Discord. The **Python bot** stays authoritative for game data; this document covers **OAuth**, the **HTTP API** on the bot process, and **inventory**.
+The **Activity** (`activity/`) is a web UI inside Discord. The **Python bot** stays authoritative for game data; this document covers **OAuth**, the **HTTP API** on the bot process, **inventory**, and **combat** (same engine as `/fight`).
 
 ## Architecture
 
 | Piece | Role |
 |--------|------|
 | `activity/dist` | Static UI (Vite) — icons, inventory grid |
-| Bot process (`main.py`) | Discord gateway + **aiohttp** on `PORT`: `POST /api/token`, `GET /api/game/inventory` |
+| Bot process (`main.py`) | Discord gateway + **aiohttp** on `PORT`: `POST /api/token`, `GET /api/game/inventory`, `GET/POST /api/game/combat/*` |
 | PostgreSQL | Same DB as slash commands |
 
 When **URL mapping** points at your public bot URL, you can serve **both** the static files and `/api/*` from one host (recommended for Railway).
+
+## Combat API (Embedded App)
+
+Iframe combat uses **in-memory** sessions keyed by Discord user id (`services/combat/activity_combat.py`). You **cannot** run Discord `/fight` and Activity combat for the same character at the same time.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/api/game/combat/enemies` | `Authorization: Bearer` | Enemies/bosses available in your **current zone** |
+| `GET` | `/api/game/combat/state` | Bearer | Resume UI if a session exists |
+| `POST` | `/api/game/combat/start` | Bearer | JSON `{ "enemy_key": "kobold", "guild_id": "<optional>", "force": false }` — `409` if already fighting (includes `state`) |
+| `POST` | `/api/game/combat/action` | Bearer | JSON `{ "ability": "auto_attack" }` or `{ "flee": true }` or `{ "potion": true }` — optional `guild_id` for milestones/loot scaling |
+
+Optional header **`X-Guild-Id`** (or `guild_id` in JSON) should match the guild the Activity is opened in so **server milestones** and **server_config** multipliers apply like `/fight`.
 
 ## Environment variables (bot / `.env`)
 

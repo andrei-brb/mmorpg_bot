@@ -21,9 +21,36 @@ type InventoryPayload = {
   items: InvRow[];
 };
 
+type CombatEnemy = { key: string; name: string; emoji: string; kind: string };
+
+type CombatAbility = {
+  key: string;
+  name: string;
+  emoji: string;
+  cost: number;
+  cost_type: string;
+  cooldown: number;
+  disabled?: string | null;
+};
+
+type CombatStatePayload = {
+  turn: number;
+  player: { name: string; current_hp: number; max_hp: number; current_res: number; max_res: number; res_type: string };
+  enemy: { name: string; current_hp: number; max_hp: number };
+  log: string[];
+  abilities: CombatAbility[];
+  can_potion: boolean;
+};
+
 function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${apiBase}${p}`;
+}
+
+function authHeaders(accessToken: string, guildId?: string): HeadersInit {
+  const h: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
+  if (guildId) h["X-Guild-Id"] = String(guildId);
+  return h;
 }
 
 function el(html: string): HTMLElement {
@@ -76,10 +103,7 @@ function renderLoading(phase: string): void {
   );
 }
 
-function renderGame(payload: InventoryPayload, meta: { guildId?: string; channelId?: string }): void {
-  const root = document.getElementById("app");
-  if (!root) return;
-
+function buildHeroHtml(payload: InventoryPayload): string {
   const char = payload.character;
   const items = payload.items || [];
   const bag = items.filter((i) => !i.is_equipped);
@@ -112,12 +136,107 @@ function renderGame(payload: InventoryPayload, meta: { guildId?: string; channel
     })
     .join("");
 
-  const who = payload.discord?.global_name || payload.discord?.username || "Traveler";
   const charLine = char
     ? `<p class="hint"><strong>${escapeHtml(char.name || "?")}</strong> · Lv ${char.level ?? "?"} · ${escapeHtml(
         String(char.class || "?"),
       )} · 🪙 ${char.gold ?? 0}</p>`
     : `<p class="hint">No character yet — use <code>/character create</code> in Discord.</p>`;
+
+  return `
+    ${charLine}
+    <div class="panel">
+      <h2>Equipment</h2>
+      <div class="equip-row">${equipHtml}</div>
+    </div>
+    <div class="panel">
+      <h2>Inventory (bag)</h2>
+      <div class="grid">${slotHtml}</div>
+      <p class="hint" style="margin-top:0.75rem">Showing up to <strong>20</strong> unequipped items (same idea as <code>/inventory</code>).</p>
+    </div>
+  `;
+}
+
+function hpBar(pct: number): string {
+  const p = Math.max(0, Math.min(100, pct));
+  return `<div class="hpbar"><div class="hpbar-fill" style="width:${p}%"></div></div>`;
+}
+
+function renderCombatState(state: CombatStatePayload): string {
+  const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
+  const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
+  const resLine =
+    state.player.max_res > 0
+      ? `<p class="hint res-line">${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}</p>`
+      : "";
+
+  const logHtml = (state.log || [])
+    .slice(-14)
+    .map((line) => `<div class="log-line">${escapeHtml(line)}</div>`)
+    .join("");
+
+  const abiHtml = (state.abilities || [])
+    .map((a) => {
+      const dis = a.disabled ? ` disabled title="${escapeHtml(a.disabled)}"` : "";
+      return `<button type="button" class="btn abi-btn" data-abi="${escapeHtml(a.key)}"${dis}>${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</button>`;
+    })
+    .join("");
+
+  const pot =
+    state.can_potion ?
+      `<button type="button" class="btn btn-secondary" data-action="potion">🧪 Potion</button>`
+    : "";
+
+  return `
+    <div class="combat-header">
+      <p class="hint">Turn <strong>${state.turn}</strong></p>
+      <div class="fighters">
+        <div>
+          <strong>${escapeHtml(state.player.name)}</strong> ${state.player.current_hp}/${state.player.max_hp} HP
+          ${hpBar(php)}
+          ${resLine}
+        </div>
+        <div>
+          <strong>${escapeHtml(state.enemy.name)}</strong> ${state.enemy.current_hp}/${state.enemy.max_hp} HP
+          ${hpBar(ehp)}
+        </div>
+      </div>
+    </div>
+    <div class="panel combat-log-panel">
+      <h2>Battle log</h2>
+      <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
+    </div>
+    <div class="combat-actions">
+      <div class="abi-grid">${abiHtml}</div>
+      <div class="row-actions">
+        ${pot}
+        <button type="button" class="btn btn-secondary" data-action="flee">🏃 Flee</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderOutcome(title: string, lines: string[]): string {
+  const body = lines.map((l) => `<p class="hint">${escapeHtml(l)}</p>`).join("");
+  return `
+    <div class="panel outcome-panel">
+      <h2>${escapeHtml(title)}</h2>
+      ${body}
+      <button type="button" class="btn" data-action="combat-again">Fight again</button>
+    </div>
+  `;
+}
+
+function mountApp(
+  accessToken: string,
+  payload: InventoryPayload,
+  meta: { guildId?: string; channelId?: string },
+): void {
+  const root = document.getElementById("app");
+  if (!root) return;
+  const appRoot = root;
+
+  const guildId = meta.guildId ?? undefined;
+  const who = payload.discord?.global_name || payload.discord?.username || "Traveler";
 
   const metaLine =
     meta.guildId || meta.channelId
@@ -126,27 +245,175 @@ function renderGame(payload: InventoryPayload, meta: { guildId?: string; channel
         )}</code></p>`
       : "";
 
-  root.innerHTML = "";
-  root.appendChild(
+  function setTab(next: "hero" | "combat"): void {
+    const hBtn = appRoot.querySelector('[data-tab="hero"]');
+    const cBtn = appRoot.querySelector('[data-tab="combat"]');
+    const hPane = appRoot.querySelector("#tab-hero");
+    const cPane = appRoot.querySelector("#tab-combat");
+    hBtn?.classList.toggle("active", next === "hero");
+    cBtn?.classList.toggle("active", next === "combat");
+    hPane?.classList.toggle("hidden", next !== "hero");
+    cPane?.classList.toggle("hidden", next !== "combat");
+    if (next === "combat") void refreshCombatPanel();
+  }
+
+  async function refreshCombatPanel(): Promise<void> {
+    const host = appRoot.querySelector("#combat-mount");
+    if (!host) return;
+    host.innerHTML = `<p class="hint">Loading combat…</p>`;
+
+    try {
+      const [stRes, enRes] = await Promise.all([
+        fetch(apiUrl("/api/game/combat/state"), { headers: authHeaders(accessToken, guildId) }),
+        fetch(apiUrl("/api/game/combat/enemies"), { headers: authHeaders(accessToken, guildId) }),
+      ]);
+
+      const stJson = (await stRes.json()) as { active?: boolean; state?: CombatStatePayload };
+      const enJson = (await enRes.json()) as { enemies?: CombatEnemy[] };
+
+      if (stJson.active && stJson.state) {
+        host.innerHTML = renderCombatState(stJson.state);
+        wireCombatActions(host);
+        return;
+      }
+
+      const enemies = enJson.enemies || [];
+      if (enemies.length === 0) {
+        host.innerHTML = `<p class="hint">No enemies listed — travel in Discord or create a character.</p>`;
+        return;
+      }
+
+      const opts = enemies
+        .map((e) => `<option value="${escapeHtml(e.key)}">${escapeHtml(e.emoji)} ${escapeHtml(e.name)} (${e.kind})</option>`)
+        .join("");
+
+      host.innerHTML = `
+        <div class="panel">
+          <h2>Start a fight</h2>
+          <p class="hint">Same zone + rules as <code>/fight</code> in Discord. You cannot run two combats at once.</p>
+          <label class="select-label">Enemy</label>
+          <select id="enemy-pick" class="enemy-select">${opts}</select>
+          <div style="margin-top:0.75rem">
+            <button type="button" class="btn" data-action="start-fight">⚔️ Start</button>
+          </div>
+        </div>
+      `;
+
+      host.querySelector("[data-action=start-fight]")?.addEventListener("click", async () => {
+        const sel = host.querySelector("#enemy-pick") as HTMLSelectElement | null;
+        const enemyKey = sel?.value || "";
+        if (!enemyKey) return;
+        host.innerHTML = `<p class="hint">Starting…</p>`;
+        const startRes = await fetch(apiUrl("/api/game/combat/start"), {
+          method: "POST",
+          headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+          body: JSON.stringify({ enemy_key: enemyKey, guild_id: guildId ? String(guildId) : undefined }),
+        });
+        const startJson = (await startRes.json()) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          state?: CombatStatePayload;
+        };
+
+        if (startRes.status === 409 && startJson.state) {
+          host.innerHTML = renderCombatState(startJson.state);
+          wireCombatActions(host);
+          return;
+        }
+
+        if (!startRes.ok || startJson.error) {
+          const msg = startJson.message || startJson.error || "start_failed";
+          host.innerHTML = `<p class="hint">❌ ${escapeHtml(msg)}</p>`;
+          return;
+        }
+
+        if (startJson.state) {
+          host.innerHTML = renderCombatState(startJson.state);
+          wireCombatActions(host);
+        }
+      });
+    } catch (e) {
+      host.innerHTML = `<p class="hint">❌ ${escapeHtml(e instanceof Error ? e.message : String(e))}</p>`;
+    }
+  }
+
+  async function postAction(body: Record<string, unknown>): Promise<void> {
+    const host = appRoot.querySelector("#combat-mount");
+    if (!host) return;
+    const res = await fetch(apiUrl("/api/game/combat/action"), {
+      method: "POST",
+      headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, guild_id: guildId ? String(guildId) : undefined }),
+    });
+    const json = (await res.json()) as {
+      ok?: boolean;
+      ended?: boolean;
+      state?: CombatStatePayload;
+      outcome?: { type?: string; title?: string; lines?: string[] };
+      error?: string;
+      message?: string;
+    };
+
+    if (!res.ok || json.error) {
+      host.innerHTML = `<p class="hint">❌ ${escapeHtml(json.message || json.error || "action_failed")}</p>`;
+      return;
+    }
+
+    if (json.ended && json.outcome) {
+      const title = json.outcome.title || json.outcome.type || "Ended";
+      const lines = json.outcome.lines || [];
+      host.innerHTML = renderOutcome(title, lines);
+      host.querySelector("[data-action=combat-again]")?.addEventListener("click", () => {
+        void refreshCombatPanel();
+      });
+      return;
+    }
+
+    if (json.state) {
+      host.innerHTML = renderCombatState(json.state);
+      wireCombatActions(host);
+    }
+  }
+
+  function wireCombatActions(host: Element): void {
+    host.querySelectorAll("[data-abi]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = (btn as HTMLElement).dataset.abi;
+        if (!key || (btn as HTMLButtonElement).disabled) return;
+        void postAction({ ability: key });
+      });
+    });
+    host.querySelector('[data-action="flee"]')?.addEventListener("click", () => {
+      void postAction({ flee: true });
+    });
+    host.querySelector('[data-action="potion"]')?.addEventListener("click", () => {
+      void postAction({ potion: true });
+    });
+  }
+
+  appRoot.innerHTML = "";
+  appRoot.appendChild(
     el(`
     <div class="shell">
       <h1>World of Discord</h1>
       <p class="sub">Signed in as ${escapeHtml(who)}</p>
-      <div class="status-pill"><span class="dot ok"></span> Live inventory</div>
-      ${charLine}
+      <div class="status-pill"><span class="dot ok"></span> Connected</div>
       ${metaLine}
-      <div class="panel">
-        <h2>Equipment</h2>
-        <div class="equip-row">${equipHtml}</div>
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="hero">Hero</button>
+        <button type="button" class="tab" data-tab="combat">Combat</button>
       </div>
-      <div class="panel">
-        <h2>Inventory (bag)</h2>
-        <div class="grid">${slotHtml}</div>
-        <p class="hint" style="margin-top:0.75rem">Showing up to <strong>20</strong> unequipped items (same idea as <code>/inventory</code>).</p>
+      <div id="tab-hero" class="tab-pane">${buildHeroHtml(payload)}</div>
+      <div id="tab-combat" class="tab-pane hidden">
+        <div id="combat-mount"><p class="hint">Open this tab to load combat.</p></div>
       </div>
     </div>
   `),
   );
+
+  appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));
+  appRoot.querySelector('[data-tab="combat"]')?.addEventListener("click", () => setTab("combat"));
 }
 
 async function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
@@ -235,7 +502,7 @@ async function main(): Promise<void> {
     console.warn("authenticate() warning", e);
   }
 
-  renderLoading("Loading your inventory…");
+  renderLoading("Loading your character…");
 
   const invRes = await fetch(apiUrl("/api/game/inventory"), {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -252,7 +519,7 @@ async function main(): Promise<void> {
 
   const payload = (await invRes.json()) as InventoryPayload;
 
-  renderGame(payload, {
+  mountApp(accessToken, payload, {
     guildId: discordSdk.guildId ?? undefined,
     channelId: discordSdk.channelId ?? undefined,
   });

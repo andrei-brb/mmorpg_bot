@@ -386,11 +386,19 @@ class CombatCog(commands.Cog, name="Combat"):
         char = await self.char_svc.get_character(interaction.user.id)
         if not char:
             return await interaction.followup.send("❌ No character. Use `/character create`.")
-        
+
+        from services.combat.activity_combat import ACTIVE_ACTIVITY
+
+        if interaction.user.id in ACTIVE_ACTIVITY:
+            return await interaction.followup.send(
+                "⚔️ You're already fighting in the **Activity** (Embedded App). Finish or flee there first."
+            )
+
         # Check if stuck in combat (status says in_combat but no active session)
         if char["combat_status"] == "in_combat":
             channel_has_combat = interaction.channel_id in ACTIVE
-            if not channel_has_combat:
+            activity_has_combat = interaction.user.id in ACTIVE_ACTIVITY
+            if not channel_has_combat and not activity_has_combat:
                 # Stuck in combat - clear it automatically
                 await self.bot.db.execute(
                     "UPDATE characters SET combat_status='idle' WHERE id=$1",
@@ -400,7 +408,7 @@ class CombatCog(commands.Cog, name="Combat"):
                 char = await self.char_svc.get_character(interaction.user.id)
             else:
                 return await interaction.followup.send("⚔️ You're already in combat!")
-        
+
         if interaction.channel_id in ACTIVE:
             return await interaction.followup.send("⚔️ Another combat is active in this channel.")
 
@@ -994,12 +1002,15 @@ class CombatCog(commands.Cog, name="Combat"):
         char = await self.char_svc.get_character(interaction.user.id)
         if not char:
             return await interaction.followup.send("❌ No character found.", ephemeral=True)
-        
+
+        from services.combat.activity_combat import ACTIVE_ACTIVITY
+
         status = char["combat_status"]
         if status == "in_combat":
             # Check if there's actually an active combat session
             channel_has_combat = interaction.channel_id in ACTIVE
-            if not channel_has_combat:
+            activity_has_combat = interaction.user.id in ACTIVE_ACTIVITY
+            if not channel_has_combat and not activity_has_combat:
                 # Stuck in combat - clear it
                 await self.bot.db.execute(
                     "UPDATE characters SET combat_status='idle' WHERE id=$1",
@@ -1009,6 +1020,12 @@ class CombatCog(commands.Cog, name="Combat"):
                     title="⚔️ Combat Status",
                     description="You were stuck in combat status (no active fight).\n**Status cleared!** You can now use commands again.",
                     color=0x00FF00,
+                )
+            elif activity_has_combat:
+                embed = discord.Embed(
+                    title="⚔️ Combat Status",
+                    description="You are in combat in the **Activity** (Embedded App). Continue there or flee.",
+                    color=0xFF4444,
                 )
             else:
                 embed = discord.Embed(

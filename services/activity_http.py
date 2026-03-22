@@ -6,7 +6,11 @@
 Endpoints:
   POST /api/token              — Exchange OAuth code (from Embedded App SDK) for access_token
   GET  /api/game/inventory     — Bearer token → character + inventory rows
-  GET  /api/game/equipment      — Bearer token → equipped items by slot
+  GET  /api/game/equipment     — Bearer token → equipped items by slot
+  GET  /api/game/combat/enemies — Bearer token → enemies/bosses in current zone
+  GET  /api/game/combat/state   — Bearer token → active iframe combat (if any)
+  POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
+  POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
 
 Requires DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID (same app as the bot).
 See ACTIVITY_SETUP.md.
@@ -28,6 +32,7 @@ from aiohttp import web
 
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
+from services.combat import activity_combat as activity_combat_api
 
 log = logging.getLogger("activity_http")
 
@@ -261,6 +266,134 @@ async def handle_inventory(request: web.Request) -> web.Response:
     )
 
 
+def _guild_id_from_request(request: web.Request, body: Optional[Dict[str, Any]] = None) -> Optional[int]:
+    raw = request.headers.get("X-Guild-Id") or request.headers.get("X-Guild-ID")
+    if raw and str(raw).strip().isdigit():
+        return int(str(raw).strip())
+    if body and body.get("guild_id") is not None:
+        g = body.get("guild_id")
+        if isinstance(g, int):
+            return g
+        if isinstance(g, str) and g.strip().isdigit():
+            return int(g.strip())
+    return None
+
+
+async def handle_combat_enemies(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(_json_safe({"enemies": [], "error": "no_character"}))
+
+    enemies = await activity_combat_api.list_zone_enemies(char)
+    return web.json_response(_json_safe({"enemies": enemies}))
+
+
+async def handle_combat_state(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    payload = await activity_combat_api.get_activity_combat_state(bot, discord_id)
+    return web.json_response(_json_safe(payload))
+
+
+async def handle_combat_start(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    enemy_key = (body.get("enemy_key") or body.get("enemy") or "").strip()
+    if not enemy_key:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_enemy_key"}), content_type="application/json")
+
+    force = bool(body.get("force"))
+    guild_id = _guild_id_from_request(request, body)
+
+    result = await activity_combat_api.start_activity_combat(bot, discord_id, enemy_key, guild_id, force=force)
+    status = 200
+    if result.get("error") == "already_in_combat":
+        status = 409
+    elif result.get("error"):
+        status = 400
+    return web.json_response(_json_safe(result), status=status)
+
+
+async def handle_combat_action(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    guild_id = _guild_id_from_request(request, body)
+    result = await activity_combat_api.process_activity_action(bot, discord_id, guild_id, body)
+    status = 200
+    if result.get("error"):
+        status = 400
+    return web.json_response(_json_safe(result), status=status)
+
+
 async def handle_equipment(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -327,6 +460,10 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/token", handle_token)
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/equipment", handle_equipment)
+    app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
+    app.router.add_get("/api/game/combat/state", handle_combat_state)
+    app.router.add_post("/api/game/combat/start", handle_combat_start)
+    app.router.add_post("/api/game/combat/action", handle_combat_action)
     app.router.add_get("/health", handle_health)
 
     static_root = _static_dir()
@@ -349,7 +486,11 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     host = os.getenv("ACTIVITY_HTTP_HOST", "0.0.0.0")
     site = web.TCPSite(runner, host, port)
     await site.start()
-    log.info("Activity HTTP listening on http://%s:%s (POST /api/token, GET /api/game/inventory)", host, port)
+    log.info(
+        "Activity HTTP listening on http://%s:%s (POST /api/token, game inventory + combat API)",
+        host,
+        port,
+    )
     return runner
 
 
