@@ -238,6 +238,9 @@ function mountApp(
   const guildId = meta.guildId ?? undefined;
   const who = payload.discord?.global_name || payload.discord?.username || "Traveler";
 
+  /** Latest inventory snapshot; updated after combat when loot/gold/bag may change */
+  let currentPayload: InventoryPayload = payload;
+
   const metaLine =
     meta.guildId || meta.channelId
       ? `<p class="hint">Guild <code>${escapeHtml(meta.guildId ?? "—")}</code> · Channel <code>${escapeHtml(
@@ -255,6 +258,21 @@ function mountApp(
     hPane?.classList.toggle("hidden", next !== "hero");
     cPane?.classList.toggle("hidden", next !== "combat");
     if (next === "combat") void refreshCombatPanel();
+  }
+
+  async function refreshHeroInventory(): Promise<void> {
+    try {
+      const invRes = await fetch(apiUrl("/api/game/inventory"), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!invRes.ok) return;
+      const next = (await invRes.json()) as InventoryPayload;
+      currentPayload = next;
+      const heroPane = appRoot.querySelector("#tab-hero");
+      if (heroPane) heroPane.innerHTML = buildHeroHtml(currentPayload);
+    } catch (e) {
+      console.warn("refreshHeroInventory failed", e);
+    }
   }
 
   async function refreshCombatPanel(): Promise<void> {
@@ -364,6 +382,10 @@ function mountApp(
       const title = json.outcome.title || json.outcome.type || "Ended";
       const lines = json.outcome.lines || [];
       host.innerHTML = renderOutcome(title, lines);
+      const ot = json.outcome.type;
+      if (ot === "victory" || ot === "flee") {
+        void refreshHeroInventory();
+      }
       host.querySelector("[data-action=combat-again]")?.addEventListener("click", () => {
         void refreshCombatPanel();
       });
