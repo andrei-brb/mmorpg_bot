@@ -672,6 +672,229 @@ code {
   width: 30%;
 }
 
+/* ───────────────────────── Combat Scene (requested style) ───────────────────── */
+.topbar {
+  display: flex;
+  justify-content: space-around;
+  background: #1e293b;
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 0.65rem;
+}
+
+.scene-wrap {
+  margin-top: 0.3rem;
+}
+
+.zone-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.scene {
+  position: relative;
+  min-height: 370px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #2c3a6e;
+  background: #111a33;
+}
+
+.bg-layer {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(10, 13, 24, 0.22), rgba(4, 6, 12, 0.58)),
+    url("/assets/bg/forest.jpg") center/cover no-repeat;
+}
+
+.scene .player,
+.scene .enemy {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+  z-index: 2;
+}
+
+.scene .player {
+  left: 28px;
+}
+
+.scene .enemy {
+  right: 28px;
+}
+
+.scene .player img,
+.scene .enemy img {
+  width: 128px;
+  max-width: 30vw;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.42));
+}
+
+.scene .name {
+  margin-top: 6px;
+  font-weight: bold;
+  font-size: 0.82rem;
+}
+
+.scene .hpbar {
+  width: 150px;
+  height: 11px;
+  background: #334155;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.scene .hpfill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.scene .playerhp {
+  background: linear-gradient(to right, #22c55e, #4ade80);
+}
+
+.scene .enemyhp {
+  background: linear-gradient(to right, #ef4444, #f87171);
+}
+
+.scene .hptext {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.damage {
+  position: absolute;
+  top: 70px;
+  right: 170px;
+  font-size: 30px;
+  color: orange;
+  font-weight: bold;
+  animation: floatUp 0.8s ease-out;
+  z-index: 3;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px);
+  }
+}
+
+.party {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.partyMember {
+  width: 50px;
+  text-align: center;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  background: #475569;
+  border-radius: 50%;
+}
+
+.partyHp {
+  height: 6px;
+  background: #22c55e;
+  border-radius: 5px;
+  margin-top: 3px;
+}
+
+.log-box {
+  background: #1e293b;
+  padding: 10px;
+  border-radius: 10px;
+  margin-top: 10px;
+  font-size: 14px;
+  border: 1px solid #2a355a;
+}
+
+.log-highlight {
+  color: #f5f7ff;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.skills {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.skill-btn {
+  flex: 1 1 120px;
+  margin: 0;
+  min-height: 56px;
+  padding: 8px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+  text-align: left;
+}
+
+.skill-btn .skill-name {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.skill-btn .skill-cost {
+  display: block;
+  font-size: 0.68rem;
+  margin-top: 3px;
+  color: #a8b6dd;
+}
+
+.skill-btn:hover {
+  background: #334155;
+}
+
+.skill-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.skill-btn.flee-btn {
+  flex: 0 0 120px;
+  background: #3d1f29;
+  border-color: #7a3248;
+}
+
+.skill-btn.alt {
+  background: #2d3249;
+  border-color: #545e86;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 10px;
+  padding: 10px;
+  background: #1e293b;
+  border-radius: 10px;
+}
+
 @media (max-width: 860px) {
   .shell {
     max-width: 760px;
@@ -696,5 +919,19 @@ code {
   }
   .progress-stats {
     grid-template-columns: 1fr;
+  }
+  .scene {
+    min-height: 320px;
+  }
+  .scene .player {
+    left: 14px;
+  }
+  .scene .enemy {
+    right: 14px;
+  }
+  .damage {
+    right: 90px;
+    top: 56px;
+    font-size: 1.55rem;
   }
 }

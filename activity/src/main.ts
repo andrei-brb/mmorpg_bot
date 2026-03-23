@@ -224,9 +224,17 @@ function buildHeroHtml(payload: InventoryPayload): string {
   `;
 }
 
-function hpBar(pct: number): string {
-  const p = Math.max(0, Math.min(100, pct));
-  return `<div class="hpbar"><div class="hpbar-fill" style="width:${p}%"></div></div>`;
+function stripBattleMarkdown(line: string): string {
+  return line.replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+}
+
+function lastDamageFromLog(lines: string[]): string | null {
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const raw = lines[i] || "";
+    const m = raw.match(/\*\*(\d[\d,]*)\*\*\s*dmg/i) || raw.match(/(\d[\d,]*)\s*dmg/i);
+    if (m?.[1]) return m[1];
+  }
+  return null;
 }
 
 function renderCombatState(state: CombatStatePayload): string {
@@ -237,51 +245,74 @@ function renderCombatState(state: CombatStatePayload): string {
       ? `<p class="hint res-line">${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}</p>`
       : "";
 
-  const logHtml = (state.log || [])
+  const logs = state.log || [];
+  const logHtml = logs
     .slice(-14)
-    .map((line) => `<div class="log-line v0-log-line">${escapeHtml(line)}</div>`)
+    .map((line) => `<div class="log-line v0-log-line">${escapeHtml(stripBattleMarkdown(line))}</div>`)
     .join("");
+  const latestLine = logs.length ? stripBattleMarkdown(logs[logs.length - 1]) : "Battle started.";
+  const floatDmg = lastDamageFromLog(logs);
 
   const abiHtml = (state.abilities || [])
     .map((a) => {
       const dis = a.disabled ? ` disabled title="${escapeHtml(a.disabled)}"` : "";
-      return `<button type="button" class="btn abi-btn v0-abi-btn" data-abi="${escapeHtml(a.key)}"${dis}>${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</button>`;
+      const c = a.cost > 0 ? `${a.cost} ${a.cost_type}` : "No cost";
+      return `<button type="button" class="skill-btn" data-abi="${escapeHtml(a.key)}"${dis}>
+        <span class="skill-name">${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</span>
+        <span class="skill-cost">${escapeHtml(c)}</span>
+      </button>`;
     })
     .join("");
 
   const pot =
     state.can_potion ?
-      `<button type="button" class="btn btn-secondary" data-action="potion">🧪 Potion</button>`
+      `<button type="button" class="skill-btn alt" data-action="potion">🧪 Potion</button>`
     : "";
 
   return `
-    <div class="panel v0-panel combat-turn-panel">
-      <div class="turn-title">Turn ${state.turn}</div>
-      <div class="turn-sub">Choose your next action</div>
+    <div class="topbar">
+      <div class="tab">Hero</div>
+      <div class="tab active">Combat</div>
+      <div class="tab">Progress</div>
     </div>
-    <div class="combat-header">
-      <div class="fighters">
-        <div class="v0-fighter-card">
-          <strong>${escapeHtml(state.player.name)}</strong> ${state.player.current_hp}/${state.player.max_hp} HP
-          ${hpBar(php)}
+    <div class="scene-wrap">
+      <div class="zone-row">
+        <div>🌲 Current battle</div>
+        <div class="muted-mini">Turn ${state.turn}</div>
+      </div>
+      <div class="scene">
+        <div class="bg-layer"></div>
+        <div class="player">
+          <img src="/assets/player/mage.png" alt="player" />
+          <div class="name">${escapeHtml(state.player.name)}</div>
+          <div class="hpbar"><div class="hpfill playerhp" style="width:${php}%"></div></div>
+          <div class="hptext">${state.player.current_hp} / ${state.player.max_hp}</div>
           ${resLine}
         </div>
-        <div class="v0-fighter-card">
-          <strong>${escapeHtml(state.enemy.name)}</strong> ${state.enemy.current_hp}/${state.enemy.max_hp} HP
-          ${hpBar(ehp)}
+        <div class="enemy">
+          <img src="/assets/enemies/bear.png" alt="enemy" />
+          <div class="name">${escapeHtml(state.enemy.name)}</div>
+          <div class="hpbar"><div class="hpfill enemyhp" style="width:${ehp}%"></div></div>
+          <div class="hptext">${state.enemy.current_hp} / ${state.enemy.max_hp}</div>
         </div>
+        ${floatDmg ? `<div class="damage">-${escapeHtml(floatDmg)}</div>` : ""}
       </div>
     </div>
-    <div class="panel v0-panel combat-log-panel">
-      <h2>Battle log</h2>
+    <div class="party">
+      <div class="partyMember"><div class="avatar"></div><div class="partyHp"></div></div>
+      <div class="partyMember"><div class="avatar"></div><div class="partyHp"></div></div>
+      <div class="partyMember"><div class="avatar"></div><div class="partyHp"></div></div>
+    </div>
+    <div class="log-box">
+      <div class="log-highlight">${escapeHtml(latestLine)}</div>
       <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
     </div>
-    <div class="combat-actions">
-      <div class="abi-grid">${abiHtml}</div>
-      <div class="row-actions">
-        ${pot}
-        <button type="button" class="btn btn-secondary" data-action="flee">🏃 Flee</button>
-      </div>
+    <div class="skills">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>
+    <div class="footer">
+      <div>Back</div>
+      <div>Map</div>
+      <div>Inventory</div>
+      <div>Profile</div>
     </div>
   `;
 }
