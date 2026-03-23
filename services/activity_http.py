@@ -33,6 +33,7 @@ from aiohttp import web
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.combat import activity_combat as activity_combat_api
+from services.achievement.achievement_service import AchievementService
 
 log = logging.getLogger("activity_http")
 
@@ -421,6 +422,138 @@ async def handle_equipment(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"character": dict(char), "equipped": equipped}))
 
 
+async def handle_progress(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(
+            _json_safe(
+                {
+                    "character": None,
+                    "stats": {
+                        "total_combats": 0,
+                        "wins": 0,
+                        "losses": 0,
+                        "fled": 0,
+                        "win_rate": 0.0,
+                    },
+                    "achievements": [],
+                    "history": [],
+                }
+            )
+        )
+
+    ach_svc = AchievementService(db)
+    earned = await ach_svc.get_character_achievements(char["id"])
+
+    # combat_sessions may be sparse in some deployments, so we gracefully handle empty history.
+    combat_rows = await db.fetch(
+        """
+        SELECT cs.outcome, cs.started_at, cs.ended_at, cs.zone
+        FROM combat_sessions cs
+        JOIN combat_participants cp ON cp.session_id = cs.id
+        WHERE cp.character_id = $1
+          AND cp.is_player = TRUE
+        ORDER BY COALESCE(cs.ended_at, cs.started_at) DESC
+        LIMIT 30
+        """,
+        char["id"],
+    )
+
+    wins = sum(1 for r in combat_rows if (r.get("outcome") or "") == "victory")
+    losses = sum(1 for r in combat_rows if (r.get("outcome") or "") in ("defeat", "timeout"))
+    fled = sum(1 for r in combat_rows if (r.get("outcome") or "") == "fled")
+    total = len(combat_rows)
+    win_rate = float(wins / total) if total else 0.0
+
+    # Fallback activity feed from gold log where reason/source indicates combat-style rewards.
+    gold_rows = await db.fetch(
+        """
+        SELECT amount, reason, source, created_at
+        FROM gold_log
+        WHERE character_id = $1
+          AND amount > 0
+          AND (
+            source::text = 'combat_drop'
+            OR reason ILIKE '%combat%'
+            OR reason ILIKE '%drop%'
+          )
+        ORDER BY created_at DESC
+        LIMIT 15
+        """,
+        char["id"],
+    )
+
+    history = [
+        {
+            "type": "combat_gold",
+            "amount": int(r["amount"] or 0),
+            "reason": r.get("reason") or "combat",
+            "source": str(r.get("source") or ""),
+            "at": r.get("created_at"),
+        }
+        for r in gold_rows
+    ]
+
+    # Merge combat rows into history for richer feed.
+    for r in combat_rows[:15]:
+        history.append(
+            {
+                "type": "combat_session",
+                "outcome": r.get("outcome") or "unknown",
+                "zone": r.get("zone"),
+                "at": r.get("ended_at") or r.get("started_at"),
+            }
+        )
+
+    history = sorted(history, key=lambda x: str(x.get("at") or ""), reverse=True)[:20]
+
+    payload = {
+        "character": {
+            "name": char.get("name"),
+            "level": char.get("level"),
+            "gold": char.get("gold"),
+            "last_combat": char.get("last_combat"),
+        },
+        "stats": {
+            "total_combats": total,
+            "wins": wins,
+            "losses": losses,
+            "fled": fled,
+            "win_rate": win_rate,
+        },
+        "achievements": [
+            {
+                "id": a.get("id"),
+                "name": a.get("name"),
+                "description": a.get("description"),
+                "icon": a.get("icon") or "🏆",
+                "points": a.get("points") or 0,
+                "category": a.get("category"),
+                "earned_at": a.get("earned_at"),
+            }
+            for a in earned[:25]
+        ],
+        "history": history,
+    }
+    return web.json_response(_json_safe(payload))
+
+
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
@@ -460,6 +593,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/token", handle_token)
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/equipment", handle_equipment)
+    app.router.add_get("/api/game/progress", handle_progress)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)

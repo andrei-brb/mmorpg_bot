@@ -42,6 +42,33 @@ type CombatStatePayload = {
   can_potion: boolean;
 };
 
+type ProgressAchievement = {
+  id?: string;
+  name?: string;
+  description?: string;
+  icon?: string;
+  points?: number;
+  category?: string;
+  earned_at?: string;
+};
+
+type ProgressHistory = {
+  type?: string;
+  outcome?: string;
+  zone?: string;
+  amount?: number;
+  reason?: string;
+  source?: string;
+  at?: string;
+};
+
+type ProgressPayload = {
+  character?: { name?: string; level?: number; gold?: number; last_combat?: string };
+  stats?: { total_combats?: number; wins?: number; losses?: number; fled?: number; win_rate?: number };
+  achievements?: ProgressAchievement[];
+  history?: ProgressHistory[];
+};
+
 function rarityClass(rarity?: string | null): string {
   const v = (rarity || "").toLowerCase();
   if (v === "legendary") return "rarity-legendary";
@@ -240,10 +267,38 @@ function renderOutcome(title: string, lines: string[]): string {
   `;
 }
 
-function renderProgressPanel(payload: InventoryPayload): string {
-  const char = payload.character;
+function renderProgressPanel(payload: InventoryPayload, progress?: ProgressPayload | null): string {
+  const char = progress?.character || payload.character || {};
+  const stats = progress?.stats || {};
+  const achievements = progress?.achievements || [];
+  const history = progress?.history || [];
   const level = char?.level ?? 1;
   const gold = char?.gold ?? 0;
+  const totalCombats = stats.total_combats ?? 0;
+  const wins = stats.wins ?? 0;
+  const losses = stats.losses ?? 0;
+  const winRate = Number(stats.win_rate ?? 0);
+  const historyHtml = history.length
+    ? history
+        .slice(0, 8)
+        .map((h) => {
+          const at = h.at ? new Date(h.at).toLocaleString() : "";
+          if (h.type === "combat_session") {
+            return `<div class="progress-row"><span>⚔️ ${escapeHtml(h.outcome || "unknown")} ${h.zone ? `· ${escapeHtml(h.zone)}` : ""}</span><span class="muted-mini">${escapeHtml(at)}</span></div>`;
+          }
+          return `<div class="progress-row"><span>🪙 +${h.amount ?? 0} ${escapeHtml(h.reason || "reward")}</span><span class="muted-mini">${escapeHtml(at)}</span></div>`;
+        })
+        .join("")
+    : '<p class="hint">No recent activity yet.</p>';
+  const achHtml = achievements.length
+    ? achievements
+        .slice(0, 8)
+        .map(
+          (a) =>
+            `<div class="progress-row"><span>${escapeHtml(a.icon || "🏆")} ${escapeHtml(a.name || "Achievement")}</span><span class="muted-mini">${a.points ?? 0} pts</span></div>`,
+        )
+        .join("")
+    : '<p class="hint">No achievements earned yet.</p>';
   return `
     <div class="panel v0-panel">
       <h2>Progress</h2>
@@ -257,29 +312,26 @@ function renderProgressPanel(payload: InventoryPayload): string {
           <strong class="progress-v">🪙 ${gold}</strong>
         </div>
         <div class="progress-card">
-          <span class="progress-k">Status</span>
-          <strong class="progress-v">Activity Live</strong>
+          <span class="progress-k">Win Rate</span>
+          <strong class="progress-v">${(winRate * 100).toFixed(0)}%</strong>
+        </div>
+        <div class="progress-card">
+          <span class="progress-k">Combats</span>
+          <strong class="progress-v">${totalCombats}</strong>
+        </div>
+        <div class="progress-card">
+          <span class="progress-k">Record</span>
+          <strong class="progress-v">${wins}W / ${losses}L</strong>
         </div>
       </div>
     </div>
     <div class="panel v0-panel">
       <h2>Achievements</h2>
-      <div class="skeleton-wrap">
-        <div class="skeleton-line w-40"></div>
-        <div class="skeleton-line w-100"></div>
-        <div class="skeleton-line w-85"></div>
-        <div class="skeleton-line w-70"></div>
-      </div>
-      <p class="hint" style="margin-top:0.75rem">Achievement endpoint UI is staged for future backend routes.</p>
+      <div class="progress-list">${achHtml}</div>
     </div>
     <div class="panel v0-panel">
       <h2>History</h2>
-      <div class="skeleton-wrap">
-        <div class="skeleton-line w-30"></div>
-        <div class="skeleton-line w-100"></div>
-        <div class="skeleton-line w-100"></div>
-        <div class="skeleton-line w-75"></div>
-      </div>
+      <div class="progress-list">${historyHtml}</div>
     </div>
   `;
 }
@@ -298,6 +350,7 @@ function mountApp(
 
   /** Latest inventory snapshot; updated after combat when loot/gold/bag may change */
   let currentPayload: InventoryPayload = payload;
+  let currentProgress: ProgressPayload | null = null;
   let tooltipEl: HTMLElement | null = null;
 
   function hideTooltip(): void {
@@ -350,6 +403,22 @@ function mountApp(
         )}</code></p>`
       : "";
 
+  async function refreshProgressData(): Promise<void> {
+    try {
+      const res = await fetch(apiUrl("/api/game/progress"), {
+        headers: authHeaders(accessToken, guildId),
+      });
+      if (!res.ok) return;
+      currentProgress = (await res.json()) as ProgressPayload;
+      const progressPane = appRoot.querySelector("#tab-progress");
+      if (progressPane && !progressPane.classList.contains("hidden")) {
+        progressPane.innerHTML = renderProgressPanel(currentPayload, currentProgress);
+      }
+    } catch (e) {
+      console.warn("refreshProgressData failed", e);
+    }
+  }
+
   function setTab(next: "hero" | "combat" | "progress"): void {
     const hBtn = appRoot.querySelector('[data-tab="hero"]');
     const cBtn = appRoot.querySelector('[data-tab="combat"]');
@@ -366,7 +435,10 @@ function mountApp(
     if (next === "combat") void refreshCombatPanel();
     if (next === "progress") {
       const progressPane = appRoot.querySelector("#tab-progress");
-      if (progressPane) progressPane.innerHTML = renderProgressPanel(currentPayload);
+      if (progressPane) {
+        progressPane.innerHTML = renderProgressPanel(currentPayload, currentProgress);
+      }
+      void refreshProgressData();
     }
   }
 
@@ -385,7 +457,7 @@ function mountApp(
       }
       const progressPane = appRoot.querySelector("#tab-progress");
       if (progressPane && !progressPane.classList.contains("hidden")) {
-        progressPane.innerHTML = renderProgressPanel(currentPayload);
+        progressPane.innerHTML = renderProgressPanel(currentPayload, currentProgress);
       }
     } catch (e) {
       console.warn("refreshHeroInventory failed", e);
@@ -502,6 +574,7 @@ function mountApp(
       const ot = json.outcome.type;
       if (ot === "victory" || ot === "flee") {
         void refreshHeroInventory();
+        void refreshProgressData();
       }
       host.querySelector("[data-action=combat-again]")?.addEventListener("click", () => {
         void refreshCombatPanel();

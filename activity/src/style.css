@@ -435,7 +435,7 @@ code {
 
 .progress-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
 }
 
@@ -456,6 +456,30 @@ code {
   display: block;
   margin-top: 0.35rem;
   font-size: 0.98rem;
+}
+
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.48rem 0.58rem;
+  border: 1px solid #29325a;
+  border-radius: 8px;
+  background: #0b1028;
+  font-size: 0.8rem;
+}
+
+.muted-mini {
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .skeleton-wrap {
