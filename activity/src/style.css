@@ -1,12 +1,12 @@
 :root {
-  --bg: #0f0f12;
-  --panel: #1a1a22;
-  --border: #2a2a36;
-  --text: #e8e6f0;
-  --muted: #8b8798;
-  --accent: #7c5cff;
-  --accent-dim: #5a3fd4;
-  --slot: #121218;
+  --bg: #070b1a;
+  --panel: #0f152c;
+  --border: #202a49;
+  --text: #e7ecff;
+  --muted: #8f9bc2;
+  --accent: #8b8cf4;
+  --accent-dim: #5a63ce;
+  --slot: #0a1023;
   --success: #3ecf8e;
 }
 
@@ -31,6 +31,10 @@ body {
 .shell {
   max-width: 980px;
   margin: 0 auto;
+  background: rgba(5, 9, 20, 0.72);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 16px;
+  padding: 1.2rem;
 }
 
 h1 {
@@ -42,8 +46,8 @@ h1 {
 
 .sub {
   color: var(--muted);
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
 }
 
 .status-pill {
@@ -55,7 +59,7 @@ h1 {
   font-size: 0.75rem;
   background: var(--panel);
   border: 1px solid var(--border);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .dot {
@@ -70,11 +74,15 @@ h1 {
 }
 
 .panel {
-  background: var(--panel);
+  background: linear-gradient(180deg, rgba(15, 21, 44, 0.96), rgba(10, 15, 32, 0.96));
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 1rem;
+}
+
+.v0-panel {
+  border-color: #28335d;
 }
 
 .panel h2 {
@@ -225,17 +233,19 @@ code {
   flex: 1;
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--slot);
-  color: var(--muted);
-  font-size: 0.85rem;
+  border: 1px solid #2c3457;
+  background: #111835;
+  color: #95a0c9;
+  font-size: 0.86rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .tab.active {
-  border-color: var(--accent);
+  border-color: #727cff;
   color: var(--text);
-  background: var(--panel);
+  background: linear-gradient(180deg, #1e2752, #141a39);
+  box-shadow: inset 0 0 0 1px rgba(130, 120, 255, 0.3);
 }
 
 .tab-pane {
@@ -365,6 +375,29 @@ code {
   color: var(--success);
 }
 
+.v0-header-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 0.25rem;
+}
+
+.logout-btn {
+  border: 1px solid #2d355c;
+  border-radius: 8px;
+  background: #0d1329;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  border-color: #5964a8;
+}
+
 .item-tooltip-layer {
   position: fixed;
   z-index: 120;
@@ -400,6 +433,63 @@ code {
   color: var(--muted);
 }
 
+.progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.progress-card {
+  background: #0c1230;
+  border: 1px solid #28366a;
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+}
+
+.progress-k {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.progress-v {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.98rem;
+}
+
+.skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-line {
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7f82ec 0%, #9fa0f5 50%, #7f82ec 100%);
+  opacity: 0.9;
+}
+
+.w-100 {
+  width: 100%;
+}
+.w-85 {
+  width: 85%;
+}
+.w-75 {
+  width: 75%;
+}
+.w-70 {
+  width: 70%;
+}
+.w-40 {
+  width: 40%;
+}
+.w-30 {
+  width: 30%;
+}
+
 @media (max-width: 860px) {
   .shell {
     max-width: 760px;
@@ -412,5 +502,8 @@ code {
 @media (max-width: 620px) {
   .grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+  .progress-stats {
+    grid-template-columns: 1fr;
   }
 }

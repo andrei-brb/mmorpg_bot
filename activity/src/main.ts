@@ -240,6 +240,50 @@ function renderOutcome(title: string, lines: string[]): string {
   `;
 }
 
+function renderProgressPanel(payload: InventoryPayload): string {
+  const char = payload.character;
+  const level = char?.level ?? 1;
+  const gold = char?.gold ?? 0;
+  return `
+    <div class="panel v0-panel">
+      <h2>Progress</h2>
+      <div class="progress-stats">
+        <div class="progress-card">
+          <span class="progress-k">Level</span>
+          <strong class="progress-v">${level}</strong>
+        </div>
+        <div class="progress-card">
+          <span class="progress-k">Gold</span>
+          <strong class="progress-v">🪙 ${gold}</strong>
+        </div>
+        <div class="progress-card">
+          <span class="progress-k">Status</span>
+          <strong class="progress-v">Activity Live</strong>
+        </div>
+      </div>
+    </div>
+    <div class="panel v0-panel">
+      <h2>Achievements</h2>
+      <div class="skeleton-wrap">
+        <div class="skeleton-line w-40"></div>
+        <div class="skeleton-line w-100"></div>
+        <div class="skeleton-line w-85"></div>
+        <div class="skeleton-line w-70"></div>
+      </div>
+      <p class="hint" style="margin-top:0.75rem">Achievement endpoint UI is staged for future backend routes.</p>
+    </div>
+    <div class="panel v0-panel">
+      <h2>History</h2>
+      <div class="skeleton-wrap">
+        <div class="skeleton-line w-30"></div>
+        <div class="skeleton-line w-100"></div>
+        <div class="skeleton-line w-100"></div>
+        <div class="skeleton-line w-75"></div>
+      </div>
+    </div>
+  `;
+}
+
 function mountApp(
   accessToken: string,
   payload: InventoryPayload,
@@ -306,16 +350,24 @@ function mountApp(
         )}</code></p>`
       : "";
 
-  function setTab(next: "hero" | "combat"): void {
+  function setTab(next: "hero" | "combat" | "progress"): void {
     const hBtn = appRoot.querySelector('[data-tab="hero"]');
     const cBtn = appRoot.querySelector('[data-tab="combat"]');
+    const pBtn = appRoot.querySelector('[data-tab="progress"]');
     const hPane = appRoot.querySelector("#tab-hero");
     const cPane = appRoot.querySelector("#tab-combat");
+    const pPane = appRoot.querySelector("#tab-progress");
     hBtn?.classList.toggle("active", next === "hero");
     cBtn?.classList.toggle("active", next === "combat");
+    pBtn?.classList.toggle("active", next === "progress");
     hPane?.classList.toggle("hidden", next !== "hero");
     cPane?.classList.toggle("hidden", next !== "combat");
+    pPane?.classList.toggle("hidden", next !== "progress");
     if (next === "combat") void refreshCombatPanel();
+    if (next === "progress") {
+      const progressPane = appRoot.querySelector("#tab-progress");
+      if (progressPane) progressPane.innerHTML = renderProgressPanel(currentPayload);
+    }
   }
 
   async function refreshHeroInventory(): Promise<void> {
@@ -330,6 +382,10 @@ function mountApp(
       if (heroPane) {
         heroPane.innerHTML = buildHeroHtml(currentPayload);
         wireHeroItems();
+      }
+      const progressPane = appRoot.querySelector("#tab-progress");
+      if (progressPane && !progressPane.classList.contains("hidden")) {
+        progressPane.innerHTML = renderProgressPanel(currentPayload);
       }
     } catch (e) {
       console.warn("refreshHeroInventory failed", e);
@@ -479,18 +535,25 @@ function mountApp(
   appRoot.appendChild(
     el(`
     <div class="shell">
-      <h1>World of Discord</h1>
-      <p class="sub">Signed in as ${escapeHtml(who)}</p>
+      <div class="v0-header-row">
+        <div>
+          <h1>World of Discord</h1>
+          <p class="sub">Welcome, ${escapeHtml(who)}</p>
+        </div>
+        <button type="button" class="logout-btn" id="logout-btn">Logout</button>
+      </div>
       <div class="status-pill"><span class="dot ok"></span> Connected</div>
       ${metaLine}
       <div class="tabs">
         <button type="button" class="tab active" data-tab="hero">Hero</button>
         <button type="button" class="tab" data-tab="combat">Combat</button>
+        <button type="button" class="tab" data-tab="progress">Progress</button>
       </div>
       <div id="tab-hero" class="tab-pane">${buildHeroHtml(payload)}</div>
       <div id="tab-combat" class="tab-pane hidden">
         <div id="combat-mount"><p class="hint">Open this tab to load combat.</p></div>
       </div>
+      <div id="tab-progress" class="tab-pane hidden"></div>
       <div id="item-tooltip" class="item-tooltip-layer" aria-hidden="true"></div>
     </div>
   `),
@@ -499,8 +562,10 @@ function mountApp(
   tooltipEl = appRoot.querySelector("#item-tooltip");
   appRoot.addEventListener("mouseleave", hideTooltip);
   wireHeroItems();
+  appRoot.querySelector("#logout-btn")?.addEventListener("click", () => window.location.reload());
   appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));
   appRoot.querySelector('[data-tab="combat"]')?.addEventListener("click", () => setTab("combat"));
+  appRoot.querySelector('[data-tab="progress"]')?.addEventListener("click", () => setTab("progress"));
 }
 
 async function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
