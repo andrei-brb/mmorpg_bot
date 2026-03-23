@@ -34,6 +34,7 @@ from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.combat import activity_combat as activity_combat_api
 from services.achievement.achievement_service import AchievementService
+from services.blacksmith.blacksmith_service import BlacksmithService
 
 log = logging.getLogger("activity_http")
 
@@ -554,6 +555,137 @@ async def handle_progress(request: web.Request) -> web.Response:
     return web.json_response(_json_safe(payload))
 
 
+async def handle_item_equip(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    item_id = (body.get("item_id") or "").strip()
+    if not item_id:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    ok, msg = await inv_svc.equip(char["id"], uid)
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg}, status=status)
+
+
+async def handle_item_sell(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    item_id = (body.get("item_id") or "").strip()
+    if not item_id:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    ok, msg, gold = await inv_svc.sell(char["id"], uid)
+    if ok and gold:
+        await char_svc.add_gold(char["id"], gold, "vendor sale")
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg, "gold": gold}, status=status)
+
+
+async def handle_item_enhance(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    item_id = (body.get("item_id") or "").strip()
+    protection_type = (body.get("protection_type") or None)
+    fragment_count = int(body.get("fragment_count") or 0)
+    if not item_id:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    bs = BlacksmithService(db)
+    result = await bs.enhance_item(char["id"], uid, protection_type=protection_type, fragment_count=fragment_count)
+    ok = bool(result.get("success"))
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, **_json_safe(result)}, status=status)
+
+
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
@@ -594,6 +726,9 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/equipment", handle_equipment)
     app.router.add_get("/api/game/progress", handle_progress)
+    app.router.add_post("/api/game/item/equip", handle_item_equip)
+    app.router.add_post("/api/game/item/sell", handle_item_sell)
+    app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)

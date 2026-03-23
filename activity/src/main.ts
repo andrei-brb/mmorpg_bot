@@ -152,13 +152,19 @@ function buildHeroHtml(payload: InventoryPayload): string {
           const icon = it.icon && it.icon.trim() ? it.icon : "📦";
           const qty = it.quantity ?? 1;
           const slot = it.equip_slot ? it.equip_slot.replace("_", " ") : "bag";
-          return `<button type="button" class="inv-row ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
+          const canEquip = Boolean(it.equip_slot);
+          return `<div class="inv-row ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0">
             <span class="inv-icon">${escapeHtml(icon)}</span>
             <span class="inv-main">
               <span class="inv-name">${escapeHtml(it.name)}</span>
               <span class="inv-meta">${escapeHtml(slot)} · x${qty}</span>
             </span>
-          </button>`;
+            <span class="inv-actions">
+              ${canEquip ? `<button type="button" class="mini-btn act-equip" data-item-id="${escapeHtml(it.id)}">Equip</button>` : ""}
+              <button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>
+              <button type="button" class="mini-btn act-sell" data-item-id="${escapeHtml(it.id)}">Sell</button>
+            </span>
+          </div>`;
         })
         .join("")
     : `<p class="hint">No items in your bag yet.</p>`;
@@ -409,7 +415,8 @@ function mountApp(
       n.addEventListener("focus", () => showTooltip(n, item));
       n.addEventListener("mouseleave", hideTooltip);
       n.addEventListener("blur", hideTooltip);
-      n.addEventListener("click", () => {
+      n.addEventListener("click", (ev) => {
+        if ((ev.target as HTMLElement | null)?.closest(".mini-btn")) return;
         if (tooltipEl?.classList.contains("visible")) hideTooltip();
         else showTooltip(n, item);
       });
@@ -647,13 +654,49 @@ function mountApp(
         <div id="combat-mount"><p class="hint">Open this tab to load combat.</p></div>
       </div>
       <div id="tab-progress" class="tab-pane hidden"></div>
+      <div id="hero-action-status" class="hint" style="margin-top:0.5rem;"></div>
       <div id="item-tooltip" class="item-tooltip-layer" aria-hidden="true"></div>
     </div>
   `),
   );
 
   tooltipEl = appRoot.querySelector("#item-tooltip");
+  const statusEl = appRoot.querySelector("#hero-action-status");
   appRoot.addEventListener("mouseleave", hideTooltip);
+  appRoot.addEventListener("click", async (ev) => {
+    const target = ev.target as HTMLElement;
+    if (!target) return;
+    const equipBtn = target.closest(".act-equip") as HTMLElement | null;
+    const sellBtn = target.closest(".act-sell") as HTMLElement | null;
+    const enhBtn = target.closest(".act-enhance") as HTMLElement | null;
+    if (!equipBtn && !sellBtn && !enhBtn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const itemId = (equipBtn || sellBtn || enhBtn)?.dataset.itemId;
+    if (!itemId) return;
+    const endpoint = equipBtn
+      ? "/api/game/item/equip"
+      : sellBtn
+        ? "/api/game/item/sell"
+        : "/api/game/item/enhance";
+    try {
+      if (statusEl) statusEl.textContent = "Processing...";
+      const res = await fetch(apiUrl(endpoint), {
+        method: "POST",
+        headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: itemId }),
+      });
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (statusEl) statusEl.textContent = json.message || (json.ok ? "Done." : "Action failed.");
+      if (json.ok) {
+        await refreshHeroInventory();
+        await refreshProgressData();
+      }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = `Action error: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  });
   wireHeroItems();
   appRoot.querySelector("#logout-btn")?.addEventListener("click", () => window.location.reload());
   appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));

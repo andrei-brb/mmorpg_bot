@@ -256,7 +256,7 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .inv-row:hover,
@@ -283,6 +283,28 @@ code {
   margin-top: 2px;
   color: var(--muted);
   font-size: 0.7rem;
+}
+
+.inv-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mini-btn {
+  border: 1px solid #33407a;
+  background: #141d45;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.mini-btn:hover {
+  border-color: #5968b8;
 }
 
 .equip-slot {
