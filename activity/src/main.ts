@@ -173,7 +173,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
       Array.from({ length: emptySlots }, () => `<div class="inv-row inv-empty"><span class="inv-name">Empty slot</span></div>`).join("")
     : `<p class="hint">No items in your bag yet.</p>`;
 
-  const equipOrder = ["head", "chest", "main_hand", "off_hand", "legs"] as const;
+  const equipOrder = ["head", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "ring", "trinket"] as const;
   const equipped: Record<string, InvRow | undefined> = {};
   for (const it of items) {
     if (it.is_equipped && it.equip_slot) equipped[it.equip_slot] = it;
