@@ -259,6 +259,12 @@ code {
   cursor: default;
 }
 
+.inv-row.inv-empty {
+  border-style: dashed;
+  color: var(--muted);
+  justify-content: center;
+}
+
 .inv-row:hover,
 .inv-row:focus-visible {
   border-color: #6f78cf;

@@ -143,6 +143,8 @@ function buildHeroHtml(payload: InventoryPayload): string {
   const char = payload.character;
   const items = payload.items || [];
   const bag = items.filter((i) => !i.is_equipped);
+  const bagSlots = 20;
+  const emptySlots = Math.max(0, bagSlots - bag.length);
   const hp = Number((char as { current_hp?: number } | null)?.current_hp ?? 0);
   const maxHp = Number((char as { max_hp?: number } | null)?.max_hp ?? 0);
   const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 100;
@@ -153,6 +155,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
           const qty = it.quantity ?? 1;
           const slot = it.equip_slot ? it.equip_slot.replace("_", " ") : "bag";
           const canEquip = Boolean(it.equip_slot);
+          const canEnhance = Boolean(it.equip_slot);
           return `<div class="inv-row ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0">
             <span class="inv-icon">${escapeHtml(icon)}</span>
             <span class="inv-main">
@@ -161,12 +164,13 @@ function buildHeroHtml(payload: InventoryPayload): string {
             </span>
             <span class="inv-actions">
               ${canEquip ? `<button type="button" class="mini-btn act-equip" data-item-id="${escapeHtml(it.id)}">Equip</button>` : ""}
-              <button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>
+              ${canEnhance ? `<button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>` : ""}
               <button type="button" class="mini-btn act-sell" data-item-id="${escapeHtml(it.id)}">Sell</button>
             </span>
           </div>`;
         })
-        .join("")
+        .join("") +
+      Array.from({ length: emptySlots }, () => `<div class="inv-row inv-empty"><span class="inv-name">Empty slot</span></div>`).join("")
     : `<p class="hint">No items in your bag yet.</p>`;
 
   const equipOrder = ["head", "chest", "main_hand", "off_hand", "legs"] as const;

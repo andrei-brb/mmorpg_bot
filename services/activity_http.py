@@ -679,6 +679,28 @@ async def handle_item_enhance(request: web.Request) -> web.Response:
     except ValueError:
         return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
 
+    item = await db.fetchrow(
+        """
+        SELECT i.id, t.item_type, t.equip_slot, t.name
+        FROM inventory i
+        JOIN item_templates t ON i.template_id = t.id
+        WHERE i.id = $1 AND i.character_id = $2
+        """,
+        uid,
+        char["id"],
+    )
+    if not item:
+        return web.json_response({"ok": False, "error": "item_not_found", "message": "Item not found."}, status=400)
+    if not item.get("equip_slot") or item.get("item_type") in ("consumable", "material", "quest"):
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "item_not_enhanceable",
+                "message": f"{item.get('name', 'This item')} cannot be enhanced.",
+            },
+            status=400,
+        )
+
     bs = BlacksmithService(db)
     result = await bs.enhance_item(char["id"], uid, protection_type=protection_type, fragment_count=fragment_count)
     ok = bool(result.get("success"))
