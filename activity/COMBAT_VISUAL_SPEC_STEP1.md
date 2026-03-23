@@ -9,6 +9,13 @@
 | Decision | Value |
 |----------|--------|
 | Mobile mid band (zone **E**) stack order | **Log first**, then “Your Party” list |
+| Breakpoints | **768px** — desktop `≥ 768px`, mobile `≤ 767px` |
+| Zone bar — guild/channel IDs | **Show on desktop**, **hide on mobile** (zone name only on small screens) |
+| Assets | **Placeholders** (CSS / gradients / no custom image files for now) |
+| Font | **System** stack (no custom WOFF2) |
+| Footer nav (zone **G**) | **Back** · **Map** · **Quest Log** · **Profile** — you confirmed **Back**; the other three follow the spec defaults (change anytime before build). |
+
+**Step 1 product inputs: complete.** Next: Step 2 (CSS tokens + base panels).
 
 ---
 
@@ -107,16 +114,16 @@ Until you provide assets, we use **CSS gradients + placeholders** (no broken ima
 
 ---
 
-## 4. What you deliver for Step 1 (checklist)
+## 4. Step 1 checklist — **done**
 
-Reply with:
-
-1. **Confirmation** of breakpoints above (768) or your preferred split.
-2. ~~**Mobile order** for the mid band~~ — **Done: log first.**
-3. **Assets:** either **“use placeholders”** or **“here are my files”** with a list:
-   - filename → path under `activity/public/` (we’ll align to the table above).
-4. **Footer labels** — final copy for G (e.g. “Quest Log” vs “Quests”).
-5. **Zone bar** — show guild/channel IDs on desktop only? (recommended: hide on mobile).
+| Item | Status |
+|------|--------|
+| Breakpoints (768) | ✅ |
+| Mobile log-first | ✅ |
+| Zone bar (desktop IDs yes, mobile hide IDs) | ✅ |
+| Assets | ✅ placeholders |
+| Font | ✅ system |
+| Footer | ✅ Back + Map + Quest Log + Profile (defaults; Back explicitly confirmed) |
 
 ---
 
