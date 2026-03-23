@@ -1,5 +1,9 @@
 # Item icons (optional)
 
+**Step-by-step helpers (export manifest, rename batch):** see **`scripts/README_ITEM_ICONS.md`** in the repo root.
+
+---
+
 The Activity **Hero** tab loads item art from this folder when present.
 
 ## File naming

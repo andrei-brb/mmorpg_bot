@@ -67,7 +67,9 @@ Output: `activity/dist/`.
 
 ### Item icons (shared with mmorpg-web)
 
-You can copy PNGs from **mmorpg-web** into `activity/public/assets/items/` named `{template_id}.png` (UUID from `item_templates.id`). The Hero inventory uses them automatically; if a file is missing, the DB emoji is shown. See `activity/public/assets/items/README.md`.
+You can copy PNGs from **mmorpg-web** into `activity/public/assets/items/` named `{template_id}.png` (UUID from `item_templates.id`). The Hero inventory uses them automatically; if a file is missing, the DB emoji is shown.
+
+**Easier workflow:** export a manifest + batch-copy with a mapping — see **`scripts/README_ITEM_ICONS.md`** (`export_item_icon_manifest.py`, `apply_item_icon_mapping.py`). Short reference: `activity/public/assets/items/README.md`.
 
 ## Local dev (bot + Vite + proxy)
 
