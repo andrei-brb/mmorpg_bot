@@ -187,6 +187,104 @@ code {
   gap: 8px;
 }
 
+.equip-grid-v0 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hero-stats-card h2 {
+  margin-bottom: 0.35rem;
+}
+
+.hero-stats-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hero-gold {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hero-gold span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.hero-gold strong {
+  font-size: 0.95rem;
+}
+
+.hero-hp-wrap {
+  margin-top: 0.65rem;
+}
+
+.hero-hp-bar {
+  height: 9px;
+  background: #0b1023;
+  border: 1px solid #2a3252;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.hero-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7f7ff4, #9f9df8);
+}
+
+.inv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.inv-row {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #28335d;
+  border-radius: 10px;
+  background: #0b1028;
+  color: var(--text);
+  padding: 0.52rem 0.58rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.inv-row:hover,
+.inv-row:focus-visible {
+  border-color: #6f78cf;
+  outline: none;
+}
+
+.inv-icon {
+  font-size: 1rem;
+}
+
+.inv-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.inv-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.inv-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
 .equip-slot {
   flex: 1 1 100px;
   min-height: 64px;
@@ -307,11 +405,34 @@ code {
   margin-bottom: 0.75rem;
 }
 
+.combat-turn-panel {
+  text-align: center;
+  margin-bottom: 0.8rem;
+}
+
+.turn-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.turn-sub {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .fighters {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: 0.5rem;
+}
+
+.v0-fighter-card {
+  background: #0c1230;
+  border: 1px solid #2a3566;
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
 }
 
 .hpbar {
@@ -345,6 +466,10 @@ code {
   padding: 0.35rem 0;
 }
 
+.v0-log-line {
+  border-bottom-color: #253059;
+}
+
 .log-line:last-child {
   border-bottom: none;
 }
@@ -362,6 +487,11 @@ code {
 .abi-btn {
   flex: 1 1 120px;
   font-size: 0.72rem;
+}
+
+.v0-abi-btn {
+  border-color: #3f4ca0;
+  background: linear-gradient(180deg, #24306a, #1a2457);
 }
 
 .row-actions {
@@ -521,11 +651,20 @@ code {
   .grid {
     grid-template-columns: repeat(5, 1fr);
   }
+  .equip-grid-v0 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
   .grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+  .equip-grid-v0 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fighters {
+    grid-template-columns: 1fr;
   }
   .progress-stats {
     grid-template-columns: 1fr;

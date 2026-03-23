@@ -143,20 +143,25 @@ function buildHeroHtml(payload: InventoryPayload): string {
   const char = payload.character;
   const items = payload.items || [];
   const bag = items.filter((i) => !i.is_equipped);
-  const slots = bag.slice(0, 20);
-  const pad = 20 - slots.length;
-  const slotHtml = [
-    ...slots.map((it) => {
-      const icon = it.icon && it.icon.trim() ? it.icon : "📦";
-      const qty = it.quantity ?? 1;
-      const title = escapeHtml(it.name);
-      return `<button type="button" class="slot filled item-slot ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${title}">
-        <span class="slot-icon">${escapeHtml(icon)}</span>
-        ${qty > 1 ? `<span class="qty-badge">x${qty}</span>` : ""}
-      </button>`;
-    }),
-    ...Array.from({ length: Math.max(0, pad) }, () => `<div class="slot" title="Empty">·</div>`),
-  ].join("");
+  const hp = Number((char as { current_hp?: number } | null)?.current_hp ?? 0);
+  const maxHp = Number((char as { max_hp?: number } | null)?.max_hp ?? 0);
+  const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 100;
+  const invListHtml = bag.length
+    ? bag
+        .map((it) => {
+          const icon = it.icon && it.icon.trim() ? it.icon : "📦";
+          const qty = it.quantity ?? 1;
+          const slot = it.equip_slot ? it.equip_slot.replace("_", " ") : "bag";
+          return `<button type="button" class="inv-row ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
+            <span class="inv-icon">${escapeHtml(icon)}</span>
+            <span class="inv-main">
+              <span class="inv-name">${escapeHtml(it.name)}</span>
+              <span class="inv-meta">${escapeHtml(slot)} · x${qty}</span>
+            </span>
+          </button>`;
+        })
+        .join("")
+    : `<p class="hint">No items in your bag yet.</p>`;
 
   const equipOrder = ["head", "chest", "main_hand", "off_hand", "legs"] as const;
   const equipped: Record<string, InvRow | undefined> = {};
@@ -178,21 +183,33 @@ function buildHeroHtml(payload: InventoryPayload): string {
     .join("");
 
   const charLine = char
-    ? `<p class="hint"><strong>${escapeHtml(char.name || "?")}</strong> · Lv ${char.level ?? "?"} · ${escapeHtml(
-        String(char.class || "?"),
-      )} · 🪙 ${char.gold ?? 0}</p>`
+    ? `<p class="hint"><strong>${escapeHtml(char.name || "?")}</strong> · Lv ${char.level ?? "?"} · ${escapeHtml(String(char.class || "?"))}</p>`
     : `<p class="hint">No character yet — use <code>/character create</code> in Discord.</p>`;
 
   return `
-    ${charLine}
-    <div class="panel">
-      <h2>Equipment</h2>
-      <div class="equip-row">${equipHtml}</div>
+    <div class="panel v0-panel hero-stats-card">
+      <div class="hero-stats-head">
+        <div>
+          <h2>Character Stats</h2>
+          ${charLine}
+        </div>
+        <div class="hero-gold">
+          <span>Gold</span>
+          <strong>🪙 ${char?.gold ?? 0}</strong>
+        </div>
+      </div>
+      <div class="hero-hp-wrap">
+        <div class="hero-hp-bar"><div class="hero-hp-fill" style="width:${hpPct}%"></div></div>
+        <div class="hint">${maxHp > 0 ? `${hp}/${maxHp} HP` : "HP unavailable"}</div>
+      </div>
     </div>
-    <div class="panel">
-      <h2>Inventory (bag)</h2>
-      <div class="grid">${slotHtml}</div>
-      <p class="hint" style="margin-top:0.75rem">Showing up to <strong>20</strong> unequipped items (same idea as <code>/inventory</code>).</p>
+    <div class="panel v0-panel">
+      <h2>Equipment</h2>
+      <div class="equip-grid-v0">${equipHtml}</div>
+    </div>
+    <div class="panel v0-panel">
+      <h2>Inventory (${bag.length})</h2>
+      <div class="inv-list">${invListHtml}</div>
     </div>
   `;
 }
@@ -212,13 +229,13 @@ function renderCombatState(state: CombatStatePayload): string {
 
   const logHtml = (state.log || [])
     .slice(-14)
-    .map((line) => `<div class="log-line">${escapeHtml(line)}</div>`)
+    .map((line) => `<div class="log-line v0-log-line">${escapeHtml(line)}</div>`)
     .join("");
 
   const abiHtml = (state.abilities || [])
     .map((a) => {
       const dis = a.disabled ? ` disabled title="${escapeHtml(a.disabled)}"` : "";
-      return `<button type="button" class="btn abi-btn" data-abi="${escapeHtml(a.key)}"${dis}>${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</button>`;
+      return `<button type="button" class="btn abi-btn v0-abi-btn" data-abi="${escapeHtml(a.key)}"${dis}>${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</button>`;
     })
     .join("");
 
@@ -228,21 +245,24 @@ function renderCombatState(state: CombatStatePayload): string {
     : "";
 
   return `
+    <div class="panel v0-panel combat-turn-panel">
+      <div class="turn-title">Turn ${state.turn}</div>
+      <div class="turn-sub">Choose your next action</div>
+    </div>
     <div class="combat-header">
-      <p class="hint">Turn <strong>${state.turn}</strong></p>
       <div class="fighters">
-        <div>
+        <div class="v0-fighter-card">
           <strong>${escapeHtml(state.player.name)}</strong> ${state.player.current_hp}/${state.player.max_hp} HP
           ${hpBar(php)}
           ${resLine}
         </div>
-        <div>
+        <div class="v0-fighter-card">
           <strong>${escapeHtml(state.enemy.name)}</strong> ${state.enemy.current_hp}/${state.enemy.max_hp} HP
           ${hpBar(ehp)}
         </div>
       </div>
     </div>
-    <div class="panel combat-log-panel">
+    <div class="panel v0-panel combat-log-panel">
       <h2>Battle log</h2>
       <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
     </div>
@@ -259,7 +279,7 @@ function renderCombatState(state: CombatStatePayload): string {
 function renderOutcome(title: string, lines: string[]): string {
   const body = lines.map((l) => `<p class="hint">${escapeHtml(l)}</p>`).join("");
   return `
-    <div class="panel outcome-panel">
+    <div class="panel v0-panel outcome-panel">
       <h2>${escapeHtml(title)}</h2>
       ${body}
       <button type="button" class="btn" data-action="combat-again">Fight again</button>
@@ -495,9 +515,9 @@ function mountApp(
         .join("");
 
       host.innerHTML = `
-        <div class="panel">
+        <div class="panel v0-panel">
           <h2>Start a fight</h2>
-          <p class="hint">Same zone + rules as <code>/fight</code> in Discord. You cannot run two combats at once.</p>
+          <p class="hint">Choose an enemy from your current zone. Same rules as <code>/fight</code>.</p>
           <label class="select-label">Enemy</label>
           <select id="enemy-pick" class="enemy-select">${opts}</select>
           <div style="margin-top:0.75rem">
