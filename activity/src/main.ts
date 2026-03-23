@@ -4,9 +4,16 @@ import { DiscordSDK } from "@discord/embedded-app-sdk";
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
 /** Empty string = same origin (Activity + API on one host). Set in .env for split deploy. */
 const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+/** Vite base URL (usually `/`). Item images live under `public/assets/items/{template_id}.png`. */
+const publicBase = (() => {
+  const b = import.meta.env.BASE_URL || "/";
+  return b.endsWith("/") ? b : `${b}/`;
+})();
 
 type InvRow = {
   id: string;
+  /** Matches `item_templates.id` — use for `/assets/items/{template_id}.png` */
+  template_id?: string;
   name: string;
   icon?: string | null;
   quantity?: number | null;
@@ -103,6 +110,29 @@ function escapeHtml(s: string): string {
   return d.innerHTML;
 }
 
+/** PNG path for item art copied from mmorpg-web into `activity/public/assets/items/`. */
+function itemIconAssetSrc(templateId: string | undefined | null): string | null {
+  const id = templateId?.trim();
+  if (!id) return null;
+  return `${publicBase}assets/items/${encodeURIComponent(id)}.png`;
+}
+
+/**
+ * Inventory / equipment icon: try static image first, fall back to DB emoji (or default).
+ */
+function renderInvIconHtml(item: InvRow, fallbackEmoji: string): string {
+  const emoji = item.icon && item.icon.trim() ? item.icon : fallbackEmoji;
+  const src = itemIconAssetSrc(item.template_id);
+  if (!src) {
+    return `<span class="inv-icon-emoji">${escapeHtml(emoji)}</span>`;
+  }
+  return `<span class="inv-icon-stack" data-icon-fallback="${escapeHtml(emoji)}">
+    <img src="${src}" alt="" class="inv-icon-img" loading="lazy" decoding="async" width="32" height="32"
+      onerror="this.style.display='none';var n=this.nextElementSibling;if(n)n.style.display='flex'" />
+    <span class="inv-icon-emoji inv-icon-emoji--fallback" style="display:none" aria-hidden="true">${escapeHtml(emoji)}</span>
+  </span>`;
+}
+
 function renderDisconnected(message: string, extra?: string): void {
   const root = document.getElementById("app");
   if (!root) return;
@@ -153,13 +183,12 @@ function buildHeroHtml(payload: InventoryPayload): string {
   const invListHtml = bag.length
     ? bag
         .map((it) => {
-          const icon = it.icon && it.icon.trim() ? it.icon : "📦";
           const qty = it.quantity ?? 1;
           const slot = it.equip_slot ? it.equip_slot.replace("_", " ") : "bag";
           const canEquip = Boolean(it.equip_slot);
           const canEnhance = Boolean(it.equip_slot);
           return `<div class="inv-row ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0">
-            <span class="inv-icon">${escapeHtml(icon)}</span>
+            <span class="inv-icon">${renderInvIconHtml(it, "📦")}</span>
             <span class="inv-main">
               <span class="inv-name">${escapeHtml(it.name)}</span>
               <span class="inv-meta">${escapeHtml(slot)} · x${qty}</span>
@@ -187,9 +216,8 @@ function buildHeroHtml(payload: InventoryPayload): string {
       if (!it) {
         return `<div class="equip-slot" data-slot="${slot}">${label}</div>`;
       }
-      const icon = it.icon && it.icon.trim() ? it.icon : "⚔️";
       return `<button type="button" class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
-        <span class="slot-icon">${escapeHtml(icon)}</span><span class="equip-label">${escapeHtml(label)}</span>
+        <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span><span class="equip-label">${escapeHtml(label)}</span>
       </button>`;
     })
     .join("");

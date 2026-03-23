@@ -361,6 +361,46 @@ code {
 
 .inv-icon {
   font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Static item art: `public/assets/items/{template_id}.png` (see public/assets/items/README.md) */
+.inv-icon-stack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.inv-icon-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+}
+
+.inv-icon-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.equip-grid-v0 .slot-icon .inv-icon-stack {
+  width: 26px;
+  height: 26px;
+}
+
+.equip-grid-v0 .slot-icon .inv-icon-img {
+  width: 26px;
+  height: 26px;
+}
+
+.equip-grid-v0 .slot-icon .inv-icon-emoji {
+  font-size: 1.05rem;
 }
 
 .inv-main {

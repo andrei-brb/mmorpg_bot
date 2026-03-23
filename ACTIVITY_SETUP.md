@@ -65,6 +65,10 @@ npm run build
 
 Output: `activity/dist/`.
 
+### Item icons (shared with mmorpg-web)
+
+You can copy PNGs from **mmorpg-web** into `activity/public/assets/items/` named `{template_id}.png` (UUID from `item_templates.id`). The Hero inventory uses them automatically; if a file is missing, the DB emoji is shown. See `activity/public/assets/items/README.md`.
+
 ## Local dev (bot + Vite + proxy)
 
 1. **Bot** — set `DISCORD_CLIENT_SECRET`, `DISCORD_APPLICATION_ID`, `DATABASE_URL`, `DISCORD_TOKEN`. HTTP listens on **8080** by default (`ACTIVITY_HTTP_PORT` or `PORT`).
