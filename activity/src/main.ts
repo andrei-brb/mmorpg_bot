@@ -40,6 +40,8 @@ type CombatStatePayload = {
   log: string[];
   abilities: CombatAbility[];
   can_potion: boolean;
+  /** From API: true when character is in a dungeon run — show party strip + sidebar */
+  in_dungeon?: boolean;
 };
 
 type ProgressAchievement = {
@@ -319,6 +321,9 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
   const metaIds = formatZoneMetaIds(ui);
   const metaHtml = metaIds ? `<span class="combat-zone-bar__meta">${escapeHtml(metaIds)}</span>` : "";
 
+  /** Party UI (strip + “Your Party” column) only while `in_dungeon` from the bot (dungeon run). */
+  const showPartyUi = Boolean(state.in_dungeon);
+
   const stripRows = [
     {
       dim: false,
@@ -436,14 +441,18 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
         ${floatDmg ? `<div class="damage">-${escapeHtml(floatDmg)}</div>` : ""}
       </div>
     </div>
-    <div class="party-strip" aria-label="Party overview">${stripHtml}</div>
-    <div class="combat-mid-band">
-      <div class="combat-mid-band__party">
+    ${showPartyUi ? `<div class="party-strip" aria-label="Party overview">${stripHtml}</div>` : ""}
+    <div class="combat-mid-band${showPartyUi ? "" : " combat-mid-band--solo"}">
+      ${
+        showPartyUi
+          ? `<div class="combat-mid-band__party">
         <div class="party-sidebar">
           <h3 class="party-sidebar-title">Your Party</h3>
           ${sidebarHtml}
         </div>
-      </div>
+      </div>`
+          : ""
+      }
       <div class="combat-mid-band__log">
         <div class="combat-log-stack">
           <div class="combat-stats-row" aria-label="Combat summary">

@@ -185,6 +185,8 @@ def serialize_activity_state(
         "is_boss": session.is_boss,
         "zone_key": session.zone_key,
         "enemy_key": session.enemy_key,
+        # Embedded Activity: multi-slot party UI only while character is in a dungeon run
+        "in_dungeon": bool(char.get("in_dungeon")),
     }
 
 

@@ -847,6 +847,11 @@ code {
   align-items: start;
 }
 
+/* Open-world / non-dungeon combat: log + stats only (no party column) */
+.combat-mid-band--solo {
+  grid-template-columns: 1fr;
+}
+
 .combat-mid-band__log {
   min-width: 0;
 }

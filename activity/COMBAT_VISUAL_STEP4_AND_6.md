@@ -18,3 +18,7 @@
 - **`prefers-reduced-motion: reduce`:** disables pulse, float-up damage, hover transform, bar transitions.
 
 **Files:** `activity/src/main.ts`, `activity/src/style.css`
+
+## Party UI visibility (dungeon-only)
+
+The party strip and “Your Party” sidebar render only when the API sends **`in_dungeon: true`** (character has `in_dungeon` set in the DB during a dungeon run). Otherwise the mid band is **solo** (full-width log column). Implemented in `services/combat/activity_combat.py` (`serialize_activity_state`) and `renderCombatState` in `main.ts`.
