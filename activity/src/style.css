@@ -784,12 +784,32 @@ code {
   border-radius: var(--combat-radius-md);
   font-size: var(--combat-text-sm);
   color: var(--combat-text-muted);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.combat-zone-bar__left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--combat-space-1);
+  min-width: 0;
 }
 
 .combat-zone-bar__title {
   font-weight: 600;
   color: var(--combat-text);
   min-width: 0;
+}
+
+.combat-zone-bar__sub {
+  font-size: var(--combat-text-xs);
+  color: var(--combat-text-muted);
+  line-height: 1.35;
+}
+
+.combat-zone-bar__sub code {
+  font-size: 0.9em;
 }
 
 .combat-zone-bar__right {
@@ -857,11 +877,24 @@ code {
   color: var(--combat-text-dim);
   padding: var(--combat-space-2) var(--combat-space-3);
   border-radius: var(--combat-radius-sm);
-  cursor: default;
+  cursor: pointer;
   min-height: var(--combat-touch-min);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.12s ease;
+}
+
+.combat-footer-nav__item:hover {
+  background: color-mix(in srgb, var(--combat-accent) 12%, transparent);
+  color: var(--combat-text);
+}
+
+.combat-footer-nav__item:active {
+  transform: scale(0.98);
 }
 
 @media (max-width: 767px) {
@@ -905,6 +938,16 @@ code {
   background: color-mix(in srgb, var(--combat-surface) 88%, transparent);
   border: 1px solid var(--combat-border-accent);
   border-radius: var(--combat-radius-md);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.party-strip-card:not(.party-strip-card--dim):hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--combat-accent) 45%, var(--combat-border-accent));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
 }
 
 .party-strip-card--dim {
@@ -1222,6 +1265,88 @@ code {
   border: 1px solid var(--combat-border-accent);
 }
 
+/* Step 4 — log column stack (stats + turn banner + log) */
+.combat-log-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--combat-space-3);
+  min-width: 0;
+}
+
+.combat-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--combat-space-3);
+  padding: var(--combat-space-3);
+  background: color-mix(in srgb, var(--combat-surface) 85%, transparent);
+  border: 1px solid var(--combat-border-accent);
+  border-radius: var(--combat-radius-md);
+}
+
+.combat-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 4.75rem;
+}
+
+.combat-stat--grow {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.combat-stat__k {
+  font-size: var(--combat-text-xs);
+  color: var(--combat-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.combat-stat__v {
+  font-size: var(--combat-text-md);
+  font-weight: 700;
+  color: var(--combat-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.combat-stat__v--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combat-turn-banner {
+  padding: var(--combat-space-3) var(--combat-space-4);
+  border-radius: var(--combat-radius-md);
+  font-size: var(--combat-text-sm);
+  font-weight: 700;
+  color: #fcd34d;
+  text-align: center;
+  background: linear-gradient(
+    90deg,
+    rgba(251, 146, 60, 0.12),
+    rgba(245, 158, 11, 0.08),
+    rgba(251, 146, 60, 0.12)
+  );
+  border: 1px solid rgba(251, 146, 60, 0.35);
+  animation: combatTurnPulse 3.2s ease-in-out infinite;
+}
+
+@keyframes combatTurnPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(251, 146, 60, 0.12);
+  }
+}
+
+.log-box.log-box--flush {
+  margin-top: 0;
+}
+
 .log-highlight {
   color: var(--combat-text-highlight);
   font-size: 0.85rem;
@@ -1265,6 +1390,15 @@ code {
 
 .skill-btn:hover {
   background: var(--combat-hp-track);
+}
+
+.skill-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--combat-accent) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.skill-btn.flee-btn:focus-visible {
+  outline-color: color-mix(in srgb, var(--combat-danger-border) 85%, white);
 }
 
 .skill-btn:disabled {
@@ -1331,5 +1465,32 @@ code {
     right: 90px;
     top: 56px;
     font-size: 1.55rem;
+  }
+}
+
+/* Step 6 — respect reduced motion (combat polish) */
+@media (prefers-reduced-motion: reduce) {
+  .combat-turn-banner {
+    animation: none;
+  }
+
+  .combat-zone-bar,
+  .party-strip-card,
+  .skill-btn,
+  .combat-footer-nav__item {
+    transition: none;
+  }
+
+  .party-strip-card:not(.party-strip-card--dim):hover {
+    transform: none;
+  }
+
+  .damage {
+    animation: none;
+  }
+
+  .party-strip-card__hpbar > div,
+  .scene .hpfill {
+    transition: none;
   }
 }

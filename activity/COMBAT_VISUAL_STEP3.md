@@ -24,4 +24,4 @@
 
 ---
 
-**Next:** Step 4 — tighten static mock / polish copy, or Step 5 — wire any extra fields from API when available.
+**Next:** Steps 4 & 6 — see `COMBAT_VISUAL_STEP4_AND_6.md`.

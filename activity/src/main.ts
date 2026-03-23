@@ -237,6 +237,24 @@ function lastDamageFromLog(lines: string[]): string | null {
   return null;
 }
 
+/** Sum all `**N** … dmg` / `N dmg` style numbers in the log (approximate “total damage” for UI). */
+function totalDamageFromLog(lines: string[]): number {
+  let sum = 0;
+  for (const line of lines) {
+    const re = /\*\*(\d[\d,]*)\*\*[\s\S]*?dmg|(\d[\d,]*)\s*dmg/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      const g = m[1] || m[2];
+      if (g) sum += parseInt(g.replace(/,/g, ""), 10) || 0;
+    }
+  }
+  return sum;
+}
+
+function formatCombatNumber(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
 /** Optional UI context for zone bar (Step 3 layout). */
 type CombatUiMeta = {
   guildId?: string;
@@ -254,7 +272,8 @@ function formatZoneMetaIds(m?: CombatUiMeta): string {
 }
 
 /**
- * Step 3 combat layout: zones B–G (see COMBAT_VISUAL_SPEC_STEP1.md).
+ * Combat layout zones B–G (see COMBAT_VISUAL_SPEC_STEP1.md).
+ * Step 4: stats row + turn banner + richer placeholder party labels.
  * Party strip + sidebar use visual placeholders until party/dungeon combat exists.
  */
 function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string {
@@ -274,6 +293,11 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
     .join("");
   const latestLine = logs.length ? stripBattleMarkdown(logs[logs.length - 1]) : "Battle started.";
   const floatDmg = lastDamageFromLog(logs);
+  const totalDmg = totalDamageFromLog(logs);
+  const enemyShort =
+    state.enemy.name.length > 22
+      ? `${escapeHtml(state.enemy.name.slice(0, 20))}…`
+      : escapeHtml(state.enemy.name);
 
   const abiHtml = (state.abilities || [])
     .map((a) => {
@@ -300,23 +324,23 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
       dim: false,
       emoji: "⚔️",
       name: state.player.name,
-      role: "Hero",
+      role: "Lead · Adventurer",
       pct: php,
       hpText: `${state.player.current_hp} / ${state.player.max_hp}`,
     },
     {
       dim: true,
       emoji: "🛡️",
-      name: "Reserve",
-      role: "Party (soon)",
+      name: "Slot 2",
+      role: "Locked · Dungeons",
       pct: 0,
       hpText: "—",
     },
     {
       dim: true,
       emoji: "🏹",
-      name: "Reserve",
-      role: "Party (soon)",
+      name: "Slot 3",
+      role: "Locked · Dungeons",
       pct: 0,
       hpText: "—",
     },
@@ -345,23 +369,23 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
       dim: false,
       emoji: "⚔️",
       name: state.player.name,
-      role: "Hero",
+      role: "Lead adventurer",
       mpPct: resPct,
       mpLine: resMpText,
     },
     {
       dim: true,
       emoji: "🛡️",
-      name: "Reserve",
-      role: "Party (soon)",
+      name: "Slot 2",
+      role: "Unlocks with party mode",
       mpPct: 0,
       mpLine: "—",
     },
     {
       dim: true,
       emoji: "🏹",
-      name: "Reserve",
-      role: "Party (soon)",
+      name: "Slot 3",
+      role: "Unlocks with party mode",
       mpPct: 0,
       mpLine: "—",
     },
@@ -384,7 +408,10 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
 
   return `
     <div class="combat-zone-bar">
-      <span class="combat-zone-bar__title">${escapeHtml(zoneTitle)}</span>
+      <div class="combat-zone-bar__left">
+        <span class="combat-zone-bar__title">${escapeHtml(zoneTitle)}</span>
+        <span class="combat-zone-bar__sub">Turn-based · same rules as <code>/fight</code></span>
+      </div>
       <div class="combat-zone-bar__right">
         <span class="combat-zone-bar__turn">Turn ${state.turn}</span>
         ${metaHtml}
@@ -418,18 +445,35 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
         </div>
       </div>
       <div class="combat-mid-band__log">
-        <div class="log-box">
-          <div class="log-highlight">${escapeHtml(latestLine)}</div>
-          <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
+        <div class="combat-log-stack">
+          <div class="combat-stats-row" aria-label="Combat summary">
+            <div class="combat-stat">
+              <span class="combat-stat__k">Turn</span>
+              <span class="combat-stat__v">${state.turn}</span>
+            </div>
+            <div class="combat-stat">
+              <span class="combat-stat__k">Total damage</span>
+              <span class="combat-stat__v">${formatCombatNumber(totalDmg)}</span>
+            </div>
+            <div class="combat-stat combat-stat--grow">
+              <span class="combat-stat__k">Encounter</span>
+              <span class="combat-stat__v combat-stat__v--truncate" title="${escapeHtml(state.enemy.name)}">${enemyShort}</span>
+            </div>
+          </div>
+          <div class="combat-turn-banner" role="status">Your turn — choose an ability below.</div>
+          <div class="log-box log-box--flush">
+            <div class="log-highlight">${escapeHtml(latestLine)}</div>
+            <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
+          </div>
         </div>
       </div>
     </div>
     <div class="skills">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>
     <nav class="combat-footer-nav" aria-label="Combat navigation">
-      <span class="combat-footer-nav__item">Back</span>
-      <span class="combat-footer-nav__item">Map</span>
-      <span class="combat-footer-nav__item">Quest Log</span>
-      <span class="combat-footer-nav__item">Profile</span>
+      <span class="combat-footer-nav__item" title="Coming soon">Back</span>
+      <span class="combat-footer-nav__item" title="Coming soon">Map</span>
+      <span class="combat-footer-nav__item" title="Coming soon">Quest Log</span>
+      <span class="combat-footer-nav__item" title="Coming soon">Profile</span>
     </nav>
   `;
 }
