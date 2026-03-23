@@ -270,11 +270,6 @@ function renderCombatState(state: CombatStatePayload): string {
     : "";
 
   return `
-    <div class="topbar">
-      <div class="tab">Hero</div>
-      <div class="tab active">Combat</div>
-      <div class="tab">Progress</div>
-    </div>
     <div class="scene-wrap">
       <div class="zone-row">
         <div>🌲 Current battle</div>
