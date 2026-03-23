@@ -42,6 +42,15 @@ type CombatStatePayload = {
   can_potion: boolean;
 };
 
+function rarityClass(rarity?: string | null): string {
+  const v = (rarity || "").toLowerCase();
+  if (v === "legendary") return "rarity-legendary";
+  if (v === "epic") return "rarity-epic";
+  if (v === "rare") return "rarity-rare";
+  if (v === "uncommon") return "rarity-uncommon";
+  return "rarity-common";
+}
+
 function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${apiBase}${p}`;
@@ -112,9 +121,12 @@ function buildHeroHtml(payload: InventoryPayload): string {
   const slotHtml = [
     ...slots.map((it) => {
       const icon = it.icon && it.icon.trim() ? it.icon : "📦";
-      const q = (it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : "";
-      const title = escapeHtml(`${it.name}${q}`);
-      return `<div class="slot filled" title="${title}">${escapeHtml(icon)}</div>`;
+      const qty = it.quantity ?? 1;
+      const title = escapeHtml(it.name);
+      return `<button type="button" class="slot filled item-slot ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${title}">
+        <span class="slot-icon">${escapeHtml(icon)}</span>
+        ${qty > 1 ? `<span class="qty-badge">x${qty}</span>` : ""}
+      </button>`;
     }),
     ...Array.from({ length: Math.max(0, pad) }, () => `<div class="slot" title="Empty">·</div>`),
   ].join("");
@@ -132,7 +144,9 @@ function buildHeroHtml(payload: InventoryPayload): string {
         return `<div class="equip-slot" data-slot="${slot}">${label}</div>`;
       }
       const icon = it.icon && it.icon.trim() ? it.icon : "⚔️";
-      return `<div class="equip-slot filled" data-slot="${slot}" title="${escapeHtml(it.name)}">${escapeHtml(icon)}<span class="equip-label">${escapeHtml(label)}</span></div>`;
+      return `<button type="button" class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
+        <span class="slot-icon">${escapeHtml(icon)}</span><span class="equip-label">${escapeHtml(label)}</span>
+      </button>`;
     })
     .join("");
 
@@ -240,6 +254,50 @@ function mountApp(
 
   /** Latest inventory snapshot; updated after combat when loot/gold/bag may change */
   let currentPayload: InventoryPayload = payload;
+  let tooltipEl: HTMLElement | null = null;
+
+  function hideTooltip(): void {
+    tooltipEl?.classList.remove("visible");
+  }
+
+  function showTooltip(anchor: HTMLElement, item: InvRow): void {
+    if (!tooltipEl) return;
+    const icon = item.icon && item.icon.trim() ? item.icon : "📦";
+    const rarity = item.rarity ? item.rarity.toUpperCase() : "COMMON";
+    const qty = item.quantity ?? 1;
+    const slot = item.equip_slot ? item.equip_slot.replace("_", " ") : item.is_equipped ? "equipped" : "bag";
+    tooltipEl.innerHTML = `
+      <div class="item-tip-card ${rarityClass(item.rarity)}">
+        <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}</div>
+        <div class="item-tip-line">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
+      </div>
+    `;
+    const rect = anchor.getBoundingClientRect();
+    const top = rect.top + window.scrollY - 10;
+    const left = rect.left + window.scrollX + rect.width / 2;
+    tooltipEl.style.top = `${Math.max(12, top)}px`;
+    tooltipEl.style.left = `${left}px`;
+    tooltipEl.classList.add("visible");
+  }
+
+  function wireHeroItems(): void {
+    const heroPane = appRoot.querySelector("#tab-hero");
+    if (!heroPane) return;
+    heroPane.querySelectorAll<HTMLElement>("[data-item-id]").forEach((n) => {
+      const id = n.dataset.itemId;
+      if (!id) return;
+      const item = currentPayload.items.find((x) => x.id === id);
+      if (!item) return;
+      n.addEventListener("mouseenter", () => showTooltip(n, item));
+      n.addEventListener("focus", () => showTooltip(n, item));
+      n.addEventListener("mouseleave", hideTooltip);
+      n.addEventListener("blur", hideTooltip);
+      n.addEventListener("click", () => {
+        if (tooltipEl?.classList.contains("visible")) hideTooltip();
+        else showTooltip(n, item);
+      });
+    });
+  }
 
   const metaLine =
     meta.guildId || meta.channelId
@@ -269,7 +327,10 @@ function mountApp(
       const next = (await invRes.json()) as InventoryPayload;
       currentPayload = next;
       const heroPane = appRoot.querySelector("#tab-hero");
-      if (heroPane) heroPane.innerHTML = buildHeroHtml(currentPayload);
+      if (heroPane) {
+        heroPane.innerHTML = buildHeroHtml(currentPayload);
+        wireHeroItems();
+      }
     } catch (e) {
       console.warn("refreshHeroInventory failed", e);
     }
@@ -430,10 +491,14 @@ function mountApp(
       <div id="tab-combat" class="tab-pane hidden">
         <div id="combat-mount"><p class="hint">Open this tab to load combat.</p></div>
       </div>
+      <div id="item-tooltip" class="item-tooltip-layer" aria-hidden="true"></div>
     </div>
   `),
   );
 
+  tooltipEl = appRoot.querySelector("#item-tooltip");
+  appRoot.addEventListener("mouseleave", hideTooltip);
+  wireHeroItems();
   appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));
   appRoot.querySelector('[data-tab="combat"]')?.addEventListener("click", () => setTab("combat"));
 }
