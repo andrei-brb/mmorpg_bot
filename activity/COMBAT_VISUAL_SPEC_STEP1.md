@@ -15,7 +15,9 @@
 | Font | **System** stack (no custom WOFF2) |
 | Footer nav (zone **G**) | **Back** · **Map** · **Quest Log** · **Profile** — you confirmed **Back**; the other three follow the spec defaults (change anytime before build). |
 
-**Step 1 product inputs: complete.** Next: Step 2 (CSS tokens + base panels).
+**Step 1 product inputs: complete.**
+
+**Step 2:** CSS tokens + primitives — see `COMBAT_VISUAL_STEP2.md` (implemented in `activity/src/style.css`). **Next: Step 3** (combat HTML structure).
 
 ---
 

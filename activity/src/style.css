@@ -1,13 +1,101 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Step 2 — Design tokens (Combat + app shell). See COMBAT_VISUAL_STEP2.md
+   Breakpoint: mobile ≤767px, desktop ≥768px (COMBAT_VISUAL_SPEC_STEP1.md)
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --bg: #070b1a;
-  --panel: #0f152c;
-  --border: #202a49;
-  --text: #e7ecff;
-  --muted: #8f9bc2;
-  --accent: #8b8cf4;
-  --accent-dim: #5a63ce;
-  --slot: #0a1023;
-  --success: #3ecf8e;
+  /* Breakpoints (for reference in docs; media queries use 767px / 768px) */
+  --combat-bp-mobile-max: 767px;
+  --combat-bp-desktop-min: 768px;
+
+  /* Surfaces */
+  --combat-bg-deep: #070b1a;
+  --combat-bg-shell: rgba(5, 9, 20, 0.72);
+  --combat-surface: #0f152c;
+  --combat-surface-raised: #1e293b;
+  --combat-surface-dark: #111835;
+  --combat-scene-base: #111a33;
+  --combat-v0-panel-border: #28335d;
+
+  /* Borders */
+  --combat-border: #202a49;
+  --combat-border-strong: #2c3a6e;
+  --combat-border-accent: #2a355a;
+  --combat-border-tab: #2c3457;
+  --combat-border-tab-active: #727cff;
+  --combat-log-line: #253059;
+
+  /* Text */
+  --combat-text: #e7ecff;
+  --combat-text-muted: #8f9bc2;
+  --combat-text-dim: #95a0c9;
+  --combat-text-highlight: #f5f7ff;
+  --combat-text-skill-meta: #a8b6dd;
+
+  /* Accents */
+  --combat-accent: #8b8cf4;
+  --combat-accent-dim: #5a63ce;
+  --combat-accent-glow: rgba(130, 120, 255, 0.3);
+  --combat-success: #3ecf8e;
+  --combat-danger: #ef4444;
+  --combat-danger-soft: #f87171;
+  --combat-danger-bg: #3d1f29;
+  --combat-danger-border: #7a3248;
+  --combat-warning: #f59e0b;
+  --combat-player-green: #22c55e;
+  --combat-player-green-bright: #4ade80;
+
+  /* HP bars */
+  --combat-hp-track: #334155;
+  --combat-hp-player: linear-gradient(to right, var(--combat-player-green), var(--combat-player-green-bright));
+  --combat-hp-enemy: linear-gradient(to right, var(--combat-danger), var(--combat-danger-soft));
+
+  /* Slots & chrome */
+  --combat-slot: #0a1023;
+  --combat-avatar-placeholder: #475569;
+
+  /* Radii */
+  --combat-radius-sm: 6px;
+  --combat-radius-md: 10px;
+  --combat-radius-lg: 12px;
+  --combat-radius-xl: 16px;
+  --combat-radius-pill: 999px;
+
+  /* Shadows */
+  --combat-shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --combat-shadow-inset-tab: inset 0 0 0 1px var(--combat-accent-glow);
+  --combat-shadow-drop: 0 8px 16px rgba(0, 0, 0, 0.42);
+
+  /* Spacing scale */
+  --combat-space-1: 0.25rem;
+  --combat-space-2: 0.5rem;
+  --combat-space-3: 0.75rem;
+  --combat-space-4: 1rem;
+  --combat-space-5: 1.25rem;
+  --combat-space-6: 1.5rem;
+
+  /* Layout */
+  --combat-shell-max-width: 980px;
+  --combat-touch-min: 44px;
+
+  /* Typography — system stack (Step 1: no custom WOFF2) */
+  --font-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --combat-text-xs: 0.68rem;
+  --combat-text-sm: 0.78rem;
+  --combat-text-base: 0.86rem;
+  --combat-text-md: 0.95rem;
+  --combat-text-lg: 1.1rem;
+  --combat-text-xl: 1.35rem;
+
+  /* Legacy aliases — existing screens keep working */
+  --bg: var(--combat-bg-deep);
+  --panel: var(--combat-surface);
+  --border: var(--combat-border);
+  --text: var(--combat-text);
+  --muted: var(--combat-text-muted);
+  --accent: var(--combat-accent);
+  --accent-dim: var(--combat-accent-dim);
+  --slot: var(--combat-slot);
+  --success: var(--combat-success);
 }
 
 * {
@@ -18,7 +106,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
 }
@@ -29,11 +117,11 @@ body {
 }
 
 .shell {
-  max-width: 980px;
+  max-width: var(--combat-shell-max-width);
   margin: 0 auto;
-  background: rgba(5, 9, 20, 0.72);
+  background: var(--combat-bg-shell);
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: 16px;
+  border-radius: var(--combat-radius-xl);
   padding: 1.2rem;
 }
 
@@ -76,13 +164,13 @@ h1 {
 .panel {
   background: linear-gradient(180deg, rgba(15, 21, 44, 0.96), rgba(10, 15, 32, 0.96));
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 1rem;
+  border-radius: var(--combat-radius-lg);
+  padding: var(--combat-space-4);
+  margin-bottom: var(--combat-space-4);
 }
 
 .v0-panel {
-  border-color: #28335d;
+  border-color: var(--combat-v0-panel-border);
 }
 
 .panel h2 {
@@ -351,27 +439,27 @@ code {
 
 .tabs {
   display: flex;
-  gap: 6px;
-  margin-bottom: 1rem;
+  gap: var(--combat-space-2);
+  margin-bottom: var(--combat-space-4);
 }
 
 .tab {
   flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid #2c3457;
-  background: #111835;
-  color: #95a0c9;
-  font-size: 0.86rem;
+  padding: var(--combat-space-2) var(--combat-space-3);
+  border-radius: var(--combat-radius-sm);
+  border: 1px solid var(--combat-border-tab);
+  background: var(--combat-surface-dark);
+  color: var(--combat-text-dim);
+  font-size: var(--combat-text-base);
   font-weight: 600;
   cursor: pointer;
 }
 
 .tab.active {
-  border-color: #727cff;
+  border-color: var(--combat-border-tab-active);
   color: var(--text);
   background: linear-gradient(180deg, #1e2752, #141a39);
-  box-shadow: inset 0 0 0 1px rgba(130, 120, 255, 0.3);
+  box-shadow: var(--combat-shadow-inset-tab);
 }
 
 .tab-pane {
@@ -495,7 +583,7 @@ code {
 }
 
 .v0-log-line {
-  border-bottom-color: #253059;
+  border-bottom-color: var(--combat-log-line);
 }
 
 .log-line:last-child {
@@ -672,14 +760,124 @@ code {
   width: 30%;
 }
 
+/* ───────── Step 2 — Combat layout primitives (zones B–G; markup in Step 3) ───────── */
+.combat-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--combat-surface) 96%, transparent),
+    color-mix(in srgb, var(--combat-bg-deep) 92%, transparent)
+  );
+  border: 1px solid var(--combat-border);
+  border-radius: var(--combat-radius-lg);
+  padding: var(--combat-space-4);
+  box-shadow: var(--combat-shadow-soft);
+}
+
+.combat-zone-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--combat-space-3);
+  padding: var(--combat-space-2) var(--combat-space-3);
+  background: var(--combat-surface-raised);
+  border: 1px solid var(--combat-border-accent);
+  border-radius: var(--combat-radius-md);
+  font-size: var(--combat-text-sm);
+  color: var(--combat-text-muted);
+}
+
+.combat-zone-bar__title {
+  font-weight: 600;
+  color: var(--combat-text);
+}
+
+.combat-zone-bar__meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--combat-text-xs);
+  opacity: 0.88;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mid band: desktop = party | log; mobile = log first (see COMBAT_VISUAL_SPEC_STEP1) */
+.combat-mid-band {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr);
+  gap: var(--combat-space-4);
+  margin-top: var(--combat-space-3);
+  align-items: start;
+}
+
+.combat-mid-band__log {
+  min-width: 0;
+}
+
+.combat-mid-band__party {
+  min-width: 0;
+}
+
+.combat-footer-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--combat-space-2);
+  margin-top: var(--combat-space-3);
+  padding: var(--combat-space-3);
+  background: var(--combat-surface-raised);
+  border: 1px solid var(--combat-border-accent);
+  border-radius: var(--combat-radius-md);
+  min-height: var(--combat-touch-min);
+}
+
+.combat-footer-nav__item {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: var(--combat-text-sm);
+  font-weight: 600;
+  color: var(--combat-text-dim);
+  padding: var(--combat-space-2) var(--combat-space-3);
+  border-radius: var(--combat-radius-sm);
+  cursor: default;
+  min-height: var(--combat-touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 767px) {
+  .combat-zone-bar__meta {
+    display: none;
+  }
+
+  .combat-mid-band {
+    grid-template-columns: 1fr;
+  }
+
+  .combat-mid-band__log {
+    order: 1;
+  }
+
+  .combat-mid-band__party {
+    order: 2;
+  }
+
+  .combat-footer-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ───────────────────────── Combat Scene (requested style) ───────────────────── */
 .topbar {
   display: flex;
   justify-content: space-around;
-  background: #1e293b;
-  padding: 10px;
-  border-radius: 10px;
-  margin-bottom: 0.65rem;
+  background: var(--combat-surface-raised);
+  padding: var(--combat-space-3);
+  border-radius: var(--combat-radius-md);
+  margin-bottom: var(--combat-space-3);
 }
 
 .scene-wrap {
@@ -690,26 +888,28 @@ code {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--combat-space-2);
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--combat-text-sm);
 }
 
 .scene {
   position: relative;
   min-height: 370px;
-  border-radius: 12px;
+  border-radius: var(--combat-radius-lg);
   overflow: hidden;
-  border: 1px solid #2c3a6e;
-  background: #111a33;
+  border: 1px solid var(--combat-border-strong);
+  background: var(--combat-scene-base);
 }
 
+/* Placeholder battlefield (Step 1: no image assets). Add JPG/WebP to public/assets/bg/ when ready. */
 .bg-layer {
   position: absolute;
   inset: 0;
   background:
     linear-gradient(180deg, rgba(10, 13, 24, 0.22), rgba(4, 6, 12, 0.58)),
-    url("/assets/bg/forest.jpg") center/cover no-repeat;
+    linear-gradient(135deg, #1a2744 0%, #0d1528 42%, #243352 100%);
+  background-size: cover;
 }
 
 .scene .player,
@@ -732,7 +932,7 @@ code {
 .scene .enemy img {
   width: 128px;
   max-width: 30vw;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.42));
+  filter: drop-shadow(var(--combat-shadow-drop));
 }
 
 .scene .name {
@@ -744,8 +944,8 @@ code {
 .scene .hpbar {
   width: 150px;
   height: 11px;
-  background: #334155;
-  border-radius: 10px;
+  background: var(--combat-hp-track);
+  border-radius: var(--combat-radius-md);
   overflow: hidden;
   margin-top: 5px;
 }
@@ -756,11 +956,11 @@ code {
 }
 
 .scene .playerhp {
-  background: linear-gradient(to right, #22c55e, #4ade80);
+  background: var(--combat-hp-player);
 }
 
 .scene .enemyhp {
-  background: linear-gradient(to right, #ef4444, #f87171);
+  background: var(--combat-hp-enemy);
 }
 
 .scene .hptext {
@@ -773,7 +973,7 @@ code {
   top: 70px;
   right: 170px;
   font-size: 30px;
-  color: orange;
+  color: var(--combat-warning);
   font-weight: bold;
   animation: floatUp 0.8s ease-out;
   z-index: 3;
@@ -793,8 +993,8 @@ code {
 
 .party {
   display: flex;
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--combat-space-3);
+  margin-top: var(--combat-space-3);
 }
 
 .partyMember {
@@ -805,49 +1005,49 @@ code {
 .avatar {
   width: 40px;
   height: 40px;
-  background: #475569;
+  background: var(--combat-avatar-placeholder);
   border-radius: 50%;
 }
 
 .partyHp {
   height: 6px;
-  background: #22c55e;
+  background: var(--combat-player-green);
   border-radius: 5px;
   margin-top: 3px;
 }
 
 .log-box {
-  background: #1e293b;
-  padding: 10px;
-  border-radius: 10px;
-  margin-top: 10px;
-  font-size: 14px;
-  border: 1px solid #2a355a;
+  background: var(--combat-surface-raised);
+  padding: var(--combat-space-3);
+  border-radius: var(--combat-radius-md);
+  margin-top: var(--combat-space-3);
+  font-size: var(--combat-text-base);
+  border: 1px solid var(--combat-border-accent);
 }
 
 .log-highlight {
-  color: #f5f7ff;
+  color: var(--combat-text-highlight);
   font-size: 0.85rem;
-  margin-bottom: 8px;
+  margin-bottom: var(--combat-space-2);
 }
 
 .skills {
   display: flex;
   justify-content: space-between;
-  margin-top: 10px;
-  gap: 8px;
+  margin-top: var(--combat-space-3);
+  gap: var(--combat-space-2);
   flex-wrap: wrap;
 }
 
 .skill-btn {
   flex: 1 1 120px;
   margin: 0;
-  min-height: 56px;
-  padding: 8px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  color: white;
+  min-height: max(56px, var(--combat-touch-min));
+  padding: var(--combat-space-2);
+  background: var(--combat-surface-raised);
+  border: 1px solid var(--combat-hp-track);
+  border-radius: var(--combat-radius-sm);
+  color: var(--combat-text);
   cursor: pointer;
   transition: 0.2s;
   text-align: left;
@@ -861,13 +1061,13 @@ code {
 
 .skill-btn .skill-cost {
   display: block;
-  font-size: 0.68rem;
+  font-size: var(--combat-text-xs);
   margin-top: 3px;
-  color: #a8b6dd;
+  color: var(--combat-text-skill-meta);
 }
 
 .skill-btn:hover {
-  background: #334155;
+  background: var(--combat-hp-track);
 }
 
 .skill-btn:disabled {
@@ -877,8 +1077,8 @@ code {
 
 .skill-btn.flee-btn {
   flex: 0 0 120px;
-  background: #3d1f29;
-  border-color: #7a3248;
+  background: var(--combat-danger-bg);
+  border-color: var(--combat-danger-border);
 }
 
 .skill-btn.alt {
@@ -889,10 +1089,10 @@ code {
 .footer {
   display: flex;
   justify-content: space-around;
-  margin-top: 10px;
-  padding: 10px;
-  background: #1e293b;
-  border-radius: 10px;
+  margin-top: var(--combat-space-3);
+  padding: var(--combat-space-3);
+  background: var(--combat-surface-raised);
+  border-radius: var(--combat-radius-md);
 }
 
 @media (max-width: 860px) {
@@ -907,7 +1107,8 @@ code {
   }
 }
 
-@media (max-width: 620px) {
+/* Mobile / narrow — matches Step 1 breakpoint (≤767px) */
+@media (max-width: 767px) {
   .grid {
     grid-template-columns: repeat(4, 1fr);
   }
