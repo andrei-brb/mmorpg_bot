@@ -11,8 +11,8 @@
 |------|--------|--------|
 | **B** | `.combat-zone-bar` | Title (`zoneLabel` or default “🌲 Current battle”), **Turn** always visible, **Guild · Channel** in `.combat-zone-bar__meta` (hidden ≤767px per Step 1) |
 | **C** | `.scene-wrap` → `.scene` | `.bg-layer` gradient placeholder; `.scene-sprite` emoji placeholders (no image 404s) |
-| **D** | `.party-strip` | 3 cards: real hero + 2 “Reserve / Party (soon)” (visual only) |
-| **E** | `.combat-mid-band` | **Desktop:** party sidebar (left) · log (right). **Mobile:** log first (`order`), then party |
+| **D** | `.skills.skills--under-scene` | Ability bar **directly under the battlefield** (hero is only on the scene, not duplicated) |
+| **E** | `.combat-mid-band` | **Desktop:** dungeon “Allies” column (slots 2–3 only) · log (right). **Mobile:** log first, then Allies |
 | **F** | `.skills` | Unchanged wiring (`data-abi`, flee, potion) |
 | **G** | `nav.combat-footer-nav` | Back · Map · Quest Log · Profile (non-interactive labels for now) |
 

@@ -276,13 +276,11 @@ function formatZoneMetaIds(m?: CombatUiMeta): string {
 /**
  * Combat layout zones B–G (see COMBAT_VISUAL_SPEC_STEP1.md).
  * Step 4: stats row + turn banner + richer placeholder party labels.
- * Party strip + sidebar use visual placeholders until party/dungeon combat exists.
+ * Skills sit under the battlefield; dungeon “Allies” column has no duplicate hero.
  */
 function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string {
   const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
   const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
-  const resPct =
-    state.player.max_res > 0 ? (100 * state.player.current_res) / state.player.max_res : 0;
   const resLine =
     state.player.max_res > 0
       ? `<p class="hint res-line">${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}</p>`
@@ -321,63 +319,10 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
   const metaIds = formatZoneMetaIds(ui);
   const metaHtml = metaIds ? `<span class="combat-zone-bar__meta">${escapeHtml(metaIds)}</span>` : "";
 
-  /** Party UI (strip + “Your Party” column) only while `in_dungeon` from the bot (dungeon run). */
+  /** Dungeon-only: ally column (no duplicate hero — you’re already on the battlefield above). */
   const showPartyUi = Boolean(state.in_dungeon);
 
-  const stripRows = [
-    {
-      dim: false,
-      emoji: "⚔️",
-      name: state.player.name,
-      role: "Lead · Adventurer",
-      pct: php,
-      hpText: `${state.player.current_hp} / ${state.player.max_hp}`,
-    },
-    {
-      dim: true,
-      emoji: "🛡️",
-      name: "Slot 2",
-      role: "Locked · Dungeons",
-      pct: 0,
-      hpText: "—",
-    },
-    {
-      dim: true,
-      emoji: "🏹",
-      name: "Slot 3",
-      role: "Locked · Dungeons",
-      pct: 0,
-      hpText: "—",
-    },
-  ] as const;
-
-  const stripHtml = stripRows
-    .map(
-      (row) => `
-    <div class="party-strip-card${row.dim ? " party-strip-card--dim" : ""}">
-      <div class="party-strip-card__avatar">${row.emoji}</div>
-      <div class="party-strip-card__name">${escapeHtml(row.name)}</div>
-      <div class="party-strip-card__role">${escapeHtml(row.role)}</div>
-      <div class="party-strip-card__hpbar"><div style="width:${row.pct}%"></div></div>
-      <div class="party-strip-card__hptext">${escapeHtml(row.hpText)}</div>
-    </div>`,
-    )
-    .join("");
-
-  const resMpText =
-    state.player.max_res > 0
-      ? `${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}`
-      : "—";
-
-  const sidebarRows = [
-    {
-      dim: false,
-      emoji: "⚔️",
-      name: state.player.name,
-      role: "Lead adventurer",
-      mpPct: resPct,
-      mpLine: resMpText,
-    },
+  const sidebarRowsAllyOnly = [
     {
       dim: true,
       emoji: "🛡️",
@@ -396,7 +341,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
     },
   ] as const;
 
-  const sidebarHtml = sidebarRows
+  const sidebarHtml = sidebarRowsAllyOnly
     .map(
       (row) => `
     <div class="party-sidebar-row${row.dim ? " party-sidebar-row--dim" : ""}">
@@ -410,6 +355,8 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
     </div>`,
     )
     .join("");
+
+  const skillsHtml = `<div class="skills skills--under-scene" aria-label="Abilities">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>`;
 
   return `
     <div class="combat-zone-bar">
@@ -441,13 +388,14 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
         ${floatDmg ? `<div class="damage">-${escapeHtml(floatDmg)}</div>` : ""}
       </div>
     </div>
-    ${showPartyUi ? `<div class="party-strip" aria-label="Party overview">${stripHtml}</div>` : ""}
+    ${skillsHtml}
     <div class="combat-mid-band${showPartyUi ? "" : " combat-mid-band--solo"}">
       ${
         showPartyUi
           ? `<div class="combat-mid-band__party">
         <div class="party-sidebar">
-          <h3 class="party-sidebar-title">Your Party</h3>
+          <h3 class="party-sidebar-title">Allies</h3>
+          <p class="party-sidebar-hint">You’re on the field above — extra slots for party dungeons.</p>
           ${sidebarHtml}
         </div>
       </div>`
@@ -469,7 +417,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
               <span class="combat-stat__v combat-stat__v--truncate" title="${escapeHtml(state.enemy.name)}">${enemyShort}</span>
             </div>
           </div>
-          <div class="combat-turn-banner" role="status">Your turn — choose an ability below.</div>
+          <div class="combat-turn-banner" role="status">Your turn — use the skill bar above.</div>
           <div class="log-box log-box--flush">
             <div class="log-highlight">${escapeHtml(latestLine)}</div>
             <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
@@ -477,7 +425,6 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
         </div>
       </div>
     </div>
-    <div class="skills">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>
     <nav class="combat-footer-nav" aria-label="Combat navigation">
       <span class="combat-footer-nav__item" title="Coming soon">Back</span>
       <span class="combat-footer-nav__item" title="Coming soon">Map</span>
