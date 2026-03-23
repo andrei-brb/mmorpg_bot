@@ -48,4 +48,4 @@ Existing combat UI still uses `.scene`, `.log-box`, `.skills`, `.footer` — now
 
 - **≤767px:** Spec mobile layout; zone meta hidden; combat mid-band column order; footer nav grid; scene tweaks.
 
-**Next:** Step 3 — HTML structure in `renderCombatState()` using these classes.
+**Done:** Step 3 — see `COMBAT_VISUAL_STEP3.md`.

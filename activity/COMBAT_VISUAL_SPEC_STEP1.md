@@ -17,7 +17,8 @@
 
 **Step 1 product inputs: complete.**
 
-**Step 2:** CSS tokens + primitives — see `COMBAT_VISUAL_STEP2.md` (implemented in `activity/src/style.css`). **Next: Step 3** (combat HTML structure).
+**Step 2:** CSS tokens + primitives — `COMBAT_VISUAL_STEP2.md`.  
+**Step 3:** Combat HTML structure — `COMBAT_VISUAL_STEP3.md`. **Next: Step 4+** (mock polish / wiring).
 
 ---
 

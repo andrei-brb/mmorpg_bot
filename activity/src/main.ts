@@ -237,9 +237,31 @@ function lastDamageFromLog(lines: string[]): string | null {
   return null;
 }
 
-function renderCombatState(state: CombatStatePayload): string {
+/** Optional UI context for zone bar (Step 3 layout). */
+type CombatUiMeta = {
+  guildId?: string;
+  channelId?: string;
+  /** Zone bar title until travel API provides a name */
+  zoneLabel?: string;
+};
+
+function formatZoneMetaIds(m?: CombatUiMeta): string {
+  if (!m) return "";
+  const parts: string[] = [];
+  if (m.guildId) parts.push(`Guild ${m.guildId}`);
+  if (m.channelId) parts.push(`Channel ${m.channelId}`);
+  return parts.join(" · ");
+}
+
+/**
+ * Step 3 combat layout: zones B–G (see COMBAT_VISUAL_SPEC_STEP1.md).
+ * Party strip + sidebar use visual placeholders until party/dungeon combat exists.
+ */
+function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string {
   const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
   const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
+  const resPct =
+    state.player.max_res > 0 ? (100 * state.player.current_res) / state.player.max_res : 0;
   const resLine =
     state.player.max_res > 0
       ? `<p class="hint res-line">${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}</p>`
@@ -269,23 +291,117 @@ function renderCombatState(state: CombatStatePayload): string {
       `<button type="button" class="skill-btn alt" data-action="potion">🧪 Potion</button>`
     : "";
 
-  return `
-    <div class="scene-wrap">
-      <div class="zone-row">
-        <div>🌲 Current battle</div>
-        <div class="muted-mini">Turn ${state.turn}</div>
+  const zoneTitle = ui?.zoneLabel?.trim() ? ui.zoneLabel : "🌲 Current battle";
+  const metaIds = formatZoneMetaIds(ui);
+  const metaHtml = metaIds ? `<span class="combat-zone-bar__meta">${escapeHtml(metaIds)}</span>` : "";
+
+  const stripRows = [
+    {
+      dim: false,
+      emoji: "⚔️",
+      name: state.player.name,
+      role: "Hero",
+      pct: php,
+      hpText: `${state.player.current_hp} / ${state.player.max_hp}`,
+    },
+    {
+      dim: true,
+      emoji: "🛡️",
+      name: "Reserve",
+      role: "Party (soon)",
+      pct: 0,
+      hpText: "—",
+    },
+    {
+      dim: true,
+      emoji: "🏹",
+      name: "Reserve",
+      role: "Party (soon)",
+      pct: 0,
+      hpText: "—",
+    },
+  ] as const;
+
+  const stripHtml = stripRows
+    .map(
+      (row) => `
+    <div class="party-strip-card${row.dim ? " party-strip-card--dim" : ""}">
+      <div class="party-strip-card__avatar">${row.emoji}</div>
+      <div class="party-strip-card__name">${escapeHtml(row.name)}</div>
+      <div class="party-strip-card__role">${escapeHtml(row.role)}</div>
+      <div class="party-strip-card__hpbar"><div style="width:${row.pct}%"></div></div>
+      <div class="party-strip-card__hptext">${escapeHtml(row.hpText)}</div>
+    </div>`,
+    )
+    .join("");
+
+  const resMpText =
+    state.player.max_res > 0
+      ? `${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}`
+      : "—";
+
+  const sidebarRows = [
+    {
+      dim: false,
+      emoji: "⚔️",
+      name: state.player.name,
+      role: "Hero",
+      mpPct: resPct,
+      mpLine: resMpText,
+    },
+    {
+      dim: true,
+      emoji: "🛡️",
+      name: "Reserve",
+      role: "Party (soon)",
+      mpPct: 0,
+      mpLine: "—",
+    },
+    {
+      dim: true,
+      emoji: "🏹",
+      name: "Reserve",
+      role: "Party (soon)",
+      mpPct: 0,
+      mpLine: "—",
+    },
+  ] as const;
+
+  const sidebarHtml = sidebarRows
+    .map(
+      (row) => `
+    <div class="party-sidebar-row${row.dim ? " party-sidebar-row--dim" : ""}">
+      <div class="party-sidebar-row__portrait${row.dim ? " party-sidebar-row__portrait--dim" : ""}">${row.emoji}</div>
+      <div class="party-sidebar-row__main">
+        <div class="party-sidebar-row__name">${escapeHtml(row.name)}</div>
+        <div class="party-sidebar-row__meta">${escapeHtml(row.role)}</div>
+        <div class="party-sidebar-mp"><div style="width:${row.mpPct}%"></div></div>
+        <div class="party-sidebar-row__meta">${row.mpLine}</div>
       </div>
+    </div>`,
+    )
+    .join("");
+
+  return `
+    <div class="combat-zone-bar">
+      <span class="combat-zone-bar__title">${escapeHtml(zoneTitle)}</span>
+      <div class="combat-zone-bar__right">
+        <span class="combat-zone-bar__turn">Turn ${state.turn}</span>
+        ${metaHtml}
+      </div>
+    </div>
+    <div class="scene-wrap">
       <div class="scene">
         <div class="bg-layer"></div>
         <div class="player">
-          <img src="/assets/player/mage.png" alt="player" />
+          <div class="scene-sprite" role="img" aria-label="${escapeHtml(state.player.name)}">⚔️</div>
           <div class="name">${escapeHtml(state.player.name)}</div>
           <div class="hpbar"><div class="hpfill playerhp" style="width:${php}%"></div></div>
           <div class="hptext">${state.player.current_hp} / ${state.player.max_hp}</div>
           ${resLine}
         </div>
         <div class="enemy">
-          <img src="/assets/enemies/bear.png" alt="enemy" />
+          <div class="scene-sprite scene-sprite--enemy" role="img" aria-label="${escapeHtml(state.enemy.name)}">🐻</div>
           <div class="name">${escapeHtml(state.enemy.name)}</div>
           <div class="hpbar"><div class="hpfill enemyhp" style="width:${ehp}%"></div></div>
           <div class="hptext">${state.enemy.current_hp} / ${state.enemy.max_hp}</div>
@@ -293,22 +409,28 @@ function renderCombatState(state: CombatStatePayload): string {
         ${floatDmg ? `<div class="damage">-${escapeHtml(floatDmg)}</div>` : ""}
       </div>
     </div>
-    <div class="party">
-      <div class="partyMember"><div class="avatar"></div><div class="partyHp"></div></div>
-      <div class="partyMember"><div class="avatar"></div><div class="partyHp"></div></div>
-      <div class="partyMember"><div class="avatar"></div><div class="partyHp"></div></div>
-    </div>
-    <div class="log-box">
-      <div class="log-highlight">${escapeHtml(latestLine)}</div>
-      <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
+    <div class="party-strip" aria-label="Party overview">${stripHtml}</div>
+    <div class="combat-mid-band">
+      <div class="combat-mid-band__party">
+        <div class="party-sidebar">
+          <h3 class="party-sidebar-title">Your Party</h3>
+          ${sidebarHtml}
+        </div>
+      </div>
+      <div class="combat-mid-band__log">
+        <div class="log-box">
+          <div class="log-highlight">${escapeHtml(latestLine)}</div>
+          <div class="combat-log">${logHtml || '<p class="hint">—</p>'}</div>
+        </div>
+      </div>
     </div>
     <div class="skills">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>
-    <div class="footer">
-      <div>Back</div>
-      <div>Map</div>
-      <div>Inventory</div>
-      <div>Profile</div>
-    </div>
+    <nav class="combat-footer-nav" aria-label="Combat navigation">
+      <span class="combat-footer-nav__item">Back</span>
+      <span class="combat-footer-nav__item">Map</span>
+      <span class="combat-footer-nav__item">Quest Log</span>
+      <span class="combat-footer-nav__item">Profile</span>
+    </nav>
   `;
 }
 
@@ -403,6 +525,13 @@ function mountApp(
 
   const guildId = meta.guildId ?? undefined;
   const who = payload.discord?.global_name || payload.discord?.username || "Traveler";
+
+  function combatUiMeta(): CombatUiMeta {
+    return {
+      guildId: meta.guildId,
+      channelId: meta.channelId,
+    };
+  }
 
   /** Latest inventory snapshot; updated after combat when loot/gold/bag may change */
   let currentPayload: InventoryPayload = payload;
@@ -536,7 +665,7 @@ function mountApp(
       const enJson = (await enRes.json()) as { enemies?: CombatEnemy[] };
 
       if (stJson.active && stJson.state) {
-        host.innerHTML = renderCombatState(stJson.state);
+        host.innerHTML = renderCombatState(stJson.state, combatUiMeta());
         wireCombatActions(host);
         return;
       }
@@ -581,7 +710,7 @@ function mountApp(
         };
 
         if (startRes.status === 409 && startJson.state) {
-          host.innerHTML = renderCombatState(startJson.state);
+          host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
           wireCombatActions(host);
           return;
         }
@@ -593,7 +722,7 @@ function mountApp(
         }
 
         if (startJson.state) {
-          host.innerHTML = renderCombatState(startJson.state);
+          host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
           wireCombatActions(host);
         }
       });
@@ -640,7 +769,7 @@ function mountApp(
     }
 
     if (json.state) {
-      host.innerHTML = renderCombatState(json.state);
+      host.innerHTML = renderCombatState(json.state, combatUiMeta());
       wireCombatActions(host);
     }
   }
