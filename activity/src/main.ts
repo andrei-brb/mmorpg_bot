@@ -117,11 +117,21 @@ function itemIconAssetSrc(templateId: string | undefined | null): string | null 
   return `${publicBase}assets/items/${encodeURIComponent(id)}.png`;
 }
 
+function looksLikeEmoji(s: string): boolean {
+  const v = (s || "").trim();
+  if (!v) return false;
+  // If the DB stored a filename, key, shortcode, etc., prefer a known-good fallback emoji.
+  // Heuristic: real emoji are typically not alphanumerics/underscores/colons/dots/slashes.
+  if (/[A-Za-z0-9_:./\\-]/.test(v)) return false;
+  return true;
+}
+
 /**
  * Inventory / equipment icon: try static image first, fall back to DB emoji (or default).
  */
 function renderInvIconHtml(item: InvRow, fallbackEmoji: string): string {
-  const emoji = item.icon && item.icon.trim() ? item.icon : fallbackEmoji;
+  const raw = item.icon && item.icon.trim() ? item.icon : "";
+  const emoji = raw && looksLikeEmoji(raw) ? raw : fallbackEmoji;
   const src = itemIconAssetSrc(item.template_id);
   if (!src) {
     return `<span class="inv-icon-emoji">${escapeHtml(emoji)}</span>`;
@@ -572,7 +582,8 @@ function mountApp(
 
   function showTooltip(anchor: HTMLElement, item: InvRow): void {
     if (!tooltipEl) return;
-    const icon = item.icon && item.icon.trim() ? item.icon : "📦";
+    const raw = item.icon && item.icon.trim() ? item.icon : "";
+    const icon = raw && looksLikeEmoji(raw) ? raw : "📦";
     const rarity = item.rarity ? item.rarity.toUpperCase() : "COMMON";
     const qty = item.quantity ?? 1;
     const slot = item.equip_slot ? item.equip_slot.replace("_", " ") : item.is_equipped ? "equipped" : "bag";
