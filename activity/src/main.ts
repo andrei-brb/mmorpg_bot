@@ -117,6 +117,21 @@ function itemIconAssetSrc(templateId: string | undefined | null): string | null 
   return `${publicBase}assets/items/${encodeURIComponent(id)}.png`;
 }
 
+function itemIconGeneratedSrcs(itemName: string | undefined | null): string[] {
+  const n = (itemName || "").trim();
+  if (!n) return [];
+  const file = `${encodeURIComponent(n)}.png`;
+  const bases = [
+    "assets/items/generated/weapons/",
+    "assets/items/generated/armor/",
+    "assets/items/generated/off_hand/",
+    "assets/items/generated/accessories/",
+    "assets/items/generated/characters/",
+    "assets/items/generated/maps/",
+  ];
+  return bases.map((b) => `${publicBase}${b}${file}`);
+}
+
 function looksLikeEmoji(s: string): boolean {
   const v = (s || "").trim();
   if (!v) return false;
@@ -132,13 +147,31 @@ function looksLikeEmoji(s: string): boolean {
 function renderInvIconHtml(item: InvRow, fallbackEmoji: string): string {
   const raw = item.icon && item.icon.trim() ? item.icon : "";
   const emoji = raw && looksLikeEmoji(raw) ? raw : fallbackEmoji;
-  const src = itemIconAssetSrc(item.template_id);
-  if (!src) {
+  const candidates = [
+    itemIconAssetSrc(item.template_id),
+    ...itemIconGeneratedSrcs(item.name),
+  ].filter((v): v is string => Boolean(v));
+
+  if (candidates.length === 0) {
     return `<span class="inv-icon-emoji">${escapeHtml(emoji)}</span>`;
   }
+
+  const attrs = candidates
+    .slice(0, 8)
+    .map((src, idx) => ` data-src-${idx}="${src}"`)
+    .join("");
+
+  // Try `data-src-0..N` sequentially. When exhausted, hide image and show emoji fallback.
+  const onErr = [
+    "var i=parseInt(this.getAttribute('data-src-idx')||'0',10)+1;",
+    "var next=this.getAttribute('data-src-'+i);",
+    "if(next){this.setAttribute('data-src-idx',String(i));this.src=next;return;}",
+    "this.style.display='none';var n=this.nextElementSibling;if(n)n.style.display='flex';",
+  ].join("");
+
   return `<span class="inv-icon-stack" data-icon-fallback="${escapeHtml(emoji)}">
-    <img src="${src}" alt="" class="inv-icon-img" loading="lazy" decoding="async" width="32" height="32"
-      onerror="this.style.display='none';var n=this.nextElementSibling;if(n)n.style.display='flex'" />
+    <img src="${candidates[0]}" alt="" class="inv-icon-img" loading="lazy" decoding="async" width="32" height="32"
+      data-src-idx="0"${attrs} onerror="${onErr}" />
     <span class="inv-icon-emoji inv-icon-emoji--fallback" style="display:none" aria-hidden="true">${escapeHtml(emoji)}</span>
   </span>`;
 }
