@@ -335,16 +335,16 @@ code {
 
 .inv-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 6px;
   max-height: 300px;
   overflow-y: auto;
   padding-right: 4px;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1400px) {
   .inv-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(8, 1fr);
   }
 }
 
@@ -354,6 +354,12 @@ code {
   }
 }
 
+.inv-tile .mini-btn {
+  font-size: 0.55rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 7px;
+}
+
 .inv-tile {
   aspect-ratio: 1 / 1;
   width: 100%;
@@ -361,12 +367,12 @@ code {
   border-radius: 10px;
   background: #0b1028;
   color: var(--text);
-  padding: 0.42rem 0.35rem;
+  padding: 0.34rem 0.28rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   cursor: pointer;
   user-select: none;
 }
@@ -386,27 +392,27 @@ code {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
 }
 
 /* Larger icon for square tiles only */
 .inv-tile .inv-icon-stack {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
 }
 
 .inv-tile .inv-icon-img {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
 }
 
 .inv-tile .inv-icon-emoji {
-  font-size: 1.05rem;
+  font-size: 0.98rem;
 }
 
 .inv-tile-name {
-  font-size: 0.66rem;
+  font-size: 0.58rem;
   font-weight: 650;
   text-align: center;
   line-height: 1.1;
@@ -417,7 +423,7 @@ code {
 }
 
 .inv-tile-meta {
-  font-size: 0.6rem;
+  font-size: 0.52rem;
   color: var(--muted);
 }
 
@@ -425,9 +431,9 @@ code {
   display: none;
   width: 100%;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  padding-top: 4px;
+  padding-top: 3px;
 }
 
 .inv-tile--active .inv-tile-actions {
