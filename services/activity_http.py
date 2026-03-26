@@ -283,6 +283,20 @@ def _guild_id_from_request(request: web.Request, body: Optional[Dict[str, Any]] 
     return None
 
 
+def _uuid_from_any(val: Any) -> UUID:
+    """
+    Robust UUID coercion.
+
+    Note: asyncpg returns its own UUID type, which `uuid.UUID(...)` can't consume directly,
+    but `str(asyncpg_uuid)` is a normal UUID string.
+    """
+    if isinstance(val, UUID):
+        return val
+    if val is None:
+        raise ValueError("missing_uuid_value")
+    return UUID(str(val))
+
+
 async def handle_combat_enemies(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -650,7 +664,7 @@ async def handle_travel(request: web.Request) -> web.Response:
         )
     except Exception:
         pass
-    await db.execute("UPDATE characters SET current_zone=$2 WHERE id=$1", UUID(char["id"]), zone_key)
+    await db.execute("UPDATE characters SET current_zone=$2 WHERE id=$1", _uuid_from_any(char["id"]), zone_key)
     try:
         await db.execute(
             "UPDATE zone_state SET active_players=active_players+1 WHERE zone_key=$1",
@@ -680,7 +694,7 @@ async def handle_explore(request: web.Request) -> web.Response:
     if (char.get("combat_status") or "") == "in_combat":
         return web.json_response(_json_safe({"ok": False, "error": "in_combat", "message": "Finish your fight first."}), status=409)
 
-    cd = await char_svc.on_cooldown(UUID(char["id"]), "explore")
+    cd = await char_svc.on_cooldown(_uuid_from_any(char["id"]), "explore")
     if cd:
         return web.json_response(_json_safe({"ok": False, "error": "cooldown", "cooldown_s": int(cd)}), status=429)
 
@@ -718,33 +732,33 @@ async def handle_explore(request: web.Request) -> web.Response:
     outcome = _roll(int(char.get("level") or 1))
 
     cooldown = Settings.EXPLORE_COOLDOWN if outcome["type"] in ("enemy", "boss") else 10
-    await char_svc.set_cooldown(UUID(char["id"]), "explore", cooldown)
+    await char_svc.set_cooldown(_uuid_from_any(char["id"]), "explore", cooldown)
 
     reward = {}
     pending = None
     if outcome["type"] == "boss":
         pending = outcome["key"]
-        await db.execute("UPDATE characters SET pending_encounter=$2 WHERE id=$1", UUID(char["id"]), pending)
+        await db.execute("UPDATE characters SET pending_encounter=$2 WHERE id=$1", _uuid_from_any(char["id"]), pending)
     elif outcome["type"] == "loot":
         xp = random.randint(5, 15 + int(char.get("level") or 1))
         gold = random.randint(1, 5 + int(char.get("level") or 1) // 2)
-        await char_svc.award_xp(UUID(char["id"]), xp)
-        await char_svc.add_gold(UUID(char["id"]), gold, "exploration")
+        await char_svc.award_xp(_uuid_from_any(char["id"]), xp)
+        await char_svc.add_gold(_uuid_from_any(char["id"]), gold, "exploration")
         reward = {"xp": xp, "gold": gold}
     elif outcome["type"] == "safe":
         xp = random.randint(3, 8)
-        await char_svc.award_xp(UUID(char["id"]), xp)
+        await char_svc.award_xp(_uuid_from_any(char["id"]), xp)
         reward = {"xp": xp}
 
     npc_payload = None
     try:
-        npc_encounter = await quest_svc.roll_npc_encounter(UUID(char["id"]), char.get("current_zone"))
+        npc_encounter = await quest_svc.roll_npc_encounter(_uuid_from_any(char["id"]), char.get("current_zone"))
         if npc_encounter:
             npc_id = npc_encounter["npc_id"]
             npc_data = npc_encounter["npc_data"]
             already = npc_encounter["already_met"]
             if not already:
-                await quest_svc.discover_npc(UUID(char["id"]), npc_id, char.get("current_zone"))
+                await quest_svc.discover_npc(_uuid_from_any(char["id"]), npc_id, char.get("current_zone"))
             npc_payload = {
                 "npc_id": npc_id,
                 "name": npc_data.get("name"),
@@ -788,7 +802,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
 
     npc_search = (body.get("npc") or body.get("npc_name") or "").strip()
     quest_svc = NPCQuestService(db)
-    char_id = UUID(char["id"])
+    char_id = _uuid_from_any(char["id"])
 
     npc_id = quest_svc.find_npc_by_name(npc_search) if npc_search else None
     if not npc_id:
