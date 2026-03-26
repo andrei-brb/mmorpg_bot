@@ -1026,34 +1026,55 @@ function mountApp(
         const sel = host.querySelector("#enemy-pick") as HTMLSelectElement | null;
         const enemyKey = sel?.value || "";
         if (!enemyKey) return;
+        const startBtn = host.querySelector("[data-action=start-fight]") as HTMLButtonElement | null;
+        if (startBtn) {
+          startBtn.disabled = true;
+          startBtn.textContent = "Starting…";
+        }
         host.innerHTML = `<p class="hint">Starting…</p>`;
-        const startRes = await fetch(apiUrl("/api/game/combat/start"), {
-          method: "POST",
-          headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
-          body: JSON.stringify({ enemy_key: enemyKey, guild_id: guildId ? String(guildId) : undefined }),
-        });
-        const startJson = (await startRes.json()) as {
-          ok?: boolean;
-          error?: string;
-          message?: string;
-          state?: CombatStatePayload;
-        };
+        try {
+          const startRes = await fetch(apiUrl("/api/game/combat/start"), {
+            method: "POST",
+            headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+            body: JSON.stringify({ enemy_key: enemyKey, guild_id: guildId ? String(guildId) : undefined }),
+          });
 
-        if (startRes.status === 409 && startJson.state) {
-          host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
-          wireCombatActions(host);
-          return;
-        }
+          if (startRes.status === 401) {
+            host.innerHTML = `<p class="hint">Session expired — reloading…</p>`;
+            window.setTimeout(() => window.location.reload(), 700);
+            return;
+          }
 
-        if (!startRes.ok || startJson.error) {
-          const msg = startJson.message || startJson.error || "start_failed";
-          host.innerHTML = `<p class="hint">❌ ${escapeHtml(msg)}</p>`;
-          return;
-        }
+          const startJson = (await startRes.json()) as {
+            ok?: boolean;
+            error?: string;
+            message?: string;
+            state?: CombatStatePayload;
+          };
 
-        if (startJson.state) {
-          host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
-          wireCombatActions(host);
+          if (startRes.status === 409 && startJson.state) {
+            host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
+            wireCombatActions(host);
+            return;
+          }
+
+          if (!startRes.ok || startJson.error) {
+            const msg = startJson.message || startJson.error || "start_failed";
+            host.innerHTML = `<p class="hint">❌ HTTP ${startRes.status}: ${escapeHtml(msg)}</p>`;
+            return;
+          }
+
+          if (startJson.state) {
+            host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
+            wireCombatActions(host);
+            return;
+          }
+
+          host.innerHTML = `<p class="hint">❌ Start succeeded but no combat state returned (HTTP ${startRes.status}).</p>`;
+        } catch (e) {
+          host.innerHTML = `<p class="hint">❌ Start error: ${escapeHtml(e instanceof Error ? e.message : String(e))}</p>`;
+        } finally {
+          if (startBtn) startBtn.disabled = false;
         }
       });
     } catch (e) {
