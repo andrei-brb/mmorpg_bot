@@ -673,6 +673,7 @@ function mountApp(
   let currentProgress: ProgressPayload | null = null;
   let currentMap: ExploreMapPayload | null = null;
   let lastExplore: ExploreResultPayload | null = null;
+  let lastEncounterEnemyKey: string | null = null;
   let tooltipEl: HTMLElement | null = null;
 
   function hideTooltip(): void {
@@ -857,6 +858,11 @@ function mountApp(
     });
     const json = (await res.json()) as ExploreResultPayload;
     lastExplore = json;
+    if (json.outcome && "key" in (json.outcome as any) && typeof (json.outcome as any).key === "string") {
+      lastEncounterEnemyKey = (json.outcome as any).key;
+    } else {
+      lastEncounterEnemyKey = null;
+    }
     await refreshHeroInventory();
     await refreshMap();
     if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
@@ -950,6 +956,30 @@ function mountApp(
         host.innerHTML = renderCombatState(stJson.state, combatUiMeta());
         wireCombatActions(host);
         return;
+      }
+
+      // Auto-start the specific enemy we rolled during Explore (tap/click "Combat").
+      if (lastEncounterEnemyKey) {
+        const enemyKey = lastEncounterEnemyKey;
+        // Prevent repeated attempts if the tab rerenders.
+        lastEncounterEnemyKey = null;
+        const startRes = await fetch(apiUrl("/api/game/combat/start"), {
+          method: "POST",
+          headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+          body: JSON.stringify({ enemy_key: enemyKey, guild_id: guildId ? String(guildId) : undefined }),
+        });
+        const startJson = (await startRes.json()) as {
+          ok?: boolean;
+          error?: string;
+          message?: string;
+          state?: CombatStatePayload;
+        };
+
+        if ((startRes.status === 200 || startRes.status === 409) && startJson.state) {
+          host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
+          wireCombatActions(host);
+          return;
+        }
       }
 
       const enemies = enJson.enemies || [];
