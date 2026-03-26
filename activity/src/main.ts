@@ -122,6 +122,8 @@ function itemIconGeneratedSrcs(itemName: string | undefined | null): string[] {
   if (!n) return [];
   const file = `${encodeURIComponent(n)}.png`;
   const bases = [
+    // Some icon sets keep files directly under `generated/` (e.g. consumables/materials)
+    "assets/items/generated/",
     "assets/items/generated/weapons/",
     "assets/items/generated/armor/",
     "assets/items/generated/off_hand/",
