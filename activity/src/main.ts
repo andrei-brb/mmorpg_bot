@@ -1010,6 +1010,12 @@ function mountApp(
       headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
       body: JSON.stringify({ ...body, guild_id: guildId ? String(guildId) : undefined }),
     });
+    if (res.status === 401) {
+      // OAuth bearer can occasionally fail mid-session; reload to force a new token exchange.
+      host.innerHTML = `<p class="hint">Session expired — reloading…</p>`;
+      window.setTimeout(() => window.location.reload(), 700);
+      return;
+    }
     const json = (await res.json()) as {
       ok?: boolean;
       ended?: boolean;
