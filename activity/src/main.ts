@@ -280,28 +280,31 @@ function buildHeroHtml(payload: InventoryPayload): string {
   const hp = Number((char as { current_hp?: number } | null)?.current_hp ?? 0);
   const maxHp = Number((char as { max_hp?: number } | null)?.max_hp ?? 0);
   const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 100;
-  const invListHtml = bag.length
+  const invTilesHtml = bag.length
     ? bag
         .map((it) => {
           const qty = it.quantity ?? 1;
-          const slot = it.equip_slot ? it.equip_slot.replace("_", " ") : "bag";
           const canEquip = Boolean(it.equip_slot);
           const canEnhance = Boolean(it.equip_slot);
-          return `<div class="inv-row ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0">
-            <span class="inv-icon">${renderInvIconHtml(it, "📦")}</span>
-            <span class="inv-main">
-              <span class="inv-name">${escapeHtml(it.name)}</span>
-              <span class="inv-meta">${escapeHtml(slot)} · x${qty}</span>
-            </span>
-            <span class="inv-actions">
-              ${canEquip ? `<button type="button" class="mini-btn act-equip" data-item-id="${escapeHtml(it.id)}">Equip</button>` : ""}
-              ${canEnhance ? `<button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>` : ""}
-              <button type="button" class="mini-btn act-sell" data-item-id="${escapeHtml(it.id)}">Sell</button>
-            </span>
-          </div>`;
+          return `
+            <div class="inv-tile ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0" role="button" aria-label="Inventory item ${escapeHtml(
+            it.name,
+          )}">
+              <div class="inv-tile-main">
+                <span class="inv-icon">${renderInvIconHtml(it, "📦")}</span>
+                <span class="inv-tile-name">${escapeHtml(it.name)}</span>
+                <span class="inv-tile-meta">x${qty}</span>
+              </div>
+              <div class="inv-tile-actions">
+                ${canEquip ? `<button type="button" class="mini-btn act-equip" data-item-id="${escapeHtml(it.id)}">Equip</button>` : ""}
+                ${canEnhance ? `<button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>` : ""}
+                <button type="button" class="mini-btn act-sell" data-item-id="${escapeHtml(it.id)}">Sell</button>
+              </div>
+            </div>
+          `.trim();
         })
         .join("") +
-      Array.from({ length: emptySlots }, () => `<div class="inv-row inv-empty"><span class="inv-name">Empty slot</span></div>`).join("")
+      Array.from({ length: emptySlots }, () => `<div class="inv-tile inv-empty" tabindex="-1"><span class="inv-tile-name">Empty slot</span></div>`).join("")
     : `<p class="hint">No items in your bag yet.</p>`;
 
   const equipOrder = ["head", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "ring", "trinket"] as const;
@@ -356,7 +359,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
     </div>
     <div class="panel v0-panel">
       <h2>Inventory (${bag.length})</h2>
-      <div class="inv-list">${invListHtml}</div>
+      <div class="inv-grid">${invTilesHtml}</div>
     </div>
   `;
 }
@@ -709,6 +712,8 @@ function mountApp(
       n.addEventListener("blur", hideTooltip);
       n.addEventListener("click", (ev) => {
         if ((ev.target as HTMLElement | null)?.closest(".mini-btn")) return;
+        // Tap-to-reveal inventory tiles handle clicks themselves; keep tooltip hover-only for tiles.
+        if (n.classList.contains("inv-tile")) return;
         if (tooltipEl?.classList.contains("visible")) hideTooltip();
         else showTooltip(n, item);
       });
@@ -1109,6 +1114,27 @@ function mountApp(
     const sellBtn = target.closest(".act-sell") as HTMLElement | null;
     const enhBtn = target.closest(".act-enhance") as HTMLElement | null;
     const unequipBtn = target.closest(".act-unequip") as HTMLElement | null;
+
+    const clickedMini = Boolean(target.closest(".mini-btn"));
+    const tileEl = target.closest(".inv-tile") as HTMLElement | null;
+
+    // 1) Tap-to-reveal inventory tile
+    if (tileEl && !clickedMini && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) {
+      if (tileEl.classList.contains("inv-empty")) return;
+      appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => {
+        if (el !== tileEl) el.classList.remove("inv-tile--active");
+      });
+      tileEl.classList.toggle("inv-tile--active");
+      return;
+    }
+
+    // 2) If clicked outside tile/action buttons, close any revealed tile.
+    if (!equipBtn && !sellBtn && !enhBtn && !unequipBtn && !tileEl) {
+      appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => el.classList.remove("inv-tile--active"));
+      return;
+    }
+
+    // 3) Ignore clicks that aren't item actions.
     if (!equipBtn && !sellBtn && !enhBtn && !unequipBtn) return;
     ev.preventDefault();
     ev.stopPropagation();

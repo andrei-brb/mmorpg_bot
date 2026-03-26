@@ -333,6 +333,111 @@ code {
   overflow-y: auto;
 }
 
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+@media (max-width: 767px) {
+  .inv-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.inv-tile {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border: 1px solid #28335d;
+  border-radius: 10px;
+  background: #0b1028;
+  color: var(--text);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.inv-tile:focus-visible {
+  outline: none;
+  border-color: #6f78cf;
+}
+
+.inv-tile:hover {
+  border-color: #6f78cf;
+}
+
+.inv-tile-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Larger icon for square tiles only */
+.inv-tile .inv-icon-stack {
+  width: 42px;
+  height: 42px;
+}
+
+.inv-tile .inv-icon-img {
+  width: 42px;
+  height: 42px;
+}
+
+.inv-tile .inv-icon-emoji {
+  font-size: 1.2rem;
+}
+
+.inv-tile-name {
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-align: center;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.inv-tile-meta {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.inv-tile-actions {
+  display: none;
+  width: 100%;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+.inv-tile--active .inv-tile-actions {
+  display: flex;
+}
+
+.inv-tile.inv-empty {
+  border-style: dashed;
+  color: var(--muted);
+  cursor: default;
+}
+
+.inv-tile.inv-empty:hover {
+  border-color: #28335d;
+}
+
 .inv-row {
   width: 100%;
   text-align: left;
