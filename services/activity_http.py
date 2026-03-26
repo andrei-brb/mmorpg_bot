@@ -720,7 +720,10 @@ async def _serve_activity_index(request: web.Request) -> web.StreamResponse:
     path = os.path.join(root, "index.html")
     if not os.path.isfile(path):
         raise web.HTTPNotFound(text="activity/dist/index.html missing — run: cd activity && npm run build")
-    return web.FileResponse(path)
+    # Discord can aggressively cache the Activity shell; force revalidation so new hashed bundles load.
+    resp = web.FileResponse(path)
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 def _static_dir() -> Optional[str]:
