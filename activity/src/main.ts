@@ -120,6 +120,23 @@ type ExploreResultPayload = {
   character?: unknown;
 };
 
+type QuestLogRow = {
+  quest_id?: string;
+  state?: string;
+  quest_name?: string;
+  quest_desc?: string;
+  npc_id?: string;
+  npc_name?: string;
+  npc_title?: string;
+  current_step?: number;
+  total_steps?: number;
+  objective?: string | null;
+  progress?: { current?: number; needed?: number } | null;
+  expires_at?: string | null;
+};
+
+type QuestLogPayload = { ok?: boolean; error?: string; quests?: QuestLogRow[] };
+
 function rarityClass(rarity?: string | null): string {
   const v = (rarity || "").toLowerCase();
   if (v === "legendary") return "rarity-legendary";
@@ -674,6 +691,7 @@ function mountApp(
   let currentMap: ExploreMapPayload | null = null;
   let lastExplore: ExploreResultPayload | null = null;
   let lastEncounterEnemyKey: string | null = null;
+  let currentQuestLog: QuestLogPayload | null = null;
   let tooltipEl: HTMLElement | null = null;
 
   function hideTooltip(): void {
@@ -746,6 +764,89 @@ function mountApp(
       }
     } catch (e) {
       console.warn("refreshProgressData failed", e);
+    }
+  }
+
+  function formatExpires(expiresAt?: string | null): string {
+    if (!expiresAt) return "";
+    const ms = Date.parse(expiresAt);
+    if (!Number.isFinite(ms)) return "";
+    const delta = ms - Date.now();
+    if (delta <= 0) return "Expired";
+    const mins = Math.floor(delta / 60000);
+    const hrs = Math.floor(mins / 60);
+    const remM = mins % 60;
+    if (hrs > 0) return `${hrs}h ${remM}m`;
+    return `${mins}m`;
+  }
+
+  function renderQuestLogPanel(): string {
+    const rows = currentQuestLog?.quests || [];
+    if (!currentQuestLog) {
+      return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">Loading…</p></div>`;
+    }
+    if (currentQuestLog.error) {
+      return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">❌ ${escapeHtml(currentQuestLog.error)}</p></div>`;
+    }
+    if (!rows.length) {
+      return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">No active quests yet. Explore and interact with NPCs to get one.</p></div>`;
+    }
+
+    const cards = rows
+      .slice(0, 12)
+      .map((q) => {
+        const npcName = q.npc_name || q.npc_id || "Unknown NPC";
+        const title = q.quest_name || q.quest_id || "Quest";
+        const step = q.current_step && q.total_steps ? `Step ${q.current_step}/${q.total_steps}` : "";
+        const objective = q.objective || "";
+        const prog =
+          q.progress && typeof q.progress.needed === "number"
+            ? `(${q.progress.current ?? 0}/${q.progress.needed})`
+            : "";
+        const expires = formatExpires(q.expires_at);
+        const expiresHtml = expires ? `<span class="quest-pill">${escapeHtml(expires)}</span>` : "";
+        const state = (q.state || "").toLowerCase();
+        const stateHtml = state ? `<span class="quest-pill">${escapeHtml(state)}</span>` : "";
+        const npcBtn =
+          q.npc_id || q.npc_name
+            ? `<button type="button" class="mini-btn quest-interact" data-npc="${escapeHtml(
+                (q.npc_id || (q.npc_name || "").split(" ")[0].toLowerCase()) as string,
+              )}">Interact</button>`
+            : "";
+
+        return `
+          <div class="panel v0-panel quest-card">
+            <div class="quest-head">
+              <div class="quest-title">${escapeHtml(title)}</div>
+              <div class="quest-pills">${stateHtml}${expiresHtml}</div>
+            </div>
+            <div class="hint">From <strong>${escapeHtml(npcName)}</strong>${step ? ` · ${escapeHtml(step)}` : ""}</div>
+            <div class="quest-obj">${escapeHtml(objective)} ${escapeHtml(prog)}</div>
+            <div class="quest-actions">${npcBtn}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    return `<div class="panel v0-panel"><h2>Quest Log</h2><div class="quest-grid">${cards}</div></div>`;
+  }
+
+  async function refreshQuestLog(): Promise<void> {
+    try {
+      const res = await fetch(apiUrl("/api/game/quests"), { headers: authHeaders(accessToken, guildId) });
+      if (res.status === 401) {
+        window.location.reload();
+        return;
+      }
+      if (!res.ok) {
+        currentQuestLog = { error: `HTTP ${res.status}` };
+        return;
+      }
+      currentQuestLog = (await res.json()) as QuestLogPayload;
+      const pane = appRoot.querySelector("#tab-quests");
+      if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderQuestLogPanel();
+    } catch (e) {
+      currentQuestLog = { error: e instanceof Error ? e.message : String(e) };
     }
   }
 
@@ -902,23 +1003,27 @@ function mountApp(
     if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
   }
 
-  function setTab(next: "hero" | "combat" | "progress" | "explore"): void {
+  function setTab(next: "hero" | "combat" | "progress" | "explore" | "quests"): void {
     const hBtn = appRoot.querySelector('[data-tab="hero"]');
     const cBtn = appRoot.querySelector('[data-tab="combat"]');
     const pBtn = appRoot.querySelector('[data-tab="progress"]');
     const eBtn = appRoot.querySelector('[data-tab="explore"]');
+    const qBtn = appRoot.querySelector('[data-tab="quests"]');
     const hPane = appRoot.querySelector("#tab-hero");
     const cPane = appRoot.querySelector("#tab-combat");
     const pPane = appRoot.querySelector("#tab-progress");
     const ePane = appRoot.querySelector("#tab-explore");
+    const qPane = appRoot.querySelector("#tab-quests");
     hBtn?.classList.toggle("active", next === "hero");
     cBtn?.classList.toggle("active", next === "combat");
     pBtn?.classList.toggle("active", next === "progress");
     eBtn?.classList.toggle("active", next === "explore");
+    qBtn?.classList.toggle("active", next === "quests");
     hPane?.classList.toggle("hidden", next !== "hero");
     cPane?.classList.toggle("hidden", next !== "combat");
     pPane?.classList.toggle("hidden", next !== "progress");
     ePane?.classList.toggle("hidden", next !== "explore");
+    qPane?.classList.toggle("hidden", next !== "quests");
     if (next === "combat") void refreshCombatPanel();
     if (next === "progress") {
       const progressPane = appRoot.querySelector("#tab-progress");
@@ -931,6 +1036,11 @@ function mountApp(
       const pane = appRoot.querySelector("#tab-explore");
       if (pane) pane.innerHTML = renderExplorePanel();
       void refreshMap();
+    }
+    if (next === "quests") {
+      const pane = appRoot.querySelector("#tab-quests");
+      if (pane) pane.innerHTML = renderQuestLogPanel();
+      void refreshQuestLog();
     }
   }
 
@@ -1163,11 +1273,13 @@ function mountApp(
       <div class="tabs">
         <button type="button" class="tab active" data-tab="hero">Hero</button>
         <button type="button" class="tab" data-tab="explore">Explore</button>
+        <button type="button" class="tab" data-tab="quests">Quests</button>
         <button type="button" class="tab" data-tab="combat">Combat</button>
         <button type="button" class="tab" data-tab="progress">Progress</button>
       </div>
       <div id="tab-hero" class="tab-pane">${buildHeroHtml(payload)}</div>
       <div id="tab-explore" class="tab-pane hidden"></div>
+      <div id="tab-quests" class="tab-pane hidden"></div>
       <div id="tab-combat" class="tab-pane hidden">
         <div id="combat-mount"><p class="hint">Open this tab to load combat.</p></div>
       </div>
@@ -1257,6 +1369,7 @@ function mountApp(
   appRoot.querySelector("#logout-btn")?.addEventListener("click", () => window.location.reload());
   appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));
   appRoot.querySelector('[data-tab="explore"]')?.addEventListener("click", () => setTab("explore"));
+  appRoot.querySelector('[data-tab="quests"]')?.addEventListener("click", () => setTab("quests"));
   appRoot.querySelector('[data-tab="combat"]')?.addEventListener("click", () => setTab("combat"));
   appRoot.querySelector('[data-tab="progress"]')?.addEventListener("click", () => setTab("progress"));
 
@@ -1270,6 +1383,16 @@ function mountApp(
     if (action === "travel") void doTravel();
     if (action === "explore") void doExplore();
     if (action === "npc-interact") void doNpcInteract(act?.dataset.npc);
+  });
+
+  appRoot.addEventListener("click", (ev) => {
+    const t = ev.target as HTMLElement | null;
+    if (!t) return;
+    const btn = t.closest<HTMLButtonElement>(".quest-interact");
+    if (!btn) return;
+    const npc = btn.dataset.npc;
+    if (!npc) return;
+    void doNpcInteract(npc);
   });
 }
 

@@ -623,6 +623,81 @@ async def handle_map(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"zones": out, "current_zone": char.get("current_zone")}))
 
 
+def _npc_for_quest_id(quest_id: str) -> Optional[Dict[str, Any]]:
+    for npc_id, npc in NPC_TEMPLATES.items():
+        for q in npc.get("quests", []):
+            if q.get("id") == quest_id:
+                return {"npc_id": npc_id, "npc_name": npc.get("name"), "npc_title": npc.get("title")}
+    return None
+
+
+def _parse_meta_json(meta: Any) -> Dict[str, Any]:
+    if meta is None:
+        return {}
+    if isinstance(meta, dict):
+        return meta
+    if isinstance(meta, str):
+        try:
+            return json.loads(meta)
+        except Exception:
+            return {}
+    return {}
+
+
+async def handle_quests(request: web.Request) -> web.Response:
+    """Quest log for Activity hybrid UX."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "quests": []}), status=400)
+
+    qs = NPCQuestService(db)
+    char_id = _uuid_from_any(char["id"])
+    active = await qs.get_active_quests(char_id)
+
+    out = []
+    for q in active:
+        quest_id = q.get("quest_id")
+        steps = q.get("steps") or []
+        cur_step = int(q.get("current_step") or 1)
+        idx = max(0, cur_step - 1)
+        step = steps[idx] if idx < len(steps) else None
+        objective = (step or {}).get("objective")
+        check = (step or {}).get("completion_check") or {}
+        meta = _parse_meta_json(q.get("metadata"))
+
+        progress = None
+        if check.get("type") == "kill_enemy":
+            needed = int(check.get("count") or 1)
+            k = f"kills_{check.get('value')}"
+            progress = {"current": int(meta.get(k, 0) or 0), "needed": needed}
+        elif check.get("type") == "kill_any_zone":
+            needed = int(check.get("count") or 1)
+            k = f"kills_zone_{check.get('value')}"
+            progress = {"current": int(meta.get(k, 0) or 0), "needed": needed}
+        elif check.get("type") == "kill_boss_zone":
+            needed = int(check.get("count") or 1)
+            k = f"boss_kills_{check.get('value')}"
+            progress = {"current": int(meta.get(k, 0) or 0), "needed": needed}
+
+        npc_info = _npc_for_quest_id(quest_id) if quest_id else None
+        out.append(
+            {
+                "quest_id": quest_id,
+                "state": q.get("state"),
+                "quest_name": q.get("quest_name"),
+                "quest_desc": q.get("quest_desc"),
+                "current_step": cur_step,
+                "total_steps": q.get("total_steps"),
+                "objective": objective,
+                "progress": progress,
+                "expires_at": q.get("expires_at"),
+                **(npc_info or {}),
+            }
+        )
+
+    return web.json_response(_json_safe({"ok": True, "quests": out}))
+
+
 async def handle_travel(request: web.Request) -> web.Response:
     """Travel to a zone key (Explore tab)."""
     _user, discord_id, char, db = await _authed_discord_user_and_char(request)
@@ -1188,6 +1263,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/equipment", handle_equipment)
     app.router.add_get("/api/game/progress", handle_progress)
     app.router.add_get("/api/game/map", handle_map)
+    app.router.add_get("/api/game/quests", handle_quests)
     app.router.add_post("/api/game/travel", handle_travel)
     app.router.add_post("/api/game/explore", handle_explore)
     app.router.add_post("/api/game/npc/interact", handle_npc_interact)
