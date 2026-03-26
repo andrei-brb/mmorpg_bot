@@ -819,6 +819,10 @@ function mountApp(
   async function refreshMap(): Promise<void> {
     try {
       const res = await fetch(apiUrl("/api/game/map"), { headers: authHeaders(accessToken, guildId) });
+      if (res.status === 401) {
+        window.location.reload();
+        return;
+      }
       if (!res.ok) return;
       currentMap = (await res.json()) as ExploreMapPayload;
       const pane = appRoot.querySelector("#tab-explore");
@@ -838,6 +842,11 @@ function mountApp(
       headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
       body: JSON.stringify({ zone_key: zoneKey }),
     });
+    if (res.status === 401) {
+      pane && (pane.innerHTML = `<p class="hint">Session expired — reloading…</p>`);
+      window.setTimeout(() => window.location.reload(), 700);
+      return;
+    }
     const json = (await res.json()) as { ok?: boolean; message?: string; error?: string; character?: unknown };
     if (!res.ok || json.error) {
       lastExplore = { error: json.error || "travel_failed", message: json.message || "Travel failed." };
@@ -856,6 +865,11 @@ function mountApp(
       headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
+    if (res.status === 401) {
+      pane && (pane.innerHTML = `<p class="hint">Session expired — reloading…</p>`);
+      window.setTimeout(() => window.location.reload(), 700);
+      return;
+    }
     const json = (await res.json()) as ExploreResultPayload;
     lastExplore = json;
     if (json.outcome && "key" in (json.outcome as any) && typeof (json.outcome as any).key === "string") {
@@ -874,6 +888,10 @@ function mountApp(
       headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
       body: JSON.stringify({ npc }),
     });
+    if (res.status === 401) {
+      window.location.reload();
+      return;
+    }
     const json = (await res.json()) as { ok?: boolean; error?: string; message?: string };
     if (!res.ok || json.error) {
       lastExplore = { error: json.error || "npc_interact_failed", message: json.message || "Interact failed." };
