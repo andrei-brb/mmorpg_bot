@@ -163,19 +163,32 @@ function renderInvIconHtml(item: InvRow, fallbackEmoji: string): string {
     .map((src, idx) => ` data-src-${idx}="${src}"`)
     .join("");
 
-  // Try `data-src-0..N` sequentially. When exhausted, hide image and show emoji fallback.
-  const onErr = [
-    "var i=parseInt(this.getAttribute('data-src-idx')||'0',10)+1;",
-    "var next=this.getAttribute('data-src-'+i);",
-    "if(next){this.setAttribute('data-src-idx',String(i));this.src=next;return;}",
-    "this.style.display='none';var n=this.nextElementSibling;if(n)n.style.display='flex';",
-  ].join("");
-
   return `<span class="inv-icon-stack" data-icon-fallback="${escapeHtml(emoji)}">
     <img src="${candidates[0]}" alt="" class="inv-icon-img" loading="lazy" decoding="async" width="32" height="32"
-      data-src-idx="0"${attrs} onerror="${onErr}" />
+      data-src-idx="0"${attrs} />
     <span class="inv-icon-emoji inv-icon-emoji--fallback" style="display:none" aria-hidden="true">${escapeHtml(emoji)}</span>
   </span>`;
+}
+
+function wireInvIconFallbacks(scope: ParentNode): void {
+  // CSP-safe: attach listeners in JS (Discord blocks inline `onerror=` handlers).
+  scope.querySelectorAll<HTMLImageElement>("img.inv-icon-img").forEach((img) => {
+    if ((img as unknown as { __wired?: boolean }).__wired) return;
+    (img as unknown as { __wired?: boolean }).__wired = true;
+    img.addEventListener("error", () => {
+      const cur = parseInt(img.getAttribute("data-src-idx") || "0", 10) || 0;
+      const nextIdx = cur + 1;
+      const next = img.getAttribute(`data-src-${nextIdx}`);
+      if (next) {
+        img.setAttribute("data-src-idx", String(nextIdx));
+        img.src = next;
+        return;
+      }
+      img.style.display = "none";
+      const fb = img.nextElementSibling as HTMLElement | null;
+      if (fb) fb.style.display = "flex";
+    });
+  });
 }
 
 function renderDisconnected(message: string, extra?: string): void {
@@ -639,6 +652,7 @@ function mountApp(
   function wireHeroItems(): void {
     const heroPane = appRoot.querySelector("#tab-hero");
     if (!heroPane) return;
+    wireInvIconFallbacks(heroPane);
     heroPane.querySelectorAll<HTMLElement>("[data-item-id]").forEach((n) => {
       const id = n.dataset.itemId;
       if (!id) return;
