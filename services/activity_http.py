@@ -35,6 +35,8 @@ from services.character.inventory_service import InventoryService
 from services.combat import activity_combat as activity_combat_api
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
+from services.quest.npc_quest_service import NPCQuestService, NPC_TEMPLATES, FACTIONS, get_dynamic_intro, get_rep_level
+from config.settings import ZONES, Settings, ENEMIES
 
 log = logging.getLogger("activity_http")
 
@@ -555,6 +557,335 @@ async def handle_progress(request: web.Request) -> web.Response:
     return web.json_response(_json_safe(payload))
 
 
+async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int, dict, Any]:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    return user, discord_id, dict(char) if char else None, db
+
+
+async def handle_map(request: web.Request) -> web.Response:
+    """List zones for Explore tab."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"zones": [], "error": "no_character"}))
+
+    out = []
+    for key, z in sorted(ZONES.items(), key=lambda kv: kv[1].level_range[0]):
+        players = await db.fetchval(
+            "SELECT COUNT(*) FROM characters WHERE current_zone=$1 AND is_active=TRUE",
+            key,
+        ) or 0
+        zs = await db.fetchrow("SELECT boss_alive FROM zone_state WHERE zone_key=$1", key)
+        boss_alive = True if (not zs or zs.get("boss_alive") is None) else bool(zs["boss_alive"])
+        out.append(
+            {
+                "key": key,
+                "name": z.name,
+                "emoji": z.emoji,
+                "description": z.description,
+                "level_min": z.level_range[0],
+                "level_max": z.level_range[1],
+                "faction": z.faction,
+                "players": int(players),
+                "boss_alive": boss_alive,
+                "is_current": key == char.get("current_zone"),
+            }
+        )
+    return web.json_response(_json_safe({"zones": out, "current_zone": char.get("current_zone")}))
+
+
+async def handle_travel(request: web.Request) -> web.Response:
+    """Travel to a zone key (Explore tab)."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    zone_key = (body.get("zone_key") or body.get("zone") or "").strip()
+    if not zone_key or zone_key not in ZONES:
+        return web.json_response(_json_safe({"ok": False, "error": "invalid_zone"}), status=400)
+
+    if char.get("current_zone") == zone_key:
+        return web.json_response(_json_safe({"ok": True, "message": "Already here.", "zone_key": zone_key}))
+
+    z = ZONES[zone_key]
+    if int(char.get("level") or 1) < z.level_range[0]:
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": False,
+                    "error": "level_too_low",
+                    "message": f"Need level {z.level_range[0]} for {z.name}.",
+                }
+            ),
+            status=400,
+        )
+
+    # zone_state counters (best-effort)
+    try:
+        await db.execute(
+            "UPDATE zone_state SET active_players=GREATEST(0,active_players-1) WHERE zone_key=$1",
+            char.get("current_zone"),
+        )
+    except Exception:
+        pass
+    await db.execute("UPDATE characters SET current_zone=$2 WHERE id=$1", UUID(char["id"]), zone_key)
+    try:
+        await db.execute(
+            "UPDATE zone_state SET active_players=active_players+1 WHERE zone_key=$1",
+            zone_key,
+        )
+    except Exception:
+        pass
+
+    # refresh char
+    char_svc = CharacterService(db)
+    fresh = await char_svc.get_character(discord_id)
+    return web.json_response(_json_safe({"ok": True, "character": dict(fresh), "zone_key": zone_key}))
+
+
+async def handle_explore(request: web.Request) -> web.Response:
+    """Roll an explore outcome (loot/safe/enemy/boss) and possibly discover an NPC."""
+    bot = request.app["bot"]
+    user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    quest_svc = NPCQuestService(db)
+
+    # combat gate similar to /explore
+    if (char.get("combat_status") or "") == "in_combat":
+        return web.json_response(_json_safe({"ok": False, "error": "in_combat", "message": "Finish your fight first."}), status=409)
+
+    cd = await char_svc.on_cooldown(UUID(char["id"]), "explore")
+    if cd:
+        return web.json_response(_json_safe({"ok": False, "error": "cooldown", "cooldown_s": int(cd)}), status=429)
+
+    zone = ZONES.get(char.get("current_zone"))
+    if not zone:
+        return web.json_response(_json_safe({"ok": False, "error": "unknown_zone"}), status=400)
+    if int(char.get("level") or 1) < zone.level_range[0]:
+        return web.json_response(_json_safe({"ok": False, "error": "level_too_low", "message": f"Need level {zone.level_range[0]}."}), status=400)
+
+    # bump zone_state counters best-effort
+    try:
+        await db.execute(
+            "UPDATE zone_state SET active_players=active_players+1, kills_today=kills_today+1 WHERE zone_key=$1",
+            char.get("current_zone"),
+        )
+    except Exception:
+        pass
+
+    import random
+
+    def _roll(level: int):
+        r = random.random()
+        if r < 0.40:
+            key = random.choice(zone.enemies)
+            e = ENEMIES.get(key)
+            return {"type": "enemy", "key": key, "name": e.name if e else key.replace("_", " ").title(), "emoji": e.emoji if e else "👾"}
+        if r < 0.55:
+            key = random.choice(zone.bosses) if zone.bosses else random.choice(zone.enemies)
+            e = ENEMIES.get(key)
+            return {"type": "boss", "key": key, "name": e.name if e else key.replace("_", " ").title(), "emoji": e.emoji if e else "💀"}
+        if r < 0.75:
+            return {"type": "loot"}
+        return {"type": "safe"}
+
+    outcome = _roll(int(char.get("level") or 1))
+
+    cooldown = Settings.EXPLORE_COOLDOWN if outcome["type"] in ("enemy", "boss") else 10
+    await char_svc.set_cooldown(UUID(char["id"]), "explore", cooldown)
+
+    reward = {}
+    pending = None
+    if outcome["type"] == "boss":
+        pending = outcome["key"]
+        await db.execute("UPDATE characters SET pending_encounter=$2 WHERE id=$1", UUID(char["id"]), pending)
+    elif outcome["type"] == "loot":
+        xp = random.randint(5, 15 + int(char.get("level") or 1))
+        gold = random.randint(1, 5 + int(char.get("level") or 1) // 2)
+        await char_svc.award_xp(UUID(char["id"]), xp)
+        await char_svc.add_gold(UUID(char["id"]), gold, "exploration")
+        reward = {"xp": xp, "gold": gold}
+    elif outcome["type"] == "safe":
+        xp = random.randint(3, 8)
+        await char_svc.award_xp(UUID(char["id"]), xp)
+        reward = {"xp": xp}
+
+    npc_payload = None
+    try:
+        npc_encounter = await quest_svc.roll_npc_encounter(UUID(char["id"]), char.get("current_zone"))
+        if npc_encounter:
+            npc_id = npc_encounter["npc_id"]
+            npc_data = npc_encounter["npc_data"]
+            already = npc_encounter["already_met"]
+            if not already:
+                await quest_svc.discover_npc(UUID(char["id"]), npc_id, char.get("current_zone"))
+            npc_payload = {
+                "npc_id": npc_id,
+                "name": npc_data.get("name"),
+                "title": npc_data.get("title"),
+                "discovery_hint": npc_data.get("discovery_hint"),
+                "already_met": already,
+            }
+    except Exception as e:
+        log.warning("NPC encounter roll failed: %s", e)
+
+    # refresh char snapshot for UI
+    fresh = await char_svc.get_character(discord_id)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "zone": {"key": char.get("current_zone"), "name": zone.name, "emoji": zone.emoji, "level_min": zone.level_range[0], "level_max": zone.level_range[1]},
+                "outcome": outcome,
+                "reward": reward,
+                "cooldown_s": cooldown,
+                "npc": npc_payload,
+                "character": dict(fresh) if fresh else None,
+            }
+        )
+    )
+
+
+async def handle_npc_interact(request: web.Request) -> web.Response:
+    """Trigger the NPC DM interaction/quest offer flow (Activity button)."""
+    bot = request.app["bot"]
+    user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    npc_search = (body.get("npc") or body.get("npc_name") or "").strip()
+    quest_svc = NPCQuestService(db)
+    char_id = UUID(char["id"])
+
+    npc_id = quest_svc.find_npc_by_name(npc_search) if npc_search else None
+    if not npc_id:
+        # If not specified, try the most recent discovery in this zone.
+        row = await db.fetchrow(
+            "SELECT npc_id FROM npc_discoveries WHERE character_id=$1 AND zone_found=$2 ORDER BY discovered_at DESC LIMIT 1",
+            char_id,
+            char.get("current_zone"),
+        )
+        npc_id = row["npc_id"] if row else None
+    if not npc_id or npc_id not in NPC_TEMPLATES:
+        return web.json_response(_json_safe({"ok": False, "error": "npc_not_found"}), status=404)
+
+    # Check discovery
+    state = await quest_svc.get_npc_state(char_id, npc_id)
+    if not state:
+        return web.json_response(_json_safe({"ok": False, "error": "npc_not_discovered"}), status=400)
+
+    npc_data = NPC_TEMPLATES[npc_id]
+
+    # Determine next quest
+    completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
+    next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+    if not next_quest:
+        return web.json_response(_json_safe({"ok": True, "message": "No quests available.", "npc_id": npc_id}))
+
+    # Level requirement
+    if int(char.get("level") or 1) < int(next_quest.get("level_req", 1) or 1):
+        return web.json_response(_json_safe({"ok": False, "error": "level_too_low", "message": f"Need level {next_quest['level_req']}."}), status=400)
+
+    # Send DM with buttons
+    try:
+        uobj = bot.get_user(discord_id) or await bot.fetch_user(discord_id)
+        dm = await uobj.create_dm()
+    except Exception:
+        return web.json_response(_json_safe({"ok": False, "error": "dm_forbidden", "message": "Enable DMs from server members."}), status=403)
+
+    # Reuse the same UI view class from QuestCog
+    from cogs.quest.quest_cog import QuestOfferView
+
+    char_class = char.get("class", "warrior")
+    char_level = int(char.get("level") or 1)
+    intro_text = get_dynamic_intro(npc_id, npc_data, char_class, char_level)
+
+    import discord as _discord
+
+    embed = _discord.Embed(
+        title=f"{npc_data.get('title','')} {npc_data.get('name','')}".strip(),
+        description=intro_text,
+        color=0x4A90E2,
+    )
+    embed.add_field(
+        name="📜 Quest Available",
+        value=f"**{next_quest['name']}**\n{next_quest['description']}",
+        inline=False,
+    )
+    rewards = next_quest.get("rewards", {}) or {}
+    reward_lines = []
+    if rewards.get("xp"):
+        reward_lines.append(f"⭐ {int(rewards['xp']):,} XP")
+    if rewards.get("gold"):
+        reward_lines.append(f"🪙 {int(rewards['gold']):,} Gold")
+    if rewards.get("items"):
+        reward_lines.append("🎁 Unique Item Reward")
+    if rewards.get("reputation"):
+        for fid, amt in rewards["reputation"].items():
+            faction = FACTIONS.get(fid, {})
+            reward_lines.append(f"{faction.get('emoji', '⭐')} +{amt} {faction.get('name', fid)} Rep")
+    if reward_lines:
+        embed.add_field(name="🏆 Rewards", value="\n".join(reward_lines), inline=True)
+
+    step_text = "\n".join(f"`{i+1}.` {s['objective']}" for i, s in enumerate(next_quest.get("steps") or []))
+    if step_text:
+        embed.add_field(name="📋 Objectives", value=step_text, inline=False)
+
+    view = QuestOfferView()
+    dm_msg = await dm.send(embed=embed, view=view)
+    await quest_svc.update_npc_state(char_id, npc_id, "quest_offered")
+
+    # Wait for choice, then apply accept/decline.
+    await view.wait()
+    if view.choice == "accept":
+        await quest_svc.offer_quest(char_id, npc_id, next_quest["id"])
+        await quest_svc.accept_quest(char_id, next_quest["id"])
+        accept_embed = _discord.Embed(title="✅ Quest Accepted!", description=next_quest["dialogue"]["accept"], color=0x2ECC71)
+        first_step = (next_quest.get("steps") or [{}])[0]
+        if first_step.get("objective"):
+            accept_embed.add_field(name="📍 First Objective", value=f"{first_step['objective']}\n*{first_step.get('hint','')}*", inline=False)
+        await dm_msg.edit(embed=accept_embed, view=None)
+        return web.json_response(_json_safe({"ok": True, "message": "Quest accepted in DMs.", "npc_id": npc_id, "quest_id": next_quest["id"]}))
+    if view.choice == "decline":
+        decline_embed = _discord.Embed(title="Quest Declined", description=next_quest["dialogue"]["decline"], color=0x95A5A6)
+        await dm_msg.edit(embed=decline_embed, view=None)
+        return web.json_response(_json_safe({"ok": True, "message": "Quest declined.", "npc_id": npc_id}))
+
+    return web.json_response(_json_safe({"ok": True, "message": "Interaction ended.", "npc_id": npc_id}))
+
 async def handle_item_equip(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -794,6 +1125,10 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/equipment", handle_equipment)
     app.router.add_get("/api/game/progress", handle_progress)
+    app.router.add_get("/api/game/map", handle_map)
+    app.router.add_post("/api/game/travel", handle_travel)
+    app.router.add_post("/api/game/explore", handle_explore)
+    app.router.add_post("/api/game/npc/interact", handle_npc_interact)
     app.router.add_post("/api/game/item/equip", handle_item_equip)
     app.router.add_post("/api/game/item/sell", handle_item_sell)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)

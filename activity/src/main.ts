@@ -78,6 +78,48 @@ type ProgressPayload = {
   history?: ProgressHistory[];
 };
 
+type ExploreZone = {
+  key: string;
+  name: string;
+  emoji: string;
+  description?: string;
+  level_min?: number;
+  level_max?: number;
+  faction?: string;
+  players?: number;
+  boss_alive?: boolean;
+  is_current?: boolean;
+};
+
+type ExploreMapPayload = {
+  current_zone?: string;
+  zones?: ExploreZone[];
+};
+
+type ExploreNpcPayload = {
+  npc_id?: string;
+  name?: string;
+  title?: string;
+  discovery_hint?: string;
+  already_met?: boolean;
+};
+
+type ExploreOutcome =
+  | { type: "enemy" | "boss"; key: string; name: string; emoji?: string }
+  | { type: "loot" | "safe" };
+
+type ExploreResultPayload = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  cooldown_s?: number;
+  zone?: { key: string; name: string; emoji: string; level_min?: number; level_max?: number };
+  outcome?: ExploreOutcome;
+  reward?: { xp?: number; gold?: number };
+  npc?: ExploreNpcPayload | null;
+  character?: unknown;
+};
+
 function rarityClass(rarity?: string | null): string {
   const v = (rarity || "").toLowerCase();
   if (v === "legendary") return "rarity-legendary";
@@ -622,6 +664,8 @@ function mountApp(
   /** Latest inventory snapshot; updated after combat when loot/gold/bag may change */
   let currentPayload: InventoryPayload = payload;
   let currentProgress: ProgressPayload | null = null;
+  let currentMap: ExploreMapPayload | null = null;
+  let lastExplore: ExploreResultPayload | null = null;
   let tooltipEl: HTMLElement | null = null;
 
   function hideTooltip(): void {
@@ -693,19 +737,153 @@ function mountApp(
     }
   }
 
-  function setTab(next: "hero" | "combat" | "progress"): void {
+  function renderExplorePanel(): string {
+    const char = currentPayload.character as { current_zone?: string; level?: number } | null;
+    const zoneKey = (char as { current_zone?: string } | null)?.current_zone || currentMap?.current_zone || "";
+    const zones = currentMap?.zones || [];
+    const cur = zones.find((z) => z.key === zoneKey) || zones.find((z) => z.is_current) || null;
+
+    const zoneTitle = cur ? `${cur.emoji || "🗺️"} ${cur.name}` : "🗺️ Explore";
+    const zoneMeta = cur
+      ? `Lv ${cur.level_min ?? "?"}-${cur.level_max ?? "?"} · ${escapeHtml(String(cur.faction || "—"))} · 👥 ${cur.players ?? 0}`
+      : "Loading map…";
+
+    const opts = zones.length
+      ? zones
+          .map((z) => {
+            const label = `${z.emoji || "🗺️"} ${z.name} (Lv ${z.level_min ?? "?"}-${z.level_max ?? "?"})`;
+            const sel = z.key === zoneKey || z.is_current ? " selected" : "";
+            return `<option value="${escapeHtml(z.key)}"${sel}>${escapeHtml(label)}</option>`;
+          })
+          .join("")
+      : `<option value="">Loading…</option>`;
+
+    const exploreBlock = (() => {
+      if (!lastExplore) return `<p class="hint">Press <strong>Explore</strong> to roll an encounter, loot, or discover an NPC.</p>`;
+      if (lastExplore.error) {
+        return `<p class="hint">❌ ${escapeHtml(lastExplore.message || lastExplore.error)}</p>`;
+      }
+      const out = lastExplore.outcome;
+      const reward = lastExplore.reward || {};
+      const npc = lastExplore.npc;
+      const parts: string[] = [];
+      if (out?.type === "enemy" || out?.type === "boss") {
+        parts.push(`<div class="panel v0-panel"><h2>Encounter</h2><p class="hint">${escapeHtml(out.emoji || "⚔️")} <strong>${escapeHtml(out.name)}</strong> (${escapeHtml(out.type)})</p><p class="hint">Open the <strong>Combat</strong> tab to fight.</p></div>`);
+      } else if (out?.type === "loot") {
+        parts.push(`<div class="panel v0-panel"><h2>Discovery</h2><p class="hint">✨ +${reward.xp ?? 0} XP · +${reward.gold ?? 0} 🪙</p></div>`);
+      } else if (out?.type === "safe") {
+        parts.push(`<div class="panel v0-panel"><h2>Quiet Journey</h2><p class="hint">🌿 +${reward.xp ?? 0} XP</p></div>`);
+      }
+      if (npc?.npc_id) {
+        const name = npc.name || "A Stranger";
+        const hint = npc.discovery_hint || (npc.already_met ? "A familiar face." : "Someone approaches…");
+        parts.push(`<div class="panel v0-panel"><h2>NPC</h2><p class="hint"><strong>${escapeHtml(name)}</strong></p><p class="hint">${escapeHtml(hint)}</p><div style="margin-top:0.75rem"><button type="button" class="btn" data-action="npc-interact" data-npc="${escapeHtml(name.split(" ")[0].toLowerCase())}">💬 Interact</button></div><p class="hint" style="margin-top:0.5rem">This will DM you the quest offer (if DMs are enabled).</p></div>`);
+      }
+      if (!parts.length) return `<p class="hint">Done.</p>`;
+      return parts.join("");
+    })();
+
+    return `
+      <div class="panel v0-panel">
+        <h2>Explore</h2>
+        <p class="hint"><strong>${escapeHtml(zoneTitle)}</strong></p>
+        <p class="hint">${zoneMeta}</p>
+        <div class="fighters" style="grid-template-columns: 1fr;">
+          <div class="v0-fighter-card">
+            <label class="select-label">Travel</label>
+            <select id="zone-pick" class="enemy-select">${opts}</select>
+            <div style="margin-top:0.75rem; display:flex; gap:8px; flex-wrap:wrap">
+              <button type="button" class="btn" data-action="travel">🧭 Travel</button>
+              <button type="button" class="btn" data-action="explore">🌲 Explore</button>
+            </div>
+            <div class="hint" style="margin-top:0.5rem">Explore has a cooldown (same as <code>/explore</code>).</div>
+          </div>
+        </div>
+      </div>
+      ${exploreBlock}
+    `;
+  }
+
+  async function refreshMap(): Promise<void> {
+    try {
+      const res = await fetch(apiUrl("/api/game/map"), { headers: authHeaders(accessToken, guildId) });
+      if (!res.ok) return;
+      currentMap = (await res.json()) as ExploreMapPayload;
+      const pane = appRoot.querySelector("#tab-explore");
+      if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
+    } catch (e) {
+      console.warn("refreshMap failed", e);
+    }
+  }
+
+  async function doTravel(): Promise<void> {
+    const pane = appRoot.querySelector("#tab-explore");
+    const sel = pane?.querySelector("#zone-pick") as HTMLSelectElement | null;
+    const zoneKey = sel?.value || "";
+    if (!zoneKey) return;
+    const res = await fetch(apiUrl("/api/game/travel"), {
+      method: "POST",
+      headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+      body: JSON.stringify({ zone_key: zoneKey }),
+    });
+    const json = (await res.json()) as { ok?: boolean; message?: string; error?: string; character?: unknown };
+    if (!res.ok || json.error) {
+      lastExplore = { error: json.error || "travel_failed", message: json.message || "Travel failed." };
+    }
+    await refreshHeroInventory();
+    await refreshMap();
+    if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
+  }
+
+  async function doExplore(): Promise<void> {
+    const pane = appRoot.querySelector("#tab-explore");
+    lastExplore = { ok: true };
+    if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
+    const res = await fetch(apiUrl("/api/game/explore"), {
+      method: "POST",
+      headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const json = (await res.json()) as ExploreResultPayload;
+    lastExplore = json;
+    await refreshHeroInventory();
+    await refreshMap();
+    if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
+  }
+
+  async function doNpcInteract(npc?: string): Promise<void> {
+    const res = await fetch(apiUrl("/api/game/npc/interact"), {
+      method: "POST",
+      headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+      body: JSON.stringify({ npc }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string; message?: string };
+    if (!res.ok || json.error) {
+      lastExplore = { error: json.error || "npc_interact_failed", message: json.message || "Interact failed." };
+    } else {
+      lastExplore = { ok: true, message: json.message || "Sent you a DM." };
+    }
+    const pane = appRoot.querySelector("#tab-explore");
+    if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
+  }
+
+  function setTab(next: "hero" | "combat" | "progress" | "explore"): void {
     const hBtn = appRoot.querySelector('[data-tab="hero"]');
     const cBtn = appRoot.querySelector('[data-tab="combat"]');
     const pBtn = appRoot.querySelector('[data-tab="progress"]');
+    const eBtn = appRoot.querySelector('[data-tab="explore"]');
     const hPane = appRoot.querySelector("#tab-hero");
     const cPane = appRoot.querySelector("#tab-combat");
     const pPane = appRoot.querySelector("#tab-progress");
+    const ePane = appRoot.querySelector("#tab-explore");
     hBtn?.classList.toggle("active", next === "hero");
     cBtn?.classList.toggle("active", next === "combat");
     pBtn?.classList.toggle("active", next === "progress");
+    eBtn?.classList.toggle("active", next === "explore");
     hPane?.classList.toggle("hidden", next !== "hero");
     cPane?.classList.toggle("hidden", next !== "combat");
     pPane?.classList.toggle("hidden", next !== "progress");
+    ePane?.classList.toggle("hidden", next !== "explore");
     if (next === "combat") void refreshCombatPanel();
     if (next === "progress") {
       const progressPane = appRoot.querySelector("#tab-progress");
@@ -713,6 +891,11 @@ function mountApp(
         progressPane.innerHTML = renderProgressPanel(currentPayload, currentProgress);
       }
       void refreshProgressData();
+    }
+    if (next === "explore") {
+      const pane = appRoot.querySelector("#tab-explore");
+      if (pane) pane.innerHTML = renderExplorePanel();
+      void refreshMap();
     }
   }
 
@@ -893,10 +1076,12 @@ function mountApp(
       ${metaLine}
       <div class="tabs">
         <button type="button" class="tab active" data-tab="hero">Hero</button>
+        <button type="button" class="tab" data-tab="explore">Explore</button>
         <button type="button" class="tab" data-tab="combat">Combat</button>
         <button type="button" class="tab" data-tab="progress">Progress</button>
       </div>
       <div id="tab-hero" class="tab-pane">${buildHeroHtml(payload)}</div>
+      <div id="tab-explore" class="tab-pane hidden"></div>
       <div id="tab-combat" class="tab-pane hidden">
         <div id="combat-mount"><p class="hint">Open this tab to load combat.</p></div>
       </div>
@@ -947,8 +1132,21 @@ function mountApp(
   wireHeroItems();
   appRoot.querySelector("#logout-btn")?.addEventListener("click", () => window.location.reload());
   appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));
+  appRoot.querySelector('[data-tab="explore"]')?.addEventListener("click", () => setTab("explore"));
   appRoot.querySelector('[data-tab="combat"]')?.addEventListener("click", () => setTab("combat"));
   appRoot.querySelector('[data-tab="progress"]')?.addEventListener("click", () => setTab("progress"));
+
+  // Explore actions (delegated)
+  appRoot.addEventListener("click", (ev) => {
+    const t = ev.target as HTMLElement | null;
+    if (!t) return;
+    const act = t.closest<HTMLElement>("[data-action]");
+    const action = act?.dataset.action || "";
+    if (!action) return;
+    if (action === "travel") void doTravel();
+    if (action === "explore") void doExplore();
+    if (action === "npc-interact") void doNpcInteract(act?.dataset.npc);
+  });
 }
 
 async function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
