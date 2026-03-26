@@ -590,6 +590,14 @@ code {
   text-transform: capitalize;
 }
 
+.enh-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  margin-top: -2px;
+}
+
 .equip-actions {
   margin-top: 6px;
   display: flex;

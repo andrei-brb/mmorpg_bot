@@ -286,13 +286,15 @@ function buildHeroHtml(payload: InventoryPayload): string {
           const qty = it.quantity ?? 1;
           const canEquip = Boolean(it.equip_slot);
           const canEnhance = Boolean(it.equip_slot);
+          const enh = Number((it as any).enhancement_level ?? 0) || 0;
+          const enhSuffix = enh > 0 ? ` +${enh}` : "";
           return `
             <div class="inv-tile ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0" role="button" aria-label="Inventory item ${escapeHtml(
             it.name,
           )}">
               <div class="inv-tile-main">
                 <span class="inv-icon">${renderInvIconHtml(it, "📦")}</span>
-                <span class="inv-tile-name">${escapeHtml(it.name)}</span>
+                <span class="inv-tile-name">${escapeHtml(it.name)}${escapeHtml(enhSuffix)}</span>
                 <span class="inv-tile-meta">x${qty}</span>
               </div>
               <div class="inv-tile-actions">
@@ -323,6 +325,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
         <div class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
           <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span>
           <span class="equip-label">${escapeHtml(label)}</span>
+          ${((Number((it as any).enhancement_level ?? 0) || 0) > 0) ? `<span class="enh-badge" title="Enhanced">+${escapeHtml(String(Number((it as any).enhancement_level ?? 0) || 0))}</span>` : ""}
           <div class="equip-actions">
             <button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>
             <button type="button" class="mini-btn act-unequip" data-slot="${escapeHtml(slot)}">Unequip</button>
@@ -683,9 +686,11 @@ function mountApp(
     const rarity = item.rarity ? item.rarity.toUpperCase() : "COMMON";
     const qty = item.quantity ?? 1;
     const slot = item.equip_slot ? item.equip_slot.replace("_", " ") : item.is_equipped ? "equipped" : "bag";
+    const enh = Number((item as any).enhancement_level ?? 0) || 0;
+    const enhSuffix = enh > 0 ? ` +${enh}` : "";
     tooltipEl.innerHTML = `
       <div class="item-tip-card ${rarityClass(item.rarity)}">
-        <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}</div>
+        <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
         <div class="item-tip-line">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
       </div>
     `;
