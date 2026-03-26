@@ -24,7 +24,7 @@ import os
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode
 from uuid import UUID
 
 import aiohttp
@@ -726,6 +726,49 @@ async def _serve_activity_index(request: web.Request) -> web.StreamResponse:
     return resp
 
 
+async def _serve_activity_item_asset(request: web.Request) -> web.StreamResponse:
+    """
+    Compatibility: older cached clients may request `/assets/items/<slug>.png` paths.
+
+    We map those to files under `activity/dist/assets/items/` and `.../items/generated/`.
+    """
+    root = request.app.get("activity_static_root")
+    if not root:
+        raise web.HTTPNotFound()
+
+    raw = request.match_info.get("name", "")
+    name = unquote(raw or "").strip()
+    if not name or not name.lower().endswith(".png"):
+        raise web.HTTPNotFound()
+
+    assets_root = os.path.join(root, "assets")
+    items_root = os.path.join(assets_root, "items")
+    gen_root = os.path.join(items_root, "generated")
+
+    # 1) direct match under dist/assets/items/
+    direct = os.path.join(items_root, name)
+    if os.path.isfile(direct):
+        resp = web.FileResponse(direct)
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+
+    # 2) map slug to generated root: `health_potion.png` -> `Health Potion.png`
+    base = name[:-4]  # strip `.png`
+    spaced = base.replace("_", " ").replace("-", " ").strip()
+    candidates = [
+        f"{spaced}.png",
+        f"{spaced.title()}.png",
+    ]
+    for cand in candidates:
+        p = os.path.join(gen_root, cand)
+        if os.path.isfile(p):
+            resp = web.FileResponse(p)
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return resp
+
+    raise web.HTTPNotFound()
+
+
 def _static_dir() -> Optional[str]:
     env = (os.getenv("ACTIVITY_STATIC_DIR") or "").strip()
     if env and os.path.isdir(env):
@@ -767,6 +810,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
         app["activity_static_root"] = static_root
         # GET / must be index.html — NOT directory listing (show_index=True caused "Index of /")
         app.router.add_get("/", _serve_activity_index)
+        # Compatibility route for old cached icon URLs.
+        app.router.add_get("/assets/items/{name}", _serve_activity_item_asset)
         assets_dir = os.path.join(static_root, "assets")
         if os.path.isdir(assets_dir):
             app.router.add_static("/assets/", assets_dir, show_index=False)
