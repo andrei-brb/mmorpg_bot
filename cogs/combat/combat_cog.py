@@ -785,15 +785,115 @@ class CombatCog(commands.Cog, name="Combat"):
 
         # ── Quest progress check (non-blocking) ──────────────────────────
         quest_lines = []
+        quest_step_updates = []
+        quest_completions = []
         try:
             from services.quest.npc_quest_service import NPCQuestService
             quest_svc = NPCQuestService(self.bot.db)
-            quest_notes = await quest_svc.check_kill_progress(
+            events = await quest_svc.check_kill_progress_events(
                 char["id"], session.enemy_key, session.zone_key, session.is_boss
             )
-            quest_lines.extend(quest_notes)
+            quest_lines.extend(events.get("notifications") or [])
+            quest_step_updates.extend(events.get("step_updates") or [])
+            quest_completions.extend(events.get("completed") or [])
         except Exception as e:
             log.error(f"Quest progress check failed: {e}", exc_info=True)  # FIX: Use error level and include traceback
+
+        # ── Quest step update / completion DMs (best-effort) ─────────────
+        if quest_step_updates or quest_completions:
+            try:
+                from services.quest.npc_quest_service import NPC_TEMPLATES, FACTIONS
+                dm = await interaction.user.create_dm()
+
+                # Step updates: only DM when the objective changes (rare, not per-kill spam).
+                for upd in quest_step_updates[:3]:
+                    qd = upd.get("quest_data") or {}
+                    ns = upd.get("next_step") or {}
+                    embed = discord.Embed(
+                        title=f"📜 {qd.get('name', upd.get('quest_id', 'Quest'))} — Step Updated!",
+                        description=qd.get("dialogue", {}).get(
+                            f"progress_{int(ns.get('step', 1)) - 2}",
+                            "\"Good progress! Keep going.\"",
+                        ),
+                        color=0xF39C12,
+                    )
+                    embed.add_field(
+                        name="📍 Next Objective",
+                        value=f"{ns.get('objective','')}\n*{ns.get('hint','')}*",
+                        inline=False,
+                    )
+                    embed.set_footer(text="Tip: Check the Activity → Quests tab for a live quest log.")
+                    await dm.send(embed=embed)
+
+                # Completions: auto-grant rewards and DM the reward summary.
+                for comp in quest_completions[:3]:
+                    qid = comp.get("quest_id")
+                    qd = comp.get("quest_data") or {}
+                    rewards = comp.get("rewards") or {}
+                    npc_id = comp.get("npc_id")
+                    npc_data = NPC_TEMPLATES.get(npc_id, {}) if npc_id else {}
+
+                    # Grant rewards (XP, gold, items) + reputation.
+                    if rewards.get("xp"):
+                        await self.char_svc.award_xp(char["id"], int(rewards["xp"]))
+                    if rewards.get("gold"):
+                        await self.char_svc.add_gold(char["id"], int(rewards["gold"]), "quest_reward", "quest_reward")
+                    if rewards.get("items"):
+                        for template_id in rewards["items"]:
+                            tmpl = await self.bot.db.fetchrow(
+                                "SELECT rarity FROM item_templates WHERE id = $1", template_id
+                            )
+                            rarity = tmpl["rarity"] if tmpl else "common"
+                            await self.inv_svc.add_item(char["id"], template_id, rarity=rarity)
+
+                    rep_lines = []
+                    if rewards.get("reputation"):
+                        for faction_id, amount in rewards["reputation"].items():
+                            rep_info = await quest_svc.add_reputation(char["id"], faction_id, int(amount))
+                            faction = FACTIONS.get(faction_id, {})
+                            rep_text = f"{faction.get('emoji', '⭐')} **+{int(amount)}** {faction.get('name', faction_id)}"
+                            if rep_info.get("leveled_up"):
+                                rep_text += f" — 🎊 **{rep_info['level']['name']}** reached!"
+                            rep_lines.append(rep_text)
+
+                    embed = discord.Embed(
+                        title=f"🎉 Quest Complete: {qd.get('name', qid or 'Quest')}",
+                        description=qd.get("dialogue", {}).get("completion", "Quest complete!"),
+                        color=0x2ECC71,
+                    )
+
+                    reward_text = []
+                    if rewards.get("xp"):
+                        reward_text.append(f"⭐ **{int(rewards['xp']):,}** XP")
+                    if rewards.get("gold"):
+                        reward_text.append(f"🪙 **{int(rewards['gold']):,}** Gold")
+                    if rewards.get("items"):
+                        item_names = [str(i).replace("_", " ").title() for i in rewards["items"]]
+                        reward_text.append(f"🎁 {', '.join(item_names)}")
+                    reward_text.extend(rep_lines)
+                    if reward_text:
+                        embed.add_field(name="🏆 Rewards", value="\n".join(reward_text), inline=False)
+
+                    # Next quest prompt (if this NPC has more).
+                    if npc_id:
+                        completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char["id"])]
+                        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+                        if next_quest:
+                            npc_short = (npc_data.get("name") or npc_id).split(" ")[0].lower()
+                            embed.add_field(
+                                name="💬 More Work Available",
+                                value=f"*{npc_data.get('name', npc_id)} has another task for you.\nUse `/interact {npc_short}` to hear them out.*",
+                                inline=False,
+                            )
+
+                    embed.set_footer(text="Tip: The Activity → Quests tab also updates automatically.")
+                    await dm.send(embed=embed)
+
+            except discord.Forbidden:
+                # Can't DM user (privacy settings). We already show quest_lines in the victory embed.
+                pass
+            except Exception:
+                pass
 
         embed = discord.Embed(
             title="🏆 Victory!",

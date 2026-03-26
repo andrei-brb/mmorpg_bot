@@ -3615,6 +3615,186 @@ class NPCQuestService:
 
         return notifications
 
+    async def check_kill_progress_events(
+        self, char_id: UUID, enemy_key: str, zone_key: str, is_boss: bool
+    ) -> Dict:
+        """
+        Like check_kill_progress(), but also returns structured events so callers
+        (Discord cogs, Activity, etc.) can react (DMs, reward granting).
+
+        Returns:
+          {
+            "notifications": list[str],
+            "step_updates": list[{"quest_id": str, "quest_data": dict, "next_step": dict}],
+            "completed": list[{"quest_id": str, "quest_data": dict, "npc_id": str, "rewards": dict}],
+          }
+        """
+        # Include both 'active' and 'offered' so offered quests can progress.
+        active = await self.db.fetch(
+            "SELECT * FROM quest_progress WHERE character_id = $1 AND state IN ('active', 'offered')",
+            char_id,
+        )
+
+        notifications: List[str] = []
+        step_updates: List[Dict] = []
+        completed: List[Dict] = []
+
+        import json
+
+        for row in active:
+            # Auto-activate offered quests when progress starts
+            if row["state"] == "offered":
+                await self.db.execute(
+                    "UPDATE quest_progress SET state = 'active', started_at = NOW() WHERE character_id = $1 AND quest_id = $2",
+                    char_id, row["quest_id"],
+                )
+                row = dict(row)
+                row["state"] = "active"
+
+            # Skip expired quests
+            expires_at = row.get("expires_at")
+            if expires_at:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expires_at:
+                    await self.db.execute(
+                        "UPDATE quest_progress SET state = 'expired' WHERE character_id = $1 AND quest_id = $2",
+                        char_id, row["quest_id"],
+                    )
+                    notifications.append(f"⏰ Quest **{row['quest_id']}** has expired!")
+                    continue
+
+            quest_data = self._find_quest_template(row["quest_id"])
+            if not quest_data:
+                log.warning(f"Quest template not found for quest_id: {row['quest_id']}")
+                continue
+
+            total_steps = len(quest_data.get("steps") or [])
+            if total_steps <= 0:
+                continue
+
+            step_idx = row["current_step"] - 1
+            if step_idx < 0 or step_idx >= total_steps:
+                continue
+
+            step = quest_data["steps"][step_idx]
+            check = step["completion_check"]
+            advanced = False
+
+            # Parse JSONB metadata (dict, string, None cases)
+            meta = row.get("metadata")
+            if meta is None:
+                meta = {}
+            elif isinstance(meta, str):
+                try:
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+            elif not isinstance(meta, dict):
+                meta = {}
+
+            metadata_updated = False
+
+            if check["type"] == "kill_enemy" and check["value"] == enemy_key:
+                needed = check.get("count", 1)
+                kill_key = f"kills_{check['value']}"
+                current_kills = meta.get(kill_key, 0) + 1
+                meta[kill_key] = current_kills
+                metadata_updated = True
+                if current_kills >= needed:
+                    advanced = True
+                    notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
+                else:
+                    notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
+
+            elif check["type"] == "kill_any_zone" and check["value"] == zone_key:
+                needed = check.get("count", 1)
+                kill_key = f"kills_zone_{check['value']}"
+                current_kills = meta.get(kill_key, 0) + 1
+                meta[kill_key] = current_kills
+                metadata_updated = True
+                if current_kills >= needed:
+                    advanced = True
+                    notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
+                else:
+                    notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
+
+            elif check["type"] == "kill_boss_zone" and check["value"] == zone_key and is_boss:
+                needed = check.get("count", 1)
+                kill_key = f"boss_kills_{check['value']}"
+                current_kills = meta.get(kill_key, 0) + 1
+                meta[kill_key] = current_kills
+                metadata_updated = True
+                if current_kills >= needed:
+                    advanced = True
+                    notifications.append(f"✅ Quest **{quest_data['name']}**: \"{step['objective']}\" — Complete!")
+                else:
+                    notifications.append(f"📋 Quest **{quest_data['name']}**: {step['objective']} ({current_kills}/{needed})")
+
+            # Re-fetch metadata before updating to reduce race-condition loss
+            if metadata_updated:
+                fresh_row = await self.db.fetchrow(
+                    "SELECT metadata FROM quest_progress WHERE character_id = $1 AND quest_id = $2",
+                    char_id, row["quest_id"],
+                )
+                if fresh_row and fresh_row.get("metadata"):
+                    fresh_meta = fresh_row["metadata"]
+                    if isinstance(fresh_meta, str):
+                        try:
+                            fresh_meta = json.loads(fresh_meta)
+                        except (json.JSONDecodeError, TypeError):
+                            fresh_meta = {}
+                    elif not isinstance(fresh_meta, dict):
+                        fresh_meta = {}
+                    for key, value in meta.items():
+                        if key.startswith("kills_") or key.startswith("boss_kills_"):
+                            fresh_meta[key] = max(fresh_meta.get(key, 0), value)
+                        else:
+                            fresh_meta[key] = value
+                    meta = fresh_meta
+
+                await self.db.execute(
+                    "UPDATE quest_progress SET metadata = $3::jsonb WHERE character_id = $1 AND quest_id = $2",
+                    char_id, row["quest_id"], json.dumps(meta),
+                )
+
+            if not advanced:
+                continue
+
+            # If this was the final step, auto-complete the quest right now.
+            # This prevents "stuck" quests where the last step is a kill objective.
+            if row["current_step"] >= total_steps:
+                rewards = await self.complete_quest(char_id, row["quest_id"])
+                if rewards:
+                    completed.append(
+                        {
+                            "quest_id": row["quest_id"],
+                            "quest_data": quest_data,
+                            "npc_id": row["npc_id"],
+                            "rewards": rewards,
+                        }
+                    )
+                continue
+
+            # Otherwise, advance to next step and report the new objective.
+            ok = await self.advance_quest(char_id, row["quest_id"])
+            if ok:
+                next_idx = step_idx + 1
+                if 0 <= next_idx < total_steps:
+                    step_updates.append(
+                        {
+                            "quest_id": row["quest_id"],
+                            "quest_data": quest_data,
+                            "next_step": quest_data["steps"][next_idx],
+                        }
+                    )
+
+        return {
+            "notifications": notifications,
+            "step_updates": step_updates,
+            "completed": completed,
+        }
+
     async def check_talk_to_npc(self, char_id: UUID, npc_id: str) -> Optional[Dict]:
         active = await self.db.fetch(
             "SELECT * FROM quest_progress WHERE character_id = $1 AND state = 'active'",
