@@ -316,9 +316,16 @@ function buildHeroHtml(payload: InventoryPayload): string {
       if (!it) {
         return `<div class="equip-slot" data-slot="${slot}">${label}</div>`;
       }
-      return `<button type="button" class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
-        <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span><span class="equip-label">${escapeHtml(label)}</span>
-      </button>`;
+      return `
+        <div class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
+          <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span>
+          <span class="equip-label">${escapeHtml(label)}</span>
+          <div class="equip-actions">
+            <button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>
+            <button type="button" class="mini-btn act-unequip" data-slot="${escapeHtml(slot)}">Unequip</button>
+          </div>
+        </div>
+      `;
     })
     .join("");
 
@@ -1101,23 +1108,40 @@ function mountApp(
     const equipBtn = target.closest(".act-equip") as HTMLElement | null;
     const sellBtn = target.closest(".act-sell") as HTMLElement | null;
     const enhBtn = target.closest(".act-enhance") as HTMLElement | null;
-    if (!equipBtn && !sellBtn && !enhBtn) return;
+    const unequipBtn = target.closest(".act-unequip") as HTMLElement | null;
+    if (!equipBtn && !sellBtn && !enhBtn && !unequipBtn) return;
     ev.preventDefault();
     ev.stopPropagation();
 
-    const itemId = (equipBtn || sellBtn || enhBtn)?.dataset.itemId;
-    if (!itemId) return;
-    const endpoint = equipBtn
-      ? "/api/game/item/equip"
-      : sellBtn
-        ? "/api/game/item/sell"
-        : "/api/game/item/enhance";
+    let endpoint = "";
+    let body: Record<string, unknown> = {};
+    if (equipBtn) {
+      endpoint = "/api/game/item/equip";
+      const itemId = equipBtn.dataset.itemId;
+      if (!itemId) return;
+      body = { item_id: itemId };
+    } else if (sellBtn) {
+      endpoint = "/api/game/item/sell";
+      const itemId = sellBtn.dataset.itemId;
+      if (!itemId) return;
+      body = { item_id: itemId };
+    } else if (enhBtn) {
+      endpoint = "/api/game/item/enhance";
+      const itemId = enhBtn.dataset.itemId;
+      if (!itemId) return;
+      body = { item_id: itemId };
+    } else if (unequipBtn) {
+      endpoint = "/api/game/item/unequip";
+      const slot = unequipBtn.dataset.slot;
+      if (!slot) return;
+      body = { slot };
+    }
     try {
       if (statusEl) statusEl.textContent = "Processing...";
       const res = await fetch(apiUrl(endpoint), {
         method: "POST",
         headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: itemId }),
+        body: JSON.stringify(body),
       });
       const json = (await res.json()) as { ok?: boolean; message?: string };
       if (statusEl) statusEl.textContent = json.message || (json.ok ? "Done." : "Action failed.");
