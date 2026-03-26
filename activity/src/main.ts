@@ -553,12 +553,6 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
         </div>
       </div>
     </div>
-    <nav class="combat-footer-nav" aria-label="Combat navigation">
-      <span class="combat-footer-nav__item" title="Coming soon">Back</span>
-      <span class="combat-footer-nav__item" title="Coming soon">Map</span>
-      <span class="combat-footer-nav__item" title="Coming soon">Quest Log</span>
-      <span class="combat-footer-nav__item" title="Coming soon">Profile</span>
-    </nav>
   `;
 }
 
