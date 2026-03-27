@@ -367,9 +367,11 @@ code {
 .inv-tile {
   aspect-ratio: 1 / 1;
   width: 100%;
-  border: 1px solid #2f3c70;
+  border: 1px solid #3b4b87;
   border-radius: 12px;
-  background: linear-gradient(180deg, #121b3a 0%, #0a1026 100%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 28%),
+    linear-gradient(180deg, #141f41 0%, #0a1026 100%);
   color: var(--text);
   padding: 0.36rem 0.3rem;
   display: flex;
@@ -395,7 +397,9 @@ code {
 .inv-tile:hover {
   border-color: #7f8af4;
   transform: translateY(-1px);
-  box-shadow: 0 0 0 1px rgba(127, 138, 244, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(127, 138, 244, 0.35),
+    0 8px 18px rgba(4, 8, 22, 0.5);
 }
 
 .inv-tile-main {
@@ -412,14 +416,18 @@ code {
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background:
-    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.08), transparent 45%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.2));
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 38%, rgba(0, 0, 0, 0.22)),
+    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.12), transparent 46%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.24));
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.34);
 }
 
 /* Larger icon for square tiles only */
@@ -462,27 +470,51 @@ code {
 }
 
 .inv-tile.rarity-common .inv-frame {
-  border-color: rgba(148, 163, 184, 0.5);
+  border-color: rgba(148, 163, 184, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(148, 163, 184, 0.28);
 }
 .inv-tile.rarity-uncommon .inv-frame {
-  border-color: rgba(56, 193, 114, 0.62);
-  box-shadow: inset 0 0 14px rgba(56, 193, 114, 0.12);
+  border-color: rgba(56, 193, 114, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 16px rgba(56, 193, 114, 0.22),
+    0 0 0 1px rgba(56, 193, 114, 0.32),
+    0 0 14px rgba(56, 193, 114, 0.18);
 }
 .inv-tile.rarity-rare .inv-frame {
-  border-color: rgba(74, 139, 255, 0.7);
-  box-shadow: inset 0 0 14px rgba(74, 139, 255, 0.18);
+  border-color: rgba(74, 139, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 18px rgba(74, 139, 255, 0.3),
+    0 0 0 1px rgba(74, 139, 255, 0.4),
+    0 0 16px rgba(74, 139, 255, 0.26);
 }
 .inv-tile.rarity-epic .inv-frame {
-  border-color: rgba(158, 91, 255, 0.72);
-  box-shadow: inset 0 0 16px rgba(158, 91, 255, 0.2);
+  border-color: rgba(186, 106, 255, 0.86);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 20px rgba(186, 106, 255, 0.34),
+    0 0 0 1px rgba(186, 106, 255, 0.45),
+    0 0 18px rgba(186, 106, 255, 0.3);
 }
 .inv-tile.rarity-legendary .inv-frame {
-  border-color: rgba(244, 185, 66, 0.75);
-  box-shadow: inset 0 0 18px rgba(244, 185, 66, 0.24);
+  border-color: rgba(255, 205, 95, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 0 22px rgba(255, 200, 72, 0.4),
+    0 0 0 1px rgba(255, 200, 72, 0.52),
+    0 0 22px rgba(255, 200, 72, 0.35);
 }
 .inv-tile.rarity-artifact .inv-frame {
-  border-color: rgba(255, 95, 210, 0.8);
-  box-shadow: inset 0 0 20px rgba(255, 95, 210, 0.28);
+  border-color: rgba(255, 112, 220, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 0 24px rgba(255, 112, 220, 0.45),
+    0 0 0 1px rgba(255, 112, 220, 0.58),
+    0 0 24px rgba(255, 112, 220, 0.42);
 }
 
 .inv-tile-name {
