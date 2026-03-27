@@ -12,6 +12,66 @@ import asyncpg
 log = logging.getLogger("database")
 
 
+async def _merge_stackable_inventory_rows(conn: asyncpg.Connection) -> None:
+    """Merge duplicate inventory rows for stackable consumables/materials (post max_stack migration)."""
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT i.character_id,
+                   i.template_id,
+                   COALESCE(i.rarity, t.rarity) AS eff_rarity,
+                   t.max_stack,
+                   array_agg(i.id ORDER BY i.obtained_at NULLS FIRST) AS ids,
+                   SUM(i.quantity)::bigint AS total_qty
+            FROM inventory i
+            JOIN item_templates t ON t.id = i.template_id
+            WHERE t.item_type IN ('consumable', 'material')
+              AND t.equip_slot IS NULL
+              AND t.max_stack > 1
+            GROUP BY i.character_id, i.template_id, COALESCE(i.rarity, t.rarity), t.max_stack
+            HAVING COUNT(*) > 1
+            """
+        )
+        for r in rows:
+            ids = list(r["ids"])
+            total = int(r["total_qty"])
+            max_stack = int(r["max_stack"] or 99)
+            if max_stack <= 0:
+                max_stack = 99
+            remaining = total
+            for oid in ids:
+                if remaining <= 0:
+                    await conn.execute("DELETE FROM inventory WHERE id=$1", oid)
+                    continue
+                q = min(remaining, max_stack)
+                await conn.execute("UPDATE inventory SET quantity=$1 WHERE id=$2", q, oid)
+                remaining -= q
+            while remaining > 0:
+                chunk = min(remaining, max_stack)
+                await conn.execute(
+                    """
+                    INSERT INTO inventory (
+                        character_id, template_id, quantity, durability,
+                        r_str, r_agi, r_int, r_spi, r_sta,
+                        r_haste, r_lifesteal, r_resistance, r_hit_rating,
+                        is_equipped, equip_slot, enhancement_level, locked, obtained_from, rarity
+                    )
+                    SELECT character_id, template_id, $1::smallint, durability,
+                        r_str, r_agi, r_int, r_spi, r_sta,
+                        r_haste, r_lifesteal, r_resistance, r_hit_rating,
+                        FALSE, NULL, COALESCE(enhancement_level, 0), locked, obtained_from, rarity
+                    FROM inventory WHERE id=$2
+                    """,
+                    chunk,
+                    ids[0],
+                )
+                remaining -= chunk
+        if rows:
+            log.info("Merged %s stackable inventory groups (duplicate rows combined).", len(rows))
+    except Exception as e:
+        log.warning("Stackable inventory merge skipped: %s", e)
+
+
 class Database:
     """Thin wrapper around asyncpg pool with convenience methods."""
 
@@ -274,7 +334,7 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_guild_live_events_window
                 ON guild_live_events(guild_id, starts_at, ends_at);
             """)
-            
+
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:
                 import os
@@ -288,6 +348,16 @@ class Database:
                     log.warning(f"migrate_add_items.sql not found at {migration_path}, skipping additional items.")
             except Exception as e:
                 log.error(f"Error loading items migration: {e}")
+
+            # Re-apply max_stack for any items added by migrate_add_items.sql (armor/weapons unchanged).
+            await c.execute(
+                """
+                UPDATE item_templates SET max_stack = 99
+                WHERE item_type IN ('consumable', 'material')
+                  AND equip_slot IS NULL;
+                """
+            )
+            await _merge_stackable_inventory_rows(c)
 
         log.info("Schema initialized.")
 

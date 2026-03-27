@@ -161,40 +161,80 @@ class InventoryService:
         bonus: Optional[Dict] = None,
         from_: str = "drop",
     ) -> Tuple[bool, str]:
-        # Check capacity
-        count = await self.db.fetchval(
-            "SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id
-        )
+        tmpl = await self.db.fetchrow("SELECT * FROM item_templates WHERE id=$1", template_id)
+        if not tmpl:
+            return False, "Item template not found."
+
         player = await self.db.fetchrow(
             """SELECT p.is_premium FROM players p
                JOIN characters c ON c.player_id=p.id WHERE c.id=$1""", char_id
         )
         max_slots = Settings.PREMIUM_INVENTORY_SLOTS if (player and player["is_premium"]) \
                     else Settings.FREE_INVENTORY_SLOTS
+
+        max_stack = int(tmpl["max_stack"] or 1)
+
+        # Stack consumables/materials (same template + rarity); fill stacks and overflow into new rows.
+        if max_stack > 1:
+            remaining = int(quantity)
+            if remaining <= 0:
+                return True, "Nothing added."
+            while remaining > 0:
+                existing = await self.db.fetchrow(
+                    """SELECT id, quantity FROM inventory i
+                       WHERE i.character_id=$1 AND i.template_id=$2
+                         AND COALESCE(i.rarity::text, 'common') = COALESCE($3::text, 'common')
+                         AND i.quantity < $4
+                       ORDER BY i.obtained_at NULLS FIRST
+                       LIMIT 1""",
+                    char_id, template_id, rarity, max_stack,
+                )
+                if existing:
+                    space = max_stack - int(existing["quantity"] or 0)
+                    add = min(remaining, space)
+                    await self.db.execute(
+                        "UPDATE inventory SET quantity = quantity + $2 WHERE id = $1",
+                        existing["id"], add,
+                    )
+                    remaining -= add
+                    continue
+                count = await self.db.fetchval(
+                    "SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id
+                )
+                if count >= max_slots:
+                    return False, f"Inventory full ({count}/{max_slots})."
+                chunk = min(remaining, max_stack)
+                if bonus is None:
+                    bonus = self.roll_bonus_stats(dict(tmpl), rarity)
+                await self.db.execute(
+                    """INSERT INTO inventory
+                       (character_id,template_id,quantity,rarity,
+                        r_str,r_agi,r_int,r_spi,r_sta,
+                        r_haste,r_lifesteal,r_resistance,r_hit_rating,
+                        obtained_from)
+                       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
+                    char_id, template_id, chunk, rarity,
+                    bonus.get("r_str",0), bonus.get("r_agi",0), bonus.get("r_int",0),
+                    bonus.get("r_spi",0), bonus.get("r_sta",0),
+                    bonus.get("r_haste",0), bonus.get("r_lifesteal",0),
+                    bonus.get("r_resistance",0), bonus.get("r_hit_rating",0),
+                    from_,
+                )
+                remaining -= chunk
+                bonus = None
+            return True, "Stacked."
+
+        # Non-stackable (gear, etc.): one row per item.
+        count = await self.db.fetchval(
+            "SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id
+        )
         if count >= max_slots:
             return False, f"Inventory full ({count}/{max_slots})."
-
-        tmpl = await self.db.fetchrow("SELECT * FROM item_templates WHERE id=$1", template_id)
-        if not tmpl:
-            return False, "Item template not found."
-
-        # Stack consumables/materials (only if same rarity)
-        if tmpl["max_stack"] > 1:
-            existing = await self.db.fetchrow(
-                "SELECT id, quantity FROM inventory WHERE character_id=$1 AND template_id=$2 AND rarity=$3 LIMIT 1",
-                char_id, template_id, rarity,
-            )
-            if existing and existing["quantity"] < tmpl["max_stack"]:
-                new_qty = min(existing["quantity"] + quantity, tmpl["max_stack"])
-                await self.db.execute(
-                    "UPDATE inventory SET quantity=$2 WHERE id=$1", existing["id"], new_qty
-                )
-                return True, "Stacked."
 
         # Generate bonus stats based on rarity if not provided
         if bonus is None:
             bonus = self.roll_bonus_stats(dict(tmpl), rarity)
-        
+
         # Insert with rarity and all bonus stats
         await self.db.execute(
             """INSERT INTO inventory
