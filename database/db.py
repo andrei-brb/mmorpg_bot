@@ -81,6 +81,35 @@ class Database:
                 ALTER TABLE characters
                 ADD COLUMN IF NOT EXISTS pending_encounter VARCHAR(64);
             """)
+
+            # Ensure only one active character per player (older installs may have multiple TRUE rows).
+            # Keep the newest active and deactivate the rest.
+            try:
+                await c.execute("""
+                    WITH ranked AS (
+                        SELECT id,
+                               player_id,
+                               ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY created_at DESC) AS rn
+                        FROM characters
+                        WHERE is_active = TRUE
+                    )
+                    UPDATE characters c
+                    SET is_active = FALSE
+                    FROM ranked r
+                    WHERE c.id = r.id AND r.rn > 1;
+                """)
+            except Exception as e:
+                log.warning(f"Active character cleanup skipped: {e}")
+
+            # Add uniqueness constraint if it wasn't present on older schemas.
+            try:
+                await c.execute("""
+                    ALTER TABLE characters
+                    ADD CONSTRAINT one_active_char UNIQUE (player_id, is_active);
+                """)
+            except Exception:
+                # Constraint already exists or cannot be added (should be fine after cleanup).
+                pass
             
             # Add rarity column to inventory (stores actual item rarity, not template rarity)
             await c.execute("""
