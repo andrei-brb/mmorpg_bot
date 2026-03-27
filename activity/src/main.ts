@@ -20,6 +20,30 @@ type InvRow = {
   is_equipped?: boolean | null;
   equip_slot?: string | null;
   rarity?: string | null;
+  level_req?: number | null;
+  item_type?: string | null;
+  s_str?: number | null;
+  s_agi?: number | null;
+  s_int?: number | null;
+  s_spi?: number | null;
+  s_sta?: number | null;
+  s_armor?: number | null;
+  s_dmg_min?: number | null;
+  s_dmg_max?: number | null;
+  s_haste?: number | null;
+  s_lifesteal?: number | null;
+  s_resistance?: number | null;
+  s_hit_rating?: number | null;
+  r_str?: number | null;
+  r_agi?: number | null;
+  r_int?: number | null;
+  r_spi?: number | null;
+  r_sta?: number | null;
+  r_haste?: number | null;
+  r_lifesteal?: number | null;
+  r_resistance?: number | null;
+  r_hit_rating?: number | null;
+  enhancement_level?: number | null;
 };
 
 type InventoryPayload = {
@@ -168,6 +192,36 @@ function escapeHtml(s: string): string {
   const d = document.createElement("div");
   d.textContent = s;
   return d.innerHTML;
+}
+
+function itemStatLines(item: InvRow): string[] {
+  const lines: string[] = [];
+  const pushStat = (label: string, base?: number | null, bonus?: number | null): void => {
+    const b = Number(base ?? 0) || 0;
+    const r = Number(bonus ?? 0) || 0;
+    const total = b + r;
+    if (!total) return;
+    const bonusTxt = r ? ` (${r > 0 ? "+" : ""}${r} bonus)` : "";
+    lines.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}`);
+  };
+
+  pushStat("STR", item.s_str, item.r_str);
+  pushStat("AGI", item.s_agi, item.r_agi);
+  pushStat("INT", item.s_int, item.r_int);
+  pushStat("SPI", item.s_spi, item.r_spi);
+  pushStat("STA", item.s_sta, item.r_sta);
+  pushStat("Haste", item.s_haste, item.r_haste);
+  pushStat("Lifesteal", item.s_lifesteal, item.r_lifesteal);
+  pushStat("Resistance", item.s_resistance, item.r_resistance);
+  pushStat("Hit", item.s_hit_rating, item.r_hit_rating);
+
+  const armor = Number(item.s_armor ?? 0) || 0;
+  if (armor) lines.push(`Armor: +${armor}`);
+  const dMin = Number(item.s_dmg_min ?? 0) || 0;
+  const dMax = Number(item.s_dmg_max ?? 0) || 0;
+  if (dMin || dMax) lines.push(`Damage: ${dMin}-${dMax}`);
+
+  return lines;
 }
 
 /** PNG path for item art copied from mmorpg-web into `activity/public/assets/items/`. */
@@ -708,10 +762,17 @@ function mountApp(
     const slot = item.equip_slot ? item.equip_slot.replace("_", " ") : item.is_equipped ? "equipped" : "bag";
     const enh = Number((item as any).enhancement_level ?? 0) || 0;
     const enhSuffix = enh > 0 ? ` +${enh}` : "";
+    const lvlReq = Number(item.level_req ?? 0) || 0;
+    const statLines = itemStatLines(item);
+    const statsHtml = statLines.length
+      ? `<div class="item-tip-stats">${statLines.map((l) => `<div class="item-tip-stat">${escapeHtml(l)}</div>`).join("")}</div>`
+      : `<div class="item-tip-line">No combat stats</div>`;
     tooltipEl.innerHTML = `
       <div class="item-tip-card ${rarityClass(item.rarity)}">
         <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
         <div class="item-tip-line">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
+        <div class="item-tip-line">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
+        ${statsHtml}
       </div>
     `;
     const rect = anchor.getBoundingClientRect();
