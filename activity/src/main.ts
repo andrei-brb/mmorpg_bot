@@ -49,6 +49,19 @@ type InvRow = {
   effect_duration?: number | null;
 };
 
+type EnhanceInfoPayload = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  info?: {
+    current_level?: number;
+    next_level?: number | null;
+    next_config?: { success_rate?: number; cost?: number; can_break?: boolean; stat_boost?: number } | null;
+    item?: { name?: string; rarity?: string; enhancement_level?: number };
+  };
+  protections?: Record<string, number>;
+};
+
 type InventoryPayload = {
   discord?: { id?: string; username?: string; global_name?: string | null };
   character: { name?: string; level?: number; class?: string; gold?: number } | null;
@@ -1437,16 +1450,132 @@ function mountApp(
       <div id="tab-progress" class="tab-pane hidden"></div>
       <div id="hero-action-status" class="hint" style="margin-top:0.5rem;"></div>
       <div id="item-tooltip" class="item-tooltip-layer" aria-hidden="true"></div>
+      <div id="enhance-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Enhance item"></div>
     </div>
   `),
   );
 
   tooltipEl = appRoot.querySelector("#item-tooltip");
   const statusEl = appRoot.querySelector("#hero-action-status");
+  const enhanceModalEl = appRoot.querySelector("#enhance-modal") as HTMLElement | null;
+  let pendingEnhanceItemId: string | null = null;
+
+  function closeEnhanceModal(): void {
+    pendingEnhanceItemId = null;
+    if (!enhanceModalEl) return;
+    enhanceModalEl.classList.add("hidden");
+    enhanceModalEl.innerHTML = "";
+  }
+
+  async function openEnhanceModal(itemId: string): Promise<void> {
+    if (!enhanceModalEl) return;
+    pendingEnhanceItemId = itemId;
+    enhanceModalEl.classList.remove("hidden");
+    enhanceModalEl.innerHTML = `<div class="modal-card"><p class="hint">Loading enhancement info…</p></div>`;
+    try {
+      const res = await fetch(apiUrl(`/api/game/item/enhance/info?item_id=${encodeURIComponent(itemId)}`), {
+        headers: authHeaders(accessToken, guildId),
+      });
+      if (res.status === 401) {
+        window.location.reload();
+        return;
+      }
+      const json = (await res.json()) as EnhanceInfoPayload;
+      if (!res.ok || !json.ok || !json.info) {
+        enhanceModalEl.innerHTML = `<div class="modal-card"><h3>Enhance</h3><p class="hint">❌ ${escapeHtml(
+          json.message || json.error || `HTTP ${res.status}`,
+        )}</p><div class="modal-actions"><button type="button" class="btn alt" data-enhance-cancel>Close</button></div></div>`;
+        return;
+      }
+
+      const nextCfg = json.info.next_config || {};
+      const protections = json.protections || {};
+      const itemName = json.info.item?.name || "Item";
+      const cur = Number(json.info.current_level ?? 0) || 0;
+      const next = Number(json.info.next_level ?? cur + 1) || cur + 1;
+      const baseRate = Number(nextCfg.success_rate ?? 0) || 0;
+      const cost = Number(nextCfg.cost ?? 0) || 0;
+      const canBreak = Boolean(nextCfg.can_break);
+      const haveBless = Number(protections.blessing_scroll ?? 0) || 0;
+      const haveCharm = Number(protections.safety_charm ?? 0) || 0;
+      const haveFrag = Number(protections.enhancement_fragment ?? 0) || 0;
+
+      enhanceModalEl.innerHTML = `
+        <div class="modal-card">
+          <h3>Enhance: ${escapeHtml(itemName)} (+${cur} → +${next})</h3>
+          <p class="hint">Cost: <strong>${cost.toLocaleString("en-US")}🪙</strong> · Base success: <strong>${(baseRate * 100).toFixed(0)}%</strong></p>
+          ${
+            canBreak
+              ? `<p class="hint"><strong>Risk:</strong> failure can <strong>shatter</strong> the item unless protected.</p>`
+              : `<p class="hint">Safe tier: failure won’t destroy the item.</p>`
+          }
+          <div class="modal-grid">
+            <div class="modal-box">
+              <div class="modal-box__title">Protection</div>
+              <label class="modal-radio"><input type="radio" name="prot" value="" checked /> None</label>
+              <label class="modal-radio ${haveBless ? "" : "is-disabled"}"><input type="radio" name="prot" value="blessing_scroll" ${
+                haveBless ? "" : "disabled"
+              } /> 🛡️ Blessing Scroll (x${haveBless})</label>
+              <label class="modal-radio ${haveCharm ? "" : "is-disabled"}"><input type="radio" name="prot" value="safety_charm" ${
+                haveCharm ? "" : "disabled"
+              } /> ✨ Safety Charm (x${haveCharm})</label>
+            </div>
+            <div class="modal-box">
+              <div class="modal-box__title">Fragments (+10% each)</div>
+              <div class="hint">You have x${haveFrag} (max 3 used)</div>
+              <select class="select" id="frag-pick" ${haveFrag ? "" : "disabled"}>
+                ${[0, 1, 2, 3]
+                  .map((n) => `<option value="${n}" ${n > haveFrag ? "disabled" : ""}>${n}</option>`)
+                  .join("")}
+              </select>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn alt" data-enhance-cancel>Cancel</button>
+            <button type="button" class="btn" data-enhance-confirm>Enhance</button>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      enhanceModalEl.innerHTML = `<div class="modal-card"><h3>Enhance</h3><p class="hint">❌ ${
+        e instanceof Error ? escapeHtml(e.message) : escapeHtml(String(e))
+      }</p><div class="modal-actions"><button type="button" class="btn alt" data-enhance-cancel>Close</button></div></div>`;
+    }
+  }
   appRoot.addEventListener("mouseleave", hideTooltip);
   appRoot.addEventListener("click", async (ev) => {
     const target = ev.target as HTMLElement;
     if (!target) return;
+    const enhanceCancel = target.closest("[data-enhance-cancel]") as HTMLElement | null;
+    const enhanceConfirm = target.closest("[data-enhance-confirm]") as HTMLElement | null;
+
+    if (enhanceCancel) {
+      closeEnhanceModal();
+      return;
+    }
+    if (enhanceConfirm) {
+      const itemId = pendingEnhanceItemId;
+      if (!itemId) return;
+      const prot = (appRoot.querySelector('input[name="prot"]:checked') as HTMLInputElement | null)?.value || null;
+      const fragSel = appRoot.querySelector("#frag-pick") as HTMLSelectElement | null;
+      const frag = fragSel ? Number(fragSel.value || "0") || 0 : 0;
+      closeEnhanceModal();
+      try {
+        if (statusEl) statusEl.textContent = "Enhancing...";
+        const res = await fetch(apiUrl("/api/game/item/enhance"), {
+          method: "POST",
+          headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+          body: JSON.stringify({ item_id: itemId, protection_type: prot || null, fragment_count: frag }),
+        });
+        const json = (await res.json()) as { ok?: boolean; message?: string };
+        if (statusEl) statusEl.textContent = json.message || (json.ok ? "Done." : "Enhance failed.");
+      } catch (e) {
+        if (statusEl) statusEl.textContent = `Enhance error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      await refreshHeroInventory();
+      await refreshProgressData();
+      return;
+    }
     const useBtn = target.closest(".act-use") as HTMLElement | null;
     const equipBtn = target.closest(".act-equip") as HTMLElement | null;
     const sellBtn = target.closest(".act-sell") as HTMLElement | null;
@@ -1508,10 +1637,10 @@ function mountApp(
       if (!itemId) return;
       body = { item_id: itemId };
     } else if (enhBtn) {
-      endpoint = "/api/game/item/enhance";
       const itemId = enhBtn.dataset.itemId;
       if (!itemId) return;
-      body = { item_id: itemId };
+      await openEnhanceModal(itemId);
+      return;
     } else if (unequipBtn) {
       endpoint = "/api/game/item/unequip";
       const slot = unequipBtn.dataset.slot;
@@ -1527,10 +1656,9 @@ function mountApp(
       });
       const json = (await res.json()) as { ok?: boolean; message?: string };
       if (statusEl) statusEl.textContent = json.message || (json.ok ? "Done." : "Action failed.");
-      if (json.ok) {
-        await refreshHeroInventory();
-        await refreshProgressData();
-      }
+      // Always refresh after an item action: enhancement can destroy/downgrade items even on failure.
+      await refreshHeroInventory();
+      await refreshProgressData();
     } catch (e) {
       if (statusEl) statusEl.textContent = `Action error: ${e instanceof Error ? e.message : String(e)}`;
     }

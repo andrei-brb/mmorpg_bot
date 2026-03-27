@@ -1394,6 +1394,52 @@ async def handle_item_enhance(request: web.Request) -> web.Response:
     return web.json_response({"ok": ok, **_json_safe(result)}, status=status)
 
 
+async def handle_item_enhance_info(request: web.Request) -> web.Response:
+    """Return enhancement preview + available protection items (Activity modal)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    item_id = (request.query.get("item_id") or "").strip()
+    if not item_id:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    bs = BlacksmithService(db)
+    info = await bs.get_enhancement_info(uid, char["id"])
+    if not info:
+        return web.json_response({"ok": False, "error": "item_not_found", "message": "Item not found."}, status=404)
+
+    protections = await bs.get_protection_inventory(char["id"])
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "info": info,
+                "protections": protections,
+            }
+        )
+    )
+
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
@@ -1491,6 +1537,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/item/sell", handle_item_sell)
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
+    app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)

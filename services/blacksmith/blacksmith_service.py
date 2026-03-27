@@ -120,22 +120,49 @@ class BlacksmithService:
         # Apply protection effects
         success_rate = config["success_rate"]
         protection_used = None
+        to_consume: list[tuple[str, int]] = []
         
         if protection_type == "safety_charm":
             if target_level <= PROTECTION_ITEMS["safety_charm"]["can_use_above"]:
                 success_rate = 1.0  # Guaranteed success
                 protection_used = "safety_charm"
+                to_consume.append(("protection_safety_charm", 1))
             else:
                 return {"success": False, "message": "Safety Charm only works up to +5!"}
         
         elif protection_type == "blessing_scroll":
             protection_used = "blessing_scroll"
+            to_consume.append(("protection_blessing_scroll", 1))
         
         # Apply enhancement fragments
         if fragment_count > 0:
             max_fragments = PROTECTION_ITEMS["enhancement_fragment"]["max_stack"]
             fragment_count = min(fragment_count, max_fragments)
             success_rate = min(1.0, success_rate + (0.10 * fragment_count))
+            to_consume.append(("protection_enhancement_fragment", int(fragment_count)))
+
+        # Verify and consume protection items/fragments (attempt cost)
+        for template_id, qty in to_consume:
+            have = await self.db.fetchval(
+                "SELECT COALESCE(SUM(quantity),0) FROM inventory WHERE character_id=$1 AND template_id=$2",
+                char_id,
+                template_id,
+            ) or 0
+            if have < qty:
+                return {"success": False, "message": f"Missing required protection item: {template_id} (need {qty})."}
+        for template_id, qty in to_consume:
+            # Prefer decrementing a single stack row (these items are stackable/consumable).
+            row = await self.db.fetchrow(
+                "SELECT id, quantity FROM inventory WHERE character_id=$1 AND template_id=$2 ORDER BY quantity DESC LIMIT 1",
+                char_id,
+                template_id,
+            )
+            if not row:
+                continue
+            if int(row["quantity"] or 0) > qty:
+                await self.db.execute("UPDATE inventory SET quantity=quantity-$2 WHERE id=$1", row["id"], qty)
+            else:
+                await self.db.execute("DELETE FROM inventory WHERE id=$1", row["id"])
         
         # Deduct gold cost
         await self.db.execute(
