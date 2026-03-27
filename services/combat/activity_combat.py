@@ -62,6 +62,9 @@ def _make_enemy(key: str, char_level: int, zone=None) -> Combatant:
 
 
 def _make_player(char: dict, stats) -> Combatant:
+    from services.character.character_service import CharacterService
+
+    char = CharacterService.normalize_resources(dict(char))
     cls = CLASSES[char["class"]]
     return Combatant(
         id=str(char["id"]),

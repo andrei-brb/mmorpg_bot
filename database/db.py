@@ -359,6 +359,19 @@ class Database:
             )
             await _merge_stackable_inventory_rows(c)
 
+            # Warriors use rage (cap 100), not mana — fix legacy rows with max_res = 0.
+            try:
+                await c.execute(
+                    """
+                    UPDATE characters
+                    SET max_res = 100,
+                        current_res = LEAST(GREATEST(COALESCE(current_res, 0), 0), 100)
+                    WHERE class = 'warrior' AND COALESCE(max_res, 0) < 100;
+                    """
+                )
+            except Exception as e:
+                log.warning("Warrior resource repair skipped: %s", e)
+
         log.info("Schema initialized.")
 
 

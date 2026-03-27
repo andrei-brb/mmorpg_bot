@@ -76,6 +76,19 @@ class CharacterService:
         )
         return True, f"Character **{name}** created!", char
 
+    @staticmethod
+    def normalize_resources(char: Dict) -> Dict:
+        """Align max_res/current_res with class rules (fixes legacy rows, e.g. warrior max_res=0)."""
+        cls = CLASSES.get(char.get("class") or "")
+        if not cls:
+            return dict(char)
+        out = dict(char)
+        if cls.resource == "rage":
+            out["max_res"] = 100
+            cr = int(out.get("current_res") or 0)
+            out["current_res"] = max(0, min(cr, 100))
+        return out
+
     async def get_character(self, player_id: int) -> Optional[asyncpg.Record]:
         return await self.db.fetchrow(
             "SELECT * FROM characters WHERE player_id=$1 AND is_active=TRUE ORDER BY created_at DESC LIMIT 1",

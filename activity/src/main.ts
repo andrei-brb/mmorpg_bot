@@ -566,6 +566,25 @@ function formatZoneMetaIds(m?: CombatUiMeta): string {
   return parts.join(" · ");
 }
 
+/** Matches Discord combat labels — warriors use Rage, not mana. */
+function resourceUiLabel(resType: string): string {
+  const t = (resType || "").toLowerCase();
+  if (t === "mana") return "💙 Mana";
+  if (t === "energy") return "⚡ Energy";
+  if (t === "rage") return "🔴 Rage";
+  if (!t || t === "none") return "";
+  return resType;
+}
+
+function resourceCostLabel(costType: string, cost: number): string {
+  if (!cost) return "No cost";
+  const t = (costType || "").toLowerCase();
+  if (t === "mana") return `${cost} mana`;
+  if (t === "energy") return `${cost} energy`;
+  if (t === "rage") return `${cost} rage`;
+  return `${cost} ${costType}`;
+}
+
 /**
  * Combat layout zones B–G (see COMBAT_VISUAL_SPEC_STEP1.md).
  * Step 4: stats row + turn banner + richer placeholder party labels.
@@ -576,7 +595,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
   const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
   const resLine =
     state.player.max_res > 0
-      ? `<p class="hint res-line">${escapeHtml(state.player.res_type)} ${state.player.current_res}/${state.player.max_res}</p>`
+      ? `<p class="hint res-line"><strong>${escapeHtml(resourceUiLabel(state.player.res_type) || state.player.res_type)}</strong> ${state.player.current_res}/${state.player.max_res}</p>`
       : "";
 
   const logs = state.log || [];
@@ -595,7 +614,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
   const abiHtml = (state.abilities || [])
     .map((a) => {
       const dis = a.disabled ? ` disabled title="${escapeHtml(a.disabled)}"` : "";
-      const c = a.cost > 0 ? `${a.cost} ${a.cost_type}` : "No cost";
+      const c = resourceCostLabel(a.cost_type || "", Number(a.cost ?? 0) || 0);
       return `<button type="button" class="skill-btn" data-abi="${escapeHtml(a.key)}"${dis}>
         <span class="skill-name">${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</span>
         <span class="skill-cost">${escapeHtml(c)}</span>
