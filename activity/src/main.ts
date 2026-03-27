@@ -615,6 +615,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
   const skillsHtml = `<div class="skills skills--under-scene" aria-label="Abilities">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>`;
 
   return `
+    <div class="combat-compact">
     <div class="combat-zone-bar">
       <div class="combat-zone-bar__left">
         <span class="combat-zone-bar__title">${escapeHtml(zoneTitle)}</span>
@@ -680,6 +681,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
           </div>
         </div>
       </div>
+    </div>
     </div>
   `;
 }
@@ -1132,6 +1134,8 @@ function mountApp(
       quest_completed?: boolean;
       quest_step_updated?: boolean;
       next_quest_available?: boolean;
+      next_quest_auto_offered?: boolean;
+      next_quest_blocked?: string;
       rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
     };
     const statusEl = appRoot.querySelector("#hero-action-status");
@@ -1155,7 +1159,13 @@ function mountApp(
           parts.push(`rep: ${rep}`);
         }
         msg = parts.length ? `Quest complete — ${parts.join(" · ")}` : "Quest complete.";
-        if (json.next_quest_available) msg += " NPC has another quest available.";
+        if (json.next_quest_auto_offered) {
+          msg += " Check your DMs — the next quest offer was sent there.";
+        } else if (json.next_quest_available && json.next_quest_blocked === "level_too_low") {
+          msg += " A follow-up quest exists but your level is too low — level up and talk to this NPC again.";
+        } else if (json.next_quest_available) {
+          msg += " NPC has another quest available.";
+        }
       }
       lastExplore = { ok: true, message: msg };
       if (statusEl) statusEl.textContent = msg;
