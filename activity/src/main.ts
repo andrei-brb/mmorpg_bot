@@ -748,7 +748,11 @@ function renderOutcome(title: string, lines: string[]): string {
     <div class="panel v0-panel outcome-panel">
       <h2>${escapeHtml(title)}</h2>
       ${body}
-      <button type="button" class="btn" data-action="combat-again">Fight again</button>
+      <div class="outcome-actions" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;align-items:center">
+        <button type="button" class="btn" data-action="combat-again">Fight again</button>
+        <button type="button" class="btn btn-secondary" data-action="combat-rest">💤 Rest</button>
+      </div>
+      <p class="hint muted-mini" style="margin-top:0.5rem">Rest fully restores HP and your resource (same cooldown as <code>/rest</code>).</p>
     </div>
   `;
 }
@@ -1305,6 +1309,55 @@ function mountApp(
     void runSpecPrompt();
   }
 
+  async function postCombatRest(): Promise<void> {
+    const host = appRoot.querySelector("#combat-mount");
+    if (!host) return;
+    const restBtn = host.querySelector("[data-action=combat-rest]") as HTMLButtonElement | null;
+    if (restBtn) restBtn.disabled = true;
+    try {
+      const res = await fetch(apiUrl("/api/game/rest"), {
+        method: "POST",
+        headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+        body: JSON.stringify({ guild_id: guildId ? String(guildId) : undefined }),
+      });
+      if (res.status === 401) {
+        host.innerHTML = `<p class="hint">Session expired — reloading…</p>`;
+        window.setTimeout(() => window.location.reload(), 700);
+        return;
+      }
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        cooldown_s?: number;
+        message?: string;
+      };
+      if (res.status === 429 && json.error === "cooldown") {
+        const s = json.cooldown_s ?? 0;
+        host.innerHTML = `<div class="panel v0-panel"><p class="hint">⏳ Rest again in <strong>${escapeHtml(String(s))}s</strong>.</p><button type="button" class="btn" data-action="combat-rest-dismiss">OK</button></div>`;
+        host.querySelector("[data-action=combat-rest-dismiss]")?.addEventListener("click", () => {
+          void refreshCombatPanel();
+        });
+        return;
+      }
+      if (!res.ok || !json.ok) {
+        const msg = json.message || json.error || "rest_failed";
+        host.innerHTML = `<div class="panel v0-panel"><p class="hint">❌ ${escapeHtml(msg)}</p><button type="button" class="btn" data-action="combat-rest-dismiss">OK</button></div>`;
+        host.querySelector("[data-action=combat-rest-dismiss]")?.addEventListener("click", () => {
+          void refreshCombatPanel();
+        });
+        return;
+      }
+      void refreshHeroInventory();
+      void refreshProgressData();
+      void refreshCombatPanel();
+    } catch (e) {
+      host.innerHTML = `<div class="panel v0-panel"><p class="hint">❌ ${escapeHtml(e instanceof Error ? e.message : String(e))}</p><button type="button" class="btn" data-action="combat-rest-dismiss">OK</button></div>`;
+      host.querySelector("[data-action=combat-rest-dismiss]")?.addEventListener("click", () => {
+        void refreshCombatPanel();
+      });
+    }
+  }
+
   async function refreshCombatPanel(): Promise<void> {
     const host = appRoot.querySelector("#combat-mount");
     if (!host) return;
@@ -1365,11 +1418,17 @@ function mountApp(
           <p class="hint">Choose an enemy from your current zone. Same rules as <code>/fight</code>.</p>
           <label class="select-label">Enemy</label>
           <select id="enemy-pick" class="enemy-select">${opts}</select>
-          <div style="margin-top:0.75rem">
+          <div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center">
             <button type="button" class="btn" data-action="start-fight">⚔️ Start</button>
+            <button type="button" class="btn btn-secondary" data-action="combat-rest">💤 Rest</button>
           </div>
+          <p class="hint muted-mini" style="margin-top:0.5rem">💤 Rest fully restores HP and your resource (same cooldown as <code>/rest</code>).</p>
         </div>
       `;
+
+      host.querySelector("[data-action=combat-rest]")?.addEventListener("click", () => {
+        void postCombatRest();
+      });
 
       host.querySelector("[data-action=start-fight]")?.addEventListener("click", async () => {
         const sel = host.querySelector("#enemy-pick") as HTMLSelectElement | null;
@@ -1470,6 +1529,9 @@ function mountApp(
       }
       host.querySelector("[data-action=combat-again]")?.addEventListener("click", () => {
         void refreshCombatPanel();
+      });
+      host.querySelector("[data-action=combat-rest]")?.addEventListener("click", () => {
+        void postCombatRest();
       });
       return;
     }

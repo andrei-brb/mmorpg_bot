@@ -11,6 +11,7 @@ Endpoints:
   GET  /api/game/combat/state   — Bearer token → active iframe combat (if any)
   POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
   POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
+  POST /api/game/rest           — Bearer token → full HP/resource restore (rest cooldown; clears iframe combat)
 
 Requires DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID (same app as the bot).
 See ACTIVITY_SETUP.md.
@@ -702,6 +703,38 @@ async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int
     char_svc = CharacterService(db)
     char = await char_svc.get_character(discord_id)
     return user, discord_id, dict(char) if char else None, db
+
+
+async def handle_rest(request: web.Request) -> web.Response:
+    """Full HP/resource restore — same rules as Discord /rest; clears Activity iframe combat if any."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    char_svc = CharacterService(db)
+    cd = await char_svc.on_cooldown(_uuid_from_any(char["id"]), "rest")
+    if cd:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "cooldown", "cooldown_s": int(cd)}),
+            status=429,
+        )
+
+    activity_combat_api.clear_activity_combat_session(discord_id)
+    await char_svc.full_restore(_uuid_from_any(char["id"]))
+    await char_svc.set_cooldown(_uuid_from_any(char["id"]), "rest", Settings.REST_COOLDOWN)
+
+    fresh = await char_svc.get_character(discord_id)
+    if fresh:
+        fresh = CharacterService.normalize_resources(dict(fresh))
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "character": dict(fresh) if fresh else None,
+                "rest_cooldown_s": Settings.REST_COOLDOWN,
+            }
+        )
+    )
 
 
 async def handle_map(request: web.Request) -> web.Response:
@@ -1772,6 +1805,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)
+    app.router.add_post("/api/game/rest", handle_rest)
     app.router.add_get("/health", handle_health)
 
     static_root = _static_dir()

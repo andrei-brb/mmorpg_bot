@@ -109,6 +109,11 @@ def _clear_activity_session(discord_id: int) -> None:
     ACTIVE_ACTIVITY.pop(discord_id, None)
 
 
+def clear_activity_combat_session(discord_id: int) -> None:
+    """Drop iframe combat session (e.g. after /rest from Activity)."""
+    _clear_activity_session(discord_id)
+
+
 def _serialize_combatant(c: Combatant) -> Dict[str, Any]:
     return {
         "id": c.id,
