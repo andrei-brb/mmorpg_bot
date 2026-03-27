@@ -319,6 +319,26 @@ class CharacterService:
         stats["haste"]        = self._apply_stat_caps("haste", stats["haste"])
         stats["lifesteal"]    = self._apply_stat_caps("lifesteal", stats["lifesteal"])
         stats["hit_rating"]   = self._apply_stat_caps("hit_rating", stats["hit_rating"])
+
+        # Temporary resistance potion buffs (stored in cooldowns as action_key).
+        try:
+            res_rows = await self.db.fetch(
+                """SELECT action_key FROM cooldowns
+                   WHERE character_id=$1
+                     AND action_key LIKE 'potion_resistance_%'
+                     AND expires_at > NOW()""",
+                char_id,
+            )
+            temp_res = 0
+            for rr in res_rows:
+                key = str(rr.get("action_key") or "")
+                tail = key.rsplit("_", 1)[-1]
+                if tail.isdigit():
+                    temp_res += int(tail)
+            if temp_res > 0:
+                stats["resistance"] += temp_res
+        except Exception:
+            pass
         
         stats["max_hp"]       = char["max_hp"]
         stats["max_res"]      = char["max_res"]
@@ -437,6 +457,28 @@ class CharacterService:
                         "UPDATE characters SET max_hp=$2 WHERE id=$1", char_id, new_max_hp
                     )
                 return True, f"{stat.upper()} increased by {amount} for {duration_minutes} minutes"
+
+    async def set_temporary_resistance(self, char_id: UUID, amount: int, duration_minutes: int) -> Tuple[bool, str]:
+        """Apply/refresh a temporary resistance potion effect via cooldown keys."""
+        if amount <= 0 or duration_minutes <= 0:
+            return False, "Invalid resistance buff values."
+        from datetime import datetime, timedelta
+
+        expires_at = datetime.utcnow() + timedelta(minutes=duration_minutes)
+        # Keep one active resistance potion effect to avoid accidental stacking abuse.
+        await self.db.execute(
+            "DELETE FROM cooldowns WHERE character_id=$1 AND action_key LIKE 'potion_resistance_%'",
+            char_id,
+        )
+        await self.db.execute(
+            """INSERT INTO cooldowns(character_id,action_key,expires_at)
+               VALUES($1,$2,$3)
+               ON CONFLICT (character_id,action_key) DO UPDATE SET expires_at=$3""",
+            char_id,
+            f"potion_resistance_{int(amount)}",
+            expires_at,
+        )
+        return True, f"Resistance increased by {int(amount)} for {int(duration_minutes)} minutes."
 
     async def full_restore(self, char_id: UUID):
         char = await self.get_by_id(char_id)

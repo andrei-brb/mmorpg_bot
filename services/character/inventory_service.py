@@ -256,6 +256,7 @@ class InventoryService:
         rows = await self.db.fetch(
             """SELECT i.*, t.name, t.description, t.item_type,
                      t.equip_slot, t.icon, t.vendor_sell, t.soulbound, t.level_req,
+                     t.effect_type, t.effect_value, t.effect_duration,
                      t.s_str,t.s_agi,t.s_int,t.s_spi,t.s_sta,t.s_armor,
                      t.s_dmg_min,t.s_dmg_max,
                      t.s_haste,t.s_lifesteal,t.s_resistance,t.s_hit_rating,
@@ -292,6 +293,17 @@ class InventoryService:
         )
         if not item: return False, "Item not found.", None
         if item["item_type"] != "consumable": return False, "Not a consumable.", None
+        if item["effect_type"] not in (
+            "heal_hp",
+            "boost_sta",
+            "boost_str",
+            "boost_agi",
+            "boost_int",
+            "boost_spi",
+            "boost_max_hp",
+            "boost_resistance",
+        ):
+            return False, "This consumable can't be used directly.", None
 
         if item["quantity"] > 1:
             await self.db.execute("UPDATE inventory SET quantity=quantity-1 WHERE id=$1", item_id)

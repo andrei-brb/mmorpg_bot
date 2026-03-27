@@ -2610,9 +2610,13 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 else:
                     msg = boost_msg
             elif effect_type == "boost_resistance":
-                # Resistance is a secondary stat, handled differently
-                msg += f" Frost resistance increased by {effect_value} for {effect_duration} minutes."
-                # TODO: Implement resistance buff system if needed
+                boost_ok, boost_msg = await self.char_svc.set_temporary_resistance(
+                    char["id"], int(effect_value), int(effect_duration)
+                )
+                if boost_ok:
+                    msg += f" {boost_msg}"
+                else:
+                    msg = boost_msg
         await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000))
 
     # ── /shop ─────────────────────────────────────────────────────────────────

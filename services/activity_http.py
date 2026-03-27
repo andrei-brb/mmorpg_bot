@@ -1134,6 +1134,86 @@ async def handle_item_sell(request: web.Request) -> web.Response:
     return web.json_response({"ok": ok, "message": msg, "gold": gold}, status=status)
 
 
+async def handle_item_use(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    item_id = (body.get("item_id") or "").strip()
+    if not item_id:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    ok, msg, effect = await inv_svc.use_consumable(char["id"], uid)
+    if ok and effect:
+        effect_type = effect.get("type")
+        effect_value = int(effect.get("value", 0) or 0)
+        effect_duration = int(effect.get("duration", 0) or 0)
+
+        if effect_type == "heal_hp":
+            heal_val = max(effect_value, int(char["max_hp"]) // 4)
+            healed = await char_svc.heal(char["id"], heal_val)
+            msg += f" Restored {healed} HP."
+        elif effect_type == "boost_sta":
+            ok2, m2 = await char_svc.boost_stat(char["id"], "sta", effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+        elif effect_type == "boost_str":
+            ok2, m2 = await char_svc.boost_stat(char["id"], "str", effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+        elif effect_type == "boost_agi":
+            ok2, m2 = await char_svc.boost_stat(char["id"], "agi", effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+        elif effect_type == "boost_int":
+            ok2, m2 = await char_svc.boost_stat(char["id"], "int_", effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+        elif effect_type == "boost_spi":
+            ok2, m2 = await char_svc.boost_stat(char["id"], "spi", effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+        elif effect_type == "boost_max_hp":
+            ok2, m2 = await char_svc.boost_stat(char["id"], "max_hp", effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+        elif effect_type == "boost_resistance":
+            ok2, m2 = await char_svc.set_temporary_resistance(char["id"], effect_value, effect_duration)
+            msg = f"{msg} {m2}" if ok2 else m2
+            ok = ok2
+
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg}, status=status)
+
+
 async def handle_item_unequip(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -1344,6 +1424,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/item/equip", handle_item_equip)
     app.router.add_post("/api/game/item/unequip", handle_item_unequip)
     app.router.add_post("/api/game/item/sell", handle_item_sell)
+    app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/state", handle_combat_state)

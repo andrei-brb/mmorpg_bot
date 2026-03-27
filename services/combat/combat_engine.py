@@ -529,6 +529,13 @@ class CombatEngine:
                     if armor_pen_pct > 0:
                         reduction = max(0.0, reduction * (1 - armor_pen_pct))
                     raw = int(raw * (1 - reduction))
+                else:
+                    # Spell/elemental-style mitigation via resistance.
+                    # This makes resistance potions and gear meaningful against magic-like hits.
+                    res = max(0, int(getattr(target, "resistance", 0) or 0))
+                    if res > 0:
+                        magic_reduction = min(0.60, res / (res + 500))
+                        raw = int(raw * (1 - magic_reduction))
 
                 # Vulnerability
                 vu = target.get_status(StatusEffect.VULNERABILITY)

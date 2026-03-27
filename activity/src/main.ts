@@ -44,6 +44,9 @@ type InvRow = {
   r_resistance?: number | null;
   r_hit_rating?: number | null;
   enhancement_level?: number | null;
+  effect_type?: string | null;
+  effect_value?: number | null;
+  effect_duration?: number | null;
 };
 
 type InventoryPayload = {
@@ -360,6 +363,19 @@ function buildHeroHtml(payload: InventoryPayload): string {
           const qty = it.quantity ?? 1;
           const canEquip = Boolean(it.equip_slot);
           const canEnhance = Boolean(it.equip_slot);
+          const directUseEffects = new Set([
+            "heal_hp",
+            "boost_sta",
+            "boost_str",
+            "boost_agi",
+            "boost_int",
+            "boost_spi",
+            "boost_max_hp",
+            "boost_resistance",
+          ]);
+          const canUse =
+            (it.item_type || "").toLowerCase() === "consumable" &&
+            directUseEffects.has((it.effect_type || "").toLowerCase());
           const enh = Number((it as any).enhancement_level ?? 0) || 0;
           const enhSuffix = enh > 0 ? ` +${enh}` : "";
           const qtyBadge = qty > 1 ? `x${qty}` : "";
@@ -376,6 +392,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
                 <span class="inv-tile-name">${escapeHtml(it.name)}${escapeHtml(enhSuffix)}</span>
               </div>
               <div class="inv-tile-actions">
+                ${canUse ? `<button type="button" class="mini-btn act-use" data-item-id="${escapeHtml(it.id)}">Use</button>` : ""}
                 ${canEquip ? `<button type="button" class="mini-btn act-equip" data-item-id="${escapeHtml(it.id)}">Equip</button>` : ""}
                 ${canEnhance ? `<button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>` : ""}
                 <button type="button" class="mini-btn act-sell" data-item-id="${escapeHtml(it.id)}">Sell</button>
@@ -1392,6 +1409,7 @@ function mountApp(
   appRoot.addEventListener("click", async (ev) => {
     const target = ev.target as HTMLElement;
     if (!target) return;
+    const useBtn = target.closest(".act-use") as HTMLElement | null;
     const equipBtn = target.closest(".act-equip") as HTMLElement | null;
     const sellBtn = target.closest(".act-sell") as HTMLElement | null;
     const enhBtn = target.closest(".act-enhance") as HTMLElement | null;
@@ -1401,7 +1419,7 @@ function mountApp(
     const tileEl = target.closest(".inv-tile") as HTMLElement | null;
 
     // 1) Tap-to-reveal inventory tile
-    if (tileEl && !clickedMini && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) {
+    if (tileEl && !clickedMini && !useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) {
       if (tileEl.classList.contains("inv-empty")) return;
       appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => {
         if (el !== tileEl) el.classList.remove("inv-tile--active");
@@ -1411,19 +1429,24 @@ function mountApp(
     }
 
     // 2) If clicked outside tile/action buttons, close any revealed tile.
-    if (!equipBtn && !sellBtn && !enhBtn && !unequipBtn && !tileEl) {
+    if (!useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn && !tileEl) {
       appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => el.classList.remove("inv-tile--active"));
       return;
     }
 
     // 3) Ignore clicks that aren't item actions.
-    if (!equipBtn && !sellBtn && !enhBtn && !unequipBtn) return;
+    if (!useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) return;
     ev.preventDefault();
     ev.stopPropagation();
 
     let endpoint = "";
     let body: Record<string, unknown> = {};
-    if (equipBtn) {
+    if (useBtn) {
+      endpoint = "/api/game/item/use";
+      const itemId = useBtn.dataset.itemId;
+      if (!itemId) return;
+      body = { item_id: itemId };
+    } else if (equipBtn) {
       endpoint = "/api/game/item/equip";
       const itemId = equipBtn.dataset.itemId;
       if (!itemId) return;
