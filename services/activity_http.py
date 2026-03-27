@@ -923,6 +923,14 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
 
     npc_data = NPC_TEMPLATES[npc_id]
 
+    # If set after a turn-in, merged into responses (rewards + next DM offer).
+    pending_completion: Optional[Dict[str, Any]] = None
+
+    def _merge_completion_payload(base: Dict[str, Any]) -> Dict[str, Any]:
+        if not pending_completion:
+            return base
+        return {**pending_completion, **base}
+
     # First: if player is turning in / talking for an active quest step, process that.
     talk_result = await quest_svc.check_talk_to_npc(char_id, npc_id)
     if talk_result and talk_result.get("complete"):
@@ -963,19 +971,43 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             "items": list(rewards.get("items") or []),
             "reputation": {k: int(v) for k, v in (rewards.get("reputation") or {}).items()},
         }
-        return web.json_response(
-            _json_safe(
-                {
-                    "ok": True,
-                    "message": "Quest completed and rewards granted.",
-                    "npc_id": npc_id,
-                    "quest_completed": True,
-                    "rewards": reward_summary,
-                    "next_quest_available": bool(next_quest),
-                }
+        pending_completion = {
+            "quest_completed": True,
+            "rewards": reward_summary,
+            "message": "Quest completed and rewards granted.",
+        }
+        char_row = await char_svc.get_by_id(char_id)
+        if char_row:
+            char = dict(char_row)
+
+        if not next_quest:
+            return web.json_response(
+                _json_safe(
+                    _merge_completion_payload(
+                        {
+                            "ok": True,
+                            "npc_id": npc_id,
+                            "next_quest_available": False,
+                        }
+                    )
+                )
             )
-        )
-    if talk_result and not talk_result.get("complete"):
+        if int(char.get("level") or 1) < int(next_quest.get("level_req", 1) or 1):
+            return web.json_response(
+                _json_safe(
+                    _merge_completion_payload(
+                        {
+                            "ok": True,
+                            "npc_id": npc_id,
+                            "next_quest_available": True,
+                            "next_quest_blocked": "level_too_low",
+                            "message": f"Quest complete. Next quest needs level {next_quest['level_req']}.",
+                        }
+                    )
+                )
+            )
+        # Continue below: automatically send the next quest offer via DM (same as Interact).
+    elif talk_result and not talk_result.get("complete"):
         next_step = talk_result.get("next_step") or {}
         return web.json_response(
             _json_safe(
@@ -987,16 +1019,21 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
                 }
             )
         )
+    else:
+        # No talk turn-in on this click — offer the next available quest for this NPC.
+        completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
+        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+        if not next_quest:
+            return web.json_response(_json_safe({"ok": True, "message": "No quests available.", "npc_id": npc_id}))
 
-    # Determine next quest
-    completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
-    next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
-    if not next_quest:
-        return web.json_response(_json_safe({"ok": True, "message": "No quests available.", "npc_id": npc_id}))
+        # Level requirement
+        if int(char.get("level") or 1) < int(next_quest.get("level_req", 1) or 1):
+            return web.json_response(
+                _json_safe({"ok": False, "error": "level_too_low", "message": f"Need level {next_quest['level_req']}."}),
+                status=400,
+            )
 
-    # Level requirement
-    if int(char.get("level") or 1) < int(next_quest.get("level_req", 1) or 1):
-        return web.json_response(_json_safe({"ok": False, "error": "level_too_low", "message": f"Need level {next_quest['level_req']}."}), status=400)
+    # `next_quest` is set (from completion chain or from branch above). Offer via DM.
 
     # Prevent duplicate offers / accepts: reserve DB row before DM (Activity spam)
     qid = next_quest["id"]
@@ -1015,27 +1052,33 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         if prog and prog.get("state") == "active":
             return web.json_response(
                 _json_safe(
-                    {
-                        "ok": False,
-                        "error": "quest_already_active",
-                        "message": "You already have this quest active. Finish it (or abandon) before taking a new offer.",
-                    }
+                    _merge_completion_payload(
+                        {
+                            "ok": False,
+                            "error": "quest_already_active",
+                            "message": "You already have this quest active. Finish it (or abandon) before taking a new offer.",
+                        }
+                    )
                 ),
                 status=400,
             )
         if prog and prog.get("state") == "offered":
             return web.json_response(
                 _json_safe(
-                    {
-                        "ok": False,
-                        "error": "quest_offer_pending",
-                        "message": "You already have a pending quest offer — check your DMs.",
-                    }
+                    _merge_completion_payload(
+                        {
+                            "ok": False,
+                            "error": "quest_offer_pending",
+                            "message": "You already have a pending quest offer — check your DMs.",
+                        }
+                    )
                 ),
                 status=400,
             )
         return web.json_response(
-            _json_safe({"ok": False, "error": "quest_unavailable", "message": "Could not start quest offer."}),
+            _json_safe(
+                _merge_completion_payload({"ok": False, "error": "quest_unavailable", "message": "Could not start quest offer."})
+            ),
             status=400,
         )
 
@@ -1045,7 +1088,14 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         dm = await uobj.create_dm()
     except Exception:
         await quest_svc.cancel_quest_offer(char_id, qid)
-        return web.json_response(_json_safe({"ok": False, "error": "dm_forbidden", "message": "Enable DMs from server members."}), status=403)
+        return web.json_response(
+            _json_safe(
+                _merge_completion_payload(
+                    {"ok": False, "error": "dm_forbidden", "message": "Enable DMs from server members."}
+                )
+            ),
+            status=403,
+        )
 
     # Reuse the same UI view class from QuestCog
     from cogs.quest.quest_cog import QuestOfferView
@@ -1103,15 +1153,29 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         if first_step.get("objective"):
             accept_embed.add_field(name="📍 First Objective", value=f"{first_step['objective']}\n*{first_step.get('hint','')}*", inline=False)
         await dm_msg.edit(embed=accept_embed, view=None)
-        return web.json_response(_json_safe({"ok": True, "message": "Quest accepted in DMs.", "npc_id": npc_id, "quest_id": next_quest["id"]}))
+        accept_body: Dict[str, Any] = {
+            "ok": True,
+            "message": "Quest accepted in DMs.",
+            "npc_id": npc_id,
+            "quest_id": next_quest["id"],
+        }
+        if pending_completion:
+            accept_body["next_quest_auto_offered"] = True
+        return web.json_response(_json_safe(_merge_completion_payload(accept_body)))
     if view.choice == "decline":
         await quest_svc.cancel_quest_offer(char_id, next_quest["id"])
         decline_embed = _discord.Embed(title="Quest Declined", description=next_quest["dialogue"]["decline"], color=0x95A5A6)
         await dm_msg.edit(embed=decline_embed, view=None)
-        return web.json_response(_json_safe({"ok": True, "message": "Quest declined.", "npc_id": npc_id}))
+        decline_body: Dict[str, Any] = {"ok": True, "message": "Quest declined.", "npc_id": npc_id}
+        if pending_completion:
+            decline_body["next_quest_auto_offered"] = True
+        return web.json_response(_json_safe(_merge_completion_payload(decline_body)))
 
     await quest_svc.cancel_quest_offer(char_id, next_quest["id"])
-    return web.json_response(_json_safe({"ok": True, "message": "Interaction ended.", "npc_id": npc_id}))
+    ended_body: Dict[str, Any] = {"ok": True, "message": "Interaction ended.", "npc_id": npc_id}
+    if pending_completion:
+        ended_body["next_quest_auto_offered"] = True
+    return web.json_response(_json_safe(_merge_completion_payload(ended_body)))
 
 async def handle_item_equip(request: web.Request) -> web.Response:
     bot = request.app["bot"]
