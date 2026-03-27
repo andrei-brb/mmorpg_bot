@@ -1440,6 +1440,45 @@ async def handle_item_enhance_info(request: web.Request) -> web.Response:
         )
     )
 
+
+async def handle_buy_protection(request: web.Request) -> web.Response:
+    """Buy protection items for enhancement (Activity modal convenience)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    key = (body.get("protection_key") or body.get("key") or "").strip()
+    qty = int(body.get("quantity") or 1)
+    if not key:
+        return web.json_response({"ok": False, "error": "missing_key", "message": "Missing protection_key."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    bs = BlacksmithService(db)
+    ok, msg = await bs.buy_protection_bulk(_uuid_from_any(char["id"]), key, qty)
+    status = 200 if ok else 400
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=status)
+
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
@@ -1538,6 +1577,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)
+    app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)

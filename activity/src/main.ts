@@ -1516,9 +1516,15 @@ function mountApp(
               <label class="modal-radio ${haveBless ? "" : "is-disabled"}"><input type="radio" name="prot" value="blessing_scroll" ${
                 haveBless ? "" : "disabled"
               } /> 🛡️ Blessing Scroll (x${haveBless})</label>
+              <div class="modal-buy-row">
+                <button type="button" class="mini-btn" data-buy-prot="blessing_scroll" data-buy-qty="1">Buy 1</button>
+              </div>
               <label class="modal-radio ${haveCharm ? "" : "is-disabled"}"><input type="radio" name="prot" value="safety_charm" ${
                 haveCharm ? "" : "disabled"
               } /> ✨ Safety Charm (x${haveCharm})</label>
+              <div class="modal-buy-row">
+                <button type="button" class="mini-btn" data-buy-prot="safety_charm" data-buy-qty="1">Buy 1</button>
+              </div>
             </div>
             <div class="modal-box">
               <div class="modal-box__title">Fragments (+10% each)</div>
@@ -1528,6 +1534,10 @@ function mountApp(
                   .map((n) => `<option value="${n}" ${n > haveFrag ? "disabled" : ""}>${n}</option>`)
                   .join("")}
               </select>
+              <div class="modal-buy-row">
+                <button type="button" class="mini-btn" data-buy-prot="enhancement_fragment" data-buy-qty="1">Buy 1</button>
+                <button type="button" class="mini-btn" data-buy-prot="enhancement_fragment" data-buy-qty="3">Buy 3</button>
+              </div>
             </div>
           </div>
           <div class="modal-actions">
@@ -1546,8 +1556,31 @@ function mountApp(
   appRoot.addEventListener("click", async (ev) => {
     const target = ev.target as HTMLElement;
     if (!target) return;
+    const buyBtn = target.closest("[data-buy-prot]") as HTMLElement | null;
     const enhanceCancel = target.closest("[data-enhance-cancel]") as HTMLElement | null;
     const enhanceConfirm = target.closest("[data-enhance-confirm]") as HTMLElement | null;
+
+    if (buyBtn) {
+      const key = buyBtn.getAttribute("data-buy-prot") || "";
+      const qty = Number(buyBtn.getAttribute("data-buy-qty") || "1") || 1;
+      try {
+        if (statusEl) statusEl.textContent = "Buying…";
+        const res = await fetch(apiUrl("/api/game/blacksmith/buy-protection"), {
+          method: "POST",
+          headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+          body: JSON.stringify({ protection_key: key, quantity: qty }),
+        });
+        const json = (await res.json()) as { ok?: boolean; message?: string };
+        if (statusEl) statusEl.textContent = json.message || (json.ok ? "Purchased." : "Purchase failed.");
+      } catch (e) {
+        if (statusEl) statusEl.textContent = `Buy error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      // Refresh hero inventory + gold, then refresh modal counts.
+      await refreshHeroInventory();
+      await refreshProgressData();
+      if (pendingEnhanceItemId) await openEnhanceModal(pendingEnhanceItemId);
+      return;
+    }
 
     if (enhanceCancel) {
       closeEnhanceModal();

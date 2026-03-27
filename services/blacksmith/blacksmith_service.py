@@ -300,6 +300,41 @@ class BlacksmithService:
             )
             return False, f"Failed to add item to inventory: {msg}"
 
+    async def buy_protection_bulk(self, char_id: UUID, protection_key: str, quantity: int) -> Tuple[bool, str]:
+        """Purchase multiple protection items in one transaction (Activity UI convenience)."""
+        if protection_key not in PROTECTION_ITEMS:
+            return False, "Invalid protection item."
+        q = int(quantity or 0)
+        if q <= 0:
+            return False, "Quantity must be at least 1."
+        item = PROTECTION_ITEMS[protection_key]
+        total_cost = int(item["cost"]) * q
+
+        char = await self.db.fetchrow("SELECT gold FROM characters WHERE id = $1", char_id)
+        if not char or int(char["gold"] or 0) < total_cost:
+            have = int(char["gold"] or 0) if char else 0
+            return False, f"Not enough gold. Need {total_cost:,}🪙, you have {have:,}🪙."
+
+        # Deduct once.
+        await self.db.execute(
+            "UPDATE characters SET gold = gold - $2 WHERE id = $1",
+            char_id, total_cost
+        )
+
+        from services.character.inventory_service import InventoryService
+        inv_svc = InventoryService(self.db)
+        template_id = f"protection_{protection_key}"
+        ok, msg = await inv_svc.add_item(char_id, template_id, rarity="rare", quantity=q, from_="blacksmith_shop")
+        if ok:
+            return True, f"✅ Purchased {item['emoji']} **{item['name']}** x{q} for **{total_cost:,}**🪙!"
+
+        # Refund if failed to add.
+        await self.db.execute(
+            "UPDATE characters SET gold = gold + $2 WHERE id = $1",
+            char_id, total_cost
+        )
+        return False, f"Failed to add item to inventory: {msg}"
+
     # ── Item Stats Calculation ────────────────────────────────────────────────
 
     def calculate_enhanced_stats(self, base_stats: Dict, enhancement_level: int) -> Dict:
