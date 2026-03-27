@@ -557,25 +557,9 @@ async def _finish_victory(
     from services.achievement.achievement_service import AchievementService
     from services.quest.npc_quest_service import NPCQuestService
 
-    server_cfg = None
-    if guild_id:
-        server_cfg = await db.fetchrow(
-            "SELECT xp_multiplier, gold_multiplier FROM server_config WHERE server_id=$1",
-            guild_id,
-        )
-    xp_mult = server_cfg["xp_multiplier"] if server_cfg else 1.0
-    gold_mult = server_cfg["gold_multiplier"] if server_cfg else 1.0
+    from services.reward_multipliers import get_combined_reward_multipliers
 
-    if guild_id:
-        try:
-            from services.milestones.milestone_service import MilestoneService
-
-            ms = MilestoneService(db)
-            bonus = await ms.get_active_multipliers(guild_id)
-            xp_mult *= bonus["xp_multiplier"]
-            gold_mult *= bonus["gold_multiplier"]
-        except Exception:
-            pass
+    xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id)
 
     rewards = engine.calculate_rewards(session, xp_mult, gold_mult)
     xp_result = await char_svc.award_xp(char["id"], rewards["xp"], xp_mult)

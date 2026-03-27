@@ -403,6 +403,7 @@ COMMAND_CHANNEL_MAP = {
     "login": "general",
     "streak": "general",
     "events": "general",
+    "liveops": "general",
     "admin": "general",
 }
 

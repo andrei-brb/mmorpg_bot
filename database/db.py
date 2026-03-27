@@ -218,6 +218,33 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_milestone_log_guild_created
                 ON milestone_log(guild_id, created_at DESC);
             """)
+
+            # ── Per-guild configurable live ops (scheduled XP/gold/boss hunt, etc.) ──
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_live_events (
+                    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id                BIGINT NOT NULL,
+                    slug                    VARCHAR(64) NOT NULL,
+                    title                   VARCHAR(256) NOT NULL,
+                    description             TEXT DEFAULT '',
+                    config                  JSONB NOT NULL DEFAULT '{}',
+                    starts_at               TIMESTAMPTZ NOT NULL,
+                    ends_at                 TIMESTAMPTZ NOT NULL,
+                    enabled                 BOOLEAN DEFAULT TRUE,
+                    announce_on_start       BOOLEAN DEFAULT TRUE,
+                    announce_on_end         BOOLEAN DEFAULT FALSE,
+                    announce_channel_id     BIGINT,
+                    announce_start_sent     BOOLEAN DEFAULT FALSE,
+                    announce_end_sent       BOOLEAN DEFAULT FALSE,
+                    created_at              TIMESTAMPTZ DEFAULT NOW(),
+                    created_by              BIGINT,
+                    UNIQUE (guild_id, slug)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_live_events_window
+                ON guild_live_events(guild_id, starts_at, ends_at);
+            """)
             
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:

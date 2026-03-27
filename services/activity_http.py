@@ -767,6 +767,14 @@ async def handle_explore(request: web.Request) -> web.Response:
     if not char:
         return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
 
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    guild_id = _guild_id_from_request(request, body)
+
     char_svc = CharacterService(db)
     inv_svc = InventoryService(db)
     quest_svc = NPCQuestService(db)
@@ -794,23 +802,11 @@ async def handle_explore(request: web.Request) -> web.Response:
     except Exception:
         pass
 
-    import random
+    from services.exploration.zone_explore import roll_explore_outcome
+    from services.reward_multipliers import get_combined_reward_multipliers
 
-    def _roll(level: int):
-        r = random.random()
-        if r < 0.40:
-            key = random.choice(zone.enemies)
-            e = ENEMIES.get(key)
-            return {"type": "enemy", "key": key, "name": e.name if e else key.replace("_", " ").title(), "emoji": e.emoji if e else "👾"}
-        if r < 0.55:
-            key = random.choice(zone.bosses) if zone.bosses else random.choice(zone.enemies)
-            e = ENEMIES.get(key)
-            return {"type": "boss", "key": key, "name": e.name if e else key.replace("_", " ").title(), "emoji": e.emoji if e else "💀"}
-        if r < 0.75:
-            return {"type": "loot"}
-        return {"type": "safe"}
-
-    outcome = _roll(int(char.get("level") or 1))
+    xp_mult, gold_mult, boss_add = await get_combined_reward_multipliers(db, guild_id)
+    outcome = roll_explore_outcome(zone, boss_add)
 
     cooldown = Settings.EXPLORE_COOLDOWN if outcome["type"] in ("enemy", "boss") else 10
     await char_svc.set_cooldown(_uuid_from_any(char["id"]), "explore", cooldown)
@@ -821,15 +817,16 @@ async def handle_explore(request: web.Request) -> web.Response:
         pending = outcome["key"]
         await db.execute("UPDATE characters SET pending_encounter=$2 WHERE id=$1", _uuid_from_any(char["id"]), pending)
     elif outcome["type"] == "loot":
-        xp = random.randint(5, 15 + int(char.get("level") or 1))
-        gold = random.randint(1, 5 + int(char.get("level") or 1) // 2)
-        await char_svc.award_xp(_uuid_from_any(char["id"]), xp)
+        xp0 = random.randint(5, 15 + int(char.get("level") or 1))
+        g0 = random.randint(1, 5 + int(char.get("level") or 1) // 2)
+        xp_res = await char_svc.award_xp(_uuid_from_any(char["id"]), xp0, xp_mult)
+        gold = int(g0 * gold_mult)
         await char_svc.add_gold(_uuid_from_any(char["id"]), gold, "exploration")
-        reward = {"xp": xp, "gold": gold}
+        reward = {"xp": int(xp_res.get("xp_gained") or 0), "gold": gold, "base_xp": xp0, "base_gold": g0}
     elif outcome["type"] == "safe":
-        xp = random.randint(3, 8)
-        await char_svc.award_xp(_uuid_from_any(char["id"]), xp)
-        reward = {"xp": xp}
+        xp0 = random.randint(3, 8)
+        xp_res = await char_svc.award_xp(_uuid_from_any(char["id"]), xp0, xp_mult)
+        reward = {"xp": int(xp_res.get("xp_gained") or 0), "base_xp": xp0}
 
     npc_payload = None
     try:
@@ -859,12 +856,34 @@ async def handle_explore(request: web.Request) -> web.Response:
                 "zone": {"key": char.get("current_zone"), "name": zone.name, "emoji": zone.emoji, "level_min": zone.level_range[0], "level_max": zone.level_range[1]},
                 "outcome": outcome,
                 "reward": reward,
+                "reward_multipliers": {
+                    "xp": xp_mult,
+                    "gold": gold_mult,
+                    "explore_boss_chance_add": boss_add,
+                },
                 "cooldown_s": cooldown,
                 "npc": npc_payload,
                 "character": dict(fresh) if fresh else None,
             }
         )
     )
+
+
+async def handle_live_events(request: web.Request) -> web.Response:
+    """Active guild live events (for Activity banner / debugging)."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "events": []}), status=400)
+
+    guild_id = _guild_id_from_request(request, {})
+    if not guild_id:
+        return web.json_response(_json_safe({"ok": True, "events": []}))
+
+    from services.live_events.live_event_service import LiveEventService
+
+    svc = LiveEventService(db)
+    rows = await svc.list_active_public(guild_id)
+    return web.json_response(_json_safe({"ok": True, "events": rows}))
 
 
 async def handle_npc_interact(request: web.Request) -> web.Response:
@@ -1318,6 +1337,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/progress", handle_progress)
     app.router.add_get("/api/game/map", handle_map)
     app.router.add_get("/api/game/quests", handle_quests)
+    app.router.add_get("/api/game/live-events", handle_live_events)
     app.router.add_post("/api/game/travel", handle_travel)
     app.router.add_post("/api/game/explore", handle_explore)
     app.router.add_post("/api/game/npc/interact", handle_npc_interact)

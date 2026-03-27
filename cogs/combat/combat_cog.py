@@ -726,23 +726,11 @@ class CombatCog(commands.Cog, name="Combat"):
             await self._defeat(interaction, char, player, msg)
 
     async def _victory(self, interaction, session, char, player: Combatant, msg=None):
-        server_cfg = await self.bot.db.fetchrow(
-            "SELECT xp_multiplier, gold_multiplier FROM server_config WHERE server_id=$1",
-            interaction.guild_id,
-        )
-        xp_mult   = server_cfg["xp_multiplier"]   if server_cfg else 1.0
-        gold_mult = server_cfg["gold_multiplier"]  if server_cfg else 1.0
+        from services.reward_multipliers import get_combined_reward_multipliers
 
-        # Apply active server milestone buffs.
-        if interaction.guild_id:
-            try:
-                from services.milestones.milestone_service import MilestoneService
-                ms = MilestoneService(self.bot.db)
-                bonus = await ms.get_active_multipliers(interaction.guild_id)
-                xp_mult *= bonus["xp_multiplier"]
-                gold_mult *= bonus["gold_multiplier"]
-            except Exception:
-                pass
+        xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(
+            self.bot.db, interaction.guild_id
+        )
 
         rewards = self.engine.calculate_rewards(session, xp_mult, gold_mult)
 

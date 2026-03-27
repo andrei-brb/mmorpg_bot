@@ -7,8 +7,10 @@ import logging, random
 import discord
 from discord import app_commands
 from discord.ext import commands
-from config.settings import ZONES, Settings, ENEMIES
+from config.settings import ZONES, Settings
 from services.character.character_service import CharacterService
+from services.exploration.zone_explore import roll_explore_outcome
+from services.reward_multipliers import get_combined_reward_multipliers
 
 log = logging.getLogger("cog.exploration")
 
@@ -54,7 +56,10 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             char["current_zone"]
         )
 
-        outcome = self._roll(char["level"], zone)
+        xp_mult, gold_mult, boss_add = await get_combined_reward_multipliers(
+            self.bot.db, interaction.guild_id
+        )
+        outcome = roll_explore_outcome(zone, boss_add)
         embed = discord.Embed(title=f"{zone.emoji} Exploring {zone.name}", description=random.choice(zone.ambients), color=0x2F7F3F)
 
         # Set cooldown based on outcome: 10s for rewards, 30s for encounters
@@ -77,14 +82,25 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             embed.add_field(name="💀 BOSS NEARBY!", value=f"The fearsome **{outcome['name']}** lurks here!\nUse `/fight` to challenge it!", inline=False)
             embed.color = 0xFF0000
         elif outcome["type"] == "loot":
-            xp, gold = random.randint(5, 15 + char["level"]), random.randint(1, 5 + char["level"] // 2)
-            await self.svc.award_xp(char["id"], xp)
+            xp0, g0 = random.randint(5, 15 + char["level"]), random.randint(1, 5 + char["level"] // 2)
+            xp_result = await self.svc.award_xp(char["id"], xp0, xp_mult)
+            gold = int(g0 * gold_mult)
             await self.svc.add_gold(char["id"], gold, "exploration")
-            embed.add_field(name="✨ Discovery!", value=f"You find hidden resources!\n+**{xp}** XP | +**{gold}**🪙", inline=False)
+            xp_eff = int(xp_result.get("xp_gained") or 0)
+            embed.add_field(
+                name="✨ Discovery!",
+                value=f"You find hidden resources!\n+**{xp_eff}** XP | +**{gold}**🪙",
+                inline=False,
+            )
         else:
-            xp = random.randint(3, 8)
-            await self.svc.award_xp(char["id"], xp)
-            embed.add_field(name="🌿 Quiet Journey", value=f"Nothing eventful, but the trek builds experience.\n+**{xp}** XP", inline=False)
+            xp0 = random.randint(3, 8)
+            xp_result = await self.svc.award_xp(char["id"], xp0, xp_mult)
+            xp_eff = int(xp_result.get("xp_gained") or 0)
+            embed.add_field(
+                name="🌿 Quiet Journey",
+                value=f"Nothing eventful, but the trek builds experience.\n+**{xp_eff}** XP",
+                inline=False,
+            )
 
         # ── NPC Encounter Roll ────────────────────────────────────────────
         try:
@@ -123,22 +139,6 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         from services.achievement.achievement_service import AchievementService
         ach_svc = AchievementService(self.bot.db)
         await ach_svc.check_and_award(char["id"], "explore", {})
-
-    def _roll(self, level, zone) -> dict:
-        r = random.random()
-        if r < 0.40:
-            key = random.choice(zone.enemies)
-            enemy = ENEMIES.get(key)
-            name = enemy.name if enemy else key.replace("_", " ").title()
-            return {"type": "enemy", "key": key, "name": name}
-        elif r < 0.55:
-            key = random.choice(zone.bosses)  # Random boss from zone
-            boss = ENEMIES.get(key)
-            name = boss.name if boss else key.replace("_", " ").title()
-            return {"type": "boss", "key": key, "name": name}
-        elif r < 0.75:
-            return {"type": "loot"}
-        return {"type": "safe"}
 
     @app_commands.command(name="travel", description="Travel to a different zone")
     @app_commands.choices(zone=[
