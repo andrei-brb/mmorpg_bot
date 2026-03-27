@@ -201,13 +201,17 @@ function escapeHtml(s: string): string {
 function itemStatLines(item: InvRow): string[] {
   if (!item.equip_slot) return [];
   const lines: string[] = [];
+  const enhLevel = Math.max(0, Math.min(10, Number(item.enhancement_level ?? 0) || 0));
+  const enhMult = 1 + enhLevel * 0.1; // mirrors ENHANCEMENT_CONFIG stat_boost (+10% per level)
   const pushStat = (label: string, base?: number | null, bonus?: number | null): void => {
     const b = Number(base ?? 0) || 0;
     const r = Number(bonus ?? 0) || 0;
-    const total = b + r;
+    const preEnh = b + r;
+    const total = Math.floor(preEnh * enhMult);
     if (!total) return;
     const bonusTxt = r ? ` (${r > 0 ? "+" : ""}${r} bonus)` : "";
-    lines.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}`);
+    const enhTxt = enhLevel > 0 ? ` [${preEnh > 0 ? "+" : ""}${preEnh} -> ${total > 0 ? "+" : ""}${total}]` : "";
+    lines.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}${enhTxt}`);
   };
 
   pushStat("STR", item.s_str, item.r_str);
@@ -220,10 +224,10 @@ function itemStatLines(item: InvRow): string[] {
   pushStat("Resistance", item.s_resistance, item.r_resistance);
   pushStat("Hit", item.s_hit_rating, item.r_hit_rating);
 
-  const armor = Number(item.s_armor ?? 0) || 0;
+  const armor = Math.floor((Number(item.s_armor ?? 0) || 0) * enhMult);
   if (armor) lines.push(`Armor: +${armor}`);
-  const dMin = Number(item.s_dmg_min ?? 0) || 0;
-  const dMax = Number(item.s_dmg_max ?? 0) || 0;
+  const dMin = Math.floor((Number(item.s_dmg_min ?? 0) || 0) * enhMult);
+  const dMax = Math.floor((Number(item.s_dmg_max ?? 0) || 0) * enhMult);
   if (dMin || dMax) lines.push(`Damage: ${dMin}-${dMax}`);
 
   return lines;
