@@ -255,6 +255,10 @@ h1 {
   border-color: #f4b942 !important;
   box-shadow: 0 0 0 1px rgba(244, 185, 66, 0.24);
 }
+.rarity-artifact {
+  border-color: #ff5fd2 !important;
+  box-shadow: 0 0 0 1px rgba(255, 95, 210, 0.3);
+}
 
 .hint {
   font-size: 0.8rem;
@@ -335,22 +339,22 @@ code {
 
 .inv-grid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 6px;
-  max-height: 300px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 420px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 6px;
 }
 
 @media (max-width: 1400px) {
   .inv-grid {
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 767px) {
   .inv-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -363,27 +367,35 @@ code {
 .inv-tile {
   aspect-ratio: 1 / 1;
   width: 100%;
-  border: 1px solid #28335d;
-  border-radius: 10px;
-  background: #0b1028;
+  border: 1px solid #2f3c70;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #121b3a 0%, #0a1026 100%);
   color: var(--text);
-  padding: 0.34rem 0.28rem;
+  padding: 0.36rem 0.3rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   cursor: pointer;
   user-select: none;
+  position: relative;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .inv-tile:focus-visible {
   outline: none;
-  border-color: #6f78cf;
+  border-color: #7f8af4;
+  box-shadow: 0 0 0 1px rgba(127, 138, 244, 0.4);
 }
 
 .inv-tile:hover {
-  border-color: #6f78cf;
+  border-color: #7f8af4;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(127, 138, 244, 0.22);
 }
 
 .inv-tile-main {
@@ -392,27 +404,89 @@ code {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 5px;
   width: 100%;
+}
+
+.inv-frame {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.08), transparent 45%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
 /* Larger icon for square tiles only */
 .inv-tile .inv-icon-stack {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
 }
 
 .inv-tile .inv-icon-img {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
 }
 
 .inv-tile .inv-icon-emoji {
-  font-size: 0.98rem;
+  font-size: 1.08rem;
+}
+
+.inv-badge {
+  position: absolute;
+  font-size: 0.54rem;
+  line-height: 1;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 3px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(7, 11, 26, 0.95);
+  color: #f8fafc;
+  letter-spacing: 0.01em;
+}
+
+.inv-badge-enh {
+  top: 4px;
+  left: 4px;
+  color: #7dd3fc;
+}
+
+.inv-badge-qty {
+  right: 4px;
+  bottom: 4px;
+}
+
+.inv-tile.rarity-common .inv-frame {
+  border-color: rgba(148, 163, 184, 0.5);
+}
+.inv-tile.rarity-uncommon .inv-frame {
+  border-color: rgba(56, 193, 114, 0.62);
+  box-shadow: inset 0 0 14px rgba(56, 193, 114, 0.12);
+}
+.inv-tile.rarity-rare .inv-frame {
+  border-color: rgba(74, 139, 255, 0.7);
+  box-shadow: inset 0 0 14px rgba(74, 139, 255, 0.18);
+}
+.inv-tile.rarity-epic .inv-frame {
+  border-color: rgba(158, 91, 255, 0.72);
+  box-shadow: inset 0 0 16px rgba(158, 91, 255, 0.2);
+}
+.inv-tile.rarity-legendary .inv-frame {
+  border-color: rgba(244, 185, 66, 0.75);
+  box-shadow: inset 0 0 18px rgba(244, 185, 66, 0.24);
+}
+.inv-tile.rarity-artifact .inv-frame {
+  border-color: rgba(255, 95, 210, 0.8);
+  box-shadow: inset 0 0 20px rgba(255, 95, 210, 0.28);
 }
 
 .inv-tile-name {
-  font-size: 0.58rem;
+  font-size: 0.6rem;
   font-weight: 650;
   text-align: center;
   line-height: 1.1;
@@ -420,11 +494,6 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
-}
-
-.inv-tile-meta {
-  font-size: 0.52rem;
-  color: var(--muted);
 }
 
 .inv-tile-actions {
@@ -444,10 +513,13 @@ code {
   border-style: dashed;
   color: var(--muted);
   cursor: default;
+  background: #0a1024;
 }
 
 .inv-tile.inv-empty:hover {
   border-color: #28335d;
+  transform: none;
+  box-shadow: none;
 }
 
 .inv-row {

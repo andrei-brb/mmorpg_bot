@@ -164,6 +164,7 @@ type QuestLogPayload = { ok?: boolean; error?: string; quests?: QuestLogRow[] };
 
 function rarityClass(rarity?: string | null): string {
   const v = (rarity || "").toLowerCase();
+  if (v === "artifact") return "rarity-artifact";
   if (v === "legendary") return "rarity-legendary";
   if (v === "epic") return "rarity-epic";
   if (v === "rare") return "rarity-rare";
@@ -361,14 +362,18 @@ function buildHeroHtml(payload: InventoryPayload): string {
           const canEnhance = Boolean(it.equip_slot);
           const enh = Number((it as any).enhancement_level ?? 0) || 0;
           const enhSuffix = enh > 0 ? ` +${enh}` : "";
+          const qtyBadge = qty > 1 ? `x${qty}` : "";
           return `
             <div class="inv-tile ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0" role="button" aria-label="Inventory item ${escapeHtml(
             it.name,
           )}">
               <div class="inv-tile-main">
-                <span class="inv-icon">${renderInvIconHtml(it, "📦")}</span>
+                <div class="inv-frame">
+                  <span class="inv-icon">${renderInvIconHtml(it, "📦")}</span>
+                  ${enh > 0 ? `<span class="inv-badge inv-badge-enh">+${enh}</span>` : ""}
+                  ${qtyBadge ? `<span class="inv-badge inv-badge-qty">${escapeHtml(qtyBadge)}</span>` : ""}
+                </div>
                 <span class="inv-tile-name">${escapeHtml(it.name)}${escapeHtml(enhSuffix)}</span>
-                <span class="inv-tile-meta">x${qty}</span>
               </div>
               <div class="inv-tile-actions">
                 ${canEquip ? `<button type="button" class="mini-btn act-equip" data-item-id="${escapeHtml(it.id)}">Equip</button>` : ""}
