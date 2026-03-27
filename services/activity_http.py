@@ -957,6 +957,12 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
 
         completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
         next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+        reward_summary = {
+            "xp": int(rewards.get("xp") or 0),
+            "gold": int(rewards.get("gold") or 0),
+            "items": list(rewards.get("items") or []),
+            "reputation": {k: int(v) for k, v in (rewards.get("reputation") or {}).items()},
+        }
         return web.json_response(
             _json_safe(
                 {
@@ -964,6 +970,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
                     "message": "Quest completed and rewards granted.",
                     "npc_id": npc_id,
                     "quest_completed": True,
+                    "rewards": reward_summary,
                     "next_quest_available": bool(next_quest),
                 }
             )

@@ -1105,12 +1105,43 @@ function mountApp(
       window.location.reload();
       return;
     }
-    const json = (await res.json()) as { ok?: boolean; error?: string; message?: string };
+    const json = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      quest_completed?: boolean;
+      quest_step_updated?: boolean;
+      next_quest_available?: boolean;
+      rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
+    };
+    const statusEl = appRoot.querySelector("#hero-action-status");
     if (!res.ok || json.error) {
       lastExplore = { error: json.error || "npc_interact_failed", message: json.message || "Interact failed." };
+      if (statusEl) statusEl.textContent = json.message || "Interact failed.";
     } else {
-      lastExplore = { ok: true, message: json.message || "Sent you a DM." };
+      let msg = json.message || "Sent you a DM.";
+      if (json.quest_completed && json.rewards) {
+        const parts: string[] = [];
+        if (json.rewards.xp) parts.push(`+${json.rewards.xp} XP`);
+        if (json.rewards.gold) parts.push(`+${json.rewards.gold} gold`);
+        if (json.rewards.items?.length) {
+          const items = json.rewards.items.map((i) => i.replace(/_/g, " ")).join(", ");
+          parts.push(`items: ${items}`);
+        }
+        if (json.rewards.reputation && Object.keys(json.rewards.reputation).length) {
+          const rep = Object.entries(json.rewards.reputation)
+            .map(([k, v]) => `${k.replace(/_/g, " ")} +${v}`)
+            .join(", ");
+          parts.push(`rep: ${rep}`);
+        }
+        msg = parts.length ? `Quest complete — ${parts.join(" · ")}` : "Quest complete.";
+        if (json.next_quest_available) msg += " NPC has another quest available.";
+      }
+      lastExplore = { ok: true, message: msg };
+      if (statusEl) statusEl.textContent = msg;
     }
+    await refreshHeroInventory();
+    await refreshProgressData();
     await refreshQuestLog();
     const pane = appRoot.querySelector("#tab-explore");
     if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
