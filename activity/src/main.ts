@@ -195,6 +195,7 @@ function escapeHtml(s: string): string {
 }
 
 function itemStatLines(item: InvRow): string[] {
+  if (!item.equip_slot) return [];
   const lines: string[] = [];
   const pushStat = (label: string, base?: number | null, bonus?: number | null): void => {
     const b = Number(base ?? 0) || 0;

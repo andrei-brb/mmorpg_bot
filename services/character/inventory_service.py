@@ -31,6 +31,14 @@ class InventoryService:
         return random.choices(keys, weights=weights)[0]
 
     def roll_bonus_stats(self, template: dict, rarity: str) -> Dict[str, int]:
+        # Only equippable gear should receive rolled combat stats.
+        # Consumables/materials/quest items must never have STR/AGI/etc.
+        if not template.get("equip_slot"):
+            return {
+                "r_str": 0, "r_agi": 0, "r_int": 0, "r_spi": 0, "r_sta": 0,
+                "r_haste": 0, "r_lifesteal": 0, "r_resistance": 0, "r_hit_rating": 0,
+            }
+
         mult = RARITIES[rarity].stat_multiplier
         bonus = {}
         
