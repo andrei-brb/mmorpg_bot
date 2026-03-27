@@ -802,10 +802,14 @@ code {
 
 .equip-actions {
   margin-top: 3px;
-  display: flex;
+  display: none;
   gap: 4px;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.equip-slot.equip-slot--active .equip-actions {
+  display: flex;
 }
 
 .hidden {

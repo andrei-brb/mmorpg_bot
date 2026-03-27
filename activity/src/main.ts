@@ -1452,6 +1452,7 @@ function mountApp(
 
     const clickedMini = Boolean(target.closest(".mini-btn"));
     const tileEl = target.closest(".inv-tile") as HTMLElement | null;
+    const equipTileEl = target.closest(".equip-slot.filled") as HTMLElement | null;
 
     // 1) Tap-to-reveal inventory tile
     if (tileEl && !clickedMini && !useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) {
@@ -1459,17 +1460,29 @@ function mountApp(
       appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => {
         if (el !== tileEl) el.classList.remove("inv-tile--active");
       });
+      appRoot.querySelectorAll<HTMLElement>(".equip-slot.equip-slot--active").forEach((el) => el.classList.remove("equip-slot--active"));
       tileEl.classList.toggle("inv-tile--active");
       return;
     }
 
-    // 2) If clicked outside tile/action buttons, close any revealed tile.
-    if (!useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn && !tileEl) {
+    // 2) Tap-to-reveal equipment slot actions
+    if (equipTileEl && !clickedMini && !useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) {
+      appRoot.querySelectorAll<HTMLElement>(".equip-slot.equip-slot--active").forEach((el) => {
+        if (el !== equipTileEl) el.classList.remove("equip-slot--active");
+      });
       appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => el.classList.remove("inv-tile--active"));
+      equipTileEl.classList.toggle("equip-slot--active");
       return;
     }
 
-    // 3) Ignore clicks that aren't item actions.
+    // 3) If clicked outside tile/action buttons, close any revealed tile.
+    if (!useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn && !tileEl && !equipTileEl) {
+      appRoot.querySelectorAll<HTMLElement>(".inv-tile.inv-tile--active").forEach((el) => el.classList.remove("inv-tile--active"));
+      appRoot.querySelectorAll<HTMLElement>(".equip-slot.equip-slot--active").forEach((el) => el.classList.remove("equip-slot--active"));
+      return;
+    }
+
+    // 4) Ignore clicks that aren't item actions.
     if (!useBtn && !equipBtn && !sellBtn && !enhBtn && !unequipBtn) return;
     ev.preventDefault();
     ev.stopPropagation();
