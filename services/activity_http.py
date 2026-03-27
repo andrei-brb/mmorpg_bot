@@ -1391,6 +1391,18 @@ async def handle_item_enhance(request: web.Request) -> web.Response:
     result = await bs.enhance_item(char["id"], uid, protection_type=protection_type, fragment_count=fragment_count)
     ok = bool(result.get("success"))
     status = 200 if ok else 400
+    if not ok:
+        try:
+            log.warning(
+                "enhance rejected: char=%s item=%s prot=%s frags=%s msg=%s",
+                str(char.get("id")),
+                str(uid),
+                str(protection_type),
+                str(fragment_count),
+                str(result.get("message") or result),
+            )
+        except Exception:
+            pass
     return web.json_response({"ok": ok, **_json_safe(result)}, status=status)
 
 
