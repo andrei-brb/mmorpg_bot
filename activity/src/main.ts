@@ -453,13 +453,15 @@ function buildHeroHtml(payload: InventoryPayload): string {
         <div class="hint">${maxHp > 0 ? `${hp}/${maxHp} HP` : "HP unavailable"}</div>
       </div>
     </div>
-    <div class="panel v0-panel">
-      <h2>Equipment</h2>
-      <div class="equip-grid-v0">${equipHtml}</div>
-    </div>
-    <div class="panel v0-panel">
-      <h2>Inventory (${bag.length})</h2>
-      <div class="inv-grid">${invTilesHtml}</div>
+    <div class="hero-main-grid">
+      <div class="panel v0-panel">
+        <h2>Equipment</h2>
+        <div class="equip-grid-v0">${equipHtml}</div>
+      </div>
+      <div class="panel v0-panel">
+        <h2>Inventory (${bag.length})</h2>
+        <div class="inv-grid">${invTilesHtml}</div>
+      </div>
     </div>
   `;
 }
