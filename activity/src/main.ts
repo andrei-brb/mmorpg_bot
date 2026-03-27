@@ -210,8 +210,7 @@ function itemStatLines(item: InvRow): string[] {
     const total = Math.floor(preEnh * enhMult);
     if (!total) return;
     const bonusTxt = r ? ` (${r > 0 ? "+" : ""}${r} bonus)` : "";
-    const enhTxt = enhLevel > 0 ? ` [${preEnh > 0 ? "+" : ""}${preEnh} -> ${total > 0 ? "+" : ""}${total}]` : "";
-    lines.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}${enhTxt}`);
+    lines.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}`);
   };
 
   pushStat("STR", item.s_str, item.r_str);
