@@ -821,7 +821,7 @@ code {
   position: fixed;
   z-index: 120;
   pointer-events: none;
-  transform: translate(-50%, -100%);
+  transform: none;
   opacity: 0;
   transition: opacity 0.12s ease;
 }

@@ -750,7 +750,9 @@ function mountApp(
   let tooltipEl: HTMLElement | null = null;
 
   function hideTooltip(): void {
-    tooltipEl?.classList.remove("visible");
+    if (!tooltipEl) return;
+    tooltipEl.classList.remove("visible");
+    tooltipEl.style.visibility = "hidden";
   }
 
   function showTooltip(anchor: HTMLElement, item: InvRow): void {
@@ -776,10 +778,33 @@ function mountApp(
       </div>
     `;
     const rect = anchor.getBoundingClientRect();
-    const top = rect.top + window.scrollY - 10;
-    const left = rect.left + window.scrollX + rect.width / 2;
-    tooltipEl.style.top = `${Math.max(12, top)}px`;
+
+    // Measure tooltip before final placement.
+    tooltipEl.classList.add("visible");
+    tooltipEl.style.visibility = "hidden";
+    const tipRect = tooltipEl.getBoundingClientRect();
+    const tipW = Math.max(180, tipRect.width || 220);
+    const tipH = Math.max(70, tipRect.height || 100);
+    const gap = 10;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // User preference: left-side items show tooltip on the left; right-side on the right.
+    const anchorCenterX = rect.left + rect.width / 2;
+    const preferLeft = anchorCenterX <= vw / 2;
+
+    let left = preferLeft ? rect.left - tipW - gap : rect.right + gap;
+    if (left < 8) left = rect.right + gap; // flip
+    if (left + tipW > vw - 8) left = rect.left - tipW - gap; // flip back
+    if (left < 8) left = 8; // hard clamp
+
+    let top = rect.top + rect.height / 2 - tipH / 2;
+    if (top < 8) top = 8;
+    if (top + tipH > vh - 8) top = vh - tipH - 8;
+
+    tooltipEl.style.top = `${top}px`;
     tooltipEl.style.left = `${left}px`;
+    tooltipEl.style.visibility = "visible";
     tooltipEl.classList.add("visible");
   }
 
