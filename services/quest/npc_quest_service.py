@@ -3357,6 +3357,34 @@ class NPCQuestService:
             char_id, quest_id, npc_id, expires_at,
         )
 
+    async def try_insert_quest_offered(self, char_id: UUID, npc_id: str, quest_id: str) -> Optional[Dict]:
+        """
+        Insert a new 'offered' row, or return None if one already exists (ON CONFLICT).
+        Used to reserve a quest offer before sending a DM so duplicate requests cannot spam offers.
+        """
+        quest_data = self._find_quest_template(quest_id)
+        expires_at = None
+        if quest_data and quest_data.get("time_limit_hours"):
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=quest_data["time_limit_hours"])
+
+        row = await self.db.fetchrow(
+            """INSERT INTO quest_progress (character_id, quest_id, npc_id, current_step, state, expires_at)
+               VALUES ($1, $2, $3, 1, 'offered', $4)
+               ON CONFLICT (character_id, quest_id) DO NOTHING
+               RETURNING *""",
+            char_id, quest_id, npc_id, expires_at,
+        )
+        return dict(row) if row else None
+
+    async def cancel_quest_offer(self, char_id: UUID, quest_id: str) -> bool:
+        """Remove a pending 'offered' quest row (decline / timeout before accept)."""
+        result = await self.db.execute(
+            "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state = 'offered'",
+            char_id,
+            quest_id,
+        )
+        return "DELETE 1" in result
+
     async def accept_quest(self, char_id: UUID, quest_id: str):
         await self.db.execute(
             """UPDATE quest_progress SET state = 'active', started_at = NOW()

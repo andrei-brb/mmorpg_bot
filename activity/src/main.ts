@@ -131,6 +131,7 @@ type QuestLogRow = {
   current_step?: number;
   total_steps?: number;
   objective?: string | null;
+  completion_check?: { type?: string; value?: string; count?: number } | null;
   progress?: { current?: number; needed?: number } | null;
   expires_at?: string | null;
 };
@@ -807,11 +808,13 @@ function mountApp(
         const expiresHtml = expires ? `<span class="quest-pill">${escapeHtml(expires)}</span>` : "";
         const state = (q.state || "").toLowerCase();
         const stateHtml = state ? `<span class="quest-pill">${escapeHtml(state)}</span>` : "";
+        const chkType = (q.completion_check?.type || "").toLowerCase();
+        const needsNpcTalk = state === "active" && chkType === "talk_to_npc";
         const npcBtn =
-          q.npc_id || q.npc_name
+          needsNpcTalk && (q.npc_id || q.npc_name)
             ? `<button type="button" class="mini-btn quest-interact" data-npc="${escapeHtml(
                 (q.npc_id || (q.npc_name || "").split(" ")[0].toLowerCase()) as string,
-              )}">Interact</button>`
+              )}">💬 Turn in / Talk</button>`
             : "";
 
         return `
@@ -828,7 +831,7 @@ function mountApp(
       })
       .join("");
 
-    return `<div class="panel v0-panel"><h2>Quest Log</h2><div class="quest-grid">${cards}</div></div>`;
+    return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">💬 <strong>Turn in / Talk</strong> only shows when your current step is to speak to an NPC. Kill/explore objectives don’t use this button.</p><div class="quest-grid">${cards}</div></div>`;
   }
 
   async function refreshQuestLog(): Promise<void> {
@@ -999,6 +1002,7 @@ function mountApp(
     } else {
       lastExplore = { ok: true, message: json.message || "Sent you a DM." };
     }
+    await refreshQuestLog();
     const pane = appRoot.querySelector("#tab-explore");
     if (pane && !pane.classList.contains("hidden")) pane.innerHTML = renderExplorePanel();
   }

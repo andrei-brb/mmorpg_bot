@@ -680,6 +680,11 @@ async def handle_quests(request: web.Request) -> web.Response:
             progress = {"current": int(meta.get(k, 0) or 0), "needed": needed}
 
         npc_info = _npc_for_quest_id(quest_id) if quest_id else None
+        chk = {
+            "type": check.get("type"),
+            "value": check.get("value"),
+            "count": check.get("count"),
+        }
         out.append(
             {
                 "quest_id": quest_id,
@@ -689,6 +694,7 @@ async def handle_quests(request: web.Request) -> web.Response:
                 "current_step": cur_step,
                 "total_steps": q.get("total_steps"),
                 "objective": objective,
+                "completion_check": chk,
                 "progress": progress,
                 "expires_at": q.get("expires_at"),
                 **(npc_info or {}),
@@ -908,11 +914,53 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
     if int(char.get("level") or 1) < int(next_quest.get("level_req", 1) or 1):
         return web.json_response(_json_safe({"ok": False, "error": "level_too_low", "message": f"Need level {next_quest['level_req']}."}), status=400)
 
-    # Send DM with buttons
+    # Prevent duplicate offers / accepts: reserve DB row before DM (Activity spam)
+    qid = next_quest["id"]
+    ins_row = await quest_svc.try_insert_quest_offered(char_id, npc_id, qid)
+    if not ins_row:
+        prog = await quest_svc.get_quest_progress(char_id, qid)
+        if prog and prog.get("state") == "expired":
+            await db.execute(
+                "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state = 'expired'",
+                char_id,
+                qid,
+            )
+            ins_row = await quest_svc.try_insert_quest_offered(char_id, npc_id, qid)
+    if not ins_row:
+        prog = await quest_svc.get_quest_progress(char_id, qid)
+        if prog and prog.get("state") == "active":
+            return web.json_response(
+                _json_safe(
+                    {
+                        "ok": False,
+                        "error": "quest_already_active",
+                        "message": "You already have this quest active. Finish it (or abandon) before taking a new offer.",
+                    }
+                ),
+                status=400,
+            )
+        if prog and prog.get("state") == "offered":
+            return web.json_response(
+                _json_safe(
+                    {
+                        "ok": False,
+                        "error": "quest_offer_pending",
+                        "message": "You already have a pending quest offer — check your DMs.",
+                    }
+                ),
+                status=400,
+            )
+        return web.json_response(
+            _json_safe({"ok": False, "error": "quest_unavailable", "message": "Could not start quest offer."}),
+            status=400,
+        )
+
+    # Send DM with buttons (release reserved row if DM cannot be sent)
     try:
         uobj = bot.get_user(discord_id) or await bot.fetch_user(discord_id)
         dm = await uobj.create_dm()
     except Exception:
+        await quest_svc.cancel_quest_offer(char_id, qid)
         return web.json_response(_json_safe({"ok": False, "error": "dm_forbidden", "message": "Enable DMs from server members."}), status=403)
 
     # Reuse the same UI view class from QuestCog
@@ -954,13 +1002,17 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         embed.add_field(name="📋 Objectives", value=step_text, inline=False)
 
     view = QuestOfferView()
-    dm_msg = await dm.send(embed=embed, view=view)
+    try:
+        dm_msg = await dm.send(embed=embed, view=view)
+    except Exception:
+        await quest_svc.cancel_quest_offer(char_id, qid)
+        return web.json_response(_json_safe({"ok": False, "error": "dm_send_failed", "message": "Could not send DM."}), status=500)
+
     await quest_svc.update_npc_state(char_id, npc_id, "quest_offered")
 
     # Wait for choice, then apply accept/decline.
     await view.wait()
     if view.choice == "accept":
-        await quest_svc.offer_quest(char_id, npc_id, next_quest["id"])
         await quest_svc.accept_quest(char_id, next_quest["id"])
         accept_embed = _discord.Embed(title="✅ Quest Accepted!", description=next_quest["dialogue"]["accept"], color=0x2ECC71)
         first_step = (next_quest.get("steps") or [{}])[0]
@@ -969,10 +1021,12 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         await dm_msg.edit(embed=accept_embed, view=None)
         return web.json_response(_json_safe({"ok": True, "message": "Quest accepted in DMs.", "npc_id": npc_id, "quest_id": next_quest["id"]}))
     if view.choice == "decline":
+        await quest_svc.cancel_quest_offer(char_id, next_quest["id"])
         decline_embed = _discord.Embed(title="Quest Declined", description=next_quest["dialogue"]["decline"], color=0x95A5A6)
         await dm_msg.edit(embed=decline_embed, view=None)
         return web.json_response(_json_safe({"ok": True, "message": "Quest declined.", "npc_id": npc_id}))
 
+    await quest_svc.cancel_quest_offer(char_id, next_quest["id"])
     return web.json_response(_json_safe({"ok": True, "message": "Interaction ended.", "npc_id": npc_id}))
 
 async def handle_item_equip(request: web.Request) -> web.Response:
