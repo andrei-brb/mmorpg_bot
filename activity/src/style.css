@@ -664,18 +664,20 @@ code {
 
 .equip-slot {
   flex: 1 1 100px;
-  min-height: 64px;
-  background: var(--slot);
-  border: 1px dashed var(--border);
-  border-radius: 8px;
+  min-height: 104px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 30%),
+    linear-gradient(180deg, #111a36 0%, #0a1026 100%);
+  border: 1px dashed #3a477d;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   font-size: 0.75rem;
   color: var(--muted);
-  gap: 4px;
-  padding: 6px;
+  gap: 6px;
+  padding: 8px 7px;
 }
 
 .equip-slot.item-slot {
@@ -684,22 +686,101 @@ code {
 
 .equip-slot.filled {
   border-style: solid;
-  border-color: var(--accent-dim);
+  border-color: #4a5ba0;
   color: var(--text);
+}
+
+.equip-slot:not(.filled) {
+  justify-content: center;
+  padding: 6px;
+}
+
+.equip-frame {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 38%, rgba(0, 0, 0, 0.24)),
+    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.12), transparent 46%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.24));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.34);
+}
+
+.equip-slot.rarity-common .equip-frame {
+  border-color: rgba(148, 163, 184, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(148, 163, 184, 0.28);
+}
+.equip-slot.rarity-uncommon .equip-frame {
+  border-color: rgba(56, 193, 114, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 16px rgba(56, 193, 114, 0.22),
+    0 0 0 1px rgba(56, 193, 114, 0.32),
+    0 0 14px rgba(56, 193, 114, 0.18);
+}
+.equip-slot.rarity-rare .equip-frame {
+  border-color: rgba(74, 139, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 18px rgba(74, 139, 255, 0.3),
+    0 0 0 1px rgba(74, 139, 255, 0.4),
+    0 0 16px rgba(74, 139, 255, 0.26);
+}
+.equip-slot.rarity-epic .equip-frame {
+  border-color: rgba(186, 106, 255, 0.86);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 20px rgba(186, 106, 255, 0.34),
+    0 0 0 1px rgba(186, 106, 255, 0.45),
+    0 0 18px rgba(186, 106, 255, 0.3);
+}
+.equip-slot.rarity-legendary .equip-frame {
+  border-color: rgba(255, 205, 95, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 0 22px rgba(255, 200, 72, 0.4),
+    0 0 0 1px rgba(255, 200, 72, 0.52),
+    0 0 22px rgba(255, 200, 72, 0.35);
+}
+.equip-slot.rarity-artifact .equip-frame {
+  border-color: rgba(255, 112, 220, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 0 24px rgba(255, 112, 220, 0.45),
+    0 0 0 1px rgba(255, 112, 220, 0.58),
+    0 0 24px rgba(255, 112, 220, 0.42);
 }
 
 .equip-label {
   font-size: 0.65rem;
   color: var(--muted);
   text-transform: capitalize;
+  line-height: 1;
 }
 
 .enh-badge {
-  font-size: 0.62rem;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 0.56rem;
   font-weight: 800;
-  color: var(--accent);
+  color: #7dd3fc;
   line-height: 1;
-  margin-top: -2px;
+  border-radius: 999px;
+  padding: 3px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(7, 11, 26, 0.95);
+  letter-spacing: 0.01em;
 }
 
 .equip-actions {

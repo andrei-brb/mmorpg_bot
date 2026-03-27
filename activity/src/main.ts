@@ -418,9 +418,11 @@ function buildHeroHtml(payload: InventoryPayload): string {
       }
       return `
         <div class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
-          <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span>
+          <div class="equip-frame">
+            <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span>
+            ${((Number((it as any).enhancement_level ?? 0) || 0) > 0) ? `<span class="enh-badge" title="Enhanced">+${escapeHtml(String(Number((it as any).enhancement_level ?? 0) || 0))}</span>` : ""}
+          </div>
           <span class="equip-label">${escapeHtml(label)}</span>
-          ${((Number((it as any).enhancement_level ?? 0) || 0) > 0) ? `<span class="enh-badge" title="Enhanced">+${escapeHtml(String(Number((it as any).enhancement_level ?? 0) || 0))}</span>` : ""}
           <div class="equip-actions">
             <button type="button" class="mini-btn act-enhance" data-item-id="${escapeHtml(it.id)}">Enhance</button>
             <button type="button" class="mini-btn act-unequip" data-slot="${escapeHtml(slot)}">Unequip</button>
