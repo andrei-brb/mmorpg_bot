@@ -584,6 +584,11 @@ class CombatEngine:
                 if target.current_hp <= 0:
                     target.is_dead = True
 
+                # Rage from taking damage (player warrior hit by enemy)
+                if target.is_player and target.res_type == "rage" and r.damage > 0:
+                    rg = max(1, r.damage // 5)
+                    target.current_res = min(target.max_res or 100, target.current_res + rg)
+
                 # Break stealth when the stealthed unit ATTACKS (but not when merely taking damage)
                 if attacker.has(StatusEffect.STEALTH) and ability.key != "stealth":
                     attacker.remove_status(StatusEffect.STEALTH)
@@ -704,9 +709,8 @@ class CombatEngine:
             elif combatant.res_type == "energy":
                 regen = max(5, int(combatant.max_res * 0.20))
                 combatant.current_res = min(combatant.max_res, combatant.current_res + regen)
-            elif combatant.res_type == "rage":
-                decay = max(3, int(combatant.max_res * 0.10))
-                combatant.current_res = max(0, combatant.current_res - decay)
+            # Rage: do not decay each turn — small gains (dmg//4) were wiped by decay (10/rnd).
+            # Rage resets to 0 on rest (full_restore). In combat it only changes via hits.
 
         return msgs
 
