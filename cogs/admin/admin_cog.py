@@ -43,7 +43,7 @@ class _GoldSelect(discord.ui.Select):
             return await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
         
         view.chosen = int(self.values[0])
-        self.stop()  # Stop FIRST
+        view.stop()
         try:
             if not interaction.response.is_done():
                 await interaction.response.defer()
@@ -78,7 +78,7 @@ class _XPSelect(discord.ui.Select):
             return await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
         
         view.chosen = int(self.values[0])
-        self.stop()  # Stop FIRST
+        view.stop()
         try:
             if not interaction.response.is_done():
                 await interaction.response.defer()
@@ -106,7 +106,7 @@ class _ItemSelect(discord.ui.Select):
             return await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
         
         view.chosen = self.values[0]
-        self.stop()  # Stop FIRST
+        view.stop()
         try:
             if not interaction.response.is_done():
                 await interaction.response.defer()
