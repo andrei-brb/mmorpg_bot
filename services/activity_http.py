@@ -923,6 +923,64 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
 
     npc_data = NPC_TEMPLATES[npc_id]
 
+    # First: if player is turning in / talking for an active quest step, process that.
+    talk_result = await quest_svc.check_talk_to_npc(char_id, npc_id)
+    if talk_result and talk_result.get("complete"):
+        rewards = await quest_svc.complete_quest(char_id, talk_result["quest_id"])
+        if not rewards:
+            return web.json_response(
+                _json_safe(
+                    {
+                        "ok": False,
+                        "error": "quest_complete_failed",
+                        "message": "Could not complete quest (it may have expired).",
+                    }
+                ),
+                status=400,
+            )
+
+        char_svc = CharacterService(db)
+        inv_svc = InventoryService(db)
+        # Grant rewards (same semantics as /interact flow).
+        if rewards.get("xp"):
+            await char_svc.award_xp(char_id, int(rewards["xp"]))
+        if rewards.get("gold"):
+            await char_svc.add_gold(char_id, int(rewards["gold"]), "quest_reward", "quest_reward")
+        if rewards.get("items"):
+            for template_id in rewards["items"]:
+                tmpl = await db.fetchrow("SELECT rarity FROM item_templates WHERE id = $1", template_id)
+                rarity = tmpl["rarity"] if tmpl else "common"
+                await inv_svc.add_item(char_id, template_id, rarity=rarity)
+        if rewards.get("reputation"):
+            for faction_id, amount in rewards["reputation"].items():
+                await quest_svc.add_reputation(char_id, faction_id, int(amount))
+
+        completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
+        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": True,
+                    "message": "Quest completed and rewards granted.",
+                    "npc_id": npc_id,
+                    "quest_completed": True,
+                    "next_quest_available": bool(next_quest),
+                }
+            )
+        )
+    if talk_result and not talk_result.get("complete"):
+        next_step = talk_result.get("next_step") or {}
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": True,
+                    "message": f"Quest step updated: {next_step.get('objective', 'Next objective updated.')}",
+                    "npc_id": npc_id,
+                    "quest_step_updated": True,
+                }
+            )
+        )
+
     # Determine next quest
     completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
     next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
