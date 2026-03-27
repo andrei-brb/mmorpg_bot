@@ -62,9 +62,36 @@ type EnhanceInfoPayload = {
   protections?: Record<string, number>;
 };
 
+type SpecOption = {
+  key: string;
+  name: string;
+  emoji: string;
+  role: string;
+  description: string;
+  flavor?: string;
+  passive_name: string;
+  passive_desc: string;
+};
+
+type SpecGatePayload = {
+  ok?: boolean;
+  spec_unlock_level?: number;
+  needs_choice?: boolean;
+  class?: string;
+  specialization?: string | null;
+  options?: SpecOption[];
+};
+
 type InventoryPayload = {
   discord?: { id?: string; username?: string; global_name?: string | null };
-  character: { name?: string; level?: number; class?: string; gold?: number } | null;
+  character: {
+    name?: string;
+    level?: number;
+    class?: string;
+    gold?: number;
+    specialization?: string | null;
+    specialization_name?: string | null;
+  } | null;
   items: InvRow[];
 };
 
@@ -112,7 +139,15 @@ type ProgressHistory = {
 };
 
 type ProgressPayload = {
-  character?: { name?: string; level?: number; gold?: number; last_combat?: string };
+  character?: {
+    name?: string;
+    level?: number;
+    gold?: number;
+    last_combat?: string;
+    class?: string;
+    specialization?: string | null;
+    specialization_name?: string | null;
+  };
   stats?: { total_combats?: number; wins?: number; losses?: number; fled?: number; win_rate?: number };
   achievements?: ProgressAchievement[];
   history?: ProgressHistory[];
@@ -448,8 +483,10 @@ function buildHeroHtml(payload: InventoryPayload): string {
     })
     .join("");
 
+  const spec = (char as InventoryPayload["character"])?.specialization_name || (char as InventoryPayload["character"])?.specialization;
+  const specPart = spec ? ` · ${escapeHtml(String(spec))}` : "";
   const charLine = char
-    ? `<p class="hint"><strong>${escapeHtml(char.name || "?")}</strong> · Lv ${char.level ?? "?"} · ${escapeHtml(String(char.class || "?"))}</p>`
+    ? `<p class="hint"><strong>${escapeHtml(char.name || "?")}</strong> · Lv ${char.level ?? "?"} · ${escapeHtml(String(char.class || "?"))}${specPart}</p>`
     : `<p class="hint">No character yet — use <code>/character create</code> in Discord.</p>`;
 
   return `
@@ -704,6 +741,7 @@ function renderProgressPanel(payload: InventoryPayload, progress?: ProgressPaylo
   const history = progress?.history || [];
   const level = char?.level ?? 1;
   const gold = char?.gold ?? 0;
+  const specName = (char as ProgressPayload["character"])?.specialization_name || (char as ProgressPayload["character"])?.specialization;
   const totalCombats = stats.total_combats ?? 0;
   const wins = stats.wins ?? 0;
   const losses = stats.losses ?? 0;
@@ -736,6 +774,10 @@ function renderProgressPanel(payload: InventoryPayload, progress?: ProgressPaylo
         <div class="progress-card">
           <span class="progress-k">Level</span>
           <strong class="progress-v">${level}</strong>
+        </div>
+        <div class="progress-card">
+          <span class="progress-k">Specialization</span>
+          <strong class="progress-v">${specName ? escapeHtml(String(specName)) : "—"}</strong>
         </div>
         <div class="progress-card">
           <span class="progress-k">Gold</span>
@@ -793,6 +835,8 @@ function mountApp(
   let lastEncounterEnemyKey: string | null = null;
   let currentQuestLog: QuestLogPayload | null = null;
   let tooltipEl: HTMLElement | null = null;
+  /** Set after DOM mount; specialization prompt at level 10+. */
+  let runSpecPrompt: () => Promise<void> = async () => {};
 
   function hideTooltip(): void {
     if (!tooltipEl) return;
@@ -897,6 +941,7 @@ function mountApp(
     } catch (e) {
       console.warn("refreshProgressData failed", e);
     }
+    void runSpecPrompt();
   }
 
   function formatExpires(expiresAt?: string | null): string {
@@ -1238,6 +1283,7 @@ function mountApp(
     } catch (e) {
       console.warn("refreshHeroInventory failed", e);
     }
+    void runSpecPrompt();
   }
 
   async function refreshCombatPanel(): Promise<void> {
@@ -1461,6 +1507,7 @@ function mountApp(
       <div id="hero-action-status" class="hint" style="margin-top:0.5rem;"></div>
       <div id="item-tooltip" class="item-tooltip-layer" aria-hidden="true"></div>
       <div id="enhance-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Enhance item"></div>
+      <div id="spec-modal" class="modal-overlay modal-overlay--spec hidden" role="dialog" aria-modal="true" aria-label="Choose specialization"></div>
     </div>
   `),
   );
@@ -1468,7 +1515,14 @@ function mountApp(
   tooltipEl = appRoot.querySelector("#item-tooltip");
   const statusEl = appRoot.querySelector("#hero-action-status");
   const enhanceModalEl = appRoot.querySelector("#enhance-modal") as HTMLElement | null;
+  const specModalEl = appRoot.querySelector("#spec-modal") as HTMLElement | null;
   let pendingEnhanceItemId: string | null = null;
+
+  function closeSpecModal(): void {
+    if (!specModalEl) return;
+    specModalEl.classList.add("hidden");
+    specModalEl.innerHTML = "";
+  }
 
   function closeEnhanceModal(): void {
     pendingEnhanceItemId = null;
@@ -1562,10 +1616,81 @@ function mountApp(
       }</p><div class="modal-actions"><button type="button" class="btn alt" data-enhance-cancel>Close</button></div></div>`;
     }
   }
+
+  runSpecPrompt = async (): Promise<void> => {
+    if (!specModalEl) return;
+    if (enhanceModalEl && !enhanceModalEl.classList.contains("hidden")) return;
+    if (!specModalEl.classList.contains("hidden")) return;
+    try {
+      const res = await fetch(apiUrl("/api/game/specializations"), {
+        headers: authHeaders(accessToken, guildId),
+      });
+      if (res.status === 401) return;
+      const json = (await res.json()) as SpecGatePayload;
+      if (!json.ok || !json.needs_choice || !json.options?.length) {
+        closeSpecModal();
+        return;
+      }
+      const lv = json.spec_unlock_level ?? 10;
+      const opts = json.options
+        .map(
+          (o, i) => `
+        <label class="spec-option">
+          <input type="radio" name="spec-choice" value="${escapeHtml(o.key)}" ${i === 0 ? "checked" : ""} />
+          <div class="spec-option__body">
+            <div class="spec-option__title">${escapeHtml(o.emoji)} ${escapeHtml(o.name)} <span class="spec-role-pill">${escapeHtml(o.role)}</span></div>
+            <p class="spec-option__desc">${escapeHtml(o.description)}</p>
+            <p class="spec-option__passive"><strong>${escapeHtml(o.passive_name)}</strong> — ${escapeHtml(o.passive_desc)}</p>
+          </div>
+        </label>`,
+        )
+        .join("");
+      specModalEl.innerHTML = `
+        <div class="modal-card spec-modal-card">
+          <h3>Choose your specialization</h3>
+          <p class="hint">You reached level <strong>${lv}</strong> — pick your path. This choice is <strong>permanent</strong>.</p>
+          <div class="spec-grid">${opts}</div>
+          <div class="modal-actions">
+            <button type="button" class="btn" data-spec-confirm>Confirm specialization</button>
+          </div>
+        </div>`;
+      specModalEl.classList.remove("hidden");
+    } catch (e) {
+      console.warn("runSpecPrompt failed", e);
+    }
+  };
+
   appRoot.addEventListener("mouseleave", hideTooltip);
   appRoot.addEventListener("click", async (ev) => {
     const target = ev.target as HTMLElement;
     if (!target) return;
+    const specConfirm = target.closest("[data-spec-confirm]") as HTMLElement | null;
+    if (specConfirm) {
+      ev.preventDefault();
+      const sel = (appRoot.querySelector('input[name="spec-choice"]:checked') as HTMLInputElement | null)?.value;
+      if (!sel) {
+        if (statusEl) statusEl.textContent = "Select a specialization first.";
+        return;
+      }
+      try {
+        if (statusEl) statusEl.textContent = "Saving specialization…";
+        const res = await fetch(apiUrl("/api/game/character/specialization"), {
+          method: "POST",
+          headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+          body: JSON.stringify({ spec_key: sel }),
+        });
+        const json = (await res.json()) as { ok?: boolean; message?: string };
+        if (statusEl) statusEl.textContent = json.message || (json.ok ? "Specialization saved." : "Failed.");
+        if (res.ok && json.ok) {
+          closeSpecModal();
+          await refreshHeroInventory();
+          await refreshProgressData();
+        }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+      return;
+    }
     const buyBtn = target.closest("[data-buy-prot]") as HTMLElement | null;
     const enhanceCancel = target.closest("[data-enhance-cancel]") as HTMLElement | null;
     const enhanceConfirm = target.closest("[data-enhance-confirm]") as HTMLElement | null;
@@ -1735,6 +1860,8 @@ function mountApp(
     if (!npc) return;
     void doNpcInteract(npc);
   });
+
+  void runSpecPrompt();
 }
 
 async function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {

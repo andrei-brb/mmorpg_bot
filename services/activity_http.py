@@ -23,7 +23,7 @@ import logging
 import os
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlencode
 from uuid import UUID
 
@@ -36,7 +36,7 @@ from services.combat import activity_combat as activity_combat_api
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.quest.npc_quest_service import NPCQuestService, NPC_TEMPLATES, FACTIONS, get_dynamic_intro, get_rep_level
-from config.settings import ZONES, Settings, ENEMIES
+from config.settings import ZONES, Settings, ENEMIES, SPECIALIZATIONS, CLASSES
 
 log = logging.getLogger("activity_http")
 
@@ -259,6 +259,11 @@ async def handle_inventory(request: web.Request) -> web.Response:
 
     items = await inv_svc.get_all(char["id"])
     char_dict = dict(char)
+    sk = char_dict.get("specialization")
+    if sk:
+        spec = SPECIALIZATIONS.get(sk)
+        if spec:
+            char_dict["specialization_name"] = spec.name
     return web.json_response(
         _json_safe(
             {
@@ -540,13 +545,21 @@ async def handle_progress(request: web.Request) -> web.Response:
 
     history = sorted(history, key=lambda x: str(x.get("at") or ""), reverse=True)[:20]
 
+    ch = {
+        "name": char.get("name"),
+        "level": char.get("level"),
+        "gold": char.get("gold"),
+        "last_combat": char.get("last_combat"),
+        "class": char.get("class"),
+        "specialization": char.get("specialization"),
+    }
+    if char.get("specialization"):
+        sp = SPECIALIZATIONS.get(char["specialization"])
+        if sp:
+            ch["specialization_name"] = sp.name
+
     payload = {
-        "character": {
-            "name": char.get("name"),
-            "level": char.get("level"),
-            "gold": char.get("gold"),
-            "last_combat": char.get("last_combat"),
-        },
+        "character": ch,
         "stats": {
             "total_combats": total,
             "wins": wins,
@@ -569,6 +582,105 @@ async def handle_progress(request: web.Request) -> web.Response:
         "history": history,
     }
     return web.json_response(_json_safe(payload))
+
+
+async def handle_specializations(request: web.Request) -> web.Response:
+    """GET — specialization choices for Activity (level 10+ prompt)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    c = dict(char)
+    class_key = (c.get("class") or "warrior").strip()
+    cls_cfg = CLASSES.get(class_key)
+    needs = int(c.get("level") or 1) >= Settings.SPEC_UNLOCK_LEVEL and not c.get("specialization")
+    options: List[Dict[str, Any]] = []
+    if cls_cfg:
+        for key in cls_cfg.specializations:
+            spec = SPECIALIZATIONS.get(key)
+            if spec:
+                options.append(
+                    {
+                        "key": key,
+                        "name": spec.name,
+                        "emoji": spec.emoji,
+                        "role": spec.role,
+                        "description": spec.description,
+                        "flavor": spec.flavor,
+                        "passive_name": spec.passive_name,
+                        "passive_desc": spec.passive_desc,
+                    }
+                )
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "spec_unlock_level": Settings.SPEC_UNLOCK_LEVEL,
+                "needs_choice": needs,
+                "class": class_key,
+                "specialization": c.get("specialization"),
+                "options": options,
+            }
+        )
+    )
+
+
+async def handle_specialization_choose(request: web.Request) -> web.Response:
+    """POST JSON { spec_key } — choose specialization (Activity)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    spec_key = (body.get("spec_key") or body.get("specialization") or "").strip()
+    if not spec_key:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "missing_spec_key", "message": "Missing spec_key."}),
+            status=400,
+        )
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    ok, msg = await char_svc.choose_spec(_uuid_from_any(char["id"]), spec_key)
+    if not ok:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+    return web.json_response(_json_safe({"ok": True, "message": msg, "spec_key": spec_key}))
 
 
 async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int, dict, Any]:
@@ -1641,6 +1753,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/equipment", handle_equipment)
     app.router.add_get("/api/game/progress", handle_progress)
+    app.router.add_get("/api/game/specializations", handle_specializations)
+    app.router.add_post("/api/game/character/specialization", handle_specialization_choose)
     app.router.add_get("/api/game/map", handle_map)
     app.router.add_get("/api/game/quests", handle_quests)
     app.router.add_get("/api/game/live-events", handle_live_events)

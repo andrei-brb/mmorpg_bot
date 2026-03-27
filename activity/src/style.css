@@ -1089,6 +1089,75 @@ code {
   display: none;
 }
 
+/* Specialization picker (above enhance modal) */
+.modal-overlay--spec {
+  z-index: 220;
+}
+
+.spec-modal-card {
+  width: min(560px, 96vw);
+  max-height: min(88vh, 680px);
+  overflow-y: auto;
+}
+
+.spec-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.spec-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  cursor: pointer;
+  background: rgba(30, 41, 59, 0.25);
+}
+
+.spec-option:has(input:checked) {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(30, 58, 138, 0.35);
+}
+
+.spec-option__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.spec-option__title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.spec-role-pill {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-left: 6px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.spec-option__desc {
+  font-size: 0.82rem;
+  margin: 4px 0;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+
+.spec-option__passive {
+  font-size: 0.78rem;
+  margin: 6px 0 0;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
 .modal-card {
   width: min(640px, 96vw);
   border: 1px solid rgba(148, 163, 184, 0.35);
