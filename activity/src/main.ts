@@ -313,6 +313,19 @@ function looksLikeEmoji(s: string): boolean {
   return true;
 }
 
+/** Activity combat enemy name is often `🐺 Forest Wolf` from the server — split for sprite + label. */
+function splitLeadingEmojiName(full: string): { emoji: string; rest: string } {
+  const t = (full || "").trim();
+  const sp = t.indexOf(" ");
+  if (sp < 1) return { emoji: "", rest: t };
+  const first = t.slice(0, sp);
+  if (looksLikeEmoji(first)) {
+    const rest = t.slice(sp + 1).trim();
+    return { emoji: first, rest: rest || t };
+  }
+  return { emoji: "", rest: t };
+}
+
 /**
  * Inventory / equipment icon: try static image first, fall back to DB emoji (or default).
  */
@@ -606,10 +619,13 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
   const latestLine = logs.length ? stripBattleMarkdown(logs[logs.length - 1]) : "Battle started.";
   const floatDmg = lastDamageFromLog(logs);
   const totalDmg = totalDamageFromLog(logs);
+  const enemyDisp = splitLeadingEmojiName(state.enemy.name);
+  const enemyLabel = enemyDisp.rest || state.enemy.name;
   const enemyShort =
-    state.enemy.name.length > 22
-      ? `${escapeHtml(state.enemy.name.slice(0, 20))}…`
-      : escapeHtml(state.enemy.name);
+    enemyLabel.length > 22 ? `${escapeHtml(enemyLabel.slice(0, 20))}…` : escapeHtml(enemyLabel);
+  const enemySpriteClass = enemyDisp.emoji
+    ? "scene-sprite scene-sprite--enemy scene-sprite--emoji"
+    : "scene-sprite scene-sprite--enemy";
 
   const abiHtml = (state.abilities || [])
     .map((a) => {
@@ -693,8 +709,8 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
           ${resLine}
         </div>
         <div class="enemy">
-          <div class="scene-sprite scene-sprite--enemy" role="img" aria-label="${escapeHtml(state.enemy.name)}"></div>
-          <div class="name">${escapeHtml(state.enemy.name)}</div>
+          <div class="${enemySpriteClass}" role="img" aria-label="${escapeHtml(enemyLabel)}">${enemyDisp.emoji ? escapeHtml(enemyDisp.emoji) : ""}</div>
+          <div class="name">${escapeHtml(enemyLabel)}</div>
           <div class="hpbar"><div class="hpfill enemyhp" style="width:${ehp}%"></div></div>
           <div class="hptext">${state.enemy.current_hp} / ${state.enemy.max_hp}</div>
         </div>

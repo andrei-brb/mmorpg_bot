@@ -1799,6 +1799,14 @@ code {
   background-image: var(--ui-combat-enemy), linear-gradient(145deg, #3f1f2a, #1a0f12);
 }
 
+/* Server sends `🐺 Forest Wolf` — show glyph instead of a single static enemy PNG. */
+.scene-sprite.scene-sprite--enemy.scene-sprite--emoji {
+  background-image: linear-gradient(145deg, #3f1f2a, #1a0f12);
+  font-size: 2.75rem;
+  line-height: 1;
+  color: var(--combat-text);
+}
+
 .scene-sprite__label {
   font-size: 0.65rem;
   color: var(--combat-text-muted);
@@ -1957,7 +1965,7 @@ code {
 .log-box {
   background-color: var(--combat-surface-raised);
   background-image: var(--ui-combat-log);
-  background-size: 100% 100%;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   background-blend-mode: soft-light;
@@ -2034,8 +2042,9 @@ code {
       rgba(245, 158, 11, 0.08),
       rgba(251, 146, 60, 0.12)
     );
-  background-size: 100% 100%, auto;
-  background-position: center, center;
+  /* Horizontal ribbon art: fill width, keep aspect — avoid vertical stretch glitch. */
+  background-size: 100% auto, auto;
+  background-position: center center, center;
   background-repeat: no-repeat, no-repeat;
   background-blend-mode: soft-light, normal;
   border: 1px solid rgba(251, 146, 60, 0.35);
@@ -2141,6 +2150,8 @@ code {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  scrollbar-gutter: stable;
+  padding-right: 2px;
 }
 
 #combat-mount {
@@ -2189,6 +2200,10 @@ code {
   width: 72px;
   height: 72px;
   max-width: 24vw;
+  font-size: 1.65rem;
+}
+
+.combat-compact .scene .scene-sprite.scene-sprite--emoji {
   font-size: 1.65rem;
 }
 
