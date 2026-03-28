@@ -22,7 +22,7 @@ Rename your art to the **exact filenames** below so `style.css` picks them up.
 | Save as | Your art |
 |---------|----------|
 | `equipment-slot-empty.png` | Universal empty equipment slot |
-| `inventory-slot-empty.png` | Empty inventory grid cell |
+| `inventory-bag-cell-alt.png` | **All** inventory grid cells (filled + empty) — wired in CSS |
 | `coin-icon.png` | Gold coin (Hero + Progress gold line) |
 
 ## Explore — `public/assets/ui/explore/`

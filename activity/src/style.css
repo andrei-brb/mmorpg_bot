@@ -111,7 +111,7 @@
   --ui-btn-secondary: url("/assets/ui/global/btn-secondary.png");
   --ui-mini-btn: url("/assets/ui/global/mini-btn-bg.png");
   --ui-hero-equip-empty: url("/assets/ui/hero/equipment-slot-empty.png");
-  --ui-hero-inv-empty: url("/assets/ui/hero/inventory-slot-empty.png");
+  --ui-hero-inv-bag-cell: url("/assets/ui/hero/inventory-bag-cell-alt.png");
   --ui-hero-coin: url("/assets/ui/hero/coin-icon.png");
   --ui-explore-accent: url("/assets/ui/explore/zone-panel-accent.jpeg");
   --ui-quests-card: url("/assets/ui/quests/quest-card-bg.png");
@@ -447,9 +447,14 @@ code {
   width: 100%;
   border: 1px solid #3b4b87;
   border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 28%),
-    linear-gradient(180deg, #141f41 0%, #0a1026 100%);
+  background-color: transparent;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 32%),
+    linear-gradient(180deg, rgba(20, 31, 65, 0.42), rgba(10, 16, 38, 0.55)),
+    var(--ui-hero-inv-bag-cell);
+  background-size: auto, auto, min(78%, 96px);
+  background-position: center, center, center 32%;
+  background-repeat: no-repeat, no-repeat, no-repeat;
   color: var(--text);
   padding: 0.36rem 0.3rem;
   display: flex;
@@ -495,17 +500,15 @@ code {
   aspect-ratio: 1 / 1;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 38%, rgba(0, 0, 0, 0.22)),
-    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.12), transparent 46%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.24));
+  /* Let parent .inv-tile bag-cell art show through */
+  background: rgba(7, 11, 26, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.34);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.22);
 }
 
 /* Larger icon for square tiles only */
@@ -623,11 +626,9 @@ code {
   border-style: dashed;
   color: var(--muted);
   cursor: default;
-  background-color: #0a1024;
-  background-image: var(--ui-hero-inv-empty);
-  background-size: 56px 56px;
-  background-position: center 10px;
-  background-repeat: no-repeat;
+  /* Same bag PNG as filled slots; tint layers from .inv-tile */
+  background-size: auto, auto, min(72%, 88px);
+  background-position: center, center, center 38%;
 }
 
 .inv-tile.inv-empty:hover {
