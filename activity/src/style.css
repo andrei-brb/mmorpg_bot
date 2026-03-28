@@ -96,6 +96,33 @@
   --accent-dim: var(--combat-accent-dim);
   --slot: var(--combat-slot);
   --success: var(--combat-success);
+
+  /* Bitmap UI — files under activity/public/assets/ (see ui/ASSET_PATHS.md) */
+  --ui-app-bg: url("/assets/ui/global/app-background.jpeg");
+  --ui-panel-texture: url("/assets/ui/global/panel-texture.png");
+  --ui-tab-strip: url("/assets/ui/global/tab-strip-bg.jpeg");
+  --ui-btn-primary: url("/assets/ui/global/btn-primary.png");
+  --ui-btn-secondary: url("/assets/ui/global/btn-secondary.png");
+  --ui-mini-btn: url("/assets/ui/global/mini-btn-bg.png");
+  --ui-hero-equip-empty: url("/assets/ui/hero/equipment-slot-empty.png");
+  --ui-hero-inv-empty: url("/assets/ui/hero/inventory-slot-empty.png");
+  --ui-hero-coin: url("/assets/ui/hero/coin-icon.png");
+  --ui-explore-accent: url("/assets/ui/explore/zone-panel-accent.jpeg");
+  --ui-quests-card: url("/assets/ui/quests/quest-card-bg.png");
+  --ui-combat-bg: url("/assets/bg/combat-battlefield.jpg");
+  --ui-combat-player: url("/assets/ui/combat/player-sprite.jpeg");
+  --ui-combat-enemy: url("/assets/ui/combat/enemy-sprite.png");
+  --ui-combat-zone-bar: url("/assets/ui/combat/zone-bar-bg.jpeg");
+  --ui-combat-skill: url("/assets/ui/combat/skill-slot.jpeg");
+  --ui-combat-turn-banner: url("/assets/ui/combat/turn-banner-bg.jpeg");
+  --ui-combat-log: url("/assets/ui/combat/combat-log-bg.png");
+  --ui-combat-ally-frame: url("/assets/ui/combat/ally-portrait-frame.jpeg");
+  --ui-combat-outcome: url("/assets/ui/combat/outcome-panel-bg.jpeg");
+  --ui-progress-stat: url("/assets/ui/progress/stat-card-bg.png");
+  --ui-modal-backdrop: url("/assets/ui/modals/modal-backdrop.jpeg");
+  --ui-modal-card: url("/assets/ui/modals/modal-card-bg.jpeg");
+  --ui-modal-spec: url("/assets/ui/modals/spec-option-bg.jpeg");
+  --ui-tooltip-frame: url("/assets/ui/global/tooltip-frame.png");
 }
 
 * {
@@ -116,6 +143,11 @@ body {
   height: 100vh;
   padding: 0.6rem;
   overflow: hidden;
+  background-color: var(--bg);
+  background-image: var(--ui-app-bg);
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
 }
 
 .shell {
@@ -177,6 +209,13 @@ h1 {
 
 .v0-panel {
   border-color: var(--combat-v0-panel-border);
+  background-image:
+    linear-gradient(180deg, rgba(15, 21, 44, 0.94), rgba(10, 15, 32, 0.94)),
+    var(--ui-panel-texture);
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-blend-mode: normal, soft-light;
 }
 
 .panel h2 {
@@ -327,6 +366,20 @@ code {
 
 .hero-gold strong {
   font-size: 0.95rem;
+}
+
+.hero-gold-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+.hero-gold-amount::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1.05em;
+  height: 1.05em;
+  background: var(--ui-hero-coin) center / contain no-repeat;
 }
 
 .hero-hp-wrap {
@@ -562,7 +615,11 @@ code {
   border-style: dashed;
   color: var(--muted);
   cursor: default;
-  background: #0a1024;
+  background-color: #0a1024;
+  background-image: var(--ui-hero-inv-empty);
+  background-size: 56px 56px;
+  background-position: center 10px;
+  background-repeat: no-repeat;
 }
 
 .inv-tile.inv-empty:hover {
@@ -667,7 +724,10 @@ code {
 
 .mini-btn {
   border: 1px solid #33407a;
-  background: #141d45;
+  background-color: #141d45;
+  background-image: var(--ui-mini-btn);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   color: var(--text);
   border-radius: 8px;
   padding: 0.28rem 0.45rem;
@@ -710,6 +770,13 @@ code {
 .equip-slot:not(.filled) {
   justify-content: center;
   padding: 6px;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 30%),
+    linear-gradient(180deg, #111a36 0%, #0a1026 100%),
+    var(--ui-hero-equip-empty);
+  background-size: auto, auto, min(72px, 70%);
+  background-position: center, center, center 28px;
+  background-repeat: no-repeat, no-repeat, no-repeat;
 }
 
 .equip-frame {
@@ -820,6 +887,14 @@ code {
   display: flex;
   gap: var(--combat-space-2);
   margin-bottom: 0.6rem;
+  padding: 6px;
+  border-radius: var(--combat-radius-md);
+  background-color: color-mix(in srgb, var(--combat-surface-dark) 88%, transparent);
+  background-image: var(--ui-tab-strip);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: soft-light;
 }
 
 .tab {
@@ -865,7 +940,10 @@ code {
   padding: 0.45rem 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--accent);
-  background: linear-gradient(180deg, var(--accent-dim), #3d2b8c);
+  background-color: transparent;
+  background-image: var(--ui-btn-primary), linear-gradient(180deg, var(--accent-dim), #3d2b8c);
+  background-size: 100% 100%, auto;
+  background-repeat: no-repeat;
   color: #fff;
   font-size: 0.8rem;
   cursor: pointer;
@@ -878,7 +956,10 @@ code {
 
 .btn-secondary {
   border-color: var(--border);
-  background: var(--panel);
+  background-color: var(--panel);
+  background-image: var(--ui-btn-secondary);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   color: var(--text);
 }
 
@@ -999,6 +1080,16 @@ code {
   flex-wrap: wrap;
 }
 
+.outcome-panel.panel {
+  background-image:
+    linear-gradient(180deg, rgba(15, 21, 44, 0.94), rgba(10, 15, 32, 0.94)),
+    var(--ui-combat-outcome);
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-blend-mode: normal, soft-light;
+}
+
 .outcome-panel h2 {
   color: var(--success);
 }
@@ -1045,7 +1136,10 @@ code {
   border-radius: 10px;
   border: 1px solid var(--border);
   padding: 0.55rem 0.65rem;
-  background: rgba(10, 10, 15, 0.96);
+  background-color: rgba(10, 10, 15, 0.96);
+  background-image: var(--ui-tooltip-frame);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   color: var(--text);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
@@ -1078,7 +1172,12 @@ code {
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0, 0, 0, 0.55);
+  background-color: rgba(0, 0, 0, 0.55);
+  background-image: var(--ui-modal-backdrop);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: multiply;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1115,7 +1214,10 @@ code {
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
   cursor: pointer;
-  background: rgba(30, 41, 59, 0.25);
+  background-color: rgba(30, 41, 59, 0.25);
+  background-image: var(--ui-modal-spec);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 .spec-option:has(input:checked) {
@@ -1162,7 +1264,10 @@ code {
   width: min(640px, 96vw);
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 12px;
-  background: rgba(10, 10, 15, 0.96);
+  background-color: rgba(10, 10, 15, 0.96);
+  background-image: var(--ui-modal-card);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   padding: 14px 14px 12px;
 }
@@ -1233,10 +1338,27 @@ code {
 }
 
 .progress-card {
-  background: #0c1230;
+  background-color: #0c1230;
+  background-image: var(--ui-progress-stat);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   border: 1px solid #28366a;
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
+}
+
+.progress-v--gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+.progress-v--gold::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  background: var(--ui-hero-coin) center / contain no-repeat;
 }
 
 .progress-k {
@@ -1326,7 +1448,12 @@ code {
   justify-content: space-between;
   gap: var(--combat-space-3);
   padding: var(--combat-space-2) var(--combat-space-3);
-  background: var(--combat-surface-raised);
+  background-color: var(--combat-surface-raised);
+  background-image: var(--ui-combat-zone-bar);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: soft-light;
   border: 1px solid var(--combat-border-accent);
   border-radius: var(--combat-radius-md);
   font-size: var(--combat-text-sm);
@@ -1598,7 +1725,11 @@ code {
   width: 40px;
   height: 40px;
   border-radius: var(--combat-radius-pill);
-  background: var(--combat-avatar-placeholder);
+  background-color: var(--combat-avatar-placeholder);
+  background-image: var(--ui-combat-ally-frame);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1649,17 +1780,23 @@ code {
   max-width: 28vw;
   margin: 0 auto;
   border-radius: var(--combat-radius-md);
-  background: linear-gradient(145deg, #1e293b, #0f172a);
+  background-color: transparent;
+  background-image: var(--ui-combat-player), linear-gradient(145deg, #1e293b, #0f172a);
+  background-size: contain, auto;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
   border: 1px solid var(--combat-border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.75rem;
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
   filter: drop-shadow(var(--combat-shadow-drop));
 }
 
 .scene-sprite--enemy {
-  background: linear-gradient(145deg, #3f1f2a, #1a0f12);
+  background-image: var(--ui-combat-enemy), linear-gradient(145deg, #3f1f2a, #1a0f12);
 }
 
 .scene-sprite__label {
@@ -1702,14 +1839,16 @@ code {
   background: var(--combat-scene-base);
 }
 
-/* Placeholder battlefield (Step 1: no image assets). Add JPG/WebP to public/assets/bg/ when ready. */
+/* Battlefield art: public/assets/bg/combat-battlefield.png */
 .bg-layer {
   position: absolute;
   inset: 0;
   background:
     linear-gradient(180deg, rgba(10, 13, 24, 0.22), rgba(4, 6, 12, 0.58)),
-    linear-gradient(135deg, #1a2744 0%, #0d1528 42%, #243352 100%);
-  background-size: cover;
+    linear-gradient(135deg, rgba(26, 39, 68, 0.55) 0%, rgba(13, 21, 40, 0.55) 42%, rgba(36, 51, 82, 0.55) 100%),
+    var(--ui-combat-bg);
+  background-size: cover, cover, cover;
+  background-position: center, center, center;
 }
 
 .scene .player,
@@ -1816,7 +1955,12 @@ code {
 }
 
 .log-box {
-  background: var(--combat-surface-raised);
+  background-color: var(--combat-surface-raised);
+  background-image: var(--ui-combat-log);
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: soft-light;
   padding: var(--combat-space-3);
   border-radius: var(--combat-radius-md);
   margin-top: var(--combat-space-3);
@@ -1882,12 +2026,18 @@ code {
   font-weight: 700;
   color: #fcd34d;
   text-align: center;
-  background: linear-gradient(
-    90deg,
-    rgba(251, 146, 60, 0.12),
-    rgba(245, 158, 11, 0.08),
-    rgba(251, 146, 60, 0.12)
-  );
+  background-color: transparent;
+  background-image: var(--ui-combat-turn-banner),
+    linear-gradient(
+      90deg,
+      rgba(251, 146, 60, 0.12),
+      rgba(245, 158, 11, 0.08),
+      rgba(251, 146, 60, 0.12)
+    );
+  background-size: 100% 100%, auto;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-blend-mode: soft-light, normal;
   border: 1px solid rgba(251, 146, 60, 0.35);
   animation: combatTurnPulse 3.2s ease-in-out infinite;
 }
@@ -1931,7 +2081,11 @@ code {
   margin: 0;
   min-height: max(56px, var(--combat-touch-min));
   padding: var(--combat-space-2);
-  background: var(--combat-surface-raised);
+  background-color: var(--combat-surface-raised);
+  background-image: var(--ui-combat-skill);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-blend-mode: soft-light;
   border: 1px solid var(--combat-hp-track);
   border-radius: var(--combat-radius-sm);
   color: var(--combat-text);
@@ -2294,12 +2448,30 @@ code {
   margin-top: 12px;
 }
 
+#tab-explore > .panel.v0-panel:first-of-type {
+  background-image:
+    linear-gradient(180deg, rgba(15, 21, 44, 0.94), rgba(10, 15, 32, 0.94)),
+    var(--ui-explore-accent),
+    var(--ui-panel-texture);
+  background-size: auto, cover, cover;
+  background-position: center, top center, center;
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-blend-mode: normal, soft-light, soft-light;
+}
+
 .quest-card.quest-card {
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 120px;
+  background-image:
+    linear-gradient(180deg, rgba(15, 21, 44, 0.92), rgba(10, 15, 32, 0.92)),
+    var(--ui-quests-card);
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-blend-mode: normal, soft-light;
 }
 
 .quest-head {

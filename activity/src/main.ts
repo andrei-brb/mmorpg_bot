@@ -498,7 +498,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
         </div>
         <div class="hero-gold">
           <span>Gold</span>
-          <strong>🪙 ${char?.gold ?? 0}</strong>
+          <strong class="hero-gold-amount">${char?.gold ?? 0}</strong>
         </div>
       </div>
       <div class="hero-hp-wrap">
@@ -686,14 +686,14 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
       <div class="scene">
         <div class="bg-layer"></div>
         <div class="player">
-          <div class="scene-sprite" role="img" aria-label="${escapeHtml(state.player.name)}">⚔️</div>
+          <div class="scene-sprite" role="img" aria-label="${escapeHtml(state.player.name)}"></div>
           <div class="name">${escapeHtml(state.player.name)}</div>
           <div class="hpbar"><div class="hpfill playerhp" style="width:${php}%"></div></div>
           <div class="hptext">${state.player.current_hp} / ${state.player.max_hp}</div>
           ${resLine}
         </div>
         <div class="enemy">
-          <div class="scene-sprite scene-sprite--enemy" role="img" aria-label="${escapeHtml(state.enemy.name)}">🐻</div>
+          <div class="scene-sprite scene-sprite--enemy" role="img" aria-label="${escapeHtml(state.enemy.name)}"></div>
           <div class="name">${escapeHtml(state.enemy.name)}</div>
           <div class="hpbar"><div class="hpfill enemyhp" style="width:${ehp}%"></div></div>
           <div class="hptext">${state.enemy.current_hp} / ${state.enemy.max_hp}</div>
@@ -804,7 +804,7 @@ function renderProgressPanel(payload: InventoryPayload, progress?: ProgressPaylo
         </div>
         <div class="progress-card">
           <span class="progress-k">Gold</span>
-          <strong class="progress-v">🪙 ${gold}</strong>
+          <strong class="progress-v progress-v--gold">${gold}</strong>
         </div>
         <div class="progress-card">
           <span class="progress-k">Win Rate</span>
