@@ -9,7 +9,13 @@
 
   /* Surfaces */
   --combat-bg-deep: #070b1a;
-  --combat-bg-shell: rgba(5, 9, 20, 0.72);
+  /* Lighter shell so app-background + panel art read through */
+  --combat-bg-shell: rgba(5, 9, 20, 0.38);
+  /* Glass tint on panels (was ~0.96 opaque — too much flat blue over bitmaps) */
+  --combat-panel-tint-a: rgba(15, 21, 44, 0.4);
+  --combat-panel-tint-b: rgba(10, 15, 32, 0.5);
+  --combat-panel-tint-card-a: rgba(15, 21, 44, 0.45);
+  --combat-panel-tint-card-b: rgba(10, 15, 32, 0.55);
   --combat-surface: #0f152c;
   --combat-surface-raised: #1e293b;
   --combat-surface-dark: #111835;
@@ -183,7 +189,7 @@ h1 {
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
   font-size: 0.75rem;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--combat-surface) 55%, transparent);
   border: 1px solid var(--border);
   margin-bottom: 0.75rem;
 }
@@ -200,7 +206,7 @@ h1 {
 }
 
 .panel {
-  background: linear-gradient(180deg, rgba(15, 21, 44, 0.96), rgba(10, 15, 32, 0.96));
+  background: linear-gradient(180deg, var(--combat-panel-tint-a), var(--combat-panel-tint-b));
   border: 1px solid var(--border);
   border-radius: var(--combat-radius-lg);
   padding: 0.75rem;
@@ -210,12 +216,13 @@ h1 {
 .v0-panel {
   border-color: var(--combat-v0-panel-border);
   background-image:
-    linear-gradient(180deg, rgba(15, 21, 44, 0.94), rgba(10, 15, 32, 0.94)),
+    linear-gradient(180deg, var(--combat-panel-tint-a), var(--combat-panel-tint-b)),
     var(--ui-panel-texture);
   background-size: auto, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;
-  background-blend-mode: normal, soft-light;
+  /* Softer blend so panel-texture.png stays visible */
+  background-blend-mode: normal, overlay;
 }
 
 .panel h2 {
@@ -225,6 +232,7 @@ h1 {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .grid {
@@ -889,12 +897,12 @@ code {
   margin-bottom: 0.6rem;
   padding: 6px;
   border-radius: var(--combat-radius-md);
-  background-color: color-mix(in srgb, var(--combat-surface-dark) 88%, transparent);
+  background-color: color-mix(in srgb, var(--combat-surface-dark) 45%, transparent);
   background-image: var(--ui-tab-strip);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-blend-mode: soft-light;
+  background-blend-mode: overlay;
 }
 
 .tab {
@@ -1082,12 +1090,12 @@ code {
 
 .outcome-panel.panel {
   background-image:
-    linear-gradient(180deg, rgba(15, 21, 44, 0.94), rgba(10, 15, 32, 0.94)),
+    linear-gradient(180deg, var(--combat-panel-tint-a), var(--combat-panel-tint-b)),
     var(--ui-combat-outcome);
   background-size: auto, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;
-  background-blend-mode: normal, soft-light;
+  background-blend-mode: normal, overlay;
 }
 
 .outcome-panel h2 {
@@ -1136,10 +1144,11 @@ code {
   border-radius: 10px;
   border: 1px solid var(--border);
   padding: 0.55rem 0.65rem;
-  background-color: rgba(10, 10, 15, 0.96);
+  background-color: rgba(10, 10, 15, 0.72);
   background-image: var(--ui-tooltip-frame);
   background-size: 100% 100%;
   background-repeat: no-repeat;
+  background-blend-mode: overlay;
   color: var(--text);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
@@ -1338,10 +1347,12 @@ code {
 }
 
 .progress-card {
-  background-color: #0c1230;
+  background-color: rgba(12, 18, 48, 0.42);
   background-image: var(--ui-progress-stat);
-  background-size: 100% 100%;
+  background-size: cover;
+  background-position: center;
   background-repeat: no-repeat;
+  background-blend-mode: overlay;
   border: 1px solid #28366a;
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
@@ -1387,7 +1398,7 @@ code {
   padding: 0.48rem 0.58rem;
   border: 1px solid #29325a;
   border-radius: 8px;
-  background: #0b1028;
+  background: rgba(11, 16, 40, 0.55);
   font-size: 0.8rem;
 }
 
@@ -1448,12 +1459,12 @@ code {
   justify-content: space-between;
   gap: var(--combat-space-3);
   padding: var(--combat-space-2) var(--combat-space-3);
-  background-color: var(--combat-surface-raised);
+  background-color: color-mix(in srgb, var(--combat-surface-raised) 52%, transparent);
   background-image: var(--ui-combat-zone-bar);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-blend-mode: soft-light;
+  background-blend-mode: overlay;
   border: 1px solid var(--combat-border-accent);
   border-radius: var(--combat-radius-md);
   font-size: var(--combat-text-sm);
@@ -1963,12 +1974,12 @@ code {
 }
 
 .log-box {
-  background-color: var(--combat-surface-raised);
+  background-color: color-mix(in srgb, var(--combat-surface-raised) 52%, transparent);
   background-image: var(--ui-combat-log);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-blend-mode: soft-light;
+  background-blend-mode: overlay;
   padding: var(--combat-space-3);
   border-radius: var(--combat-radius-md);
   margin-top: var(--combat-space-3);
@@ -1990,7 +2001,7 @@ code {
   align-items: stretch;
   gap: var(--combat-space-3);
   padding: var(--combat-space-3);
-  background: color-mix(in srgb, var(--combat-surface) 85%, transparent);
+  background: color-mix(in srgb, var(--combat-surface) 48%, transparent);
   border: 1px solid var(--combat-border-accent);
   border-radius: var(--combat-radius-md);
 }
@@ -2090,11 +2101,11 @@ code {
   margin: 0;
   min-height: max(56px, var(--combat-touch-min));
   padding: var(--combat-space-2);
-  background-color: var(--combat-surface-raised);
+  background-color: color-mix(in srgb, var(--combat-surface-raised) 55%, transparent);
   background-image: var(--ui-combat-skill);
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  background-blend-mode: soft-light;
+  background-blend-mode: overlay;
   border: 1px solid var(--combat-hp-track);
   border-radius: var(--combat-radius-sm);
   color: var(--combat-text);
@@ -2465,13 +2476,13 @@ code {
 
 #tab-explore > .panel.v0-panel:first-of-type {
   background-image:
-    linear-gradient(180deg, rgba(15, 21, 44, 0.94), rgba(10, 15, 32, 0.94)),
+    linear-gradient(180deg, var(--combat-panel-tint-a), var(--combat-panel-tint-b)),
     var(--ui-explore-accent),
     var(--ui-panel-texture);
   background-size: auto, cover, cover;
   background-position: center, top center, center;
   background-repeat: no-repeat, no-repeat, no-repeat;
-  background-blend-mode: normal, soft-light, soft-light;
+  background-blend-mode: normal, overlay, overlay;
 }
 
 .quest-card.quest-card {
@@ -2481,12 +2492,12 @@ code {
   gap: 8px;
   min-height: 120px;
   background-image:
-    linear-gradient(180deg, rgba(15, 21, 44, 0.92), rgba(10, 15, 32, 0.92)),
+    linear-gradient(180deg, var(--combat-panel-tint-card-a), var(--combat-panel-tint-card-b)),
     var(--ui-quests-card);
   background-size: auto, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;
-  background-blend-mode: normal, soft-light;
+  background-blend-mode: normal, overlay;
 }
 
 .quest-head {
