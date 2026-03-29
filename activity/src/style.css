@@ -106,7 +106,8 @@
   /* Bitmap UI — files under activity/public/assets/ (see ui/ASSET_PATHS.md) */
   --ui-app-bg: url("/assets/ui/global/app-background.jpeg");
   --ui-panel-texture: url("/assets/ui/global/panel-texture.png");
-  --ui-tab-strip: url("/assets/ui/global/tab-strip-bg.jpeg");
+  /* Bump ?v= when replacing — file: public/assets/ui/global/TABS.jpeg */
+  --ui-tab-strip: url("/assets/ui/global/TABS.jpeg?v=1");
   --ui-btn-primary: url("/assets/ui/global/btn-primary.png");
   --ui-btn-secondary: url("/assets/ui/global/btn-secondary.png");
   --ui-mini-btn: url("/assets/ui/global/mini-btn-bg.png");

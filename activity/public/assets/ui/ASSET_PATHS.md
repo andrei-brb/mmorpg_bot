@@ -11,7 +11,7 @@ Rename your art to the **exact filenames** below so `style.css` picks them up.
 |---------|-------------------------|
 | `app-background.jpeg` | App background (full page) |
 | `panel-texture.png` | Panel frame / texture overlay on panels |
-| `tab-strip-bg.jpeg` | Tab bar strip (optional chrome behind tabs) |
+| `TABS.jpeg` | Tab bar strip (chrome behind Hero / Explore / Quests / Combat / Progress) |
 | `btn-primary.png` | Primary button (stretches with button size) |
 | `btn-secondary.png` | Secondary button |
 | `mini-btn-bg.png` | Mini button (Use / Equip / Sell rows) |
