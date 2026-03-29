@@ -25,3 +25,6 @@ activity/.env
 
 # Local UI export (generated; large)
 /world-of-discord-activity-ui.zip
+
+# If you unzip next to `activity/`, ignore the duplicate folder
+activity 2/
