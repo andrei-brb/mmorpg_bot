@@ -1199,16 +1199,22 @@ code {
   margin-bottom: 4px;
 }
 
+/* No plate behind the sprite — icon pixels sit directly on parchment */
 .item-tip-icon-wrap {
-  width: 52px;
-  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(0, 0, 0, 0.32);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 0;
+  line-height: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.item-tip-icon-wrap .inv-icon-stack {
+  width: 40px;
+  height: 40px;
 }
 
 .item-tip-icon-wrap .inv-icon-img {
@@ -1218,6 +1224,7 @@ code {
   max-height: 40px;
   object-fit: contain;
   image-rendering: crisp-edges;
+  border-radius: 0;
 }
 
 .item-tip-icon-wrap .inv-icon-emoji {
