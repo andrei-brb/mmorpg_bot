@@ -4,7 +4,8 @@ export interface Skill {
   key: string;
   name: string;
   description: string;
-  icon: string; // path to /skills/skill_<key>.png
+  /** Same path the Combat tab loads via `skillIconUrl(key)` → `public/skills/skill_<key>.png`. */
+  icon: string;
   class: SkillClass;
   cost: string;
 }

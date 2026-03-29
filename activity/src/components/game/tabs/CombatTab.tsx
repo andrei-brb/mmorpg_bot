@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatEnemy, CombatStatePayload } from "@/lib/apiTypes";
+import { skillIconUrl } from "@/lib/skillIconUrl";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -207,7 +208,7 @@ export function CombatTab() {
                 title={a.disabled || undefined}
                 className="skill-btn"
                 onClick={() => void onAbility(a.key)}>
-                <span className="text-lg" style={{ filter: 'drop-shadow(0 1px 2px hsl(0 0% 0% / 0.4))' }}>{a.emoji}</span>
+                <CombatSkillIcon abilityKey={a.key} emoji={a.emoji} />
                 <span className="text-foreground font-semibold text-[10px]">{a.name}</span>
                 <span className="text-muted-foreground text-[9px]">{a.cost} {a.cost_type}</span>
               </button>
@@ -277,4 +278,27 @@ function EnemyFace({ name }: { name: string }) {
   const parts = name.trim().split(/\s+/);
   const emoji = parts[0] && /[^\w\s]/.test(parts[0]) ? parts[0] : "👾";
   return <>{emoji}</>;
+}
+
+/** Uses `public/skills/skill_<key>.png` when present; falls back to server emoji. */
+function CombatSkillIcon({ abilityKey, emoji }: { abilityKey: string; emoji: string }) {
+  const [useEmoji, setUseEmoji] = useState(false);
+  if (useEmoji) {
+    return (
+      <span className="text-2xl leading-none" style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.4))" }}>
+        {emoji}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={skillIconUrl(abilityKey)}
+      alt=""
+      width={32}
+      height={32}
+      className="w-8 h-8 object-contain shrink-0"
+      style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.4))" }}
+      onError={() => setUseEmoji(true)}
+    />
+  );
 }

@@ -10,6 +10,10 @@ const publicBase = (() => {
   return b.endsWith("/") ? b : `${b}/`;
 })();
 
+function skillPngUrl(key: string): string {
+  return `${publicBase}skills/skill_${encodeURIComponent(key)}.png`;
+}
+
 type InvRow = {
   id: string;
   /** Matches `item_templates.id` — use for `/assets/items/{template_id}.png` */
@@ -380,6 +384,18 @@ function wireInvIconFallbacks(scope: ParentNode): void {
   });
 }
 
+function wireSkillPngFallbacks(scope: ParentNode): void {
+  scope.querySelectorAll<HTMLImageElement>("img.skill-icon-png").forEach((img) => {
+    if ((img as unknown as { __wiredSkill?: boolean }).__wiredSkill) return;
+    (img as unknown as { __wiredSkill?: boolean }).__wiredSkill = true;
+    img.addEventListener("error", () => {
+      img.style.display = "none";
+      const fb = img.nextElementSibling as HTMLElement | null;
+      if (fb?.classList.contains("skill-icon-emoji")) fb.style.display = "inline-block";
+    });
+  });
+}
+
 function renderDisconnected(message: string, extra?: string): void {
   const root = document.getElementById("app");
   if (!root) return;
@@ -638,7 +654,11 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
       const dis = a.disabled ? ` disabled title="${escapeHtml(a.disabled)}"` : "";
       const c = resourceCostLabel(a.cost_type || "", Number(a.cost ?? 0) || 0);
       return `<button type="button" class="skill-btn" data-abi="${escapeHtml(a.key)}"${dis}>
-        <span class="skill-name">${escapeHtml(a.emoji)} ${escapeHtml(a.name)}</span>
+        <span class="skill-icon-slot" style="display:flex;align-items:center;justify-content:center;min-height:32px;width:100%">
+          <img src="${escapeHtml(skillPngUrl(a.key))}" alt="" class="skill-icon-png" width="32" height="32" loading="lazy" decoding="async" />
+          <span class="skill-icon-emoji" style="display:none;font-size:1.25rem;line-height:1" aria-hidden="true">${escapeHtml(a.emoji)}</span>
+        </span>
+        <span class="skill-name">${escapeHtml(a.name)}</span>
         <span class="skill-cost">${escapeHtml(c)}</span>
       </button>`;
     })
@@ -1572,6 +1592,7 @@ function mountApp(
   }
 
   function wireCombatActions(host: Element): void {
+    wireSkillPngFallbacks(host);
     host.querySelectorAll("[data-abi]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = (btn as HTMLElement).dataset.abi;
