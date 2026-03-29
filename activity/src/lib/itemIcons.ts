@@ -35,6 +35,23 @@ export function itemIconGeneratedSrcs(itemName: string | undefined | null, base:
   return GENERATED_BASES.map((b) => `${base}${b}${file}`);
 }
 
+/** Slug for `activity/public/assets/items/icons/{slug}_{rarity}.png` (matches `icons/items/` art pack). */
+export function slugifyItemNameForIconPack(name: string | undefined | null): string {
+  const n = normalizeItemIconName(name);
+  if (!n) return "";
+  return n
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function packIconSrc(name: string | undefined | null, rarity: string | undefined | null, base: string): string | null {
+  const slug = slugifyItemNameForIconPack(name);
+  if (!slug) return null;
+  const r = (rarity || "common").trim().toLowerCase() || "common";
+  return `${base}assets/items/icons/${slug}_${r}.png`;
+}
+
 function templateSrc(templateId: string | undefined | null, base: string): string | null {
   const id = templateId?.trim();
   if (!id) return null;
@@ -42,16 +59,16 @@ function templateSrc(templateId: string | undefined | null, base: string): strin
 }
 
 /**
- * Ordered URLs to try. PNGs in this repo are almost all under `generated/{display name}.png`, while
- * `template_id` is often tiered (`chest_common_4`) — only a few ids match flat `assets/items/{id}.png`
- * via the server fallback. Prefer display-name paths first so armor/gloves match `Scale Cuirass.png`,
- * `Steel Grips.png`, etc.
+ * Ordered URLs to try: custom icon pack (`icons/{slug}_{rarity}.png`), then `generated/{display name}.png`,
+ * then `assets/items/{template_id}.png`. `template_id` is often tiered (`chest_common_4`) while generated
+ * PNGs use display names (`Scale Cuirass.png`).
  */
 export function itemIconCandidates(item: InvRow): string[] {
   const base = publicBaseUrl();
+  const pack = packIconSrc(item.name, item.rarity, base);
   const generated = itemIconGeneratedSrcs(item.name, base);
   const primary = templateSrc(item.template_id, base);
-  const ordered = [...generated, primary].filter((v): v is string => Boolean(v));
+  const ordered = [pack, ...generated, primary].filter((v): v is string => Boolean(v));
   return [...new Set(ordered)];
 }
 

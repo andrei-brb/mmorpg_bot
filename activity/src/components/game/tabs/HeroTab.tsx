@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { InvRow } from "@/lib/apiTypes";
-import { publicBaseUrl } from "@/lib/gameApi";
 import { BlacksmithModal } from "../modals/BlacksmithModal";
+import { ItemIcon } from "../ItemIcon";
 import { SpecializationModal } from "../modals/SpecializationModal";
 
 const EQUIP_ORDER = [
@@ -33,11 +34,9 @@ function rarityKey(rarity?: string | null) {
   return (rarity || "common").toLowerCase();
 }
 
-function itemImgSrc(it: InvRow): string | null {
-  const id = it.template_id?.trim() || it.name?.trim();
-  if (!id) return null;
-  return `${publicBaseUrl()}assets/items/generated/${encodeURIComponent(id)}.png`;
-}
+const ITEM_ICON_SHADOW: CSSProperties = {
+  filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))",
+};
 
 export function HeroTab() {
   const {
@@ -161,7 +160,6 @@ export function HeroTab() {
             {equipmentSlots.map((slot) => {
               const it = slot.item;
               const rc = it ? RARITY_COLORS[rarityKey(it.rarity)] || "" : "";
-              const src = it ? itemImgSrc(it) : null;
               return (
                 <div
                   key={slot.id}
@@ -171,15 +169,7 @@ export function HeroTab() {
                 >
                   {it ? (
                     <div className="flex flex-col items-center">
-                      {src ? (
-                        <img src={src} alt="" className="w-8 h-8 object-contain"
-                          style={{ filter: 'drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))' }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <span className="text-lg" style={{ filter: 'drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))' }}>
-                          {SLOT_ICONS[slot.id] || "⚔️"}
-                        </span>
-                      )}
+                      <ItemIcon item={it} size={32} style={ITEM_ICON_SHADOW} />
                       {Number(it.enhancement_level ?? 0) > 0 && (
                         <span className="text-[8px] text-primary font-bold leading-none mt-0.5"
                           style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.4)' }}>
@@ -226,7 +216,6 @@ export function HeroTab() {
           <div className="grid grid-cols-5 gap-2">
             {invSlots.map((inv) => {
               const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
-              const src = inv.item ? itemImgSrc(inv.item) : null;
               return (
                 <div
                   key={inv.id}
@@ -235,15 +224,7 @@ export function HeroTab() {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   {inv.item ? (
-                    src ? (
-                      <img src={src} alt="" className="w-8 h-8 object-contain"
-                        style={{ filter: 'drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))' }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    ) : (
-                      <span className="text-lg" style={{ filter: 'drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))' }}>
-                        {inv.icon || "📦"}
-                      </span>
-                    )
+                    <ItemIcon item={inv.item} size={32} style={ITEM_ICON_SHADOW} />
                   ) : (
                     <span className="text-[7px] leading-tight text-center opacity-30">Empty</span>
                   )}
