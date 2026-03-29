@@ -901,13 +901,13 @@ function mountApp(
     tooltipEl.innerHTML = `
       <div class="item-tip-card ${rarityClass(item.rarity)}">
         <div class="item-tip-inner">
-          <div class="item-tip-head">
+          <div class="item-tip-icon-hero">
             <div class="item-tip-icon-wrap">${tipIconHtml}</div>
-            <div class="item-tip-head-text">
-              <div class="item-tip-title">${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
-              <div class="item-tip-line item-tip-line--rarity">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
-              <div class="item-tip-line item-tip-line--type">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
-            </div>
+          </div>
+          <div class="item-tip-meta">
+            <div class="item-tip-title">${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
+            <div class="item-tip-line item-tip-line--rarity">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
+            <div class="item-tip-line item-tip-line--type">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
           </div>
           ${statsHtml}
         </div>
