@@ -19,6 +19,7 @@ type InvRow = {
   quantity?: number | null;
   is_equipped?: boolean | null;
   equip_slot?: string | null;
+  template_equip_slot?: string | null;
   rarity?: string | null;
   level_req?: number | null;
   item_type?: string | null;
@@ -246,8 +247,13 @@ function escapeHtml(s: string): string {
   return d.innerHTML;
 }
 
+/** Instance slot when worn; otherwise template slot from item_templates (bag rows). */
+function gearSlotKey(it: InvRow): string {
+  return (it.equip_slot || it.template_equip_slot || "").trim();
+}
+
 function itemStatLines(item: InvRow): string[] {
-  if (!item.equip_slot) return [];
+  if (!gearSlotKey(item)) return [];
   const lines: string[] = [];
   const enhLevel = Math.max(0, Math.min(10, Number(item.enhancement_level ?? 0) || 0));
   const enhMult = 1 + enhLevel * 0.1; // mirrors ENHANCEMENT_CONFIG stat_boost (+10% per level)
@@ -425,8 +431,8 @@ function buildHeroHtml(payload: InventoryPayload): string {
     ? bag
         .map((it) => {
           const qty = it.quantity ?? 1;
-          const canEquip = Boolean(it.equip_slot);
-          const canEnhance = Boolean(it.equip_slot);
+          const canEquip = Boolean(gearSlotKey(it));
+          const canEnhance = Boolean(gearSlotKey(it));
           const directUseEffects = new Set([
             "heal_hp",
             "boost_sta",
@@ -889,7 +895,12 @@ function mountApp(
     const icon = raw && looksLikeEmoji(raw) ? raw : "📦";
     const rarity = item.rarity ? item.rarity.toUpperCase() : "COMMON";
     const qty = item.quantity ?? 1;
-    const slot = item.equip_slot ? item.equip_slot.replace("_", " ") : item.is_equipped ? "equipped" : "bag";
+    const slotKey = gearSlotKey(item);
+    const slot = slotKey
+      ? slotKey.replace("_", " ")
+      : item.is_equipped
+        ? "equipped"
+        : "bag";
     const enh = Number((item as any).enhancement_level ?? 0) || 0;
     const enhSuffix = enh > 0 ? ` +${enh}` : "";
     const lvlReq = Number(item.level_req ?? 0) || 0;

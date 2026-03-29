@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { InvRow } from "@/lib/apiTypes";
-import { BlacksmithModal } from "../modals/BlacksmithModal";
+import type { EnhanceInfoPayload, InvRow } from "@/lib/apiTypes";
+import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
 import { SpecializationModal } from "../modals/SpecializationModal";
@@ -34,6 +34,23 @@ function rarityKey(rarity?: string | null) {
   return (rarity || "common").toLowerCase();
 }
 
+/** Template slot for icons / actions; `equip_slot` alone was overwritten by SQL before `template_equip_slot` existed. */
+function gearSlot(it: InvRow): string | null {
+  const s = (it.template_equip_slot || it.equip_slot || "").trim();
+  return s || null;
+}
+
+function isProtectionTemplate(it: InvRow): boolean {
+  return (it.template_id || "").toLowerCase().startsWith("protection_");
+}
+
+function isEnhanceableGear(it: InvRow): boolean {
+  if (!gearSlot(it) || isProtectionTemplate(it)) return false;
+  const t = (it.item_type || "").toLowerCase();
+  if (t === "consumable") return false;
+  return true;
+}
+
 export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
@@ -44,7 +61,10 @@ export function HeroTab() {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [enhanceItemId, setEnhanceItemId] = useState<string | null>(null);
+  const [enhancePayload, setEnhancePayload] = useState<EnhanceInfoPayload | null>(null);
+  const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
   const [showSpec, setShowSpec] = useState(false);
+  const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [status, setStatus] = useState("");
 
   const char = inventory?.character;
@@ -89,15 +109,56 @@ export function HeroTab() {
     return () => document.removeEventListener("mousedown", onDown, true);
   }, [pinnedKey]);
 
+  useEffect(() => {
+    if (!enhanceItemId) {
+      setEnhancePayload(null);
+      setEnhanceInfoLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setEnhancePayload(null);
+    setEnhanceInfoLoading(true);
+    void getEnhanceInfo(enhanceItemId)
+      .then((p) => {
+        if (!cancelled) setEnhancePayload(p);
+      })
+      .catch((e) => {
+        if (!cancelled) setEnhancePayload({ ok: false, message: String(e) });
+      })
+      .finally(() => {
+        if (!cancelled) setEnhanceInfoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enhanceItemId, getEnhanceInfo]);
+
   const equipmentSlots = EQUIP_ORDER.map((slot) => ({
     id: slot,
     label: SLOT_LABELS[slot],
     item: equipped[slot] || null,
   }));
 
+  const blacksmithCandidates = useMemo(() => {
+    const out: InvRow[] = [];
+    const eq: Record<string, InvRow> = {};
+    for (const it of items) {
+      if (it.is_equipped && it.equip_slot) eq[it.equip_slot] = it;
+    }
+    for (const slot of EQUIP_ORDER) {
+      const it = eq[slot];
+      if (it && isEnhanceableGear(it)) out.push(it);
+    }
+    for (const it of items) {
+      if (it.is_equipped) continue;
+      if (isEnhanceableGear(it)) out.push(it);
+    }
+    return out;
+  }, [items]);
+
   const EMPTY_SLOTS = 20;
   const invSlots = [
-    ...bag.map((it) => ({ id: it.id, name: it.name, icon: it.icon || SLOT_ICONS[it.equip_slot || ""] || "📦", rarity: rarityKey(it.rarity), item: it })),
+    ...bag.map((it) => ({ id: it.id, name: it.name, icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦", rarity: rarityKey(it.rarity), item: it })),
     ...Array.from({ length: Math.max(0, EMPTY_SLOTS - bag.length) }, (_, i) => ({ id: `empty-${i}`, name: null as string | null, icon: null as string | null, rarity: null as string | null, item: null as InvRow | null })),
   ];
 
@@ -240,9 +301,11 @@ export function HeroTab() {
           </div>
           <div className="ornament-divider my-3" />
           <button onClick={() => {
-            const first = items.find(i => i.is_equipped);
+            const first =
+              items.find((i) => i.equip_slot && !i.is_equipped) ??
+              items.find((i) => i.is_equipped && i.equip_slot);
             if (first) setEnhanceItemId(first.id);
-            else toast("No items to enhance");
+            else toast("No gear in bag or equipment to enhance");
           }} className="game-btn-primary text-xs w-full">
             🔨 Open Blacksmith
           </button>
@@ -274,6 +337,14 @@ export function HeroTab() {
                   {it ? (
                     <div className="absolute inset-0 flex items-center justify-center p-0.5">
                       <ItemIcon item={it} size={46} />
+                      {Number(it.enhancement_level ?? 0) > 0 && (
+                        <span
+                          className="pointer-events-none absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none text-primary"
+                          style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
+                        >
+                          +{it.enhancement_level}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <span className="text-[7px] leading-tight text-center opacity-30">Empty</span>
@@ -303,17 +374,30 @@ export function HeroTab() {
                               Use
                             </button>
                           )}
-                          {it.equip_slot && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped");
-                              }}
-                              className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                            >
-                              Equip
-                            </button>
+                          {gearSlot(it) && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPinnedKey(null);
+                                  setEnhanceItemId(it.id);
+                                }}
+                                className="game-btn-primary px-2 py-0.5 text-[10px]"
+                              >
+                                🔨 Enhance
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped");
+                                }}
+                                className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                              >
+                                Equip
+                              </button>
+                            </>
                           )}
                           <button
                             type="button"
@@ -336,6 +420,46 @@ export function HeroTab() {
         </div>
       </div>
 
+      {blacksmithPickerOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          style={{ background: "hsl(0 0% 0% / 0.7)", backdropFilter: "blur(4px)" }}
+          onClick={() => setBlacksmithPickerOpen(false)}
+        >
+          <div className="game-panel w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="game-panel-header">Choose item to enhance</div>
+            <ul className="max-h-72 overflow-y-auto space-y-1 mb-4">
+              {blacksmithCandidates.map((it) => (
+                <li key={it.id}>
+                  <button
+                    type="button"
+                    className="w-full text-left game-btn-secondary text-xs py-2 px-3 flex items-center gap-2"
+                    onClick={() => {
+                      setEnhanceItemId(it.id);
+                      setBlacksmithPickerOpen(false);
+                    }}
+                  >
+                    <span className="text-lg shrink-0">{it.icon || SLOT_ICONS[gearSlot(it) || ""] || "⚔️"}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="font-cinzel font-semibold">{it.name}</span>
+                      {Number(it.enhancement_level ?? 0) > 0 && (
+                        <span className="text-primary"> +{it.enhancement_level}</span>
+                      )}
+                      {it.is_equipped && <span className="text-muted-foreground"> · Equipped</span>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <button type="button" className="game-btn-secondary text-xs" onClick={() => setBlacksmithPickerOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Blacksmith Modal — uses real enhance API */}
       {enhanceItemId && (() => {
         const it = items.find(i => i.id === enhanceItemId);
@@ -344,16 +468,39 @@ export function HeroTab() {
           <BlacksmithModal
             item={{
               name: it.name,
-              icon: SLOT_ICONS[it.equip_slot || ""] || "⚔️",
+              icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "⚔️",
               rarity: rarityKey(it.rarity),
               level: Number(it.enhancement_level ?? 0),
             }}
+            enhancePayload={enhancePayload}
+            infoLoading={enhanceInfoLoading}
             onClose={() => setEnhanceItemId(null)}
-            onEnhance={async () => {
+            onBuyProtection={async (protectionKey: string, quantity: number) => {
               try {
-                const j = await postEnhance(enhanceItemId, null, 0);
-                toast(j.message || (j.ok ? "Enhanced!" : "Failed"));
-                // Keep modal open so you can enhance again (+inventory refreshes inside postEnhance).
+                const j = await buyProtection(protectionKey, quantity);
+                toast(j.message || (j.ok !== false ? "Purchased" : "Failed"));
+                if (j.ok !== false) {
+                  const p = await getEnhanceInfo(enhanceItemId);
+                  setEnhancePayload(p);
+                }
+              } catch (e) {
+                toast.error(String(e));
+              }
+            }}
+            onEnhance={async (protection: BlacksmithProtection, fragments: number) => {
+              const prot =
+                protection === "blessing"
+                  ? "blessing_scroll"
+                  : protection === "charm"
+                    ? "safety_charm"
+                    : null;
+              try {
+                const j = await postEnhance(enhanceItemId, prot, fragments);
+                toast(j.message || (j.ok !== false ? "Enhanced!" : "Failed"));
+                if (j.ok !== false) {
+                  const p = await getEnhanceInfo(enhanceItemId);
+                  setEnhancePayload(p);
+                }
               } catch (e) {
                 toast.error(String(e));
               }

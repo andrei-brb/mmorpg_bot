@@ -7,7 +7,10 @@ export type InvRow = {
   icon?: string | null;
   quantity?: number | null;
   is_equipped?: boolean | null;
+  /** Which slot this row is worn in (NULL when in bag). */
   equip_slot?: string | null;
+  /** Template slot (armor/weapon slot type); present on gear. Not overwritten by instance equip_slot. */
+  template_equip_slot?: string | null;
   rarity?: string | null;
   level_req?: number | null;
   item_type?: string | null;
@@ -190,6 +193,7 @@ export type SpecGatePayload = {
   options?: SpecOption[];
 };
 
+/** Matches `BlacksmithService.get_enhancement_info` + `protections` from Activity HTTP. */
 export type EnhanceInfoPayload = {
   ok?: boolean;
   error?: string;
@@ -204,6 +208,7 @@ export type EnhanceInfoPayload = {
       stat_boost?: number;
     } | null;
     item?: { name?: string; rarity?: string; enhancement_level?: number };
-  };
+  } | null;
+  /** Counts: blessing_scroll, safety_charm, enhancement_fragment */
   protections?: Record<string, number>;
 };

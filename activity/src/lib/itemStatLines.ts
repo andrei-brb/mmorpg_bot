@@ -24,7 +24,7 @@ export function itemTooltipSubtitle(item: InvRow): string {
   const parts: string[] = [];
   if (item.rarity) parts.push(capitalizeWord(item.rarity));
   if (item.item_type) parts.push(capitalizeWord(item.item_type));
-  const slot = item.equip_slot?.trim();
+  const slot = (item.template_equip_slot || item.equip_slot || "").trim();
   if (slot && SLOT_LABEL[slot]) parts.push(SLOT_LABEL[slot]);
   return parts.join(" · ");
 }
@@ -57,7 +57,7 @@ export function itemTooltipLines(item: InvRow): string[] {
     out.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}`);
   };
 
-  const slot = item.equip_slot?.trim();
+  const slot = (item.template_equip_slot || item.equip_slot || "").trim();
   if (slot || hasEquipmentStats(item)) {
     pushStat("STR", item.s_str, item.r_str);
     pushStat("AGI", item.s_agi, item.r_agi);
