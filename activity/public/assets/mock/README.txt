@@ -14,9 +14,14 @@ On the Combat tab in mock mode, use the floating “Enemy select” / “In comb
 control (bottom-right) to switch between those two PNGs. Your choice is saved
 in localStorage (discord_activity_mock_combat_view).
 
-Enable: open the activity with ?mock=1 (persists in localStorage), or set
-localStorage key discord_activity_mock_preview to "1".
+Enable mock mode (any one works; all persist in localStorage until you turn off):
 
-Disable: ?mock=0 clears the flag and turns mock mode off.
+  • Browser: add ?mock=1 to the URL
+  • Discord Activity often strips query strings — use the hash instead:
+    your-activity-url#mock=1
+  • In Discord (or anywhere): triple-click the title "World of Discord" in the
+    header to toggle mock mode on/off (page reloads).
+
+Disable: ?mock=0 or #mock=0, or triple-click the title again.
 
 See style.css block "Full-tab mock preview".
