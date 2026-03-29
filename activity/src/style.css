@@ -1153,35 +1153,66 @@ code {
   isolation: isolate;
   background-color: #8f7f62;
   background-image:
-    linear-gradient(180deg, rgba(42, 36, 28, 0.12) 0%, rgba(22, 18, 14, 0.2) 100%),
+    linear-gradient(180deg, rgba(42, 36, 28, 0.04) 0%, rgba(22, 18, 14, 0.07) 100%),
     var(--ui-tooltip-frame);
   /* Slightly taller frame bitmap (vertical only) — keeps width, breathes up/down */
   background-size: 100% 100%, 114% 118%;
   background-repeat: no-repeat;
   background-position: center;
   color: #12100e;
+  /* Dark rim + soft inner highlight so the bitmap border reads against dark UIs */
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 0 0 2px rgba(0, 0, 0, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
     0 14px 36px rgba(0, 0, 0, 0.65);
 }
 
 .item-tip-card.rarity-common {
-  box-shadow: 0 0 0 1px rgba(110, 115, 130, 0.35), 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(110, 115, 130, 0.5),
+    0 10px 28px rgba(0, 0, 0, 0.55);
 }
 .item-tip-card.rarity-uncommon {
-  box-shadow: 0 0 0 1px rgba(56, 193, 114, 0.45), 0 0 18px rgba(56, 193, 114, 0.18), 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(56, 193, 114, 0.55),
+    0 0 20px rgba(56, 193, 114, 0.22),
+    0 10px 28px rgba(0, 0, 0, 0.55);
 }
 .item-tip-card.rarity-rare {
-  box-shadow: 0 0 0 1px rgba(74, 139, 255, 0.5), 0 0 18px rgba(74, 139, 255, 0.2), 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(74, 139, 255, 0.6),
+    0 0 22px rgba(74, 139, 255, 0.28),
+    0 10px 28px rgba(0, 0, 0, 0.55);
 }
 .item-tip-card.rarity-epic {
-  box-shadow: 0 0 0 1px rgba(158, 91, 255, 0.5), 0 0 18px rgba(158, 91, 255, 0.22), 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(158, 91, 255, 0.58),
+    0 0 22px rgba(158, 91, 255, 0.28),
+    0 10px 28px rgba(0, 0, 0, 0.55);
 }
 .item-tip-card.rarity-legendary {
-  box-shadow: 0 0 0 1px rgba(244, 185, 66, 0.55), 0 0 20px rgba(244, 185, 66, 0.25), 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 3px rgba(244, 185, 66, 0.62),
+    0 0 24px rgba(244, 185, 66, 0.32),
+    0 10px 28px rgba(0, 0, 0, 0.55);
 }
 .item-tip-card.rarity-artifact {
-  box-shadow: 0 0 0 1px rgba(255, 95, 210, 0.55), 0 0 20px rgba(255, 95, 210, 0.22), 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 3px rgba(255, 95, 210, 0.58),
+    0 0 24px rgba(255, 95, 210, 0.28),
+    0 10px 28px rgba(0, 0, 0, 0.55);
 }
 
 .item-tip-inner {
