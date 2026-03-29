@@ -1133,13 +1133,18 @@ code {
   transform: none;
   opacity: 0;
   transition: opacity 0.12s ease;
+  background: transparent;
 }
 
 .item-tooltip-layer.visible {
   opacity: 1;
 }
 
-/* Tooltip: darker parchment reads against dark UI; frame + soft rim */
+/*
+  Tooltip frame PNG includes margin + light matte outside the ornate border (and
+  often white AA fringes). 100% 100% stretches that into the card → “white sheet”.
+  Zoom/crop the bitmap slightly so only the frame shows; base color fills any sliver.
+*/
 .item-tip-card {
   width: fit-content;
   max-width: min(300px, 94vw);
@@ -1148,13 +1153,14 @@ code {
   border: none !important;
   padding: 0;
   overflow: hidden;
-  background-color: #8f7f62;
+  isolation: isolate;
+  background-color: #2a2432;
   background-image:
     linear-gradient(180deg, rgba(42, 36, 28, 0.14) 0%, rgba(22, 18, 14, 0.22) 100%),
     var(--ui-tooltip-frame);
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  background-position: center;
+  background-size: 100% 100%, 122% 122%;
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
   color: #12100e;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.45),
