@@ -1141,9 +1141,8 @@ code {
 }
 
 /*
-  Tooltip frame PNG includes margin + light matte outside the ornate border (and
-  often white AA fringes). 100% 100% stretches that into the card → “white sheet”.
-  Zoom/crop the bitmap slightly so only the frame shows; base color fills any sliver.
+  tooltip-frame.png: transparent outside the border — background-color fills that.
+  If the parchment center is also transparent in your export, this tan shows through.
 */
 .item-tip-card {
   width: fit-content;
@@ -1154,13 +1153,13 @@ code {
   padding: 0;
   overflow: hidden;
   isolation: isolate;
-  background-color: #2a2432;
+  background-color: #8f7f62;
   background-image:
-    linear-gradient(180deg, rgba(42, 36, 28, 0.14) 0%, rgba(22, 18, 14, 0.22) 100%),
+    linear-gradient(180deg, rgba(42, 36, 28, 0.12) 0%, rgba(22, 18, 14, 0.2) 100%),
     var(--ui-tooltip-frame);
-  background-size: 100% 100%, 122% 122%;
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
   color: #12100e;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.45),
