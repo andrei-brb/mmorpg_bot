@@ -1,16 +1,9 @@
 import type { InvRow } from "@/lib/apiTypes";
 import { publicBaseUrl } from "@/lib/gameApi";
+import itemIconManifest from "@/data/itemIconManifest.json";
 
-/** Same paths as legacy `main.ts` / mmorpg-web exports. */
-const GENERATED_BASES = [
-  "assets/items/generated/",
-  "assets/items/generated/weapons/",
-  "assets/items/generated/armor/",
-  "assets/items/generated/off_hand/",
-  "assets/items/generated/accessories/",
-  "assets/items/generated/characters/",
-  "assets/items/generated/maps/",
-];
+/** Built by `scripts/generate-item-icon-manifest.mjs` from `public/assets/items/icons/*`. */
+const manifest = itemIconManifest as Record<string, string[]>;
 
 export function looksLikeEmoji(s: string): boolean {
   const v = (s || "").trim();
@@ -19,7 +12,7 @@ export function looksLikeEmoji(s: string): boolean {
   return true;
 }
 
-/** Match server-side `icon_url_for_item_name` / inventory display so filenames align with `generated/*.png`. */
+/** Match server-side naming / inventory display. */
 export function normalizeItemIconName(name: string | undefined | null): string {
   let raw = (name || "").trim();
   raw = raw.replace(/\s*\+\s*\d+\s*$/u, "");
@@ -28,14 +21,7 @@ export function normalizeItemIconName(name: string | undefined | null): string {
   return raw.trim();
 }
 
-export function itemIconGeneratedSrcs(itemName: string | undefined | null, base: string): string[] {
-  const n = normalizeItemIconName(itemName);
-  if (!n) return [];
-  const file = `${encodeURIComponent(n)}.png`;
-  return GENERATED_BASES.map((b) => `${base}${b}${file}`);
-}
-
-/** Slug for `activity/public/assets/items/icons/{slug}_{rarity}.png` (matches `icons/items/` art pack). */
+/** Slug for manifest keys (`icons/{slug}_{rarity}.png`). */
 export function slugifyItemNameForIconPack(name: string | undefined | null): string {
   const n = normalizeItemIconName(name);
   if (!n) return "";
@@ -45,41 +31,41 @@ export function slugifyItemNameForIconPack(name: string | undefined | null): str
     .replace(/^_+|_+$/g, "");
 }
 
-/**
- * Rarity order after the exact tier: the grid export often names files `*_uncommon.png` even when the
- * same display name exists at common/rare/epic/legendary in the DB — try other tiers before legacy `generated/`.
- */
+/** Prefer exact tier, then other tiers — art pack often has one file per item line. */
 const PACK_RARITY_FALLBACK = ["uncommon", "common", "rare", "epic", "legendary"] as const;
 
-function packIconSrcs(name: string | undefined | null, rarity: string | undefined | null, base: string): string[] {
-  const slug = slugifyItemNameForIconPack(name);
-  if (!slug) return [];
+function pickPackFile(files: string[] | undefined, rarity: string | undefined | null): string | null {
+  if (!files?.length) return null;
   const r = (rarity || "common").trim().toLowerCase() || "common";
-  const urls: string[] = [`${base}assets/items/icons/${slug}_${r}.png`];
-  for (const alt of PACK_RARITY_FALLBACK) {
-    if (alt === r) continue;
-    urls.push(`${base}assets/items/icons/${slug}_${alt}.png`);
+  const order = [r, ...PACK_RARITY_FALLBACK.filter((x) => x !== r)];
+  for (const tier of order) {
+    const hit = files.find((f) => {
+      const lower = f.toLowerCase();
+      return (
+        lower.endsWith(`_${tier}.png`) ||
+        lower.endsWith(`_${tier}.jpg`) ||
+        lower.endsWith(`_${tier}.jpeg`) ||
+        lower.endsWith(`_${tier}.webp`)
+      );
+    });
+    if (hit) return hit;
   }
-  return urls;
-}
-
-function templateSrc(templateId: string | undefined | null, base: string): string | null {
-  const id = templateId?.trim();
-  if (!id) return null;
-  return `${base}assets/items/${encodeURIComponent(id)}.png`;
+  if (files.length === 1) return files[0];
+  return files[0] ?? null;
 }
 
 /**
- * Ordered URLs: all `icons/{slug}_{rarity}.png` variants (exact tier first, then other rarities), then legacy
- * `generated/{display name}.png` (older bundled art — different framing), then `assets/items/{template_id}.png`.
+ * Single URL from bundled `icons/` art only (see `itemIconManifest.json`). No legacy `generated/` or
+ * `template_id` images — avoids wrong art and long 404 chains.
  */
 export function itemIconCandidates(item: InvRow): string[] {
+  const slug = slugifyItemNameForIconPack(item.name);
+  if (!slug) return [];
+  const files = manifest[slug];
+  const file = pickPackFile(files, item.rarity);
+  if (!file) return [];
   const base = publicBaseUrl();
-  const pack = packIconSrcs(item.name, item.rarity, base);
-  const generated = itemIconGeneratedSrcs(item.name, base);
-  const primary = templateSrc(item.template_id, base);
-  const ordered = [...pack, ...generated, primary].filter((v): v is string => Boolean(v));
-  return [...new Set(ordered)];
+  return [`${base}assets/items/icons/${file}`];
 }
 
 export function itemEmojiFallback(item: InvRow, defaultEmoji = "📦"): string {
