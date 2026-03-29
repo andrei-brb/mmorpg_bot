@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { InvRow } from "@/lib/apiTypes";
-import { publicBaseUrl } from "@/lib/gameApi";
+import { ItemIcon } from "@/components/game/ItemIcon";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,12 +35,6 @@ function rarityClass(rarity?: string | null): string {
   if (v === "rare") return "text-rarity-rare border-rarity-rare/40";
   if (v === "uncommon") return "text-rarity-uncommon border-rarity-uncommon/40";
   return "text-rarity-common border-rarity-common/40";
-}
-
-function itemImgSrc(it: InvRow): string | null {
-  const id = it.template_id?.trim();
-  if (!id) return null;
-  return `${publicBaseUrl()}assets/items/${encodeURIComponent(id)}.png`;
 }
 
 export function HeroTab() {
@@ -165,16 +159,11 @@ export function HeroTab() {
                 </div>
               );
             }
-            const src = itemImgSrc(it);
             return (
               <div key={slot} className={`rounded-sm border p-2 ${rarityClass(it.rarity)}`}>
                 <div className="text-[10px] capitalize text-muted-foreground mb-1">{label}</div>
                 <div className="flex items-center gap-2">
-                  {src ? (
-                    <img src={src} alt="" className="w-8 h-8 object-contain" />
-                  ) : (
-                    <span className="text-lg">⚔️</span>
-                  )}
+                  <ItemIcon item={it} size={32} className="shrink-0 w-8 h-8" />
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-semibold truncate">{it.name}</div>
                     {Number(it.enhancement_level ?? 0) > 0 && (
@@ -211,11 +200,10 @@ export function HeroTab() {
             const canUse =
               (it.item_type || "").toLowerCase() === "consumable" &&
               directUse.has((it.effect_type || "").toLowerCase());
-            const src = itemImgSrc(it);
             return (
               <div key={it.id} className={`rounded-sm border p-2 ${rarityClass(it.rarity)}`}>
                 <div className="flex gap-2 items-center">
-                  {src ? <img src={src} alt="" className="w-9 h-9 object-contain shrink-0" /> : <span className="text-xl">📦</span>}
+                  <ItemIcon item={it} size={36} className="shrink-0 w-9 h-9" />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold truncate">
                       {it.name}
