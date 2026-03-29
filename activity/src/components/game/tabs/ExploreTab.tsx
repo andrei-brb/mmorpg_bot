@@ -2,10 +2,16 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 
+function exploreRewardHasValues(reward: { xp?: number; gold?: number } | undefined): boolean {
+  if (!reward) return false;
+  return (Number(reward.xp ?? 0) > 0 || Number(reward.gold ?? 0) > 0);
+}
+
 export function ExploreTab() {
-  const { map, refreshMap, travel, explore, lastExplore } = useGameSession();
+  const { map, refreshMap, travel, explore, lastExplore, npcInteract } = useGameSession();
   const [zonePick, setZonePick] = useState("");
   const [busy, setBusy] = useState(false);
+  const [npcBusy, setNpcBusy] = useState(false);
 
   useEffect(() => { void refreshMap(); }, [refreshMap]);
   useEffect(() => { if (map?.current_zone && !zonePick) setZonePick(map.current_zone); }, [map, zonePick]);
@@ -33,7 +39,9 @@ export function ExploreTab() {
       } else if (json.outcome?.type === "loot" || json.outcome?.type === "safe") {
         toast("Exploration result", { description: json.message || "You continue your journey." });
       }
-      if (json.reward) toast.success(`+${json.reward.xp ?? 0} XP, +${json.reward.gold ?? 0} gold`);
+      if (exploreRewardHasValues(json.reward)) {
+        toast.success(`+${json.reward!.xp ?? 0} XP, +${json.reward!.gold ?? 0} gold`);
+      }
     } finally { setBusy(false); }
   };
 
@@ -113,14 +121,14 @@ export function ExploreTab() {
         <div className="game-panel">
           <div className="game-panel-header">{outcomeEl.type === "loot" ? "✨ Discovery!" : "🍃 Quiet Journey"}</div>
           <p className="text-sm text-foreground">{lastExplore?.message || "You continue your journey."}</p>
-          {lastExplore?.reward && (
+          {exploreRewardHasValues(lastExplore?.reward) && (
             <>
               <div className="ornament-divider my-2" />
               <div className="flex gap-4 text-xs">
                 <span className="text-primary font-semibold" style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
-                  +{lastExplore.reward.xp ?? 0} XP
+                  +{lastExplore!.reward!.xp ?? 0} XP
                 </span>
-                <span className="text-gold font-semibold">+{lastExplore.reward.gold ?? 0} 🪙</span>
+                <span className="text-gold font-semibold">+{lastExplore!.reward!.gold ?? 0} 🪙</span>
               </div>
             </>
           )}
@@ -136,6 +144,30 @@ export function ExploreTab() {
           {lastExplore.npc.discovery_hint && (
             <p className="text-xs text-muted-foreground italic">"{lastExplore.npc.discovery_hint}"</p>
           )}
+          {lastExplore.npc.already_met && (
+            <p className="text-[10px] text-muted-foreground mt-1">You’ve met this NPC before.</p>
+          )}
+          <div className="ornament-divider my-2" />
+          <p className="text-[10px] text-muted-foreground mb-2">
+            Opens the quest / DM flow (same as <span className="text-foreground">Talk</span> on the Quests tab). Check Discord DMs.
+          </p>
+          <button
+            type="button"
+            disabled={busy || npcBusy}
+            onClick={() => {
+              const id = lastExplore.npc?.npc_id || lastExplore.npc?.name;
+              if (!id) return;
+              setNpcBusy(true);
+              void npcInteract(id)
+                .then(() => {
+                  toast("Interact sent", { description: "Check Discord for a message from this NPC." });
+                })
+                .finally(() => setNpcBusy(false));
+            }}
+            className="game-btn-primary text-xs px-3 py-1.5"
+          >
+            {npcBusy ? "…" : "Interact"}
+          </button>
         </div>
       )}
     </div>
