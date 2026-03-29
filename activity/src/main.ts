@@ -968,13 +968,6 @@ function mountApp(
     });
   }
 
-  const metaLine =
-    meta.guildId || meta.channelId
-      ? `<p class="hint">Guild <code>${escapeHtml(meta.guildId ?? "—")}</code> · Channel <code>${escapeHtml(
-          meta.channelId ?? "—",
-        )}</code></p>`
-      : "";
-
   async function refreshProgressData(): Promise<void> {
     try {
       const res = await fetch(apiUrl("/api/game/progress"), {
@@ -1592,10 +1585,8 @@ function mountApp(
           <h1>World of Discord</h1>
           <p class="sub">Welcome, ${escapeHtml(who)}</p>
         </div>
-        <button type="button" class="logout-btn" id="logout-btn">Logout</button>
+        <div class="status-pill status-pill--header" role="status"><span class="dot ok"></span> Connected</div>
       </div>
-      <div class="status-pill"><span class="dot ok"></span> Connected</div>
-      ${metaLine}
       <div class="tabs">
         <button type="button" class="tab active" data-tab="hero">Hero</button>
         <button type="button" class="tab" data-tab="explore">Explore</button>
@@ -1938,7 +1929,6 @@ function mountApp(
     }
   });
   wireHeroItems();
-  appRoot.querySelector("#logout-btn")?.addEventListener("click", () => window.location.reload());
   appRoot.querySelector('[data-tab="hero"]')?.addEventListener("click", () => setTab("hero"));
   appRoot.querySelector('[data-tab="explore"]')?.addEventListener("click", () => setTab("explore"));
   appRoot.querySelector('[data-tab="quests"]')?.addEventListener("click", () => setTab("quests"));
