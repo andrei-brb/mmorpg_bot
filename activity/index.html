@@ -7,6 +7,76 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      (function () {
+        try {
+          var q = new URLSearchParams(window.location.search);
+          var key = "discord_activity_mock_preview";
+          if (q.get("mock") === "1") {
+            localStorage.setItem(key, "1");
+            document.documentElement.classList.add("preview-full-mock");
+          } else if (q.get("mock") === "0") {
+            localStorage.removeItem(key);
+            localStorage.removeItem("discord_activity_mock_combat_view");
+            document.documentElement.classList.remove("preview-full-mock");
+            delete document.documentElement.dataset.mockCombatView;
+          } else if (localStorage.getItem(key) === "1") {
+            document.documentElement.classList.add("preview-full-mock");
+          }
+          var combatMockKey = "discord_activity_mock_combat_view";
+          if (document.documentElement.classList.contains("preview-full-mock")) {
+            document.documentElement.dataset.mockCombatView =
+              localStorage.getItem(combatMockKey) === "fight" ? "fight" : "prep";
+          }
+        } catch (_) {}
+      })();
+    </script>
+    <script>
+      (function () {
+        function initMockCombatToggle() {
+          var root = document.documentElement;
+          if (!root.classList.contains("preview-full-mock")) return;
+          var KEY = "discord_activity_mock_combat_view";
+
+          var bar = document.createElement("div");
+          bar.className = "mock-combat-subtoggle";
+          bar.setAttribute("role", "group");
+          bar.setAttribute("aria-label", "Combat tab mock");
+          bar.innerHTML =
+            '<span class="mock-combat-subtoggle__label">Combat mock</span>' +
+            '<button type="button" data-view="prep">Enemy select</button>' +
+            '<button type="button" data-view="fight">In combat</button>';
+
+          function syncButtons() {
+            var v = root.dataset.mockCombatView === "fight" ? "fight" : "prep";
+            bar.querySelectorAll("button").forEach(function (b) {
+              b.classList.toggle("active", b.getAttribute("data-view") === v);
+            });
+          }
+
+          bar.addEventListener("click", function (e) {
+            var t = e.target;
+            if (t.tagName !== "BUTTON") return;
+            var v = t.getAttribute("data-view");
+            if (v !== "prep" && v !== "fight") return;
+            root.dataset.mockCombatView = v;
+            try {
+              localStorage.setItem(KEY, v);
+            } catch (_) {}
+            syncButtons();
+          });
+
+          document.body.appendChild(bar);
+          syncButtons();
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", initMockCombatToggle);
+        } else {
+          initMockCombatToggle();
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
