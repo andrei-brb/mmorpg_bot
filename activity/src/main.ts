@@ -374,68 +374,9 @@ function wireInvIconFallbacks(scope: ParentNode): void {
   });
 }
 
-function isMockPreviewMode(): boolean {
-  return typeof document !== "undefined" && document.documentElement.classList.contains("preview-full-mock");
-}
-
-function wireStandaloneMockTabs(shell: HTMLElement): void {
-  shell.querySelectorAll(".tabs [data-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const name = (btn as HTMLElement).dataset.tab;
-      if (!name) return;
-      shell.querySelectorAll(".tabs .tab").forEach((b) => b.classList.toggle("active", b === btn));
-      (["hero", "explore", "quests", "combat", "progress"] as const).forEach((t) => {
-        shell.querySelector(`#tab-${t}`)?.classList.toggle("hidden", t !== name);
-      });
-    });
-  });
-}
-
-/** When Discord SDK/API is unavailable but mock preview is on — same tab IDs as the real shell so mock CSS backgrounds apply. */
-function renderMockPreviewStandaloneShell(message: string, extra?: string): void {
-  const root = document.getElementById("app");
-  if (!root) return;
-  const extraBlock = extra ? `<div class="mock-dev-strip__extra">${extra}</div>` : "";
-  root.innerHTML = "";
-  root.appendChild(
-    el(`
-    <div class="shell shell--mock-standalone">
-      <div class="v0-header-row">
-        <div>
-          <h1>World of Discord</h1>
-          <p class="sub">Mock preview · triple-click title to turn off</p>
-        </div>
-      </div>
-      <div class="mock-dev-strip" role="status">
-        <div class="mock-dev-strip__msg">${message}</div>
-        ${extraBlock}
-      </div>
-      <div class="tabs">
-        <button type="button" class="tab active" data-tab="hero">Hero</button>
-        <button type="button" class="tab" data-tab="explore">Explore</button>
-        <button type="button" class="tab" data-tab="quests">Quests</button>
-        <button type="button" class="tab" data-tab="combat">Combat</button>
-        <button type="button" class="tab" data-tab="progress">Progress</button>
-      </div>
-      <div id="tab-hero" class="tab-pane"><div class="mock-pane-filler" aria-hidden="true"></div></div>
-      <div id="tab-explore" class="tab-pane hidden"><div class="mock-pane-filler" aria-hidden="true"></div></div>
-      <div id="tab-quests" class="tab-pane hidden"><div class="mock-pane-filler" aria-hidden="true"></div></div>
-      <div id="tab-combat" class="tab-pane hidden"><div class="mock-pane-filler" aria-hidden="true"></div></div>
-      <div id="tab-progress" class="tab-pane hidden"><div class="mock-pane-filler" aria-hidden="true"></div></div>
-    </div>
-  `),
-  );
-  const shell = root.querySelector(".shell") as HTMLElement | null;
-  if (shell) wireStandaloneMockTabs(shell);
-}
-
 function renderDisconnected(message: string, extra?: string): void {
   const root = document.getElementById("app");
   if (!root) return;
-  if (isMockPreviewMode()) {
-    renderMockPreviewStandaloneShell(message, extra);
-    return;
-  }
   root.innerHTML = "";
   root.appendChild(
     el(`
