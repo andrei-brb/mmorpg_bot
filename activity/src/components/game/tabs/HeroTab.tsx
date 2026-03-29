@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BlacksmithModal } from "@/components/game/modals/BlacksmithModal";
 
 const EQUIP_ORDER = [
   "head",
@@ -28,19 +29,38 @@ const EQUIP_ORDER = [
   "trinket",
 ] as const;
 
-function rarityClass(rarity?: string | null): string {
+const SLOT_ICONS: Record<string, string> = {
+  head: "🪖",
+  chest: "🛡️",
+  hands: "🧤",
+  legs: "👖",
+  feet: "👢",
+  main_hand: "⚔️",
+  off_hand: "🛡️",
+  neck: "📿",
+  ring: "💍",
+  trinket: "💎",
+};
+
+function rarityBorderColor(rarity?: string | null): string {
   const v = (rarity || "").toLowerCase();
-  if (v === "legendary") return "text-rarity-legendary border-rarity-legendary/40";
-  if (v === "epic") return "text-rarity-epic border-rarity-epic/40";
-  if (v === "rare") return "text-rarity-rare border-rarity-rare/40";
-  if (v === "uncommon") return "text-rarity-uncommon border-rarity-uncommon/40";
-  return "text-rarity-common border-rarity-common/40";
+  if (v === "legendary") return "hsl(43 85% 52%)";
+  if (v === "epic") return "hsl(268 55% 58%)";
+  if (v === "rare") return "hsl(210 65% 52%)";
+  if (v === "uncommon") return "hsl(120 38% 46%)";
+  return "hsl(228 14% 22%)";
 }
 
 function itemImgSrc(it: InvRow): string | null {
   const id = it.template_id?.trim();
   if (!id) return null;
   return `${publicBaseUrl()}assets/items/${encodeURIComponent(id)}.png`;
+}
+
+function generateItemImgSrc(it: InvRow): string | null {
+  const name = it.name?.trim();
+  if (!name) return null;
+  return `${publicBaseUrl()}assets/items/generated/${encodeURIComponent(name)}.png`;
 }
 
 export function HeroTab() {
@@ -51,6 +71,8 @@ export function HeroTab() {
     getEnhanceInfo,
     postEnhance,
     buyProtection,
+    specModal,
+    requestSpecChoice,
   } = useGameSession();
 
   const [status, setStatus] = useState("");
@@ -58,6 +80,8 @@ export function HeroTab() {
   const [enhanceInfo, setEnhanceInfo] = useState<Awaited<ReturnType<typeof getEnhanceInfo>> | null>(null);
   const [prot, setProt] = useState<string>("none");
   const [frags, setFrags] = useState(0);
+  const [showBlacksmith, setShowBlacksmith] = useState(false);
+  const [selectedBagItem, setSelectedBagItem] = useState<string | null>(null);
 
   const char = inventory?.character;
   const items = inventory?.items || [];
@@ -115,10 +139,30 @@ export function HeroTab() {
     "boost_resistance",
   ]);
 
+  const ItemImg = ({ item, size = "w-10 h-10" }: { item: InvRow; size?: string }) => {
+    const src = itemImgSrc(item) || generateItemImgSrc(item);
+    if (src) {
+      return (
+        <img
+          src={src}
+          alt={item.name}
+          className={`${size} object-contain`}
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+            const next = (e.target as HTMLElement).nextElementSibling;
+            if (next) (next as HTMLElement).style.display = "";
+          }}
+        />
+      );
+    }
+    return <span className="text-xl opacity-60">{SLOT_ICONS[item.equip_slot || ""] || "📦"}</span>;
+  };
+
   return (
     <div className="space-y-4">
+      {/* CHARACTER STATS */}
       <div className="game-panel">
-        <div className="game-panel-header">Character</div>
+        <div className="game-panel-header">Character Stats</div>
         {!char ? (
           <p className="text-sm text-muted-foreground">
             No character — use <code className="text-xs">/character create</code> in Discord.
@@ -126,149 +170,217 @@ export function HeroTab() {
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-cinzel font-semibold">{char.name}</span>
-              <span className="text-primary text-xs font-mono">Lv {char.level ?? "?"}</span>
-              <span className="text-muted-foreground">{char.class}</span>
+              <span className="font-cinzel font-bold uppercase tracking-wide">{char.name}</span>
+              <span className="text-primary text-xs font-cinzel font-semibold">Lv {char.level ?? "?"}</span>
+              <span className="text-muted-foreground text-xs lowercase">{char.class}</span>
               {(char.specialization_name || char.specialization) && (
-                <span className="text-xs italic text-accent-foreground">
-                  · {char.specialization_name || char.specialization}
-                </span>
+                <>
+                  <span className="text-muted-foreground text-xs">|</span>
+                  <span className="text-xs italic text-accent-foreground">
+                    {char.specialization_name || char.specialization}
+                  </span>
+                </>
               )}
-              <span className="ml-auto text-primary font-cinzel">{Number(char.gold ?? 0).toLocaleString()} 🪙</span>
+              <span className="ml-auto text-primary font-cinzel font-semibold">
+                {Number(char.gold ?? 0).toLocaleString()} 🪙
+              </span>
             </div>
+
             <div>
               <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                <span>HP</span>
-                <span>
-                  {hp}/{maxHp || "—"}
+                <span className="font-cinzel uppercase tracking-wider font-semibold">Hit Points</span>
+                <span className="tabular-nums">
+                  {hp} / {maxHp || "—"}
                 </span>
               </div>
               <div className="hp-bar-track">
                 <div className="hp-bar-fill" style={{ width: `${hpPct}%` }} />
               </div>
             </div>
+
+            {!char.specialization && !char.specialization_name && (
+              <button
+                type="button"
+                className="game-btn-secondary w-full text-xs py-2"
+                onClick={() => void requestSpecChoice?.()}
+              >
+                ✨ Specialization
+              </button>
+            )}
           </div>
         )}
         {status && <p className="text-xs text-muted-foreground mt-2">{status}</p>}
       </div>
 
-      <div className="game-panel">
-        <div className="game-panel-header">Equipment</div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {EQUIP_ORDER.map((slot) => {
-            const it = equipped[slot];
-            const label = slot.replace("_", " ");
-            if (!it) {
+      {/* EQUIPMENT + INVENTORY side by side */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* EQUIPMENT */}
+        <div className="game-panel">
+          <div className="game-panel-header">Equipment</div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {EQUIP_ORDER.map((slot) => {
+              const it = equipped[slot];
+              const label = slot.replace(/_/g, " ");
               return (
-                <div key={slot} className="rounded-sm border border-dashed border-border p-2 text-[10px] text-muted-foreground capitalize">
-                  {label}
-                </div>
-              );
-            }
-            const src = itemImgSrc(it);
-            return (
-              <div key={slot} className={`rounded-sm border p-2 ${rarityClass(it.rarity)}`}>
-                <div className="text-[10px] capitalize text-muted-foreground mb-1">{label}</div>
-                <div className="flex items-center gap-2">
-                  {src ? (
-                    <img src={src} alt="" className="w-8 h-8 object-contain" />
-                  ) : (
-                    <span className="text-lg">⚔️</span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold truncate">{it.name}</div>
-                    {Number(it.enhancement_level ?? 0) > 0 && (
-                      <div className="text-[10px] text-primary">+{it.enhancement_level}</div>
+                <div key={slot} className="flex flex-col items-center gap-1">
+                  <div
+                    className={`relative w-full aspect-square ${it ? "slot-filled" : "slot-empty"}`}
+                    style={it ? { borderColor: rarityBorderColor(it.rarity) } : undefined}
+                    title={it ? `${it.name}${Number(it.enhancement_level ?? 0) > 0 ? ` +${it.enhancement_level}` : ""}` : label}
+                  >
+                    {it ? (
+                      <ItemImg item={it} size="w-7 h-7" />
+                    ) : (
+                      <span className="text-sm opacity-30">{SLOT_ICONS[slot]}</span>
+                    )}
+                    {it && Number(it.enhancement_level ?? 0) > 0 && (
+                      <span
+                        className="absolute -bottom-0.5 -right-0.5 text-[8px] font-bold px-1 rounded-sm"
+                        style={{
+                          background: "hsl(228 22% 9%)",
+                          color: "hsl(43 78% 50%)",
+                          border: "1px solid hsl(43 50% 35% / 0.5)",
+                        }}
+                      >
+                        +{it.enhancement_level}
+                      </span>
                     )}
                   </div>
+                  <span className="text-[8px] text-muted-foreground capitalize leading-none text-center">
+                    {label}
+                  </span>
                 </div>
-                <div className="flex gap-1 mt-2">
-                  <Button size="sm" variant="secondary" className="h-7 text-[10px]" type="button" onClick={() => openEnhance(it.id)}>
-                    Enhance
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px]"
-                    type="button"
-                    onClick={() => runAction("/api/game/item/unequip", { slot }, "Unequipped")}
-                  >
-                    Unequip
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      <div className="game-panel">
-        <div className="game-panel-header">Inventory ({bag.length})</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {bag.length === 0 && <p className="text-xs text-muted-foreground">Empty bag.</p>}
-          {bag.map((it) => {
+        {/* INVENTORY */}
+        <div className="game-panel">
+          <div className="game-panel-header">Inventory</div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {bag.length === 0 && (
+              <>
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="slot-empty w-full aspect-square" />
+                ))}
+              </>
+            )}
+            {bag.map((it) => (
+              <button
+                key={it.id}
+                type="button"
+                className={`relative slot-filled w-full aspect-square transition-all ${
+                  selectedBagItem === it.id ? "ring-1 ring-[hsl(43_78%_50%)]" : ""
+                }`}
+                style={{ borderColor: rarityBorderColor(it.rarity) }}
+                title={`${it.name}${Number(it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : ""}`}
+                onClick={() => setSelectedBagItem(selectedBagItem === it.id ? null : it.id)}
+              >
+                <ItemImg item={it} size="w-7 h-7" />
+                {Number(it.quantity ?? 1) > 1 && (
+                  <span
+                    className="absolute bottom-0 right-0.5 text-[8px] font-bold"
+                    style={{ color: "hsl(38 25% 82%)", textShadow: "0 1px 2px hsl(0 0% 0% / 0.8)" }}
+                  >
+                    ×{it.quantity}
+                  </span>
+                )}
+              </button>
+            ))}
+            {bag.length > 0 &&
+              bag.length < 10 &&
+              Array.from({ length: 10 - bag.length }).map((_, i) => (
+                <div key={`empty-${i}`} className="slot-empty w-full aspect-square" />
+              ))}
+          </div>
+
+          {/* Selected item actions */}
+          {selectedBagItem && (() => {
+            const it = bag.find((b) => b.id === selectedBagItem);
+            if (!it) return null;
             const canEquip = Boolean(it.equip_slot);
             const canUse =
               (it.item_type || "").toLowerCase() === "consumable" &&
               directUse.has((it.effect_type || "").toLowerCase());
-            const src = itemImgSrc(it);
             return (
-              <div key={it.id} className={`rounded-sm border p-2 ${rarityClass(it.rarity)}`}>
-                <div className="flex gap-2 items-center">
-                  {src ? <img src={src} alt="" className="w-9 h-9 object-contain shrink-0" /> : <span className="text-xl">📦</span>}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold truncate">
-                      {it.name}
-                      {Number(it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : ""}
-                    </div>
-                    {Number(it.enhancement_level ?? 0) > 0 && (
-                      <div className="text-[10px] text-primary">+{it.enhancement_level}</div>
-                    )}
-                  </div>
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid hsl(228 16% 20%)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <ItemImg item={it} size="w-6 h-6" />
+                  <span className="text-xs font-semibold truncate">{it.name}</span>
+                  {Number(it.enhancement_level ?? 0) > 0 && (
+                    <span className="text-[10px] text-primary">+{it.enhancement_level}</span>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-1 mt-2">
+                <div className="flex flex-wrap gap-1">
                   {canUse && (
-                    <Button
-                      size="sm"
-                      className="h-7 text-[10px]"
+                    <button
+                      className="game-btn-primary text-[10px] px-2 py-1"
                       type="button"
-                      onClick={() => runAction("/api/game/item/use", { item_id: it.id }, "Used")}
+                      onClick={() => void runAction("/api/game/item/use", { item_id: it.id }, "Used")}
                     >
                       Use
-                    </Button>
+                    </button>
                   )}
                   {canEquip && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 text-[10px]"
+                    <button
+                      className="game-btn-secondary text-[10px] px-2 py-1"
                       type="button"
-                      onClick={() => runAction("/api/game/item/equip", { item_id: it.id }, "Equipped")}
+                      onClick={() => void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped")}
                     >
                       Equip
-                    </Button>
+                    </button>
                   )}
                   {canEquip && (
-                    <Button size="sm" variant="outline" className="h-7 text-[10px]" type="button" onClick={() => openEnhance(it.id)}>
+                    <button
+                      className="game-btn-secondary text-[10px] px-2 py-1"
+                      type="button"
+                      onClick={() => openEnhance(it.id)}
+                    >
                       Enhance
-                    </Button>
+                    </button>
                   )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-[10px]"
+                  <button
+                    className="game-btn-danger text-[10px] px-2 py-1"
                     type="button"
-                    onClick={() => runAction("/api/game/item/sell", { item_id: it.id }, "Sold")}
+                    onClick={() => void runAction("/api/game/item/sell", { item_id: it.id }, "Sold")}
                   >
                     Sell
-                  </Button>
+                  </button>
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
       </div>
 
+      {/* OPEN BLACKSMITH CTA */}
+      <button
+        type="button"
+        className="game-btn-primary w-full py-3 text-sm"
+        onClick={() => setShowBlacksmith(true)}
+      >
+        🔨 Open Blacksmith
+      </button>
+
+      {/* BLACKSMITH MODAL */}
+      {showBlacksmith && (
+        <BlacksmithModal
+          item={{
+            name: "Select an item",
+            icon: "🔨",
+            rarity: "common",
+            level: 0,
+          }}
+          onClose={() => setShowBlacksmith(false)}
+          onEnhance={() => {
+            setShowBlacksmith(false);
+            void refreshInventory();
+          }}
+        />
+      )}
+
+      {/* ENHANCE DIALOG (real API) */}
       <Dialog open={Boolean(enhanceItemId)} onOpenChange={(o) => !o && setEnhanceItemId(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -321,23 +433,13 @@ export function HeroTab() {
                   </div>
                 </RadioGroup>
                 <div className="flex gap-2 mt-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void buyProtection("blessing_scroll", 1)}
-                  >
+                  <Button type="button" size="sm" variant="outline" onClick={() => void buyProtection("blessing_scroll", 1)}>
                     Buy blessing
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={() => void buyProtection("safety_charm", 1)}>
                     Buy charm
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void buyProtection("enhancement_fragment", 3)}
-                  >
+                  <Button type="button" size="sm" variant="outline" onClick={() => void buyProtection("enhancement_fragment", 3)}>
                     Buy fragments
                   </Button>
                 </div>
