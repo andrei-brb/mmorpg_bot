@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { QuestLogRow } from "@/lib/apiTypes";
+import { Button } from "@/components/ui/button";
 
-function questPillClass(state: string | undefined): string {
-  const s = (state || "active").toLowerCase();
-  if (s === "completed") return "border-emerald-500/50 text-emerald-200 bg-emerald-950/40";
-  return "border-slate-400/45 text-slate-200";
-}
+const STATE_STYLES: Record<string, string> = {
+  active: "bg-accent/60 text-accent-foreground border border-accent",
+  completed: "bg-primary/15 text-primary border border-primary/30",
+};
 
 export function QuestsTab() {
   const { refreshQuests, quests, npcInteract } = useGameSession();
@@ -24,78 +24,80 @@ export function QuestsTab() {
   }, [quests]);
 
   return (
-    <div id="tab-quests" className="tab-pane space-y-4">
-      <div className="panel v0-panel">
-        <h2>Quest Log</h2>
-        <p className="hint">
-          Talk to NPCs from Explore results. Use Talk when an NPC id is available on the quest.
+    <div className="space-y-4">
+      <div className="game-panel">
+        <div className="game-panel-header">Quest log</div>
+        <p className="text-xs text-muted-foreground">
+          Talk to NPCs from Explore results. Use the button on an active quest if the NPC id is known.
         </p>
       </div>
 
-      {rows.length === 0 ? (
-        <p className="hint">No quests in your log.</p>
-      ) : (
-        <div className="quest-grid">
-          {rows.map((q, idx) => (
-            <div key={`${q.quest_id ?? idx}`} className="quest-card panel v0-panel">
-              <div className="quest-head">
-                <div>
-                  <div className="quest-title">{q.quest_name ?? "Quest"}</div>
-                  <div className="quest-pills mt-1.5">
-                    <span className={`quest-pill ${questPillClass(q.state)}`}>{(q.state ?? "active").toUpperCase()}</span>
-                  </div>
-                </div>
-                {q.npc_id ? (
-                  <div className="quest-actions">
-                    <button
-                      type="button"
-                      className="mini-btn quest-interact"
-                      data-npc={q.npc_id}
-                      onClick={() => {
-                        void npcInteract(q.npc_id).then(() => {
-                          toast("NPC interact sent");
-                          void refreshQuests();
-                        });
-                      }}
-                    >
-                      Talk
-                    </button>
-                  </div>
-                ) : null}
+      {rows.length === 0 && <p className="text-xs text-muted-foreground">No quests in your log.</p>}
+
+      {rows.map((q, idx) => (
+        <div key={`${q.quest_id ?? idx}`} className="quest-card">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div>
+              <h3 className="font-cinzel font-semibold text-foreground text-sm">{q.quest_name ?? "Quest"}</h3>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-sm uppercase font-semibold tracking-wider ${
+                    STATE_STYLES[(q.state || "active").toLowerCase()] || STATE_STYLES.active
+                  }`}
+                >
+                  {q.state ?? "active"}
+                </span>
               </div>
-              <div className="hint text-[0.78rem] mb-1">
-                {q.npc_name ? (
-                  <>
-                    From <span className="text-foreground font-semibold">{q.npc_name}</span>
-                  </>
-                ) : null}
-                {q.current_step != null && q.total_steps != null ? (
-                  <span>
-                    {" "}
-                    · Step {q.current_step}/{q.total_steps}
-                  </span>
-                ) : null}
-              </div>
-              {q.objective ? <div className="quest-obj">{q.objective}</div> : null}
-              {q.progress && q.progress.needed != null ? (
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1 h-2 rounded-sm overflow-hidden bg-[#0b1023] border border-[#28335d]">
-                    <div
-                      className="h-full rounded-sm bg-[#727cff]"
-                      style={{
-                        width: `${Math.min(100, ((q.progress.current ?? 0) / Math.max(1, q.progress.needed)) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="hint tabular-nums text-[0.72rem]">
-                    {q.progress.current ?? 0}/{q.progress.needed}
-                  </span>
-                </div>
-              ) : null}
             </div>
-          ))}
+            {q.npc_id && (
+              <Button
+                type="button"
+                size="sm"
+                className="text-xs shrink-0 quest-interact"
+                data-npc={q.npc_id}
+                onClick={() => {
+                  void npcInteract(q.npc_id).then(() => {
+                    toast("NPC interact sent");
+                    void refreshQuests();
+                  });
+                }}
+              >
+                Talk
+              </Button>
+            )}
+          </div>
+          <div className="ornament-divider my-2" />
+          <div className="text-xs text-muted-foreground mb-1.5">
+            {q.npc_name && (
+              <>
+                From <span className="text-foreground font-semibold">{q.npc_name}</span>
+              </>
+            )}
+            {q.current_step != null && q.total_steps != null && (
+              <span>
+                {" "}
+                · Step {q.current_step}/{q.total_steps}
+              </span>
+            )}
+          </div>
+          {q.objective && <div className="text-sm text-foreground mb-2">{q.objective}</div>}
+          {q.progress && q.progress.needed != null && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 rounded-sm overflow-hidden bg-muted">
+                <div
+                  className="h-full rounded-sm bg-primary/80"
+                  style={{
+                    width: `${Math.min(100, ((q.progress.current ?? 0) / Math.max(1, q.progress.needed)) * 100)}%`,
+                  }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {q.progress.current ?? 0}/{q.progress.needed}
+              </span>
+            </div>
+          )}
         </div>
-      )}
+      ))}
     </div>
   );
 }

@@ -402,156 +402,21 @@ code {
   background: var(--ui-hero-coin) center / contain no-repeat;
 }
 
-.hero-hp-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 0.35rem;
-}
-
-.hero-hp-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.hero-hp-numbers {
-  font-size: 0.72rem;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-.hero-stats-card.panel h2 {
-  color: hsl(43 78% 52% / 0.95);
-}
-
-.hero-char-identity {
-  margin-top: 0.15rem;
-}
-
-.hero-char-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.65rem;
-}
-
-.hero-char-name {
-  font-family: "Cinzel", serif;
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: hsl(43 78% 52%);
-  text-shadow:
-    0 0 10px hsl(43 78% 50% / 0.28),
-    0 2px 4px hsl(0 0% 0% / 0.55);
-}
-
-.hero-char-level {
-  font-family: "Cinzel", serif;
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: hsl(43 65% 58%);
-  letter-spacing: 0.06em;
-}
-
-.hero-char-classline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.35rem;
-  font-size: 0.88rem;
-  color: hsl(215 20% 86%);
-  font-family: "Crimson Text", serif;
-}
-
-.hero-char-sep {
-  color: hsl(43 78% 50% / 0.65);
-  font-weight: 400;
-}
-
-.hero-spec-btn {
-  margin-top: 0.65rem;
-  padding: 0.42rem 1rem;
-  font-family: "Cinzel", serif;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-size: clamp(0.55rem, 2.4vw, 0.62rem);
-  line-height: 1.2;
-  border-radius: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: linear-gradient(180deg, #121a36 0%, #0a1026 100%);
-  color: #e2e8f0;
-  cursor: pointer;
-  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06);
-}
-
-.hero-spec-btn:hover {
-  border-color: hsl(43 78% 50% / 0.45);
-  color: hsl(43 78% 78%);
-}
-
-.hero-blacksmith-btn {
-  width: 100%;
-  margin-top: 0.75rem;
-  padding: 0.55rem 1rem;
-  min-height: 44px;
-  font-family: "Cinzel", serif;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-size: 0.68rem;
-  border-radius: 4px;
-  border: 1px solid hsl(43 55% 40% / 0.85);
-  background-image: linear-gradient(180deg, hsl(43 40% 28%) 0%, hsl(28 22% 12%) 55%, hsl(228 22% 9%) 100%);
-  box-shadow:
-    inset 0 1px 0 hsl(43 60% 55% / 0.28),
-    inset 0 -1px 0 hsl(0 0% 0% / 0.35),
-    0 0 0 1px hsl(0 0% 0% / 0.4);
-  color: hsl(43 78% 82%);
-  cursor: pointer;
-}
-
-.hero-blacksmith-btn:hover {
-  filter: brightness(1.06);
-}
-
-.panel.v0-panel h2 .hero-inventory-count {
-  font-size: 0.72em;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin-left: 0.35rem;
-}
-
-@media (max-width: 700px) {
-  .hero-main-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .hero-hp-wrap {
   margin-top: 0.65rem;
 }
 
 .hero-hp-bar {
-  height: 12px;
+  height: 9px;
   background: #0b1023;
   border: 1px solid #2a3252;
   border-radius: 999px;
   overflow: hidden;
-  box-shadow: inset 0 1px 3px hsl(0 0% 0% / 0.45);
 }
 
 .hero-hp-fill {
   height: 100%;
-  /* Match Lovable reference: green HP (was purple). */
-  background: linear-gradient(90deg, #22c55e, #4ade80);
+  background: linear-gradient(90deg, #7f7ff4, #9f9df8);
 }
 
 .inv-list {
@@ -760,17 +625,13 @@ code {
   display: none;
   width: 100%;
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
   padding-top: 3px;
-  flex-direction: row;
-  align-items: center;
 }
 
 .inv-tile--active .inv-tile-actions {
   display: flex;
-  flex-direction: row;
-  gap: 8px;
 }
 
 .inv-tile.inv-empty {
@@ -930,11 +791,6 @@ code {
 .equip-slot:not(.filled) {
   justify-content: center;
   padding: 6px;
-  font-size: 0.6rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 800;
-  color: rgba(148, 163, 184, 0.72);
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 30%),
     linear-gradient(180deg, #111a36 0%, #0a1026 100%),
@@ -1035,20 +891,13 @@ code {
 .equip-actions {
   margin-top: 3px;
   display: none;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: center;
-  align-items: center;
 }
 
-/* Always show per-slot actions when filled (Lovable-style); flex gap keeps labels from merging. */
-.equip-slot.filled .equip-actions {
+.equip-slot.equip-slot--active .equip-actions {
   display: flex;
-  flex-direction: row;
-}
-
-.equip-slot.filled .equip-actions .mini-btn {
-  flex: 0 0 auto;
 }
 
 .hidden {

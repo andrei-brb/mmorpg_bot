@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { InvRow } from "@/lib/apiTypes";
-import { ItemIcon } from "@/components/game/ItemIcon";
+import { publicBaseUrl } from "@/lib/gameApi";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,21 +28,19 @@ const EQUIP_ORDER = [
   "trinket",
 ] as const;
 
-const BAG_SLOTS = 20;
-
-function slotLabelUpper(slot: string): string {
-  return slot.replace(/_/g, " ").toUpperCase();
+function rarityClass(rarity?: string | null): string {
+  const v = (rarity || "").toLowerCase();
+  if (v === "legendary") return "text-rarity-legendary border-rarity-legendary/40";
+  if (v === "epic") return "text-rarity-epic border-rarity-epic/40";
+  if (v === "rare") return "text-rarity-rare border-rarity-rare/40";
+  if (v === "uncommon") return "text-rarity-uncommon border-rarity-uncommon/40";
+  return "text-rarity-common border-rarity-common/40";
 }
 
-/** Matches `legacy-main.ts` / `.rarity-*` in `style.css`. */
-function rarityClassV0(rarity?: string | null): string {
-  const v = (rarity || "").toLowerCase();
-  if (v === "artifact") return "rarity-artifact";
-  if (v === "legendary") return "rarity-legendary";
-  if (v === "epic") return "rarity-epic";
-  if (v === "rare") return "rarity-rare";
-  if (v === "uncommon") return "rarity-uncommon";
-  return "rarity-common";
+function itemImgSrc(it: InvRow): string | null {
+  const id = it.template_id?.trim();
+  if (!id) return null;
+  return `${publicBaseUrl()}assets/items/${encodeURIComponent(id)}.png`;
 }
 
 export function HeroTab() {
@@ -53,7 +51,6 @@ export function HeroTab() {
     getEnhanceInfo,
     postEnhance,
     buyProtection,
-    requestSpecChoice,
   } = useGameSession();
 
   const [status, setStatus] = useState("");
@@ -61,8 +58,6 @@ export function HeroTab() {
   const [enhanceInfo, setEnhanceInfo] = useState<Awaited<ReturnType<typeof getEnhanceInfo>> | null>(null);
   const [prot, setProt] = useState<string>("none");
   const [frags, setFrags] = useState(0);
-  const [activeInvId, setActiveInvId] = useState<string | null>(null);
-  const [blacksmithOpen, setBlacksmithOpen] = useState(false);
 
   const char = inventory?.character;
   const items = inventory?.items || [];
@@ -120,257 +115,159 @@ export function HeroTab() {
     "boost_resistance",
   ]);
 
-  const specLine = char?.specialization_name || char?.specialization;
-  const enhancableItems = useMemo(
-    () => items.filter((i) => Boolean(i.equip_slot)),
-    [items],
-  );
-
   return (
-    <div id="tab-hero" className="tab-pane space-y-4">
-      <div className="hero-stats-card panel v0-panel">
-        <div className="hero-stats-head">
-          <div>
-            <h2>Character Stats</h2>
-            {!char ? (
-              <p className="hint">
-                No character yet — use <code>/character create</code> in Discord.
-              </p>
-            ) : (
-              <div className="hero-char-identity">
-                <div className="hero-char-line">
-                  <span className="hero-char-name">{char.name}</span>
-                  <span className="hero-char-level">Lv {char.level ?? "?"}</span>
-                </div>
-                <div className="hero-char-classline">
-                  <span>{String(char.class || "?")}</span>
-                  {specLine ? (
-                    <>
-                      <span className="hero-char-sep">|</span>
-                      <span>{String(specLine)}</span>
-                    </>
-                  ) : null}
-                </div>
-                <button type="button" className="hero-spec-btn" onClick={() => void requestSpecChoice()}>
-                  Specialization
-                </button>
+    <div className="space-y-4">
+      <div className="game-panel">
+        <div className="game-panel-header">Character</div>
+        {!char ? (
+          <p className="text-sm text-muted-foreground">
+            No character — use <code className="text-xs">/character create</code> in Discord.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-cinzel font-semibold">{char.name}</span>
+              <span className="text-primary text-xs font-mono">Lv {char.level ?? "?"}</span>
+              <span className="text-muted-foreground">{char.class}</span>
+              {(char.specialization_name || char.specialization) && (
+                <span className="text-xs italic text-accent-foreground">
+                  · {char.specialization_name || char.specialization}
+                </span>
+              )}
+              <span className="ml-auto text-primary font-cinzel">{Number(char.gold ?? 0).toLocaleString()} 🪙</span>
+            </div>
+            <div>
+              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                <span>HP</span>
+                <span>
+                  {hp}/{maxHp || "—"}
+                </span>
               </div>
-            )}
-          </div>
-          {char && (
-            <div className="hero-gold">
-              <span>Gold</span>
-              <strong className="hero-gold-amount">{Number(char.gold ?? 0).toLocaleString()}</strong>
-            </div>
-          )}
-        </div>
-        {char && (
-          <div className="hero-hp-wrap">
-            <div className="hero-hp-label-row">
-              <span className="hero-hp-label">Hit points</span>
-              <span className="hero-hp-numbers">{maxHp > 0 ? `${hp} / ${maxHp}` : "—"}</span>
-            </div>
-            <div className="hero-hp-bar">
-              <div className="hero-hp-fill" style={{ width: `${hpPct}%` }} />
+              <div className="hp-bar-track">
+                <div className="hp-bar-fill" style={{ width: `${hpPct}%` }} />
+              </div>
             </div>
           </div>
         )}
-        {status ? (
-          <p id="hero-action-status" className="hint" style={{ marginTop: "0.5rem" }}>
-            {status}
-          </p>
-        ) : null}
+        {status && <p className="text-xs text-muted-foreground mt-2">{status}</p>}
       </div>
 
-      <div className="hero-main-grid">
-        <div className="panel v0-panel">
-          <h2>Equipment</h2>
-          <div className="equip-grid-v0">
-            {EQUIP_ORDER.map((slot) => {
-              const it = equipped[slot];
-              const labelUpper = slotLabelUpper(slot);
-              if (!it) {
-                return (
-                  <div key={slot} className="equip-slot" data-slot={slot}>
-                    {labelUpper}
-                  </div>
-                );
-              }
-              const enh = Number(it.enhancement_level ?? 0) || 0;
+      <div className="game-panel">
+        <div className="game-panel-header">Equipment</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {EQUIP_ORDER.map((slot) => {
+            const it = equipped[slot];
+            const label = slot.replace("_", " ");
+            if (!it) {
               return (
-                <div
-                  key={slot}
-                  className={`equip-slot filled item-slot ${rarityClassV0(it.rarity)}`}
-                  data-slot={slot}
-                  data-item-id={it.id}
-                >
-                  <div className="equip-frame">
-                    <span className="slot-icon">
-                      <ItemIcon item={it} size={26} />
-                    </span>
-                    {enh > 0 ? <span className="enh-badge">+{enh}</span> : null}
-                  </div>
-                  <span className="equip-label">{slot.replace(/_/g, " ")}</span>
-                  <div className="equip-actions">
-                    <button
-                      type="button"
-                      className="mini-btn act-enhance"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void openEnhance(it.id);
-                      }}
-                    >
-                      Enhance
-                    </button>
-                    <button
-                      type="button"
-                      className="mini-btn act-unequip"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void runAction("/api/game/item/unequip", { slot }, "Unequipped");
-                      }}
-                    >
-                      Unequip
-                    </button>
-                  </div>
+                <div key={slot} className="rounded-sm border border-dashed border-border p-2 text-[10px] text-muted-foreground capitalize">
+                  {label}
                 </div>
               );
-            })}
-          </div>
-          <button type="button" className="hero-blacksmith-btn" onClick={() => setBlacksmithOpen(true)}>
-            Open Blacksmith
-          </button>
-        </div>
-
-        <div className="panel v0-panel">
-          <h2>
-            Inventory <span className="hero-inventory-count">({bag.length})</span>
-          </h2>
-          <div className="inv-grid">
-            {bag.length === 0 ? (
-              <p className="hint" style={{ gridColumn: "1 / -1" }}>
-                No items in your bag yet.
-              </p>
-            ) : (
-              <>
-                {bag.map((it) => {
-                  const qty = it.quantity ?? 1;
-                  const canEquip = Boolean(it.equip_slot);
-                  const canUse =
-                    (it.item_type || "").toLowerCase() === "consumable" &&
-                    directUse.has((it.effect_type || "").toLowerCase());
-                  const enh = Number(it.enhancement_level ?? 0) || 0;
-                  const enhSuffix = enh > 0 ? ` +${enh}` : "";
-                  const qtyBadge = qty > 1 ? `x${qty}` : "";
-                  const active = activeInvId === it.id;
-                  return (
-                    <div
-                      key={it.id}
-                      role="button"
-                      tabIndex={0}
-                      className={`inv-tile ${rarityClassV0(it.rarity)} ${active ? "inv-tile--active" : ""}`}
-                      data-item-id={it.id}
-                      onClick={() => setActiveInvId((id) => (id === it.id ? null : it.id))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setActiveInvId((id) => (id === it.id ? null : it.id));
-                        }
-                      }}
-                    >
-                      <div className="inv-tile-main">
-                        <div className="inv-frame">
-                          <span className="inv-icon">
-                            <ItemIcon item={it} size={32} />
-                          </span>
-                          {enh > 0 ? <span className="inv-badge inv-badge-enh">+{enh}</span> : null}
-                          {qtyBadge ? <span className="inv-badge inv-badge-qty">{qtyBadge}</span> : null}
-                        </div>
-                        <span className="inv-tile-name">
-                          {it.name}
-                          {enhSuffix}
-                        </span>
-                      </div>
-                      <div className="inv-tile-actions">
-                        {canUse ? (
-                          <button
-                            type="button"
-                            className="mini-btn act-use"
-                            onClick={() => void runAction("/api/game/item/use", { item_id: it.id }, "Used")}
-                          >
-                            Use
-                          </button>
-                        ) : null}
-                        {canEquip ? (
-                          <button
-                            type="button"
-                            className="mini-btn act-equip"
-                            onClick={() => void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped")}
-                          >
-                            Equip
-                          </button>
-                        ) : null}
-                        {canEquip ? (
-                          <button type="button" className="mini-btn act-enhance" onClick={() => void openEnhance(it.id)}>
-                            Enhance
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="mini-btn act-sell"
-                          onClick={() => void runAction("/api/game/item/sell", { item_id: it.id }, "Sold")}
-                        >
-                          Sell
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {Array.from({ length: Math.max(0, BAG_SLOTS - bag.length) }).map((_, i) => (
-                  <div key={`empty-${i}`} className="inv-tile inv-empty" tabIndex={-1}>
-                    <span className="inv-tile-name">Empty slot</span>
+            }
+            const src = itemImgSrc(it);
+            return (
+              <div key={slot} className={`rounded-sm border p-2 ${rarityClass(it.rarity)}`}>
+                <div className="text-[10px] capitalize text-muted-foreground mb-1">{label}</div>
+                <div className="flex items-center gap-2">
+                  {src ? (
+                    <img src={src} alt="" className="w-8 h-8 object-contain" />
+                  ) : (
+                    <span className="text-lg">⚔️</span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold truncate">{it.name}</div>
+                    {Number(it.enhancement_level ?? 0) > 0 && (
+                      <div className="text-[10px] text-primary">+{it.enhancement_level}</div>
+                    )}
                   </div>
-                ))}
-              </>
-            )}
-          </div>
+                </div>
+                <div className="flex gap-1 mt-2">
+                  <Button size="sm" variant="secondary" className="h-7 text-[10px]" type="button" onClick={() => openEnhance(it.id)}>
+                    Enhance
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px]"
+                    type="button"
+                    onClick={() => runAction("/api/game/item/unequip", { slot }, "Unequipped")}
+                  >
+                    Unequip
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <Dialog open={blacksmithOpen} onOpenChange={setBlacksmithOpen}>
-        <DialogContent className="max-w-md panel v0-panel border-[#28335d]">
-          <DialogHeader>
-            <DialogTitle className="font-cinzel">Blacksmith</DialogTitle>
-          </DialogHeader>
-          <p className="hint text-sm">Choose an item to enhance (same as Enhance on gear).</p>
-          <ul className="max-h-64 overflow-y-auto space-y-2">
-            {enhancableItems.length === 0 ? (
-              <li className="hint text-sm">No gear to enhance.</li>
-            ) : (
-              enhancableItems.map((it) => (
-                <li key={it.id} className="flex items-center justify-between gap-2 border border-[#29325a] rounded-sm p-2">
-                  <span className="text-sm truncate">{it.name}</span>
-                  <button
+      <div className="game-panel">
+        <div className="game-panel-header">Inventory ({bag.length})</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {bag.length === 0 && <p className="text-xs text-muted-foreground">Empty bag.</p>}
+          {bag.map((it) => {
+            const canEquip = Boolean(it.equip_slot);
+            const canUse =
+              (it.item_type || "").toLowerCase() === "consumable" &&
+              directUse.has((it.effect_type || "").toLowerCase());
+            const src = itemImgSrc(it);
+            return (
+              <div key={it.id} className={`rounded-sm border p-2 ${rarityClass(it.rarity)}`}>
+                <div className="flex gap-2 items-center">
+                  {src ? <img src={src} alt="" className="w-9 h-9 object-contain shrink-0" /> : <span className="text-xl">📦</span>}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold truncate">
+                      {it.name}
+                      {Number(it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : ""}
+                    </div>
+                    {Number(it.enhancement_level ?? 0) > 0 && (
+                      <div className="text-[10px] text-primary">+{it.enhancement_level}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {canUse && (
+                    <Button
+                      size="sm"
+                      className="h-7 text-[10px]"
+                      type="button"
+                      onClick={() => runAction("/api/game/item/use", { item_id: it.id }, "Used")}
+                    >
+                      Use
+                    </Button>
+                  )}
+                  {canEquip && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 text-[10px]"
+                      type="button"
+                      onClick={() => runAction("/api/game/item/equip", { item_id: it.id }, "Equipped")}
+                    >
+                      Equip
+                    </Button>
+                  )}
+                  {canEquip && (
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]" type="button" onClick={() => openEnhance(it.id)}>
+                      Enhance
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-[10px]"
                     type="button"
-                    className="mini-btn shrink-0"
-                    onClick={() => {
-                      setBlacksmithOpen(false);
-                      void openEnhance(it.id);
-                    }}
+                    onClick={() => runAction("/api/game/item/sell", { item_id: it.id }, "Sold")}
                   >
-                    Enhance
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setBlacksmithOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                    Sell
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <Dialog open={Boolean(enhanceItemId)} onOpenChange={(o) => !o && setEnhanceItemId(null)}>
         <DialogContent className="max-w-md">
@@ -457,11 +354,7 @@ export function HeroTab() {
                   </SelectTrigger>
                   <SelectContent>
                     {[0, 1, 2, 3].map((n) => (
-                      <SelectItem
-                        key={n}
-                        value={String(n)}
-                        disabled={n > (Number(enhanceInfo.protections?.enhancement_fragment ?? 0) || 0)}
-                      >
+                      <SelectItem key={n} value={String(n)} disabled={n > (Number(enhanceInfo.protections?.enhancement_fragment ?? 0) || 0)}>
                         {n}
                       </SelectItem>
                     ))}

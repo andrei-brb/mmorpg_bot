@@ -86,7 +86,7 @@ export function GameShell() {
       )}
 
       <div className="mx-auto max-w-[980px] px-5 py-6">
-        <div className="game-frame rounded-sm p-4 sm:p-5 flex flex-col min-h-0">
+        <div className="game-frame rounded-sm p-4 sm:p-5">
           <div
             className="w-full h-8 -mt-4 sm:-mt-5 mb-4 rounded-t-sm overflow-hidden opacity-40"
             style={{
@@ -97,7 +97,7 @@ export function GameShell() {
             }}
           />
 
-          <div className="game-frame-inner flex flex-col min-h-0 flex-1">
+          <div className="game-frame-inner">
             <div className="crest-motif" />
             <div className="rune-band-left hidden sm:block" />
             <div className="rune-band-right hidden sm:block" />
@@ -134,25 +134,21 @@ export function GameShell() {
 
             <div className="ornament-divider mb-4" />
 
-            <div className="tab-bar rounded-sm mb-2 flex overflow-x-auto">
+            <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
               {TABS.map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}
-                  title={
-                    tab === "Hero"
-                      ? "Character stats, equipment & inventory — same layout as the Lovable reference"
-                      : undefined
-                  }
                 >
                   <span className="mr-1.5">{TAB_ICONS[tab]}</span>
                   <span className="hidden sm:inline">{tab}</span>
                 </button>
               ))}
             </div>
-            <div className="sm:px-1 flex flex-col flex-1 min-h-0">
+
+            <div className="sm:px-1">
               {activeTab === "Hero" && <HeroTab />}
               {activeTab === "Explore" && <ExploreTab />}
               {activeTab === "Quests" && <QuestsTab />}

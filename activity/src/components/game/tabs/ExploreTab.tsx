@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
+import { Button } from "@/components/ui/button";
 
 export function ExploreTab() {
   const { map, refreshMap, travel, explore, lastExplore } = useGameSession();
@@ -57,44 +58,40 @@ export function ExploreTab() {
   const cur = zones.find((z) => z.key === map?.current_zone);
 
   return (
-    <div id="tab-explore" className="tab-pane space-y-4">
-      <div className="panel v0-panel">
-        <h2>World Map</h2>
-        <p className="hint mb-2">
-          Current zone:{" "}
+    <div className="space-y-4">
+      <div className="game-panel">
+        <div className="game-panel-header">World map</div>
+        <p className="text-xs text-muted-foreground mb-2">
+          Current:{" "}
           <span className="text-foreground">
             {cur?.emoji} {cur?.name ?? "—"}
           </span>
         </p>
-        <label className="select-label" htmlFor="zone-select">
-          Travel to
-        </label>
-        <select
-          id="zone-select"
-          className="enemy-select mb-3"
-          value={zonePick}
-          onChange={(e) => setZonePick(e.target.value)}
-        >
-          {zones.map((z) => (
-            <option key={z.key} value={z.key}>
-              {z.emoji} {z.name} ({z.level_min ?? "?"}–{z.level_max ?? "?"}) {z.is_current ? "· here" : ""}
-            </option>
-          ))}
-        </select>
-        <div className="row-actions">
-          <button type="button" className="btn" disabled={busy} onClick={() => void doTravel()}>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select
+            className="game-select flex-1 bg-background border rounded-sm px-2 py-2 text-sm"
+            value={zonePick}
+            onChange={(e) => setZonePick(e.target.value)}
+          >
+            {zones.map((z) => (
+              <option key={z.key} value={z.key}>
+                {z.emoji} {z.name} ({z.level_min ?? "?"}-{z.level_max ?? "?"}) {z.is_current ? "· here" : ""}
+              </option>
+            ))}
+          </select>
+          <Button type="button" className="game-btn-primary" disabled={busy} onClick={() => void doTravel()}>
             Travel
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void doExplore()}>
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => void doExplore()}>
             Explore
-          </button>
+          </Button>
         </div>
       </div>
 
       {lastExplore && (
-        <div className="panel v0-panel">
-          <h2>Last result</h2>
-          <pre className="hint whitespace-pre-wrap break-words max-h-48 overflow-y-auto text-[0.72rem] leading-relaxed">
+        <div className="game-panel">
+          <div className="game-panel-header">Last result</div>
+          <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
             {JSON.stringify(lastExplore, null, 2)}
           </pre>
         </div>
