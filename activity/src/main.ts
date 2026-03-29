@@ -444,7 +444,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
           const enhSuffix = enh > 0 ? ` +${enh}` : "";
           const qtyBadge = qty > 1 ? `x${qty}` : "";
           return `
-            <div class="inv-tile ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}" tabindex="0" role="button" aria-label="Inventory item ${escapeHtml(
+            <div class="inv-tile ${rarityClass(it.rarity)}" data-item-id="${escapeHtml(it.id)}" tabindex="0" role="button" aria-label="Inventory item ${escapeHtml(
             it.name,
           )}">
               <div class="inv-tile-main">
@@ -481,7 +481,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
         return `<div class="equip-slot" data-slot="${slot}">${label}</div>`;
       }
       return `
-        <div class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" title="${escapeHtml(it.name)}">
+        <div class="equip-slot filled item-slot ${rarityClass(it.rarity)}" data-slot="${slot}" data-item-id="${escapeHtml(it.id)}" aria-label="${escapeHtml(it.name)}">
           <div class="equip-frame">
             <span class="slot-icon">${renderInvIconHtml(it, "⚔️")}</span>
             ${((Number((it as any).enhancement_level ?? 0) || 0) > 0) ? `<span class="enh-badge" title="Enhanced">+${escapeHtml(String(Number((it as any).enhancement_level ?? 0) || 0))}</span>` : ""}
@@ -896,13 +896,15 @@ function mountApp(
     const statLines = itemStatLines(item);
     const statsHtml = statLines.length
       ? `<div class="item-tip-stats">${statLines.map((l) => `<div class="item-tip-stat">${escapeHtml(l)}</div>`).join("")}</div>`
-      : `<div class="item-tip-line">No combat stats</div>`;
+      : `<div class="item-tip-line item-tip-line--muted">No combat stats</div>`;
     tooltipEl.innerHTML = `
       <div class="item-tip-card ${rarityClass(item.rarity)}">
-        <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
-        <div class="item-tip-line">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
-        <div class="item-tip-line">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
-        ${statsHtml}
+        <div class="item-tip-inner">
+          <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
+          <div class="item-tip-line item-tip-line--rarity">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
+          <div class="item-tip-line item-tip-line--type">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
+          ${statsHtml}
+        </div>
       </div>
     `;
     const rect = anchor.getBoundingClientRect();
