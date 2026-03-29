@@ -10,9 +10,7 @@ type Props = {
   style?: CSSProperties;
 };
 
-/**
- * Try pack icons (`assets/items/icons/{slug}_{rarity}.png`), generated name paths, `assets/items/{template_id}.png`, then DB emoji.
- */
+/** `assets/items/generated/{Display Name}.png` (then .jpg / .jpeg), then DB emoji. */
 export function ItemIcon({ item, size = 36, className, style }: Props) {
   const candidates = useMemo(() => itemIconCandidates(item), [item]);
   const emoji = useMemo(() => itemEmojiFallback(item), [item]);

@@ -1,9 +1,8 @@
 import type { InvRow } from "@/lib/apiTypes";
 import { publicBaseUrl } from "@/lib/gameApi";
-import itemIconManifest from "@/data/itemIconManifest.json";
 
-/** Built by `scripts/generate-item-icon-manifest.mjs` from `public/assets/items/icons/*`. */
-const manifest = itemIconManifest as Record<string, string[]>;
+/** Display-name sprites shipped under `public/assets/items/generated/` only. */
+const GENERATED_DIR = "assets/items/generated/";
 
 export function looksLikeEmoji(s: string): boolean {
   const v = (s || "").trim();
@@ -12,7 +11,7 @@ export function looksLikeEmoji(s: string): boolean {
   return true;
 }
 
-/** Match server-side naming / inventory display. */
+/** Align with server-side display names and `generated/{Name}.png` filenames. */
 export function normalizeItemIconName(name: string | undefined | null): string {
   let raw = (name || "").trim();
   raw = raw.replace(/\s*\+\s*\d+\s*$/u, "");
@@ -21,51 +20,24 @@ export function normalizeItemIconName(name: string | undefined | null): string {
   return raw.trim();
 }
 
-/** Slug for manifest keys (`icons/{slug}_{rarity}.png`). */
-export function slugifyItemNameForIconPack(name: string | undefined | null): string {
-  const n = normalizeItemIconName(name);
-  if (!n) return "";
-  return n
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-/** Prefer exact tier, then other tiers — art pack often has one file per item line. */
-const PACK_RARITY_FALLBACK = ["uncommon", "common", "rare", "epic", "legendary"] as const;
-
-function pickPackFile(files: string[] | undefined, rarity: string | undefined | null): string | null {
-  if (!files?.length) return null;
-  const r = (rarity || "common").trim().toLowerCase() || "common";
-  const order = [r, ...PACK_RARITY_FALLBACK.filter((x) => x !== r)];
-  for (const tier of order) {
-    const hit = files.find((f) => {
-      const lower = f.toLowerCase();
-      return (
-        lower.endsWith(`_${tier}.png`) ||
-        lower.endsWith(`_${tier}.jpg`) ||
-        lower.endsWith(`_${tier}.jpeg`) ||
-        lower.endsWith(`_${tier}.webp`)
-      );
-    });
-    if (hit) return hit;
-  }
-  if (files.length === 1) return files[0];
-  return files[0] ?? null;
+function generatedSrcsForName(itemName: string | undefined | null, base: string): string[] {
+  const n = normalizeItemIconName(itemName);
+  if (!n) return [];
+  const file = encodeURIComponent(n);
+  return [
+    `${base}${GENERATED_DIR}${file}.png`,
+    `${base}${GENERATED_DIR}${file}.jpg`,
+    `${base}${GENERATED_DIR}${file}.jpeg`,
+  ];
 }
 
 /**
- * Single URL from bundled `icons/` art only (see `itemIconManifest.json`). No legacy `generated/` or
- * `template_id` images — avoids wrong art and long 404 chains.
+ * URLs under `assets/items/generated/` only (`{Display Name}.png` / `.jpg` / `.jpeg`).
+ * Same item name at every rarity shares one sprite.
  */
 export function itemIconCandidates(item: InvRow): string[] {
-  const slug = slugifyItemNameForIconPack(item.name);
-  if (!slug) return [];
-  const files = manifest[slug];
-  const file = pickPackFile(files, item.rarity);
-  if (!file) return [];
   const base = publicBaseUrl();
-  return [`${base}assets/items/icons/${file}`];
+  return [...new Set(generatedSrcsForName(item.name, base))];
 }
 
 export function itemEmojiFallback(item: InvRow, defaultEmoji = "📦"): string {

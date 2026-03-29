@@ -12,7 +12,6 @@
     "moduleDetection": "force",
     "moduleResolution": "bundler",
     "noEmit": true,
-    "resolveJsonModule": true,
     "noFallthroughCasesInSwitch": false,
     "noImplicitAny": false,
     "noUnusedLocals": false,
