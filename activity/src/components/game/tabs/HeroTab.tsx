@@ -353,9 +353,10 @@ export function HeroTab() {
               try {
                 const j = await postEnhance(enhanceItemId, null, 0);
                 toast(j.message || (j.ok ? "Enhanced!" : "Failed"));
-              } catch (e) { toast.error(String(e)); }
-              setEnhanceItemId(null);
-              await refreshInventory();
+                // Keep modal open so you can enhance again (+inventory refreshes inside postEnhance).
+              } catch (e) {
+                toast.error(String(e));
+              }
             }}
           />
         );
