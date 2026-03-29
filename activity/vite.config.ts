@@ -7,7 +7,8 @@ export default defineConfig(({ mode }) => {
   const proxyTarget = env.VITE_DEV_PROXY_TARGET || "http://127.0.0.1:8080";
 
   return {
-    base: "./",
+    // Root-relative `/assets/...` URLs — avoids broken relative `./assets` resolution in some iframe paths.
+    base: "/",
     server: {
       port: 5173,
       strictPort: true,

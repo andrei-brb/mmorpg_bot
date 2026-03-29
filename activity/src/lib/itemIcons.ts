@@ -19,8 +19,17 @@ export function looksLikeEmoji(s: string): boolean {
   return true;
 }
 
+/** Match server-side `icon_url_for_item_name` / inventory display so filenames align with `generated/*.png`. */
+export function normalizeItemIconName(name: string | undefined | null): string {
+  let raw = (name || "").trim();
+  raw = raw.replace(/\s*\+\s*\d+\s*$/u, "");
+  raw = raw.replace(/Shadowforge/g, "Shadow Forge");
+  raw = raw.replace(/\s+Chest$/u, "");
+  return raw.trim();
+}
+
 export function itemIconGeneratedSrcs(itemName: string | undefined | null, base: string): string[] {
-  const n = (itemName || "").trim();
+  const n = normalizeItemIconName(itemName);
   if (!n) return [];
   const file = `${encodeURIComponent(n)}.png`;
   return GENERATED_BASES.map((b) => `${base}${b}${file}`);
@@ -32,12 +41,18 @@ function templateSrc(templateId: string | undefined | null, base: string): strin
   return `${base}assets/items/${encodeURIComponent(id)}.png`;
 }
 
-/** Ordered list of image URLs to try; same order as legacy inventory icons. */
+/**
+ * Ordered URLs to try. PNGs in this repo are almost all under `generated/{display name}.png`, while
+ * `template_id` is often tiered (`chest_common_4`) — only a few ids match flat `assets/items/{id}.png`
+ * via the server fallback. Prefer display-name paths first so armor/gloves match `Scale Cuirass.png`,
+ * `Steel Grips.png`, etc.
+ */
 export function itemIconCandidates(item: InvRow): string[] {
   const base = publicBaseUrl();
-  const primary = templateSrc(item.template_id, base);
   const generated = itemIconGeneratedSrcs(item.name, base);
-  return [primary, ...generated].filter((v): v is string => Boolean(v));
+  const primary = templateSrc(item.template_id, base);
+  const ordered = [...generated, primary].filter((v): v is string => Boolean(v));
+  return [...new Set(ordered)];
 }
 
 export function itemEmojiFallback(item: InvRow, defaultEmoji = "📦"): string {
