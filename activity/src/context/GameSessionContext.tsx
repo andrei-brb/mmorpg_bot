@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import type {
   CombatEnemy,
@@ -15,8 +16,10 @@ import type {
   ExploreMapPayload,
   ExploreResultPayload,
   InventoryPayload,
+  LiveEventRow,
   ProgressPayload,
   QuestLogPayload,
+  SpecGatePayload,
   SpecOption,
 } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
@@ -34,6 +37,8 @@ type GameSessionValue = {
   lastExplore: ExploreResultPayload | null;
   progress: ProgressPayload | null;
   quests: QuestLogPayload | null;
+  liveEvents: LiveEventRow[];
+  refreshLiveEvents: () => Promise<void>;
   specModal: { open: boolean; options: SpecOption[]; unlockLevel: number };
   closeSpecModal: () => void;
   chooseSpecialization: (specKey: string) => Promise<void>;
@@ -61,8 +66,8 @@ type GameSessionValue = {
     fragments: number,
   ) => Promise<{ ok?: boolean; message?: string }>;
   buyProtection: (key: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
-  npcInteract: (npc?: string) => Promise<void>;
-  /** Re-fetch spec gate from API (opens specialization modal if the server says you must choose). */
+  npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  /** Opens API-driven spec modal when eligible, otherwise explains why (toast). */
   requestSpecChoice: () => Promise<void>;
   displayName: string;
 };
@@ -97,6 +102,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [lastExplore, setLastExplore] = useState<ExploreResultPayload | null>(null);
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [quests, setQuests] = useState<QuestLogPayload | null>(null);
+  const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [specModal, setSpecModal] = useState<{
     open: boolean;
     options: SpecOption[];
@@ -149,6 +155,16 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [accessToken, guildId]);
 
+  const refreshLiveEvents = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const j = await api.getLiveEvents(accessToken, guildId);
+      setLiveEvents(j.events || []);
+    } catch (e) {
+      console.warn("refreshLiveEvents", e);
+    }
+  }, [accessToken, guildId]);
+
   const checkSpecModal = useCallback(async () => {
     if (!accessToken) return;
     try {
@@ -172,18 +188,41 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requestSpecChoice = useCallback(async () => {
-    await checkSpecModal();
-  }, [checkSpecModal]);
+    if (!accessToken) return;
+    try {
+      const json = (await api.getSpecializations(accessToken, guildId)) as SpecGatePayload;
+      if (!json.ok) {
+        toast.error("Could not load specialization options.");
+        return;
+      }
+      if (json.needs_choice && json.options?.length) {
+        setSpecModal({
+          open: true,
+          options: json.options,
+          unlockLevel: json.spec_unlock_level ?? 10,
+        });
+      } else if (json.specialization) {
+        toast.info("You already have a specialization for this character.");
+      } else {
+        toast.info(`Reach level ${json.spec_unlock_level ?? 10} to choose a specialization.`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  }, [accessToken, guildId]);
 
   const chooseSpecialization = useCallback(
     async (specKey: string) => {
       if (!accessToken) return;
       const res = await api.postSpecialization(accessToken, specKey, guildId);
-      const j = (await res.json()) as { ok?: boolean; message?: string };
+      const j = (await res.json()) as { ok?: boolean; message?: string; error?: string };
       if (res.ok && j.ok) {
         closeSpecModal();
+        toast.success(j.message || "Specialization saved.");
         await refreshInventory();
         await refreshProgress();
+      } else {
+        toast.error(j.message || j.error || "Could not choose specialization.");
       }
     },
     [accessToken, guildId, closeSpecModal, refreshInventory, refreshProgress],
@@ -309,11 +348,19 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
 
   const npcInteract = useCallback(
     async (npc?: string) => {
-      if (!accessToken) return;
-      await api.postNpcInteract(accessToken, npc, guildId);
+      if (!accessToken) return { ok: false, error: "no_token" };
+      const res = await api.postNpcInteract(accessToken, npc, guildId);
+      let j: { ok?: boolean; message?: string; error?: string } = {};
+      try {
+        j = (await res.json()) as typeof j;
+      } catch {
+        /* ignore */
+      }
       await refreshInventory();
       await refreshProgress();
       await refreshQuests();
+      const ok = res.ok && j.ok !== false;
+      return { ok, message: j.message, error: j.error };
     },
     [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
   );
@@ -394,6 +441,11 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [phase, accessToken, inventory?.character?.level, checkSpecModal]);
 
+  useEffect(() => {
+    if (phase !== "ready" || !accessToken) return;
+    void refreshLiveEvents();
+  }, [phase, accessToken, refreshLiveEvents]);
+
   const displayName = useMemo(() => {
     const d = inventory?.discord;
     const gn = d?.global_name || d?.username;
@@ -412,6 +464,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       lastExplore,
       progress,
       quests,
+      liveEvents,
+      refreshLiveEvents,
       specModal,
       closeSpecModal,
       chooseSpecialization,
@@ -445,6 +499,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       lastExplore,
       progress,
       quests,
+      liveEvents,
+      refreshLiveEvents,
       specModal,
       closeSpecModal,
       chooseSpecialization,

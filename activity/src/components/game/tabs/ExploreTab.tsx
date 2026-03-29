@@ -159,8 +159,14 @@ export function ExploreTab() {
               if (!id) return;
               setNpcBusy(true);
               void npcInteract(id)
-                .then(() => {
-                  toast("Interact sent", { description: "Check Discord for a message from this NPC." });
+                .then((r) => {
+                  if (r.ok) {
+                    toast.success(r.message || "Interact sent", {
+                      description: "Check Discord DMs for a message from this NPC.",
+                    });
+                  } else {
+                    toast.error(r.message || r.error || "Could not interact.");
+                  }
                 })
                 .finally(() => setNpcBusy(false));
             }}

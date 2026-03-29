@@ -48,9 +48,16 @@ export function QuestsTab() {
               </div>
               {isCompleted && q.npc_id && (
                 <button
+                  type="button"
                   onClick={() => {
-                    void npcInteract(q.npc_id).then(() => {
-                      toast("Quest turned in!", { description: `${q.quest_name} completed. Rewards granted.` });
+                    void npcInteract(q.npc_id).then((r) => {
+                      if (r.ok) {
+                        toast.success(r.message || "Quest turned in!", {
+                          description: q.quest_name ? `${q.quest_name}` : undefined,
+                        });
+                      } else {
+                        toast.error(r.message || r.error || "Could not turn in quest.");
+                      }
                       void refreshQuests();
                     });
                   }}
@@ -61,9 +68,16 @@ export function QuestsTab() {
               )}
               {!isCompleted && q.npc_id && (
                 <button
+                  type="button"
                   onClick={() => {
-                    void npcInteract(q.npc_id).then(() => {
-                      toast("NPC interact sent");
+                    void npcInteract(q.npc_id).then((r) => {
+                      if (r.ok) {
+                        toast.success(r.message || "NPC interaction sent.", {
+                          description: "Check Discord DMs if a quest was offered.",
+                        });
+                      } else {
+                        toast.error(r.message || r.error || "Could not talk to NPC.");
+                      }
                       void refreshQuests();
                     });
                   }}

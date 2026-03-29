@@ -4,6 +4,7 @@ import type {
   ExploreMapPayload,
   ExploreResultPayload,
   InventoryPayload,
+  LiveEventRow,
   ProgressPayload,
   QuestLogPayload,
   SpecGatePayload,
@@ -117,6 +118,14 @@ export async function getQuests(token: string, guildId?: string): Promise<QuestL
   const res = await fetch(apiUrl("/api/game/quests"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`quests ${res.status}`);
   return res.json() as Promise<QuestLogPayload>;
+}
+
+export async function getLiveEvents(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; events?: LiveEventRow[] }> {
+  const res = await fetch(apiUrl("/api/game/live-events"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<{ ok?: boolean; events?: LiveEventRow[] }>;
 }
 
 export async function getSpecializations(token: string, guildId?: string): Promise<SpecGatePayload> {

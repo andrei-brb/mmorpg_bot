@@ -193,6 +193,16 @@ export type SpecGatePayload = {
   options?: SpecOption[];
 };
 
+/** Active guild live events from `GET /api/game/live-events`. */
+export type LiveEventRow = {
+  slug?: string;
+  title?: string;
+  description?: string;
+  config?: Record<string, unknown>;
+  starts_at?: string;
+  ends_at?: string;
+};
+
 /** Matches `BlacksmithService.get_enhancement_info` + `protections` from Activity HTTP. */
 export type EnhanceInfoPayload = {
   ok?: boolean;

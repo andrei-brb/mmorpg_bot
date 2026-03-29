@@ -22,6 +22,7 @@ export function GameShell() {
   const [activeTab, setActiveTab] = useState<TabName>("Hero");
   const {
     displayName,
+    liveEvents,
     specModal,
     closeSpecModal,
     chooseSpecialization,
@@ -114,6 +115,28 @@ export function GameShell() {
             </div>
 
             <div className="ornament-divider mb-4" />
+
+            {liveEvents.length > 0 && (
+              <div
+                className="mb-4 p-3 rounded-sm text-xs"
+                style={{
+                  background: "linear-gradient(180deg, hsl(43 40% 12% / 0.35) 0%, hsl(228 20% 10% / 0.5) 100%)",
+                  border: "1px solid hsl(43 50% 35% / 0.35)",
+                }}
+              >
+                <div className="font-cinzel font-semibold text-primary mb-2">Guild live events</div>
+                <ul className="space-y-2">
+                  {liveEvents.map((ev) => (
+                    <li key={ev.slug || ev.title || String(ev.ends_at)}>
+                      <span className="font-semibold text-foreground">{ev.title || ev.slug || "Event"}</span>
+                      {ev.description && (
+                        <span className="text-muted-foreground"> — {ev.description}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
               {TABS.map((tab) => (

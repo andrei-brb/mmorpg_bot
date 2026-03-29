@@ -5,7 +5,6 @@ import type { EnhanceInfoPayload, InvRow } from "@/lib/apiTypes";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
-import { SpecializationModal } from "../modals/SpecializationModal";
 
 const EQUIP_ORDER = [
   "head", "chest", "hands", "legs", "feet",
@@ -54,7 +53,7 @@ function isEnhanceableGear(it: InvRow): boolean {
 export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
-    getEnhanceInfo, postEnhance, buyProtection,
+    getEnhanceInfo, postEnhance, buyProtection, requestSpecChoice,
   } = useGameSession();
 
   /** Hover: stats only. Click: `pinnedKey` keeps actions open until outside click or same slot toggled. */
@@ -63,7 +62,6 @@ export function HeroTab() {
   const [enhanceItemId, setEnhanceItemId] = useState<string | null>(null);
   const [enhancePayload, setEnhancePayload] = useState<EnhanceInfoPayload | null>(null);
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
-  const [showSpec, setShowSpec] = useState(false);
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -187,8 +185,11 @@ export function HeroTab() {
                   </>
                 )}
                 {!char.specialization && !char.specialization_name && (
-                  <button onClick={() => setShowSpec(true)}
-                    className="text-primary text-xs hover:underline font-semibold animate-pulse-glow">
+                  <button
+                    type="button"
+                    onClick={() => void requestSpecChoice()}
+                    className="text-primary text-xs hover:underline font-semibold animate-pulse-glow"
+                  >
                     Choose Spec!
                   </button>
                 )}
@@ -211,7 +212,19 @@ export function HeroTab() {
 
             <div className="ornament-divider mb-3" />
             <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setShowSpec(true)} className="game-btn-secondary text-xs px-3 py-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (char.specialization || char.specialization_name) {
+                    toast.info(
+                      `Specialization: ${char.specialization_name || char.specialization}`,
+                    );
+                  } else {
+                    void requestSpecChoice();
+                  }
+                }}
+                className="game-btn-secondary text-xs px-3 py-1.5"
+              >
                 ⚔️ Specialization
               </button>
             </div>
@@ -300,13 +313,16 @@ export function HeroTab() {
             })}
           </div>
           <div className="ornament-divider my-3" />
-          <button onClick={() => {
-            const first =
-              items.find((i) => i.equip_slot && !i.is_equipped) ??
-              items.find((i) => i.is_equipped && i.equip_slot);
-            if (first) setEnhanceItemId(first.id);
-            else toast("No gear in bag or equipment to enhance");
-          }} className="game-btn-primary text-xs w-full">
+          <button
+            type="button"
+            onClick={() => {
+              const list = blacksmithCandidates;
+              if (list.length === 0) toast("No gear to enhance");
+              else if (list.length === 1) setEnhanceItemId(list[0].id);
+              else setBlacksmithPickerOpen(true);
+            }}
+            className="game-btn-primary text-xs w-full"
+          >
             🔨 Open Blacksmith
           </button>
         </div>
@@ -509,15 +525,6 @@ export function HeroTab() {
         );
       })()}
 
-      {/* Specialization Modal */}
-      {showSpec && (
-        <SpecializationModal
-          playerLevel={char?.level ?? 0}
-          currentSpec={char?.specialization || null}
-          onClose={() => setShowSpec(false)}
-          onChoose={(key) => { setShowSpec(false); toast(`Chose: ${key}`); }}
-        />
-      )}
     </div>
   );
 }
