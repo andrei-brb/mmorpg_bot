@@ -22,3 +22,6 @@ activity/node_modules/
 activity/dist/
 activity/.env
 *.tsbuildinfo
+
+# Local UI export (generated; large)
+/world-of-discord-activity-ui.zip
