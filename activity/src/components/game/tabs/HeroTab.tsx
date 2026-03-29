@@ -57,7 +57,6 @@ export function HeroTab() {
   const [enhanceInfo, setEnhanceInfo] = useState<Awaited<ReturnType<typeof getEnhanceInfo>> | null>(null);
   const [prot, setProt] = useState<string>("none");
   const [frags, setFrags] = useState(0);
-  const [activeEquipSlot, setActiveEquipSlot] = useState<string | null>(null);
   const [activeInvId, setActiveInvId] = useState<string | null>(null);
   const [blacksmithOpen, setBlacksmithOpen] = useState(false);
 
@@ -142,7 +141,7 @@ export function HeroTab() {
             {char && (
               <div className="mt-2">
                 <button type="button" className="mini-btn" onClick={() => void requestSpecChoice()}>
-                  ⚔ Specialization
+                  Specialization
                 </button>
               </div>
             )}
@@ -156,10 +155,13 @@ export function HeroTab() {
         </div>
         {char && (
           <div className="hero-hp-wrap">
+            <div className="hero-hp-label-row">
+              <span className="hero-hp-label">Hit points</span>
+              <span className="hero-hp-numbers">{maxHp > 0 ? `${hp} / ${maxHp}` : "—"}</span>
+            </div>
             <div className="hero-hp-bar">
               <div className="hero-hp-fill" style={{ width: `${hpPct}%` }} />
             </div>
-            <div className="hint">{maxHp > 0 ? `${hp} / ${maxHp} HP` : "HP unavailable"}</div>
           </div>
         )}
         {status ? (
@@ -184,26 +186,12 @@ export function HeroTab() {
                 );
               }
               const enh = Number(it.enhancement_level ?? 0) || 0;
-              const active = activeEquipSlot === slot;
               return (
                 <div
                   key={slot}
-                  role="button"
-                  tabIndex={0}
-                  className={`equip-slot filled item-slot ${rarityClassV0(it.rarity)} ${active ? "equip-slot--active" : ""}`}
+                  className={`equip-slot filled item-slot ${rarityClassV0(it.rarity)}`}
                   data-slot={slot}
                   data-item-id={it.id}
-                  onClick={() => {
-                    setActiveInvId(null);
-                    setActiveEquipSlot((s) => (s === slot ? null : slot));
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setActiveInvId(null);
-                      setActiveEquipSlot((s) => (s === slot ? null : slot));
-                    }
-                  }}
                 >
                   <div className="equip-frame">
                     <span className="slot-icon">
@@ -213,13 +201,23 @@ export function HeroTab() {
                   </div>
                   <span className="equip-label">{label}</span>
                   <div className="equip-actions">
-                    <button type="button" className="mini-btn act-enhance" onClick={() => void openEnhance(it.id)}>
+                    <button
+                      type="button"
+                      className="mini-btn act-enhance"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openEnhance(it.id);
+                      }}
+                    >
                       Enhance
                     </button>
                     <button
                       type="button"
                       className="mini-btn act-unequip"
-                      onClick={() => void runAction("/api/game/item/unequip", { slot }, "Unequipped")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void runAction("/api/game/item/unequip", { slot }, "Unequipped");
+                      }}
                     >
                       Unequip
                     </button>
@@ -259,14 +257,10 @@ export function HeroTab() {
                       tabIndex={0}
                       className={`inv-tile ${rarityClassV0(it.rarity)} ${active ? "inv-tile--active" : ""}`}
                       data-item-id={it.id}
-                      onClick={() => {
-                        setActiveEquipSlot(null);
-                        setActiveInvId((id) => (id === it.id ? null : it.id));
-                      }}
+                      onClick={() => setActiveInvId((id) => (id === it.id ? null : it.id))}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          setActiveEquipSlot(null);
                           setActiveInvId((id) => (id === it.id ? null : it.id));
                         }
                       }}

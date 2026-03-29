@@ -134,19 +134,29 @@ export function GameShell() {
 
             <div className="ornament-divider mb-4" />
 
-            <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
+            <div className="tab-bar rounded-sm mb-2 flex overflow-x-auto">
               {TABS.map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}
+                  title={
+                    tab === "Hero"
+                      ? "Character stats, equipment & inventory — same layout as the Lovable reference"
+                      : undefined
+                  }
                 >
                   <span className="mr-1.5">{TAB_ICONS[tab]}</span>
                   <span className="hidden sm:inline">{tab}</span>
                 </button>
               ))}
             </div>
+            {activeTab === "Hero" && (
+              <p className="text-center text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-4 px-2 opacity-90">
+                Stats, equipment &amp; bag — one screen (no separate inventory tab).
+              </p>
+            )}
 
             <div className="sm:px-1 flex flex-col flex-1 min-h-0">
               {activeTab === "Hero" && <HeroTab />}

@@ -402,6 +402,32 @@ code {
   background: var(--ui-hero-coin) center / contain no-repeat;
 }
 
+.hero-hp-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0.35rem;
+}
+
+.hero-hp-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hero-hp-numbers {
+  font-size: 0.72rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-stats-card.panel h2 {
+  color: hsl(43 78% 52% / 0.95);
+}
+
 .hero-hp-wrap {
   margin-top: 0.65rem;
 }
@@ -416,7 +442,8 @@ code {
 
 .hero-hp-fill {
   height: 100%;
-  background: linear-gradient(90deg, #7f7ff4, #9f9df8);
+  /* Match Lovable reference: green HP (was purple). */
+  background: linear-gradient(90deg, #22c55e, #4ade80);
 }
 
 .inv-list {
@@ -625,13 +652,17 @@ code {
   display: none;
   width: 100%;
   justify-content: center;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: wrap;
   padding-top: 3px;
+  flex-direction: row;
+  align-items: center;
 }
 
 .inv-tile--active .inv-tile-actions {
   display: flex;
+  flex-direction: row;
+  gap: 8px;
 }
 
 .inv-tile.inv-empty {
@@ -891,13 +922,20 @@ code {
 .equip-actions {
   margin-top: 3px;
   display: none;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
 }
 
-.equip-slot.equip-slot--active .equip-actions {
+/* Always show per-slot actions when filled (Lovable-style); flex gap keeps labels from merging. */
+.equip-slot.filled .equip-actions {
   display: flex;
+  flex-direction: row;
+}
+
+.equip-slot.filled .equip-actions .mini-btn {
+  flex: 0 0 auto;
 }
 
 .hidden {
