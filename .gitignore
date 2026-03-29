@@ -28,3 +28,4 @@ activity/.env
 
 # If you unzip next to `activity/`, ignore the duplicate folder
 activity 2/
+activity/realm-whispers-client-main/
