@@ -907,35 +907,44 @@ code {
 .tabs {
   display: flex;
   gap: var(--combat-space-2);
+  align-items: stretch;
   margin-bottom: 0.35rem;
   margin-top: 0;
   padding: 6px;
   border-radius: var(--combat-radius-md);
-  background-color: color-mix(in srgb, var(--combat-surface-dark) 45%, transparent);
+  /* Let TABS.jpeg read clearly; tint only fills transparent areas */
+  background-color: color-mix(in srgb, var(--combat-surface-dark) 22%, transparent);
   background-image: var(--ui-tab-strip);
   background-size: cover;
-  background-position: center;
+  /* Nudge art so painted labels sit with the hit targets (tweak % if art changes) */
+  background-position: center 28%;
   background-repeat: no-repeat;
-  background-blend-mode: overlay;
+  background-blend-mode: normal;
 }
 
 .tab {
   flex: 1;
   padding: var(--combat-space-2) var(--combat-space-3);
   border-radius: var(--combat-radius-sm);
-  border: 1px solid var(--combat-border-tab);
-  background: var(--combat-surface-dark);
-  color: var(--combat-text-dim);
+  border: 1px solid rgba(44, 52, 87, 0.35);
+  background: rgba(13, 18, 40, 0.38);
+  color: rgba(231, 236, 255, 0.82);
   font-size: var(--combat-text-base);
   font-weight: 600;
   cursor: pointer;
+  backdrop-filter: blur(1px);
+}
+
+.tab:hover {
+  border-color: rgba(89, 100, 168, 0.45);
+  background: rgba(13, 18, 40, 0.48);
 }
 
 .tab.active {
-  border-color: var(--combat-border-tab-active);
-  color: var(--text);
-  background: linear-gradient(180deg, #1e2752, #141a39);
-  box-shadow: var(--combat-shadow-inset-tab);
+  border-color: rgba(114, 124, 255, 0.55);
+  color: rgba(248, 250, 255, 0.95);
+  background: rgba(22, 30, 62, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(114, 124, 255, 0.22);
 }
 
 .tab-pane {
