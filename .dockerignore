@@ -1,0 +1,31 @@
+# Smaller build context + image → faster push/pull on Railway (fewer registry timeouts).
+
+.git
+.github
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# Discord Activity — Vite build runs in Dockerfile stage 1; do not copy dev tree into final image
+activity/node_modules/
+activity/dist/
+activity/.env
+activity/.vite/
+**/*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+.cursor/
+.vscode/
+
+# Logs & local artifacts
+*.log
+world-of-discord-activity-ui.zip
