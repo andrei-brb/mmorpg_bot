@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { InvRow } from "@/lib/apiTypes";
 import { BlacksmithModal } from "../modals/BlacksmithModal";
 import { ItemIcon } from "../ItemIcon";
+import { ItemTooltipPanel } from "../ItemTooltipPanel";
 import { SpecializationModal } from "../modals/SpecializationModal";
 
 const EQUIP_ORDER = [
@@ -178,19 +179,15 @@ export function HeroTab() {
                     <span className="text-[8px] leading-tight text-center opacity-50 font-cinzel">{slot.label}</span>
                   )}
                   {hoveredItem === slot.id && it && (
-                    <div className="game-tooltip bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap">
-                      <div className={`font-semibold font-cinzel ${rc}`}>
-                        {it.name} {Number(it.enhancement_level ?? 0) > 0 && <span className="text-primary">+{it.enhancement_level}</span>}
-                      </div>
-                      <div className="ornament-divider my-1.5" />
-                      <div className="text-muted-foreground capitalize">{it.rarity || "common"}</div>
-                      <div className="ornament-divider my-1.5" />
-                      <div className="flex gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); setHoveredItem(null); setEnhanceItemId(it.id); }}
-                          className="game-btn-primary text-[9px] px-2 py-0.5">🔨 Enhance</button>
-                        <button onClick={(e) => { e.stopPropagation(); setHoveredItem(null); void runAction("/api/game/item/unequip", { slot: slot.id }, "Unequipped"); }}
-                          className="game-btn-secondary text-[9px] px-2 py-0.5">Unequip</button>
-                      </div>
+                    <div className="game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+                      <ItemTooltipPanel item={it} rarityClass={rc}>
+                        <div className="flex flex-wrap gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); setHoveredItem(null); setEnhanceItemId(it.id); }}
+                            className="game-btn-primary text-[9px] px-2 py-0.5">🔨 Enhance</button>
+                          <button onClick={(e) => { e.stopPropagation(); setHoveredItem(null); void runAction("/api/game/item/unequip", { slot: slot.id }, "Unequipped"); }}
+                            className="game-btn-secondary text-[9px] px-2 py-0.5">Unequip</button>
+                        </div>
+                      </ItemTooltipPanel>
                     </div>
                   )}
                 </div>
@@ -232,22 +229,21 @@ export function HeroTab() {
                       style={{ textShadow: '0 1px 2px hsl(0 0% 0% / 0.8)' }}>×{inv.item.quantity}</span>
                   )}
                   {hoveredItem === `inv-${inv.id}` && inv.item && (
-                    <div className="game-tooltip bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap">
-                      <div className={`font-semibold font-cinzel ${rc}`}>{inv.item.name}</div>
-                      <div className="text-muted-foreground capitalize">{inv.item.rarity || "common"}</div>
-                      <div className="ornament-divider my-1.5" />
-                      <div className="flex gap-1.5 flex-wrap">
-                        {(inv.item.item_type || "").toLowerCase() === "consumable" && (
-                          <button onClick={() => void runAction("/api/game/item/use", { item_id: inv.item!.id }, "Used")}
-                            className="game-btn-secondary px-2 py-0.5 text-[10px]">Use</button>
-                        )}
-                        {inv.item.equip_slot && (
-                          <button onClick={() => void runAction("/api/game/item/equip", { item_id: inv.item!.id }, "Equipped")}
-                            className="game-btn-secondary px-2 py-0.5 text-[10px]">Equip</button>
-                        )}
-                        <button onClick={() => void runAction("/api/game/item/sell", { item_id: inv.item!.id }, "Sold")}
-                          className="game-btn-secondary px-2 py-0.5 text-[10px]">Sell</button>
-                      </div>
+                    <div className="game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+                      <ItemTooltipPanel item={inv.item} rarityClass={rc}>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(inv.item.item_type || "").toLowerCase() === "consumable" && (
+                            <button onClick={() => void runAction("/api/game/item/use", { item_id: inv.item!.id }, "Used")}
+                              className="game-btn-secondary px-2 py-0.5 text-[10px]">Use</button>
+                          )}
+                          {inv.item.equip_slot && (
+                            <button onClick={() => void runAction("/api/game/item/equip", { item_id: inv.item!.id }, "Equipped")}
+                              className="game-btn-secondary px-2 py-0.5 text-[10px]">Equip</button>
+                          )}
+                          <button onClick={() => void runAction("/api/game/item/sell", { item_id: inv.item!.id }, "Sold")}
+                            className="game-btn-secondary px-2 py-0.5 text-[10px]">Sell</button>
+                        </div>
+                      </ItemTooltipPanel>
                     </div>
                   )}
                 </div>
