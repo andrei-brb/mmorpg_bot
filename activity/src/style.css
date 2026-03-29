@@ -128,7 +128,8 @@
   --ui-modal-backdrop: url("/assets/ui/modals/modal-backdrop.jpeg");
   --ui-modal-card: url("/assets/ui/modals/modal-card-bg.jpeg");
   --ui-modal-spec: url("/assets/ui/modals/spec-option-bg.jpeg");
-  --ui-tooltip-frame: url("/assets/ui/global/tooltip-frame.png");
+  /* Bump ?v= when replacing the file — same filename is cached forever in Discord/browser */
+  --ui-tooltip-frame: url("/assets/ui/global/tooltip-frame.png?v=4");
 }
 
 * {
