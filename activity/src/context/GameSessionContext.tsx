@@ -1,0 +1,470 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { DiscordSDK } from "@discord/embedded-app-sdk";
+import type {
+  CombatEnemy,
+  CombatStatePayload,
+  ExploreMapPayload,
+  ExploreResultPayload,
+  InventoryPayload,
+  ProgressPayload,
+  QuestLogPayload,
+  SpecOption,
+} from "@/lib/apiTypes";
+import * as api from "@/lib/gameApi";
+
+type Phase = "boot" | "loading" | "ready" | "error" | "no_client";
+
+type GameSessionValue = {
+  phase: Phase;
+  errorHtml?: string;
+  accessToken: string | null;
+  guildId?: string;
+  channelId?: string;
+  inventory: InventoryPayload | null;
+  map: ExploreMapPayload | null;
+  lastExplore: ExploreResultPayload | null;
+  progress: ProgressPayload | null;
+  quests: QuestLogPayload | null;
+  specModal: { open: boolean; options: SpecOption[]; unlockLevel: number };
+  closeSpecModal: () => void;
+  chooseSpecialization: (specKey: string) => Promise<void>;
+  refreshInventory: () => Promise<void>;
+  refreshMap: () => Promise<void>;
+  refreshProgress: () => Promise<void>;
+  refreshQuests: () => Promise<void>;
+  travel: (zoneKey: string) => Promise<{ ok: boolean; message?: string }>;
+  explore: () => Promise<ExploreResultPayload>;
+  /** After explore encounter — Combat tab consumes to auto-start. */
+  pendingCombatEnemyKey: React.MutableRefObject<string | null>;
+  loadCombatSnapshot: () => Promise<{
+    active: boolean;
+    state?: CombatStatePayload;
+    enemies: CombatEnemy[];
+  }>;
+  startCombat: (enemyKey: string) => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
+  combatAction: (body: Record<string, unknown>) => Promise<api.CombatActionJson>;
+  rest: () => Promise<{ ok: boolean; message?: string; cooldown_s?: number }>;
+  itemPost: (endpoint: string, body: Record<string, unknown>) => Promise<Response>;
+  getEnhanceInfo: (itemId: string) => Promise<import("@/lib/apiTypes").EnhanceInfoPayload>;
+  postEnhance: (
+    itemId: string,
+    protection: string | null,
+    fragments: number,
+  ) => Promise<{ ok?: boolean; message?: string }>;
+  buyProtection: (key: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
+  npcInteract: (npc?: string) => Promise<void>;
+  displayName: string;
+};
+
+const GameSessionContext = createContext<GameSessionValue | null>(null);
+
+function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve("timeout"), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(t);
+        console.error(err);
+        resolve("timeout");
+      },
+    );
+  });
+}
+
+export function GameSessionProvider({ children }: { children: ReactNode }) {
+  const [phase, setPhase] = useState<Phase>("boot");
+  const [errorHtml, setErrorHtml] = useState<string | undefined>();
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [guildId, setGuildId] = useState<string | undefined>();
+  const [channelId, setChannelId] = useState<string | undefined>();
+  const [inventory, setInventory] = useState<InventoryPayload | null>(null);
+  const [map, setMap] = useState<ExploreMapPayload | null>(null);
+  const [lastExplore, setLastExplore] = useState<ExploreResultPayload | null>(null);
+  const [progress, setProgress] = useState<ProgressPayload | null>(null);
+  const [quests, setQuests] = useState<QuestLogPayload | null>(null);
+  const [specModal, setSpecModal] = useState<{
+    open: boolean;
+    options: SpecOption[];
+    unlockLevel: number;
+  }>({ open: false, options: [], unlockLevel: 10 });
+
+  const pendingCombatEnemyKey = useRef<string | null>(null);
+  const sdkRef = useRef<DiscordSDK | null>(null);
+
+  const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
+
+  const refreshInventory = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const inv = await api.getInventory(accessToken, guildId);
+      setInventory(inv);
+    } catch (e) {
+      console.warn("refreshInventory", e);
+    }
+  }, [accessToken, guildId]);
+
+  const refreshMap = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const m = await api.getMap(accessToken, guildId);
+      setMap(m);
+    } catch (e) {
+      if (String(e).includes("401")) window.location.reload();
+      console.warn("refreshMap", e);
+    }
+  }, [accessToken, guildId]);
+
+  const refreshProgress = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const p = await api.getProgress(accessToken, guildId);
+      setProgress(p);
+    } catch (e) {
+      console.warn("refreshProgress", e);
+    }
+  }, [accessToken, guildId]);
+
+  const refreshQuests = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const q = await api.getQuests(accessToken, guildId);
+      setQuests(q);
+    } catch (e) {
+      console.warn("refreshQuests", e);
+    }
+  }, [accessToken, guildId]);
+
+  const checkSpecModal = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const json = await api.getSpecializations(accessToken, guildId);
+      if (json.ok && json.needs_choice && json.options?.length) {
+        setSpecModal({
+          open: true,
+          options: json.options,
+          unlockLevel: json.spec_unlock_level ?? 10,
+        });
+      } else {
+        setSpecModal((s) => ({ ...s, open: false }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [accessToken, guildId]);
+
+  const closeSpecModal = useCallback(() => {
+    setSpecModal((s) => ({ ...s, open: false }));
+  }, []);
+
+  const chooseSpecialization = useCallback(
+    async (specKey: string) => {
+      if (!accessToken) return;
+      const res = await api.postSpecialization(accessToken, specKey, guildId);
+      const j = (await res.json()) as { ok?: boolean; message?: string };
+      if (res.ok && j.ok) {
+        closeSpecModal();
+        await refreshInventory();
+        await refreshProgress();
+      }
+    },
+    [accessToken, guildId, closeSpecModal, refreshInventory, refreshProgress],
+  );
+
+  const travel = useCallback(
+    async (zoneKey: string) => {
+      if (!accessToken) return { ok: false, message: "no token" };
+      const res = await api.postTravel(accessToken, zoneKey, guildId);
+      await refreshInventory();
+      await refreshMap();
+      return { ok: !res.error, message: res.message };
+    },
+    [accessToken, guildId, refreshInventory, refreshMap],
+  );
+
+  const explore = useCallback(async () => {
+    if (!accessToken) return { ok: false, error: "no token" } as ExploreResultPayload;
+    const json = await api.postExplore(accessToken, guildId);
+    setLastExplore(json);
+    pendingCombatEnemyKey.current = null;
+    if (json.outcome && "key" in json.outcome && typeof json.outcome.key === "string") {
+      pendingCombatEnemyKey.current = json.outcome.key;
+    }
+    await refreshInventory();
+    await refreshMap();
+    return json;
+  }, [accessToken, guildId, refreshInventory, refreshMap]);
+
+  const loadCombatSnapshot = useCallback(async () => {
+    if (!accessToken) return { active: false, enemies: [] as CombatEnemy[] };
+    const [stRes, enRes] = await Promise.all([
+      api.getCombatState(accessToken, guildId),
+      api.getCombatEnemies(accessToken, guildId),
+    ]);
+    const stJson = await api.parseCombatState(stRes);
+    const enJson = (await enRes.json()) as { enemies?: CombatEnemy[] };
+    return {
+      active: Boolean(stJson.active && stJson.state),
+      state: stJson.state,
+      enemies: enJson.enemies || [],
+    };
+  }, [accessToken, guildId]);
+
+  const startCombat = useCallback(
+    async (enemyKey: string) => {
+      if (!accessToken) return { ok: false, message: "no token" };
+      const startRes = await api.postCombatStart(accessToken, enemyKey, guildId);
+      const startJson = (await startRes.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        state?: CombatStatePayload;
+      };
+      if ((startRes.status === 200 || startRes.status === 409) && startJson.state) {
+        return { ok: true, state: startJson.state };
+      }
+      return { ok: false, message: startJson.message || startJson.error };
+    },
+    [accessToken, guildId],
+  );
+
+  const combatAction = useCallback(
+    async (body: Record<string, unknown>) => {
+      if (!accessToken) return {};
+      const res = await api.postCombatAction(accessToken, body, guildId);
+      return (await res.json()) as api.CombatActionJson;
+    },
+    [accessToken, guildId],
+  );
+
+  const rest = useCallback(async () => {
+    if (!accessToken) return { ok: false, message: "no token" };
+    const res = await api.postRest(accessToken, guildId);
+    const json = (await res.json()) as { ok?: boolean; error?: string; message?: string; cooldown_s?: number };
+    if (res.status === 429 && json.error === "cooldown") {
+      return { ok: false, message: json.message, cooldown_s: json.cooldown_s };
+    }
+    await refreshInventory();
+    await refreshProgress();
+    return { ok: Boolean(json.ok), message: json.message };
+  }, [accessToken, guildId, refreshInventory, refreshProgress]);
+
+  const itemPost = useCallback(
+    async (endpoint: string, body: Record<string, unknown>) => {
+      if (!accessToken) throw new Error("no token");
+      return api.postItem(accessToken, endpoint, body, guildId);
+    },
+    [accessToken, guildId],
+  );
+
+  const getEnhanceInfo = useCallback(
+    async (itemId: string) => {
+      if (!accessToken) throw new Error("no token");
+      return api.getEnhanceInfo(accessToken, itemId, guildId);
+    },
+    [accessToken, guildId],
+  );
+
+  const postEnhance = useCallback(
+    async (itemId: string, protection: string | null, fragments: number) => {
+      if (!accessToken) return { ok: false };
+      const res = await api.postEnhance(accessToken, itemId, protection, fragments, guildId);
+      const j = (await res.json()) as { ok?: boolean; message?: string };
+      await refreshInventory();
+      await refreshProgress();
+      return j;
+    },
+    [accessToken, guildId, refreshInventory, refreshProgress],
+  );
+
+  const buyProtection = useCallback(
+    async (key: string, qty: number) => {
+      if (!accessToken) return { ok: false };
+      const res = await api.postBuyProtection(accessToken, key, qty, guildId);
+      const j = (await res.json()) as { ok?: boolean; message?: string };
+      await refreshInventory();
+      await refreshProgress();
+      return j;
+    },
+    [accessToken, guildId, refreshInventory, refreshProgress],
+  );
+
+  const npcInteract = useCallback(
+    async (npc?: string) => {
+      if (!accessToken) return;
+      await api.postNpcInteract(accessToken, npc, guildId);
+      await refreshInventory();
+      await refreshProgress();
+      await refreshQuests();
+    },
+    [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function boot() {
+      if (!clientId) {
+        setPhase("no_client");
+        setErrorHtml(
+          "Missing <code>VITE_DISCORD_CLIENT_ID</code>. Copy <code>activity/.env.example</code> to <code>activity/.env</code>.",
+        );
+        return;
+      }
+      setPhase("loading");
+      const sdk = new DiscordSDK(clientId);
+      sdkRef.current = sdk;
+
+      const raced = await runWithTimeout(sdk.ready(), 12000);
+      if (cancelled) return;
+      if (raced === "timeout") {
+        setPhase("error");
+        setErrorHtml(
+          "Could not connect to Discord. Open this app <strong>inside Discord</strong> as an Activity, or use dev proxy + ngrok.",
+        );
+        return;
+      }
+
+      let code: string;
+      try {
+        const auth = await sdk.commands.authorize({
+          client_id: clientId,
+          response_type: "code",
+          state: "",
+          prompt: "none",
+          scope: ["identify", "applications.commands"],
+        });
+        code = auth.code;
+      } catch (e) {
+        console.error(e);
+        setPhase("error");
+        setErrorHtml("Authorization was cancelled or failed.");
+        return;
+      }
+
+      try {
+        const token = await api.exchangeToken(code);
+        if (cancelled) return;
+        try {
+          await sdk.commands.authenticate({ access_token: token });
+        } catch (e) {
+          console.warn("authenticate", e);
+        }
+        setAccessToken(token);
+        setGuildId(sdk.guildId ?? undefined);
+        setChannelId(sdk.channelId ?? undefined);
+
+        const inv = await api.getInventory(token, sdk.guildId ?? undefined);
+        if (cancelled) return;
+        setInventory(inv);
+        setPhase("ready");
+      } catch (e) {
+        setPhase("error");
+        setErrorHtml(
+          `Sign-in failed: ${e instanceof Error ? e.message : String(e)}. Is the bot running with DISCORD_CLIENT_SECRET?`,
+        );
+      }
+    }
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
+  useEffect(() => {
+    if (phase !== "ready" || !accessToken) return;
+    const t = window.setTimeout(() => void checkSpecModal(), 400);
+    return () => window.clearTimeout(t);
+  }, [phase, accessToken, inventory?.character?.level, checkSpecModal]);
+
+  const displayName = useMemo(() => {
+    const d = inventory?.discord;
+    const gn = d?.global_name || d?.username;
+    return gn || inventory?.character?.name || "Adventurer";
+  }, [inventory]);
+
+  const value = useMemo<GameSessionValue>(
+    () => ({
+      phase,
+      errorHtml,
+      accessToken,
+      guildId,
+      channelId,
+      inventory,
+      map,
+      lastExplore,
+      progress,
+      quests,
+      specModal,
+      closeSpecModal,
+      chooseSpecialization,
+      refreshInventory,
+      refreshMap,
+      refreshProgress,
+      refreshQuests,
+      travel,
+      explore,
+      pendingCombatEnemyKey,
+      loadCombatSnapshot,
+      startCombat,
+      combatAction,
+      rest,
+      itemPost,
+      getEnhanceInfo,
+      postEnhance,
+      buyProtection,
+      npcInteract,
+      displayName,
+    }),
+    [
+      phase,
+      errorHtml,
+      accessToken,
+      guildId,
+      channelId,
+      inventory,
+      map,
+      lastExplore,
+      progress,
+      quests,
+      specModal,
+      closeSpecModal,
+      chooseSpecialization,
+      refreshInventory,
+      refreshMap,
+      refreshProgress,
+      refreshQuests,
+      travel,
+      explore,
+      loadCombatSnapshot,
+      startCombat,
+      combatAction,
+      rest,
+      itemPost,
+      getEnhanceInfo,
+      postEnhance,
+      buyProtection,
+      npcInteract,
+      displayName,
+    ],
+  );
+
+  return <GameSessionContext.Provider value={value}>{children}</GameSessionContext.Provider>;
+}
+
+export function useGameSession(): GameSessionValue {
+  const v = useContext(GameSessionContext);
+  if (!v) throw new Error("useGameSession outside GameSessionProvider");
+  return v;
+}

@@ -21,3 +21,4 @@ __pycache__/
 activity/node_modules/
 activity/dist/
 activity/.env
+*.tsbuildinfo

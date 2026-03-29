@@ -1,0 +1,605 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Press+Start+2P&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Deep dark fantasy palette */
+    --background: 228 28% 6%;
+    --foreground: 38 25% 82%;
+
+    --card: 230 22% 10%;
+    --card-foreground: 38 25% 82%;
+
+    --popover: 228 24% 12%;
+    --popover-foreground: 38 25% 82%;
+
+    /* Gold / amber primary */
+    --primary: 43 78% 50%;
+    --primary-foreground: 228 30% 6%;
+
+    /* Deep purple secondary */
+    --secondary: 262 28% 18%;
+    --secondary-foreground: 38 18% 78%;
+
+    --muted: 228 18% 14%;
+    --muted-foreground: 218 14% 50%;
+
+    --accent: 268 35% 26%;
+    --accent-foreground: 38 28% 88%;
+
+    --destructive: 0 68% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 228 16% 20%;
+    --input: 228 18% 15%;
+    --ring: 43 78% 50%;
+
+    --radius: 0.125rem;
+
+    /* Frame & bevel tokens */
+    --frame-outer: 228 20% 8%;
+    --frame-mid: 228 16% 16%;
+    --frame-inner: 228 14% 22%;
+    --frame-highlight: 38 30% 40%;
+    --frame-rim: 43 50% 35%;
+
+    /* Game-specific tokens */
+    --gold: 43 78% 50%;
+    --gold-dim: 43 50% 35%;
+    --hp-bar: 0 60% 42%;
+    --hp-bar-fill: 120 45% 36%;
+    --mana-bar: 210 65% 48%;
+    --xp-bar: 43 78% 50%;
+    --connected: 140 55% 42%;
+    --stone: 228 14% 14%;
+    --stone-light: 226 12% 24%;
+    --stone-dark: 228 18% 8%;
+    --parchment: 38 28% 82%;
+    --rarity-common: 0 0% 65%;
+    --rarity-uncommon: 120 38% 46%;
+    --rarity-rare: 210 65% 52%;
+    --rarity-epic: 268 55% 58%;
+    --rarity-legendary: 43 85% 52%;
+
+    --sidebar-background: 228 22% 8%;
+    --sidebar-foreground: 38 25% 82%;
+    --sidebar-primary: 43 78% 50%;
+    --sidebar-primary-foreground: 228 30% 6%;
+    --sidebar-accent: 262 28% 18%;
+    --sidebar-accent-foreground: 38 18% 78%;
+    --sidebar-border: 228 16% 20%;
+    --sidebar-ring: 43 78% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Crimson Text', serif;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(ellipse at 20% 0%, hsl(268 35% 14% / 0.38) 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 100%, hsl(228 28% 11% / 0.58) 0%, transparent 60%),
+      url('/textures/stone-dark.jpg');
+    background-size: auto, auto, 420px 420px;
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-attachment: fixed;
+    background-blend-mode: normal, normal, soft-light;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cinzel', serif;
+  }
+
+  /* Custom scrollbar for game feel */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: hsl(228 18% 10%); }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(228 14% 24%);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(228 14% 30%); }
+}
+
+@layer components {
+  .font-pixel {
+    font-family: 'Press Start 2P', cursive;
+  }
+
+  /* ═══════════════════════════════════════
+     OUTER FRAME — thick ornamental border
+     ═══════════════════════════════════════ */
+  .game-frame {
+    position: relative;
+    border: 3px solid hsl(var(--frame-mid));
+    outline: 2px solid hsl(var(--frame-outer));
+    outline-offset: 2px;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-highlight) / 0.3),
+      inset 0 -1px 0 hsl(var(--frame-outer)),
+      0 0 0 5px hsl(var(--frame-outer)),
+      0 0 30px hsl(0 0% 0% / 0.6),
+      0 0 80px hsl(268 40% 10% / 0.3);
+    background-color: hsl(var(--background));
+    background-image:
+      linear-gradient(180deg, hsl(228 28% 7% / 0.62) 0%, hsl(228 28% 5% / 0.68) 50%, hsl(228 28% 7% / 0.62) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 420px 420px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+  }
+
+  /* Corner ornaments */
+  .game-frame::before,
+  .game-frame::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid hsl(var(--gold-dim));
+    border-radius: 50%;
+    box-shadow:
+      0 0 4px hsl(var(--gold) / 0.3),
+      inset 0 0 3px hsl(var(--gold) / 0.2);
+    z-index: 10;
+  }
+  .game-frame::before { top: -8px; left: -8px; }
+  .game-frame::after { top: -8px; right: -8px; }
+
+  /* Bottom corners via inner wrapper */
+  .game-frame-inner {
+    position: relative;
+  }
+  .game-frame-inner::before,
+  .game-frame-inner::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid hsl(var(--gold-dim));
+    border-radius: 50%;
+    box-shadow:
+      0 0 4px hsl(var(--gold) / 0.3),
+      inset 0 0 3px hsl(var(--gold) / 0.2);
+    z-index: 10;
+  }
+  .game-frame-inner::before { bottom: -8px; left: -8px; }
+  .game-frame-inner::after { bottom: -8px; right: -8px; }
+
+  /* Rune band side decoration */
+  .rune-band-left,
+  .rune-band-right {
+    position: absolute;
+    top: 60px;
+    bottom: 60px;
+    width: 1px;
+    background: repeating-linear-gradient(
+      180deg,
+      hsl(var(--frame-highlight) / 0.15) 0px,
+      hsl(var(--frame-highlight) / 0.15) 4px,
+      transparent 4px,
+      transparent 12px
+    );
+    z-index: 5;
+  }
+  .rune-band-left { left: 6px; }
+  .rune-band-right { right: 6px; }
+
+  /* ═══════════════════════════════════════
+     CREST / JEWEL MOTIF (top center)
+     ═══════════════════════════════════════ */
+  .crest-motif {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 24px;
+    z-index: 20;
+  }
+  .crest-motif::before {
+    content: '◆';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 22px;
+    line-height: 1;
+    color: hsl(var(--gold));
+    text-shadow: 0 0 8px hsl(var(--gold) / 0.5), 0 2px 4px hsl(0 0% 0% / 0.6);
+    filter: drop-shadow(0 0 3px hsl(var(--gold) / 0.3));
+  }
+
+  /* ═══════════════════════════════════════
+     PANELS — stone slab with bevel frame
+     ═══════════════════════════════════════ */
+  .game-panel {
+    position: relative;
+    @apply p-4 rounded-sm;
+    background-color: hsl(228 22% 9%);
+    background-image:
+      linear-gradient(180deg, hsl(230 20% 12% / 0.74) 0%, hsl(228 22% 9% / 0.76) 100%),
+      url('/textures/stone-dark.jpg'),
+      url('/textures/parchment-dark.jpg');
+    background-size: 100% 100%, 220px 220px, 320px 320px;
+    background-repeat: no-repeat, repeat, repeat;
+    background-blend-mode: normal, multiply, soft-light;
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.5),
+      inset 0 -1px 0 hsl(var(--stone-dark)),
+      inset 1px 0 0 hsl(var(--frame-inner) / 0.3),
+      inset -1px 0 0 hsl(var(--frame-inner) / 0.3),
+      0 2px 8px hsl(0 0% 0% / 0.4),
+      0 6px 20px hsl(0 0% 0% / 0.2);
+  }
+
+  /* Double border effect */
+  .game-panel::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px solid hsl(var(--frame-inner) / 0.25);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .game-panel-header {
+    @apply text-xs uppercase tracking-[0.2em] mb-3 pb-2 relative;
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    color: hsl(var(--gold));
+    letter-spacing: 0.2em;
+    text-shadow: 0 1px 3px hsl(0 0% 0% / 0.5);
+    border-bottom: none;
+  }
+
+  /* Ornamental divider under header */
+  .game-panel-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background:
+      linear-gradient(90deg,
+        transparent 0%,
+        hsl(var(--gold-dim) / 0.4) 15%,
+        hsl(var(--gold) / 0.6) 50%,
+        hsl(var(--gold-dim) / 0.4) 85%,
+        transparent 100%
+      );
+  }
+
+  /* ═══════════════════════════════════════
+     TAB BAR — raised stone slabs
+     ═══════════════════════════════════════ */
+  .tab-bar {
+    position: relative;
+    background-color: hsl(228 20% 8%);
+    background-image:
+      linear-gradient(180deg, hsl(228 18% 14% / 0.66) 0%, hsl(228 22% 10% / 0.68) 40%, hsl(228 20% 8% / 0.66) 100%),
+      url('/textures/frame-border.jpg');
+    background-size: 100% 100%, 512px 64px;
+    background-repeat: no-repeat, repeat-x;
+    background-position: center, center;
+    background-blend-mode: normal, soft-light;
+    border: 2px solid hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.4),
+      inset 0 -2px 0 hsl(var(--stone-dark)),
+      0 4px 12px hsl(0 0% 0% / 0.5);
+  }
+
+  .tab-btn {
+    position: relative;
+    @apply flex-1 min-w-0 px-2 py-3 text-xs font-cinzel font-semibold uppercase whitespace-nowrap transition-all;
+    letter-spacing: 0.12em;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    border-right: 1px solid hsl(var(--frame-mid) / 0.5);
+  }
+  .tab-btn:last-child { border-right: none; }
+
+  .tab-btn:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.4);
+  }
+
+  .tab-btn-active {
+    color: hsl(var(--gold));
+    text-shadow: 0 0 8px hsl(var(--gold) / 0.3);
+    background:
+      linear-gradient(180deg,
+        hsl(228 18% 16%) 0%,
+        hsl(228 20% 12%) 100%
+      );
+    box-shadow:
+      inset 0 2px 0 hsl(var(--gold) / 0.5),
+      inset 0 -1px 0 hsl(var(--stone-dark));
+  }
+
+  .tab-btn-active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: hsl(var(--gold));
+    box-shadow: 0 0 6px hsl(var(--gold) / 0.5);
+    border-radius: 1px;
+  }
+
+  /* ═══════════════════════════════════════
+     SLOTS — equipment & inventory cells
+     ═══════════════════════════════════════ */
+  .slot-empty {
+    @apply border rounded-sm flex items-center justify-center text-xs;
+    border: 1px dashed hsl(var(--stone-light) / 0.5);
+    color: hsl(var(--muted-foreground));
+    background-image:
+      linear-gradient(135deg, hsl(var(--stone-dark) / 0.68) 0%, hsl(var(--stone) / 0.58) 100%),
+      url('/textures/parchment-dark.jpg');
+    background-size: 100% 100%, 180px 180px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    box-shadow:
+      inset 0 1px 3px hsl(0 0% 0% / 0.4),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.1);
+  }
+
+  .slot-filled {
+    @apply border rounded-sm flex items-center justify-center text-lg;
+    border: 1px solid hsl(var(--stone-light) / 0.6);
+    background-image:
+      linear-gradient(135deg, hsl(228 18% 13% / 0.64) 0%, hsl(260 18% 14% / 0.64) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 200px 200px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    box-shadow:
+      inset 0 1px 3px hsl(0 0% 0% / 0.4),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.15),
+      0 1px 3px hsl(0 0% 0% / 0.3);
+  }
+
+  /* Corner rivet dots on slots */
+  .slot-filled::before {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--stone-light) / 0.4);
+    box-shadow:
+      calc(100% - 7px) 0 0 hsl(var(--stone-light) / 0.4),
+      0 calc(100% - 7px) 0 hsl(var(--stone-light) / 0.4),
+      calc(100% - 7px) calc(100% - 7px) 0 hsl(var(--stone-light) / 0.4);
+  }
+
+  /* ═══════════════════════════════════════
+     HP BAR — tactile / beveled
+     ═══════════════════════════════════════ */
+  .hp-bar-track {
+    @apply h-5 rounded-sm overflow-hidden;
+    background: hsl(var(--hp-bar) / 0.2);
+    border: 1px solid hsl(var(--hp-bar) / 0.35);
+    box-shadow: inset 0 2px 4px hsl(0 0% 0% / 0.5);
+  }
+
+  .hp-bar-fill {
+    @apply h-full rounded-sm transition-all duration-500;
+    background: linear-gradient(180deg, hsl(120 50% 40%) 0%, hsl(120 45% 30%) 100%);
+    box-shadow:
+      inset 0 1px 0 hsl(120 50% 55% / 0.4),
+      0 0 6px hsl(var(--hp-bar-fill) / 0.3);
+  }
+
+  /* ═══════════════════════════════════════
+     QUEST CARD
+     ═══════════════════════════════════════ */
+  .quest-card {
+    @apply game-panel p-3;
+    border-left: 3px solid hsl(var(--gold) / 0.6);
+    box-shadow:
+      inset 3px 0 6px hsl(var(--gold) / 0.05),
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.5),
+      0 2px 8px hsl(0 0% 0% / 0.4);
+  }
+
+  .quest-card::before {
+    border-left: none;
+  }
+
+  /* ═══════════════════════════════════════
+     STAT CARD
+     ═══════════════════════════════════════ */
+  .stat-card {
+    @apply game-panel p-3 text-center;
+  }
+
+  /* ═══════════════════════════════════════
+     ORNAMENTAL DIVIDER
+     ═══════════════════════════════════════ */
+  .ornament-divider {
+    height: 1px;
+    background:
+      linear-gradient(90deg,
+        transparent 0%,
+        hsl(var(--frame-highlight) / 0.3) 20%,
+        hsl(var(--gold-dim) / 0.5) 50%,
+        hsl(var(--frame-highlight) / 0.3) 80%,
+        transparent 100%
+      );
+  }
+
+  /* ═══════════════════════════════════════
+     GAME BUTTONS — beveled, tactile
+     ═══════════════════════════════════════ */
+  .game-btn-primary {
+    @apply px-4 py-2 rounded-sm text-sm font-cinzel font-semibold transition-all;
+    background-image:
+      linear-gradient(180deg, hsl(var(--gold) / 0.82) 0%, hsl(38 70% 38% / 0.86) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 180px 180px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsl(var(--gold-dim));
+    box-shadow:
+      inset 0 1px 0 hsl(43 80% 65% / 0.5),
+      inset 0 -1px 0 hsl(38 60% 25%),
+      0 2px 4px hsl(0 0% 0% / 0.4);
+    text-shadow: 0 1px 1px hsl(0 0% 0% / 0.3);
+  }
+  .game-btn-primary:hover {
+    background-image:
+      linear-gradient(180deg, hsl(43 80% 55% / 0.84) 0%, hsl(38 70% 42% / 0.86) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 180px 180px;
+    box-shadow:
+      inset 0 1px 0 hsl(43 80% 70% / 0.5),
+      inset 0 -1px 0 hsl(38 60% 25%),
+      0 2px 8px hsl(var(--gold) / 0.3);
+  }
+  .game-btn-primary:active {
+    box-shadow: inset 0 2px 4px hsl(0 0% 0% / 0.5);
+  }
+
+  .game-btn-secondary {
+    @apply px-4 py-2 rounded-sm text-sm font-cinzel font-semibold transition-all;
+    background-image:
+      linear-gradient(180deg, hsl(228 16% 18% / 0.76) 0%, hsl(228 18% 12% / 0.78) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 180px 180px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.4),
+      inset 0 -1px 0 hsl(var(--stone-dark)),
+      0 2px 4px hsl(0 0% 0% / 0.3);
+  }
+  .game-btn-secondary:hover {
+    background-image:
+      linear-gradient(180deg, hsl(228 16% 22% / 0.82) 0%, hsl(228 18% 16% / 0.82) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 180px 180px;
+    border-color: hsl(var(--frame-inner));
+  }
+
+  .game-btn-danger {
+    @apply px-4 py-2 rounded-sm text-sm font-cinzel font-semibold transition-all;
+    background-image:
+      linear-gradient(180deg, hsl(0 60% 40% / 0.84) 0%, hsl(0 55% 30% / 0.84) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 180px 180px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    color: hsl(0 0% 100%);
+    border: 1px solid hsl(0 50% 35%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 60% 55% / 0.3),
+      inset 0 -1px 0 hsl(0 60% 20%),
+      0 2px 4px hsl(0 0% 0% / 0.4);
+  }
+  .game-btn-danger:hover {
+    background-image:
+      linear-gradient(180deg, hsl(0 65% 45% / 0.86) 0%, hsl(0 55% 35% / 0.86) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 180px 180px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 60% 55% / 0.3),
+      0 0 8px hsl(0 60% 40% / 0.3);
+  }
+
+  /* ═══════════════════════════════════════
+     GAME SELECT — styled dropdown
+     ═══════════════════════════════════════ */
+  .game-select {
+    @apply w-full rounded-sm px-3 py-2 text-sm text-foreground;
+    background-image:
+      linear-gradient(180deg, hsl(228 18% 14% / 0.78) 0%, hsl(228 20% 10% / 0.8) 100%),
+      url('/textures/stone-dark.jpg');
+    background-size: 100% 100%, 200px 200px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, multiply;
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 2px 4px hsl(0 0% 0% / 0.3),
+      inset 0 -1px 0 hsl(var(--frame-inner) / 0.2);
+  }
+  .game-select:focus {
+    outline: none;
+    border-color: hsl(var(--gold-dim));
+    box-shadow:
+      inset 0 2px 4px hsl(0 0% 0% / 0.3),
+      0 0 0 1px hsl(var(--gold) / 0.2);
+  }
+
+  /* ═══════════════════════════════════════
+     SKILL BUTTON — combat ability
+     ═══════════════════════════════════════ */
+  .skill-btn {
+    @apply flex flex-col items-center gap-1 p-2 rounded-sm text-xs transition-all relative;
+    background-image:
+      linear-gradient(180deg, hsl(260 20% 16% / 0.74) 0%, hsl(260 18% 11% / 0.76) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 170px 170px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 1px 0 hsl(260 20% 24% / 0.5),
+      inset 0 -1px 0 hsl(260 20% 8%),
+      0 2px 4px hsl(0 0% 0% / 0.3);
+  }
+  .skill-btn:hover {
+    background-image:
+      linear-gradient(180deg, hsl(260 22% 20% / 0.8) 0%, hsl(260 20% 14% / 0.8) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 170px 170px;
+    border-color: hsl(var(--gold-dim));
+    box-shadow:
+      inset 0 1px 0 hsl(260 20% 28% / 0.5),
+      0 0 8px hsl(var(--gold) / 0.15);
+  }
+  .skill-btn:active {
+    box-shadow: inset 0 2px 6px hsl(0 0% 0% / 0.5);
+  }
+
+  /* ═══════════════════════════════════════
+     TOOLTIP — parchment style
+     ═══════════════════════════════════════ */
+  .game-tooltip {
+    @apply absolute z-20 p-3 min-w-[150px] text-xs;
+    background-image:
+      linear-gradient(180deg, hsl(228 22% 14% / 0.72) 0%, hsl(228 24% 10% / 0.72) 100%),
+      url('/textures/parchment-dark.jpg');
+    background-size: 100% 100%, 200px 200px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.3),
+      0 4px 16px hsl(0 0% 0% / 0.6),
+      0 0 0 1px hsl(var(--frame-outer));
+  }
+  .game-tooltip::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px solid hsl(var(--frame-inner) / 0.15);
+    pointer-events: none;
+  }
+}
