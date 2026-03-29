@@ -45,11 +45,22 @@ export function slugifyItemNameForIconPack(name: string | undefined | null): str
     .replace(/^_+|_+$/g, "");
 }
 
-function packIconSrc(name: string | undefined | null, rarity: string | undefined | null, base: string): string | null {
+/**
+ * Rarity order after the exact tier: the grid export often names files `*_uncommon.png` even when the
+ * same display name exists at common/rare/epic/legendary in the DB — try other tiers before legacy `generated/`.
+ */
+const PACK_RARITY_FALLBACK = ["uncommon", "common", "rare", "epic", "legendary"] as const;
+
+function packIconSrcs(name: string | undefined | null, rarity: string | undefined | null, base: string): string[] {
   const slug = slugifyItemNameForIconPack(name);
-  if (!slug) return null;
+  if (!slug) return [];
   const r = (rarity || "common").trim().toLowerCase() || "common";
-  return `${base}assets/items/icons/${slug}_${r}.png`;
+  const urls: string[] = [`${base}assets/items/icons/${slug}_${r}.png`];
+  for (const alt of PACK_RARITY_FALLBACK) {
+    if (alt === r) continue;
+    urls.push(`${base}assets/items/icons/${slug}_${alt}.png`);
+  }
+  return urls;
 }
 
 function templateSrc(templateId: string | undefined | null, base: string): string | null {
@@ -59,16 +70,15 @@ function templateSrc(templateId: string | undefined | null, base: string): strin
 }
 
 /**
- * Ordered URLs to try: custom icon pack (`icons/{slug}_{rarity}.png`), then `generated/{display name}.png`,
- * then `assets/items/{template_id}.png`. `template_id` is often tiered (`chest_common_4`) while generated
- * PNGs use display names (`Scale Cuirass.png`).
+ * Ordered URLs: all `icons/{slug}_{rarity}.png` variants (exact tier first, then other rarities), then legacy
+ * `generated/{display name}.png` (older bundled art — different framing), then `assets/items/{template_id}.png`.
  */
 export function itemIconCandidates(item: InvRow): string[] {
   const base = publicBaseUrl();
-  const pack = packIconSrc(item.name, item.rarity, base);
+  const pack = packIconSrcs(item.name, item.rarity, base);
   const generated = itemIconGeneratedSrcs(item.name, base);
   const primary = templateSrc(item.template_id, base);
-  const ordered = [pack, ...generated, primary].filter((v): v is string => Boolean(v));
+  const ordered = [...pack, ...generated, primary].filter((v): v is string => Boolean(v));
   return [...new Set(ordered)];
 }
 
