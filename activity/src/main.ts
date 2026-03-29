@@ -1,4 +1,5 @@
 import "./style.css";
+import { initLayoutEditor } from "./uiLayoutEditor";
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
@@ -503,7 +504,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
     : `<p class="hint">No character yet — use <code>/character create</code> in Discord.</p>`;
 
   return `
-    <div class="panel v0-panel hero-stats-card">
+    <div class="panel v0-panel hero-stats-card" data-layout-id="hero-stats">
       <div class="hero-stats-head">
         <div>
           <h2>Character Stats</h2>
@@ -520,11 +521,11 @@ function buildHeroHtml(payload: InventoryPayload): string {
       </div>
     </div>
     <div class="hero-main-grid">
-      <div class="panel v0-panel">
+      <div class="panel v0-panel" data-layout-id="hero-equip">
         <h2>Equipment</h2>
         <div class="equip-grid-v0">${equipHtml}</div>
       </div>
-      <div class="panel v0-panel">
+      <div class="panel v0-panel" data-layout-id="hero-inv">
         <h2>Inventory (${bag.length})</h2>
         <div class="inv-grid">${invTilesHtml}</div>
       </div>
@@ -684,11 +685,11 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
     )
     .join("");
 
-  const skillsHtml = `<div class="skills skills--under-scene" aria-label="Abilities">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>`;
+  const skillsHtml = `<div class="skills skills--under-scene" data-layout-id="combat-skills" aria-label="Abilities">${abiHtml}${pot}<button type="button" class="skill-btn flee-btn" data-action="flee">🏃 Flee</button></div>`;
 
   return `
     <div class="combat-compact">
-    <div class="combat-zone-bar">
+    <div class="combat-zone-bar" data-layout-id="combat-zone">
       <div class="combat-zone-bar__left">
         <span class="combat-zone-bar__title">${escapeHtml(zoneTitle)}</span>
         <span class="combat-zone-bar__sub">Turn-based · same rules as <code>/fight</code></span>
@@ -698,7 +699,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
         ${metaHtml}
       </div>
     </div>
-    <div class="scene-wrap">
+    <div class="scene-wrap" data-layout-id="combat-scene">
       <div class="scene">
         <div class="bg-layer"></div>
         <div class="player">
@@ -721,7 +722,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
     <div class="combat-mid-band${showPartyUi ? "" : " combat-mid-band--solo"}">
       ${
         showPartyUi
-          ? `<div class="combat-mid-band__party">
+          ? `<div class="combat-mid-band__party" data-layout-id="combat-party">
         <div class="party-sidebar">
           <h3 class="party-sidebar-title">Allies</h3>
           <p class="party-sidebar-hint">You’re on the field above — extra slots for party dungeons.</p>
@@ -730,7 +731,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
       </div>`
           : ""
       }
-      <div class="combat-mid-band__log">
+      <div class="combat-mid-band__log" data-layout-id="combat-log">
         <div class="combat-log-stack">
           <div class="combat-stats-row" aria-label="Combat summary">
             <div class="combat-stat">
@@ -761,7 +762,7 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
 function renderOutcome(title: string, lines: string[]): string {
   const body = lines.map((l) => `<p class="hint">${escapeHtml(l)}</p>`).join("");
   return `
-    <div class="panel v0-panel outcome-panel">
+    <div class="panel v0-panel outcome-panel" data-layout-id="combat-outcome">
       <h2>${escapeHtml(title)}</h2>
       ${body}
       <div class="outcome-actions" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;align-items:center">
@@ -807,7 +808,7 @@ function renderProgressPanel(payload: InventoryPayload, progress?: ProgressPaylo
         .join("")
     : '<p class="hint">No achievements earned yet.</p>';
   return `
-    <div class="panel v0-panel">
+    <div class="panel v0-panel" data-layout-id="progress-stats">
       <h2>Progress</h2>
       <div class="progress-stats">
         <div class="progress-card">
@@ -836,11 +837,11 @@ function renderProgressPanel(payload: InventoryPayload, progress?: ProgressPaylo
         </div>
       </div>
     </div>
-    <div class="panel v0-panel">
+    <div class="panel v0-panel" data-layout-id="progress-achievements">
       <h2>Achievements</h2>
       <div class="progress-list">${achHtml}</div>
     </div>
-    <div class="panel v0-panel">
+    <div class="panel v0-panel" data-layout-id="progress-history">
       <h2>History</h2>
       <div class="progress-list">${historyHtml}</div>
     </div>
@@ -1001,13 +1002,13 @@ function mountApp(
   function renderQuestLogPanel(): string {
     const rows = currentQuestLog?.quests || [];
     if (!currentQuestLog) {
-      return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">Loading…</p></div>`;
+      return `<div class="panel v0-panel" data-layout-id="quests-main"><h2>Quest Log</h2><p class="hint">Loading…</p></div>`;
     }
     if (currentQuestLog.error) {
-      return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">❌ ${escapeHtml(currentQuestLog.error)}</p></div>`;
+      return `<div class="panel v0-panel" data-layout-id="quests-main"><h2>Quest Log</h2><p class="hint">❌ ${escapeHtml(currentQuestLog.error)}</p></div>`;
     }
     if (!rows.length) {
-      return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">No active quests yet. Explore and interact with NPCs to get one.</p></div>`;
+      return `<div class="panel v0-panel" data-layout-id="quests-main"><h2>Quest Log</h2><p class="hint">No active quests yet. Explore and interact with NPCs to get one.</p></div>`;
     }
 
     const cards = rows
@@ -1048,7 +1049,7 @@ function mountApp(
       })
       .join("");
 
-    return `<div class="panel v0-panel"><h2>Quest Log</h2><p class="hint">💬 <strong>Turn in / Talk</strong> only shows when your current step is to speak to an NPC. Kill/explore objectives don’t use this button.</p><div class="quest-grid">${cards}</div></div>`;
+    return `<div class="panel v0-panel" data-layout-id="quests-main"><h2>Quest Log</h2><p class="hint">💬 <strong>Turn in / Talk</strong> only shows when your current step is to speak to an NPC. Kill/explore objectives don’t use this button.</p><div class="quest-grid">${cards}</div></div>`;
   }
 
   async function refreshQuestLog(): Promise<void> {
@@ -1117,7 +1118,7 @@ function mountApp(
     })();
 
     return `
-      <div class="panel v0-panel">
+      <div class="panel v0-panel" data-layout-id="explore-travel">
         <h2>Explore</h2>
         <p class="hint"><strong>${escapeHtml(zoneTitle)}</strong></p>
         <p class="hint">${zoneMeta}</p>
@@ -1133,7 +1134,7 @@ function mountApp(
           </div>
         </div>
       </div>
-      ${exploreBlock}
+      <div class="explore-results-wrap" data-layout-id="explore-results">${exploreBlock}</div>
     `;
   }
 
@@ -1957,6 +1958,7 @@ function mountApp(
     void doNpcInteract(npc);
   });
 
+  initLayoutEditor(appRoot);
   void runSpecPrompt();
 }
 

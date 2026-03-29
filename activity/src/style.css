@@ -943,6 +943,7 @@ code {
   overflow: auto;
   min-height: 0;
   flex: 1 1 auto;
+  position: relative;
 }
 
 @keyframes fade {
@@ -2663,4 +2664,111 @@ code {
 
 .quest-actions .mini-btn {
   align-self: flex-start;
+}
+
+/* ── Visual layout editor (drag / resize, persisted in localStorage) ─────────── */
+.ui-layout-toolbar {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 10000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: min(96vw, 420px);
+  padding: 8px 10px;
+  border-radius: var(--combat-radius-md);
+  background: color-mix(in srgb, var(--combat-surface) 92%, black);
+  border: 1px solid var(--combat-border-strong);
+  box-shadow: var(--combat-shadow-drop);
+  font-size: var(--combat-text-xs);
+  color: var(--combat-text-muted);
+}
+
+.ui-layout-toolbar__main {
+  padding: 6px 12px;
+  border-radius: var(--combat-radius-sm);
+  border: 1px solid var(--combat-border-tab-active);
+  background: linear-gradient(180deg, #2a3360, #1a2144);
+  color: var(--combat-text-highlight);
+  font-size: var(--combat-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ui-layout-toolbar__btn {
+  padding: 5px 10px;
+  border-radius: var(--combat-radius-sm);
+  border: 1px solid var(--combat-border);
+  background: var(--combat-surface-dark);
+  color: var(--combat-text);
+  font-size: var(--combat-text-xs);
+  cursor: pointer;
+}
+
+.ui-layout-toolbar__hint {
+  flex: 1 1 100%;
+  opacity: 0.9;
+}
+
+.ui-layout-toolbar__hint--hidden {
+  display: none;
+}
+
+body.ui-layout-edit [data-layout-id] {
+  outline: 1px dashed color-mix(in srgb, var(--combat-accent) 65%, transparent);
+  outline-offset: 1px;
+}
+
+body.ui-layout-edit [data-layout-id]:not(.ui-layout--positioned) {
+  position: relative;
+}
+
+.ui-layout-handle {
+  display: none;
+  z-index: 5;
+}
+
+body.ui-layout-edit .ui-layout-handle {
+  display: flex;
+}
+
+.ui-layout-handle--drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0f172a;
+  background: linear-gradient(180deg, #a5b4fc, #818cf8);
+  cursor: grab;
+  user-select: none;
+  border-radius: var(--combat-radius-sm) var(--combat-radius-sm) 0 0;
+}
+
+.ui-layout-handle--drag:active {
+  cursor: grabbing;
+}
+
+.ui-layout-handle--resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  background: linear-gradient(135deg, transparent 50%, #818cf8 50%);
+  cursor: nwse-resize;
+  border-radius: 0 0 var(--combat-radius-sm) 0;
+}
+
+.ui-layout--positioned .panel h2,
+.ui-layout--positioned.panel h2 {
+  padding-top: 1.5rem;
 }
