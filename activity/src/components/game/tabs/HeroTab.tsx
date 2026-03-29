@@ -30,6 +30,10 @@ const EQUIP_ORDER = [
 
 const BAG_SLOTS = 20;
 
+function slotLabelUpper(slot: string): string {
+  return slot.replace(/_/g, " ").toUpperCase();
+}
+
 /** Matches `legacy-main.ts` / `.rarity-*` in `style.css`. */
 function rarityClassV0(rarity?: string | null): string {
   const v = (rarity || "").toLowerCase();
@@ -133,14 +137,21 @@ export function HeroTab() {
                 No character yet — use <code>/character create</code> in Discord.
               </p>
             ) : (
-              <p className="hint">
-                <strong>{char.name}</strong> · Lv {char.level ?? "?"} · {String(char.class || "?")}
-                {specLine ? ` · ${specLine}` : ""}
-              </p>
-            )}
-            {char && (
-              <div className="mt-2">
-                <button type="button" className="mini-btn" onClick={() => void requestSpecChoice()}>
+              <div className="hero-char-identity">
+                <div className="hero-char-line">
+                  <span className="hero-char-name">{char.name}</span>
+                  <span className="hero-char-level">Lv {char.level ?? "?"}</span>
+                </div>
+                <div className="hero-char-classline">
+                  <span>{String(char.class || "?")}</span>
+                  {specLine ? (
+                    <>
+                      <span className="hero-char-sep">|</span>
+                      <span>{String(specLine)}</span>
+                    </>
+                  ) : null}
+                </div>
+                <button type="button" className="hero-spec-btn" onClick={() => void requestSpecChoice()}>
                   Specialization
                 </button>
               </div>
@@ -177,11 +188,11 @@ export function HeroTab() {
           <div className="equip-grid-v0">
             {EQUIP_ORDER.map((slot) => {
               const it = equipped[slot];
-              const label = slot.replace("_", " ");
+              const labelUpper = slotLabelUpper(slot);
               if (!it) {
                 return (
                   <div key={slot} className="equip-slot" data-slot={slot}>
-                    {label}
+                    {labelUpper}
                   </div>
                 );
               }
@@ -199,7 +210,7 @@ export function HeroTab() {
                     </span>
                     {enh > 0 ? <span className="enh-badge">+{enh}</span> : null}
                   </div>
-                  <span className="equip-label">{label}</span>
+                  <span className="equip-label">{slot.replace(/_/g, " ")}</span>
                   <div className="equip-actions">
                     <button
                       type="button"
@@ -226,13 +237,15 @@ export function HeroTab() {
               );
             })}
           </div>
-          <button type="button" className="btn w-full mt-3" onClick={() => setBlacksmithOpen(true)}>
-            🔨 Open Blacksmith
+          <button type="button" className="hero-blacksmith-btn" onClick={() => setBlacksmithOpen(true)}>
+            Open Blacksmith
           </button>
         </div>
 
         <div className="panel v0-panel">
-          <h2>Inventory ({bag.length})</h2>
+          <h2>
+            Inventory <span className="hero-inventory-count">({bag.length})</span>
+          </h2>
           <div className="inv-grid">
             {bag.length === 0 ? (
               <p className="hint" style={{ gridColumn: "1 / -1" }}>

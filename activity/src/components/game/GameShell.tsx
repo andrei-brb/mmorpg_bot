@@ -152,12 +152,6 @@ export function GameShell() {
                 </button>
               ))}
             </div>
-            {activeTab === "Hero" && (
-              <p className="text-center text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-4 px-2 opacity-90">
-                Stats, equipment &amp; bag — one screen (no separate inventory tab).
-              </p>
-            )}
-
             <div className="sm:px-1 flex flex-col flex-1 min-h-0">
               {activeTab === "Hero" && <HeroTab />}
               {activeTab === "Explore" && <ExploreTab />}

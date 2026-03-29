@@ -428,16 +428,124 @@ code {
   color: hsl(43 78% 52% / 0.95);
 }
 
+.hero-char-identity {
+  margin-top: 0.15rem;
+}
+
+.hero-char-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+}
+
+.hero-char-name {
+  font-family: "Cinzel", serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: hsl(43 78% 52%);
+  text-shadow:
+    0 0 10px hsl(43 78% 50% / 0.28),
+    0 2px 4px hsl(0 0% 0% / 0.55);
+}
+
+.hero-char-level {
+  font-family: "Cinzel", serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: hsl(43 65% 58%);
+  letter-spacing: 0.06em;
+}
+
+.hero-char-classline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+  color: hsl(215 20% 86%);
+  font-family: "Crimson Text", serif;
+}
+
+.hero-char-sep {
+  color: hsl(43 78% 50% / 0.65);
+  font-weight: 400;
+}
+
+.hero-spec-btn {
+  margin-top: 0.65rem;
+  padding: 0.42rem 1rem;
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: clamp(0.55rem, 2.4vw, 0.62rem);
+  line-height: 1.2;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(180deg, #121a36 0%, #0a1026 100%);
+  color: #e2e8f0;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06);
+}
+
+.hero-spec-btn:hover {
+  border-color: hsl(43 78% 50% / 0.45);
+  color: hsl(43 78% 78%);
+}
+
+.hero-blacksmith-btn {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.55rem 1rem;
+  min-height: 44px;
+  font-family: "Cinzel", serif;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  border-radius: 4px;
+  border: 1px solid hsl(43 55% 40% / 0.85);
+  background-image: linear-gradient(180deg, hsl(43 40% 28%) 0%, hsl(28 22% 12%) 55%, hsl(228 22% 9%) 100%);
+  box-shadow:
+    inset 0 1px 0 hsl(43 60% 55% / 0.28),
+    inset 0 -1px 0 hsl(0 0% 0% / 0.35),
+    0 0 0 1px hsl(0 0% 0% / 0.4);
+  color: hsl(43 78% 82%);
+  cursor: pointer;
+}
+
+.hero-blacksmith-btn:hover {
+  filter: brightness(1.06);
+}
+
+.panel.v0-panel h2 .hero-inventory-count {
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-left: 0.35rem;
+}
+
+@media (max-width: 700px) {
+  .hero-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .hero-hp-wrap {
   margin-top: 0.65rem;
 }
 
 .hero-hp-bar {
-  height: 9px;
+  height: 12px;
   background: #0b1023;
   border: 1px solid #2a3252;
   border-radius: 999px;
   overflow: hidden;
+  box-shadow: inset 0 1px 3px hsl(0 0% 0% / 0.45);
 }
 
 .hero-hp-fill {
@@ -822,6 +930,11 @@ code {
 .equip-slot:not(.filled) {
   justify-content: center;
   padding: 6px;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: rgba(148, 163, 184, 0.72);
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 30%),
     linear-gradient(180deg, #111a36 0%, #0a1026 100%),
