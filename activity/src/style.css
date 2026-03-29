@@ -1139,23 +1139,26 @@ code {
   opacity: 1;
 }
 
-/* Tooltip: frame bitmap hugs content; parchment fill kills transparent PNG halos (no white “outer sheet”) */
+/* Tooltip: darker parchment reads against dark UI; frame + soft rim */
 .item-tip-card {
   width: fit-content;
-  max-width: min(292px, 94vw);
+  max-width: min(300px, 94vw);
   min-width: 0;
   border-radius: 10px;
   border: none !important;
   padding: 0;
   overflow: hidden;
-  /* Matches typical parchment in tooltip-frame.png so edges blend */
-  background-color: #d4c9ae;
-  background-image: var(--ui-tooltip-frame);
+  background-color: #8f7f62;
+  background-image:
+    linear-gradient(180deg, rgba(42, 36, 28, 0.14) 0%, rgba(22, 18, 14, 0.22) 100%),
+    var(--ui-tooltip-frame);
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: center;
   color: #12100e;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 14px 36px rgba(0, 0, 0, 0.65);
 }
 
 .item-tip-card.rarity-common {
@@ -1178,35 +1181,73 @@ code {
 }
 
 .item-tip-inner {
-  padding: 10px 12px 11px;
+  padding: 12px 13px 17px;
   margin: 0;
   border-radius: 0;
   background: transparent;
 }
 
+.item-tip-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.item-tip-icon-wrap {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.item-tip-icon-wrap .inv-icon-img {
+  width: 44px !important;
+  height: 44px !important;
+  max-width: 44px;
+  max-height: 44px;
+  object-fit: contain;
+  image-rendering: crisp-edges;
+}
+
+.item-tip-icon-wrap .inv-icon-emoji {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.item-tip-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
 .item-tip-title {
   font-weight: 800;
-  font-size: 0.82rem;
-  line-height: 1.2;
+  font-size: 0.84rem;
+  line-height: 1.22;
   letter-spacing: 0.01em;
   color: #0c0a09;
   text-shadow: none;
 }
 
 .item-tip-line {
-  margin-top: 0.3rem;
+  margin-top: 0.28rem;
   font-size: 0.7rem;
   line-height: 1.35;
 }
 
 .item-tip-line--rarity {
-  color: #0b2e26;
+  color: #06251c;
   font-weight: 600;
   text-shadow: none;
 }
 
 .item-tip-line--type {
-  margin-top: 0.25rem;
+  margin-top: 0.22rem;
   color: #0c0a09;
   font-weight: 600;
   text-shadow: none;
@@ -1218,17 +1259,22 @@ code {
 }
 
 .item-tip-stats {
-  margin-top: 0.42rem;
-  border-top: 1px solid rgba(20, 16, 12, 0.22);
-  padding-top: 0.38rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(12, 10, 8, 0.35);
+  padding-top: 0.42rem;
+  padding-bottom: 2px;
 }
 
 .item-tip-stat {
   font-size: 0.73rem;
-  line-height: 1.38;
+  line-height: 1.42;
   font-weight: 600;
   color: #0a0908;
   text-shadow: none;
+}
+
+.item-tip-stat:last-child {
+  padding-bottom: 1px;
 }
 
 /* Modal (enhance confirm) */

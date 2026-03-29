@@ -897,16 +897,23 @@ function mountApp(
     const statsHtml = statLines.length
       ? `<div class="item-tip-stats">${statLines.map((l) => `<div class="item-tip-stat">${escapeHtml(l)}</div>`).join("")}</div>`
       : `<div class="item-tip-line item-tip-line--muted">No combat stats</div>`;
+    const tipIconHtml = renderInvIconHtml(item, icon);
     tooltipEl.innerHTML = `
       <div class="item-tip-card ${rarityClass(item.rarity)}">
         <div class="item-tip-inner">
-          <div class="item-tip-title">${escapeHtml(icon)} ${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
-          <div class="item-tip-line item-tip-line--rarity">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
-          <div class="item-tip-line item-tip-line--type">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
+          <div class="item-tip-head">
+            <div class="item-tip-icon-wrap">${tipIconHtml}</div>
+            <div class="item-tip-head-text">
+              <div class="item-tip-title">${escapeHtml(item.name)}${escapeHtml(enhSuffix)}</div>
+              <div class="item-tip-line item-tip-line--rarity">${escapeHtml(rarity)} · ${escapeHtml(slot)} · x${qty}</div>
+              <div class="item-tip-line item-tip-line--type">Type: ${escapeHtml(String(item.item_type || "item"))}${lvlReq > 0 ? ` · Req Lv ${lvlReq}` : ""}</div>
+            </div>
+          </div>
           ${statsHtml}
         </div>
       </div>
     `;
+    wireInvIconFallbacks(tooltipEl);
     const rect = anchor.getBoundingClientRect();
 
     // Measure tooltip before final placement.
