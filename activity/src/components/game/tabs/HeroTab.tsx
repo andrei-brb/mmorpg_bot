@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { InvRow } from "@/lib/apiTypes";
@@ -40,7 +40,9 @@ export function HeroTab() {
     getEnhanceInfo, postEnhance, buyProtection,
   } = useGameSession();
 
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  /** Hover: stats only. Click: `pinnedKey` keeps actions open until outside click or same slot toggled. */
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [enhanceItemId, setEnhanceItemId] = useState<string | null>(null);
   const [showSpec, setShowSpec] = useState(false);
   const [status, setStatus] = useState("");
@@ -67,6 +69,7 @@ export function HeroTab() {
         setStatus(j.message || (j.ok ? msg : "Failed"));
         toast(j.message || msg);
         await refreshInventory();
+        if (res.ok && j.ok !== false) setPinnedKey(null);
       } catch (e) {
         setStatus(String(e));
         toast.error(String(e));
@@ -74,6 +77,17 @@ export function HeroTab() {
     },
     [itemPost, refreshInventory],
   );
+
+  useEffect(() => {
+    if (!pinnedKey) return;
+    const onDown = (e: MouseEvent) => {
+      const el = document.querySelector(`[data-item-slot="${CSS.escape(pinnedKey)}"]`);
+      if (el && e.target instanceof Node && el.contains(e.target)) return;
+      setPinnedKey(null);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [pinnedKey]);
 
   const equipmentSlots = EQUIP_ORDER.map((slot) => ({
     id: slot,
@@ -156,12 +170,20 @@ export function HeroTab() {
             {equipmentSlots.map((slot) => {
               const it = slot.item;
               const rc = it ? RARITY_COLORS[rarityKey(it.rarity)] || "" : "";
+              const showHoverTip = it && hoveredKey === slot.id && pinnedKey !== slot.id;
+              const showPinned = it && pinnedKey === slot.id;
               return (
                 <div
                   key={slot.id}
-                  className={`relative aspect-square ${it ? `slot-filled ${rc}` : "slot-empty"}`}
-                  onMouseEnter={() => it && setHoveredItem(slot.id)}
-                  onMouseLeave={() => setHoveredItem(null)}
+                  data-item-slot={slot.id}
+                  className={`relative aspect-square ${it ? `slot-filled ${rc} cursor-pointer` : "slot-empty"}`}
+                  onMouseEnter={() => it && setHoveredKey(slot.id)}
+                  onMouseLeave={() => setHoveredKey(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!it) return;
+                    setPinnedKey((p) => (p === slot.id ? null : slot.id));
+                  }}
                 >
                   {it ? (
                     <div className="absolute inset-0 flex items-center justify-center p-0.5">
@@ -178,14 +200,36 @@ export function HeroTab() {
                   ) : (
                     <span className="text-[8px] leading-tight text-center opacity-50 font-cinzel">{slot.label}</span>
                   )}
-                  {hoveredItem === slot.id && it && (
-                    <div className="game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+                  {showHoverTip && (
+                    <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+                      <ItemTooltipPanel item={it} rarityClass={rc} />
+                    </div>
+                  )}
+                  {showPinned && (
+                    <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
                       <ItemTooltipPanel item={it} rarityClass={rc}>
                         <div className="flex flex-wrap gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); setHoveredItem(null); setEnhanceItemId(it.id); }}
-                            className="game-btn-primary text-[9px] px-2 py-0.5">🔨 Enhance</button>
-                          <button onClick={(e) => { e.stopPropagation(); setHoveredItem(null); void runAction("/api/game/item/unequip", { slot: slot.id }, "Unequipped"); }}
-                            className="game-btn-secondary text-[9px] px-2 py-0.5">Unequip</button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPinnedKey(null);
+                              setEnhanceItemId(it.id);
+                            }}
+                            className="game-btn-primary text-[9px] px-2 py-0.5"
+                          >
+                            🔨 Enhance
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void runAction("/api/game/item/unequip", { slot: slot.id }, "Unequipped");
+                            }}
+                            className="game-btn-secondary text-[9px] px-2 py-0.5"
+                          >
+                            Unequip
+                          </button>
                         </div>
                       </ItemTooltipPanel>
                     </div>
@@ -210,38 +254,77 @@ export function HeroTab() {
           <div className="grid grid-cols-5 gap-2">
             {invSlots.map((inv) => {
               const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
+              const invKey = `inv-${inv.id}`;
+              const it = inv.item;
+              const showHoverTip = it && hoveredKey === invKey && pinnedKey !== invKey;
+              const showPinned = it && pinnedKey === invKey;
               return (
                 <div
                   key={inv.id}
-                  className={`relative aspect-square ${inv.name ? `slot-filled ${rc}` : "slot-empty"}`}
-                  onMouseEnter={() => inv.name && setHoveredItem(`inv-${inv.id}`)}
-                  onMouseLeave={() => setHoveredItem(null)}
+                  data-item-slot={invKey}
+                  className={`relative aspect-square ${inv.name ? `slot-filled ${rc} ${it ? "cursor-pointer" : ""}` : "slot-empty"}`}
+                  onMouseEnter={() => inv.name && setHoveredKey(invKey)}
+                  onMouseLeave={() => setHoveredKey(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!it) return;
+                    setPinnedKey((p) => (p === invKey ? null : invKey));
+                  }}
                 >
-                  {inv.item ? (
+                  {it ? (
                     <div className="absolute inset-0 flex items-center justify-center p-0.5">
-                      <ItemIcon item={inv.item} size={46} />
+                      <ItemIcon item={it} size={46} />
                     </div>
                   ) : (
                     <span className="text-[7px] leading-tight text-center opacity-30">Empty</span>
                   )}
-                  {inv.item && Number(inv.item.quantity ?? 1) > 1 && (
+                  {it && Number(it.quantity ?? 1) > 1 && (
                     <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-foreground"
-                      style={{ textShadow: '0 1px 2px hsl(0 0% 0% / 0.8)' }}>×{inv.item.quantity}</span>
+                      style={{ textShadow: '0 1px 2px hsl(0 0% 0% / 0.8)' }}>×{it.quantity}</span>
                   )}
-                  {hoveredItem === `inv-${inv.id}` && inv.item && (
-                    <div className="game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
-                      <ItemTooltipPanel item={inv.item} rarityClass={rc}>
+                  {showHoverTip && (
+                    <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+                      <ItemTooltipPanel item={it} rarityClass={rc} />
+                    </div>
+                  )}
+                  {showPinned && (
+                    <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
+                      <ItemTooltipPanel item={it} rarityClass={rc}>
                         <div className="flex flex-wrap gap-1.5">
-                          {(inv.item.item_type || "").toLowerCase() === "consumable" && (
-                            <button onClick={() => void runAction("/api/game/item/use", { item_id: inv.item!.id }, "Used")}
-                              className="game-btn-secondary px-2 py-0.5 text-[10px]">Use</button>
+                          {(it.item_type || "").toLowerCase() === "consumable" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void runAction("/api/game/item/use", { item_id: it.id }, "Used");
+                              }}
+                              className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                            >
+                              Use
+                            </button>
                           )}
-                          {inv.item.equip_slot && (
-                            <button onClick={() => void runAction("/api/game/item/equip", { item_id: inv.item!.id }, "Equipped")}
-                              className="game-btn-secondary px-2 py-0.5 text-[10px]">Equip</button>
+                          {it.equip_slot && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped");
+                              }}
+                              className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                            >
+                              Equip
+                            </button>
                           )}
-                          <button onClick={() => void runAction("/api/game/item/sell", { item_id: inv.item!.id }, "Sold")}
-                            className="game-btn-secondary px-2 py-0.5 text-[10px]">Sell</button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void runAction("/api/game/item/sell", { item_id: it.id }, "Sold");
+                            }}
+                            className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                          >
+                            Sell
+                          </button>
                         </div>
                       </ItemTooltipPanel>
                     </div>

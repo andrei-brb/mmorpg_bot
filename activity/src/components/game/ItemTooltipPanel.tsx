@@ -5,6 +5,7 @@ import { itemTooltipLines, itemTooltipSubtitle } from "@/lib/itemStatLines";
 type Props = {
   item: InvRow;
   rarityClass: string;
+  /** Omit for hover-only tooltips (stats, no action row). */
   children?: ReactNode;
 };
 
