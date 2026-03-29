@@ -62,6 +62,8 @@ type GameSessionValue = {
   ) => Promise<{ ok?: boolean; message?: string }>;
   buyProtection: (key: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
   npcInteract: (npc?: string) => Promise<void>;
+  /** Re-fetch spec gate from API (opens specialization modal if the server says you must choose). */
+  requestSpecChoice: () => Promise<void>;
   displayName: string;
 };
 
@@ -168,6 +170,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const closeSpecModal = useCallback(() => {
     setSpecModal((s) => ({ ...s, open: false }));
   }, []);
+
+  const requestSpecChoice = useCallback(async () => {
+    await checkSpecModal();
+  }, [checkSpecModal]);
 
   const chooseSpecialization = useCallback(
     async (specKey: string) => {
@@ -425,6 +431,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       postEnhance,
       buyProtection,
       npcInteract,
+      requestSpecChoice,
       displayName,
     }),
     [
@@ -456,6 +463,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       postEnhance,
       buyProtection,
       npcInteract,
+      requestSpecChoice,
       displayName,
     ],
   );
