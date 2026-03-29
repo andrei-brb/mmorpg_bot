@@ -56,7 +56,7 @@
         document.addEventListener(
           "click",
           function (e) {
-            var el = e.target && e.target.closest && e.target.closest(".v0-header-row h1");
+            var el = e.target && e.target.closest && e.target.closest(".shell h1");
             if (!el) return;
             clicks += 1;
             clearTimeout(timer);

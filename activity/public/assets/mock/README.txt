@@ -24,4 +24,7 @@ Enable mock mode (any one works; all persist in localStorage until you turn off)
 
 Disable: ?mock=0 or #mock=0, or triple-click the title again.
 
+If Discord shows "could not connect" but mock mode is on, you still get tab bar +
+full-tab mock images (disconnected layout uses the same tab pane IDs).
+
 See style.css block "Full-tab mock preview".
