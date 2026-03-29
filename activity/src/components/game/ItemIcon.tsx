@@ -35,15 +35,23 @@ export function ItemIcon({ item, size = 36, className, style }: Props) {
     );
   }
 
+  const src = candidates[idx];
+  const dim = size ?? 36;
+
   return (
     <img
-      src={candidates[idx]}
+      key={src}
+      src={src}
       alt=""
-      width={size}
-      height={size}
-      className={`object-contain ${className ?? ""}`}
-      style={style}
-      loading="lazy"
+      className={`block shrink-0 object-contain object-center ${className ?? ""}`}
+      style={{
+        maxWidth: dim,
+        maxHeight: dim,
+        width: "auto",
+        height: "auto",
+        ...style,
+      }}
+      loading="eager"
       decoding="async"
       onError={() => setIdx((i) => i + 1)}
     />

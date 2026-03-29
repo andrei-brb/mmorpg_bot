@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { InvRow } from "@/lib/apiTypes";
@@ -33,10 +32,6 @@ const RARITY_COLORS: Record<string, string> = {
 function rarityKey(rarity?: string | null) {
   return (rarity || "common").toLowerCase();
 }
-
-const ITEM_ICON_SHADOW: CSSProperties = {
-  filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))",
-};
 
 export function HeroTab() {
   const {
@@ -168,11 +163,13 @@ export function HeroTab() {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   {it ? (
-                    <div className="flex flex-col items-center">
-                      <ItemIcon item={it} size={32} style={ITEM_ICON_SHADOW} />
+                    <div className="absolute inset-0 flex items-center justify-center p-0.5">
+                      <ItemIcon item={it} size={46} />
                       {Number(it.enhancement_level ?? 0) > 0 && (
-                        <span className="text-[8px] text-primary font-bold leading-none mt-0.5"
-                          style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.4)' }}>
+                        <span
+                          className="pointer-events-none absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none text-primary"
+                          style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
+                        >
                           +{it.enhancement_level}
                         </span>
                       )}
@@ -224,7 +221,9 @@ export function HeroTab() {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   {inv.item ? (
-                    <ItemIcon item={inv.item} size={32} style={ITEM_ICON_SHADOW} />
+                    <div className="absolute inset-0 flex items-center justify-center p-0.5">
+                      <ItemIcon item={inv.item} size={46} />
+                    </div>
                   ) : (
                     <span className="text-[7px] leading-tight text-center opacity-30">Empty</span>
                   )}
