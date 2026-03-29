@@ -11,7 +11,8 @@ interface EnhancableItem {
 interface BlacksmithModalProps {
   item: EnhancableItem;
   onClose: () => void;
-  onEnhance: (newLevel: number) => void;
+  /** Server-side enhance only — no client-side roll/toasts here (parent calls API + toast). */
+  onEnhance: () => void | Promise<void>;
 }
 
 const MAX_ENHANCEMENT = 10;
@@ -38,6 +39,7 @@ export function BlacksmithModal({ item, onClose, onEnhance }: BlacksmithModalPro
   const [blessingStock, setBlessingStock] = useState(2);
   const [charmStock, setCharmStock] = useState(1);
   const [fragmentStock, setFragmentStock] = useState(5);
+  const [enhancePending, setEnhancePending] = useState(false);
 
   const nextLevel = item.level + 1;
   const tier = TIER_DATA[nextLevel];
@@ -46,37 +48,13 @@ export function BlacksmithModal({ item, onClose, onEnhance }: BlacksmithModalPro
   const charmUsable = nextLevel <= 5;
   const successChance = Math.min(100, tier?.baseChance + fragments * 10);
 
-  const handleEnhance = () => {
-    if (isMaxed || !tier) return;
-
-    // Use up protection / fragments
-    if (protection === "blessing" && blessingStock > 0) setBlessingStock((s) => s - 1);
-    if (protection === "charm" && charmStock > 0) setCharmStock((s) => s - 1);
-    if (fragments > 0) setFragmentStock((s) => Math.max(0, s - fragments));
-
-    const roll = Math.random() * 100;
-    if (roll < successChance) {
-      toast("✨ Enhancement Success!", {
-        description: `${item.name} is now +${nextLevel}!`,
-      });
-      onEnhance(nextLevel);
-    } else {
-      if (canShatter && protection === "none") {
-        toast("💥 Item Shattered!", {
-          description: `${item.name} was destroyed in the attempt.`,
-        });
-        onClose();
-      } else if (canShatter && protection === "blessing") {
-        const downgraded = Math.max(0, item.level - 1);
-        toast("🛡️ Blessing Activated — Downgraded", {
-          description: `${item.name} dropped to +${downgraded} instead of shattering.`,
-        });
-        onEnhance(downgraded);
-      } else {
-        toast("❌ Enhancement Failed", {
-          description: `${item.name} remains at +${item.level}. No damage done.`,
-        });
-      }
+  const handleEnhance = async () => {
+    if (isMaxed || !tier || enhancePending) return;
+    setEnhancePending(true);
+    try {
+      await Promise.resolve(onEnhance());
+    } finally {
+      setEnhancePending(false);
     }
   };
 
@@ -245,10 +223,10 @@ export function BlacksmithModal({ item, onClose, onEnhance }: BlacksmithModalPro
 
         {/* Actions */}
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="game-btn-secondary text-xs">Cancel</button>
+          <button type="button" onClick={onClose} disabled={enhancePending} className="game-btn-secondary text-xs">Cancel</button>
           {!isMaxed && (
-            <button onClick={handleEnhance} className="game-btn-primary text-xs">
-              🔨 Enhance
+            <button type="button" onClick={() => void handleEnhance()} disabled={enhancePending} className="game-btn-primary text-xs">
+              {enhancePending ? "…" : "🔨 Enhance"}
             </button>
           )}
         </div>
