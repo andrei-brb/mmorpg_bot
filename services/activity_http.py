@@ -1822,6 +1822,12 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
             app.router.add_static("/assets/", assets_dir, show_index=False)
         else:
             log.warning("No activity/dist/assets — run `cd activity && npm run build` before deploy")
+        # Vite copies `activity/public/textures/` → `dist/textures/` (CSS uses url('/textures/...')).
+        textures_dir = os.path.join(static_root, "textures")
+        if os.path.isdir(textures_dir):
+            app.router.add_static("/textures/", textures_dir, show_index=False)
+        else:
+            log.warning("No activity/dist/textures — UI panel backgrounds may 404")
 
     runner = web.AppRunner(app)
     await runner.setup()
