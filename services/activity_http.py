@@ -1828,6 +1828,12 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
             app.router.add_static("/textures/", textures_dir, show_index=False)
         else:
             log.warning("No activity/dist/textures — UI panel backgrounds may 404")
+        # Combat skill bar: `public/skills/skill_<key>.png` → `/skills/...` (see `activity/src/lib/skillIconUrl.ts`).
+        skills_dir = os.path.join(static_root, "skills")
+        if os.path.isdir(skills_dir):
+            app.router.add_static("/skills/", skills_dir, show_index=False)
+        else:
+            log.warning("No activity/dist/skills — run `cd activity && npm run build`; combat skill icons may 404")
 
     runner = web.AppRunner(app)
     await runner.setup()
