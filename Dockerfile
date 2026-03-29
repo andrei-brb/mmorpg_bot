@@ -13,6 +13,11 @@ ARG VITE_DISCORD_CLIENT_ID
 ARG VITE_API_BASE_URL=
 ENV VITE_DISCORD_CLIENT_ID=$VITE_DISCORD_CLIENT_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Rollup ships platform-specific optional deps; `npm ci` in Linux sometimes skips the right
+# binary when the lockfile was generated on another OS (npm/cli#4828). Install explicitly.
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then npm install @rollup/rollup-linux-arm64-gnu --no-save; \
+    else npm install @rollup/rollup-linux-x64-gnu --no-save; fi
 RUN if [ -z "$VITE_DISCORD_CLIENT_ID" ]; then \
       echo "ERROR: Docker build-arg VITE_DISCORD_CLIENT_ID is required (your Discord Application ID)." >&2; \
       echo "Railway: Service → Variables → add VITE_DISCORD_CLIENT_ID → enable for **Build**, redeploy." >&2; \
