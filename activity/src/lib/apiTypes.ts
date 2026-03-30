@@ -77,6 +77,9 @@ export type CombatStatePayload = {
     current_res: number;
     max_res: number;
     res_type: string;
+    /** Class key (e.g. `warrior`) — from combat state so icons work without waiting on inventory. */
+    class?: string | null;
+    specialization?: string | null;
   };
   enemy: { name: string; current_hp: number; max_hp: number };
   log: string[];

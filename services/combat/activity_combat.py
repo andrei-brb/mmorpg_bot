@@ -182,10 +182,15 @@ def serialize_activity_state(
     session = ac.session
     player = session.alive_players[0] if session.alive_players else session.players[0]
     enemy = session.alive_enemies[0] if session.alive_enemies else session.enemies[0]
+    player_payload = _serialize_combatant(player)
+    # Activity UI loads class/spec icons from `/classes` + `/specs`; include keys here so
+    # the client does not depend on inventory fetch timing (player name already comes from state).
+    player_payload["class"] = char.get("class")
+    player_payload["specialization"] = char.get("specialization")
     return {
         "phase": "combat" if awaiting_action and not session.over else "ended",
         "turn": session.turn,
-        "player": _serialize_combatant(player),
+        "player": player_payload,
         "enemy": _serialize_combatant(enemy),
         "log": ac.log_lines[-12:],
         "abilities": _ability_options(char, player),

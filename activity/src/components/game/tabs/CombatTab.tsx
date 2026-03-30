@@ -22,21 +22,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [enemyPick, setEnemyPick] = useState("");
   const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [useClassFallback, setUseClassFallback] = useState(false);
-  const [useSpecFallback, setUseSpecFallback] = useState(false);
 
   const zoneLabel = map?.zones?.find((z) => z.key === map?.current_zone);
-  const classKey = inventory?.character?.class || "";
-  const specKey = inventory?.character?.specialization || "";
-
-  // Reset icon fallbacks when the underlying keys change.
-  useEffect(() => {
-    setUseClassFallback(false);
-  }, [classKey]);
-
-  useEffect(() => {
-    setUseSpecFallback(false);
-  }, [specKey]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -162,6 +149,10 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   if (mode === "fight" && state) {
     const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
     const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
+    const classKey =
+      state.player.class || inventory?.character?.class || "";
+    const specKey =
+      state.player.specialization || inventory?.character?.specialization || "";
     return (
       <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
         {/* Zone bar */}
@@ -178,23 +169,20 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         <div className="grid grid-cols-2 gap-4">
           <div className="game-panel text-center">
             <div className="mb-2 flex items-center justify-center" style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}>
-              {classKey && !useClassFallback ? (
+              {classKey ? (
                 <img
                   src={classIconUrl(classKey)}
                   alt=""
                   width={48}
                   height={48}
                   className="w-12 h-12 object-contain rounded-sm"
-                  onError={() => {
-                    setUseClassFallback(true);
-                  }}
                 />
               ) : (
                 <span className="text-3xl">🧝</span>
               )}
             </div>
             <p className="text-sm font-cinzel font-semibold text-foreground">{state.player.name}</p>
-            {specKey && !useSpecFallback && (
+            {specKey && (
               <div className="mt-1 flex items-center justify-center">
                 <img
                   src={specIconUrl(specKey)}
@@ -202,9 +190,6 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                   width={18}
                   height={18}
                   className="w-[18px] h-[18px] object-contain rounded-[2px]"
-                  onError={() => {
-                    setUseSpecFallback(true);
-                  }}
                 />
               </div>
             )}
