@@ -86,6 +86,30 @@ export type CombatStatePayload = {
   abilities: CombatAbility[];
   can_potion: boolean;
   in_dungeon?: boolean;
+  /** Activity Dungeon tab — combat started with dungeon_key + floor (see server). */
+  dungeon_key?: string | null;
+  dungeon_floor?: number | null;
+};
+
+export type DungeonFloorPreview = {
+  floor: number;
+  enemy_key: string;
+  is_boss: boolean;
+  name: string;
+  emoji: string;
+};
+
+export type DungeonCatalogEntry = {
+  key: string;
+  name: string;
+  emoji: string;
+  description: string;
+  level_req: number;
+  floors: number;
+  xp_per_floor: number;
+  gold_min: number;
+  gold_max: number;
+  floor_preview: DungeonFloorPreview[];
 };
 
 export type ExploreZone = {

@@ -1,5 +1,6 @@
 import type {
   CombatStatePayload,
+  DungeonCatalogEntry,
   EnhanceInfoPayload,
   ExploreMapPayload,
   ExploreResultPayload,
@@ -84,12 +85,30 @@ export async function getCombatEnemies(token: string, guildId?: string) {
   return res;
 }
 
-export async function postCombatStart(token: string, enemyKey: string, guildId?: string) {
+/** Overworld: pick an enemy from the current zone. Dungeon tab: server resolves enemy from `config.settings.DUNGEONS`. */
+export type StartCombatParams =
+  | { kind: "zone"; enemyKey: string }
+  | { kind: "dungeon"; dungeonKey: string; floor: number };
+
+export async function postCombatStart(token: string, guildId: string | undefined, params: StartCombatParams) {
+  const body =
+    params.kind === "zone"
+      ? { enemy_key: params.enemyKey }
+      : { dungeon_key: params.dungeonKey, floor: params.floor };
   return fetch(apiUrl("/api/game/combat/start"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
-    body: JSON.stringify({ enemy_key: enemyKey, guild_id: guildId ? String(guildId) : undefined }),
+    body: JSON.stringify({ ...body, guild_id: guildId ? String(guildId) : undefined }),
   });
+}
+
+export async function getDungeons(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; dungeons?: DungeonCatalogEntry[] }> {
+  const res = await fetch(apiUrl("/api/game/dungeons"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`dungeons ${res.status}`);
+  return res.json() as Promise<{ ok?: boolean; dungeons?: DungeonCatalogEntry[] }>;
 }
 
 export async function postCombatAction(token: string, body: Record<string, unknown>, guildId?: string) {

@@ -15,6 +15,7 @@ from uuid import uuid4
 from config.settings import (
     ABILITY_UNLOCK_LEVELS,
     CLASSES,
+    DUNGEONS,
     ENEMIES,
     RARITIES,
     Settings,
@@ -34,6 +35,8 @@ class ActivityCombatState:
     session: CombatSession
     log_lines: List[str] = field(default_factory=list)
     potion_used: bool = False
+    dungeon_key: Optional[str] = None
+    dungeon_floor: Optional[int] = None
 
 
 def _make_enemy(key: str, char_level: int, zone=None) -> Combatant:
@@ -199,8 +202,22 @@ def serialize_activity_state(
         "zone_key": session.zone_key,
         "enemy_key": session.enemy_key,
         # Embedded Activity: multi-slot party UI only while character is in a dungeon run
-        "in_dungeon": bool(char.get("in_dungeon")),
+        "in_dungeon": bool(char.get("in_dungeon")) or bool(ac.dungeon_key),
+        "dungeon_key": ac.dungeon_key,
+        "dungeon_floor": ac.dungeon_floor,
     }
+
+
+def _enemy_key_for_dungeon_floor(cfg, floor: int) -> tuple[str, bool]:
+    """Resolve enemy for a dungeon floor (matches cogs/dungeon/dungeon_cog)."""
+    if floor < 1 or floor > cfg.floors:
+        raise ValueError("invalid_floor")
+    is_boss = floor == cfg.floors
+    if is_boss:
+        enemy_key = cfg.floor_bosses[-1]
+    else:
+        enemy_key = cfg.enemies_per_floor[(floor - 1) % len(cfg.enemies_per_floor)]
+    return enemy_key, is_boss
 
 
 async def list_zone_enemies(char: dict) -> List[Dict[str, str]]:
@@ -222,24 +239,34 @@ async def list_zone_enemies(char: dict) -> List[Dict[str, str]]:
 async def start_activity_combat(
     bot,
     discord_id: int,
-    enemy_key: str,
     guild_id: Optional[int],
     *,
     force: bool = False,
+    enemy_key: Optional[str] = None,
+    dungeon_key: Optional[str] = None,
+    dungeon_floor: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Begin iframe combat or return existing session."""
+    """Begin iframe combat or return existing session.
+
+    Overworld: pass ``enemy_key`` from the character's current zone.
+
+    Dungeon (Activity tab): pass ``dungeon_key`` + ``dungeon_floor`` (1-based); enemy is resolved
+    from ``config.settings.DUNGEONS`` like Discord ``/dungeon`` fights.
+    """
     db = getattr(bot, "db", None)
     if db is None or db.pool is None:
         return {"error": "database_unavailable"}
 
     from services.character.character_service import CharacterService
-    from services.character.inventory_service import InventoryService
 
     char_svc = CharacterService(db)
-    inv_svc = InventoryService(db)
     char = await char_svc.get_character(discord_id)
     if not char:
         return {"error": "no_character", "message": "Create a character with /character create in Discord."}
+
+    dungeon_mode = bool(dungeon_key and dungeon_floor is not None)
+    if not dungeon_mode and not (enemy_key or "").strip():
+        return {"error": "missing_enemy_key", "message": "Missing enemy_key or dungeon_key/floor."}
 
     if discord_id in ACTIVE_ACTIVITY:
         if not force:
@@ -256,17 +283,41 @@ async def start_activity_combat(
         if not char:
             return {"error": "no_character", "message": "Create a character with /character create in Discord."}
 
+    resolved_dungeon_key: Optional[str] = None
+    resolved_dungeon_floor: Optional[int] = None
     zone = ZONES.get(char["current_zone"])
-    if not zone:
-        return {"error": "unknown_zone"}
-    if char["level"] < zone.level_range[0]:
-        return {
-            "error": "level_too_low",
-            "message": f"This zone requires level {zone.level_range[0]}+.",
-        }
+    is_boss: bool
 
-    if enemy_key not in zone.enemies and enemy_key not in zone.bosses:
-        return {"error": "invalid_enemy", "message": "That enemy is not in your current zone."}
+    if dungeon_mode:
+        cfg = DUNGEONS.get(dungeon_key or "")
+        if not cfg:
+            return {"error": "invalid_dungeon", "message": "Unknown dungeon."}
+        if char["level"] < cfg.level_req:
+            return {
+                "error": "level_too_low",
+                "message": f"This dungeon requires level {cfg.level_req}+.",
+            }
+        try:
+            enemy_key, is_boss = _enemy_key_for_dungeon_floor(cfg, int(dungeon_floor))
+        except (ValueError, TypeError):
+            return {"error": "invalid_floor", "message": "Invalid dungeon floor."}
+        resolved_dungeon_key = dungeon_key
+        resolved_dungeon_floor = int(dungeon_floor)
+        if not zone:
+            return {"error": "unknown_zone", "message": "Travel to a valid zone first."}
+    else:
+        enemy_key = (enemy_key or "").strip()
+        if not zone:
+            return {"error": "unknown_zone"}
+        if char["level"] < zone.level_range[0]:
+            return {
+                "error": "level_too_low",
+                "message": f"This zone requires level {zone.level_range[0]}+.",
+            }
+
+        if enemy_key not in zone.enemies and enemy_key not in zone.bosses:
+            return {"error": "invalid_enemy", "message": "That enemy is not in your current zone."}
+        is_boss = enemy_key in zone.bosses
 
     # Same combat_status rules as /fight (Discord channel sessions)
     if char["combat_status"] == "in_combat":
@@ -282,8 +333,10 @@ async def start_activity_combat(
 
     stats = await char_svc.total_stats(char["id"])
     player_c = _make_player(dict(char), stats)
-    enemy_c = _make_enemy(enemy_key, char["level"], zone)
-    is_boss = enemy_key in zone.bosses
+    if dungeon_mode:
+        enemy_c = _make_enemy(enemy_key, char["level"], None)
+    else:
+        enemy_c = _make_enemy(enemy_key, char["level"], zone)
 
     session = CombatSession(
         session_id=uuid4(),
@@ -306,7 +359,13 @@ async def start_activity_combat(
         char["id"],
     )
 
-    ac = ActivityCombatState(session=session, log_lines=log_lines, potion_used=False)
+    ac = ActivityCombatState(
+        session=session,
+        log_lines=log_lines,
+        potion_used=False,
+        dungeon_key=resolved_dungeon_key,
+        dungeon_floor=resolved_dungeon_floor,
+    )
     ACTIVE_ACTIVITY[discord_id] = ac
 
     has_potion = await _has_healing_potion(db, char["id"])

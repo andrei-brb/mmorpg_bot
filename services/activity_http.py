@@ -330,6 +330,52 @@ async def handle_combat_enemies(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"enemies": enemies}))
 
 
+async def handle_game_dungeons(request: web.Request) -> web.Response:
+    """Static dungeon catalog + per-floor enemy preview (aligned with ``config.settings.DUNGEONS``)."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    from config.settings import DUNGEONS, ENEMIES
+    from services.combat.activity_combat import _enemy_key_for_dungeon_floor
+
+    dungeons_out = []
+    for dkey, cfg in DUNGEONS.items():
+        floor_preview = []
+        for f in range(1, cfg.floors + 1):
+            ek, is_boss = _enemy_key_for_dungeon_floor(cfg, f)
+            t = ENEMIES.get(ek)
+            floor_preview.append(
+                {
+                    "floor": f,
+                    "enemy_key": ek,
+                    "is_boss": is_boss,
+                    "name": t.name if t else ek,
+                    "emoji": t.emoji if t else "👾",
+                }
+            )
+        dungeons_out.append(
+            {
+                "key": dkey,
+                "name": cfg.name,
+                "emoji": cfg.emoji,
+                "description": cfg.description,
+                "level_req": cfg.level_req,
+                "floors": cfg.floors,
+                "xp_per_floor": cfg.xp_reward,
+                "gold_min": cfg.gold_reward[0],
+                "gold_max": cfg.gold_reward[1],
+                "floor_preview": floor_preview,
+            }
+        )
+    return web.json_response(_json_safe({"ok": True, "dungeons": dungeons_out}))
+
+
 async def handle_combat_state(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -373,14 +419,27 @@ async def handle_combat_start(request: web.Request) -> web.Response:
     if not isinstance(body, dict):
         body = {}
 
-    enemy_key = (body.get("enemy_key") or body.get("enemy") or "").strip()
-    if not enemy_key:
-        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_enemy_key"}), content_type="application/json")
+    dungeon_key = (body.get("dungeon_key") or "").strip() or None
+    floor_raw = body.get("floor")
+    enemy_key = (body.get("enemy_key") or body.get("enemy") or "").strip() or None
 
     force = bool(body.get("force"))
     guild_id = _guild_id_from_request(request, body)
 
-    result = await activity_combat_api.start_activity_combat(bot, discord_id, enemy_key, guild_id, force=force)
+    if dungeon_key and floor_raw is not None:
+        try:
+            dungeon_floor = int(floor_raw)
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(text=json.dumps({"error": "invalid_floor"}), content_type="application/json")
+        result = await activity_combat_api.start_activity_combat(
+            bot, discord_id, guild_id, force=force, dungeon_key=dungeon_key, dungeon_floor=dungeon_floor
+        )
+    elif enemy_key:
+        result = await activity_combat_api.start_activity_combat(
+            bot, discord_id, guild_id, force=force, enemy_key=enemy_key
+        )
+    else:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_enemy_key"}), content_type="application/json")
     status = 200
     if result.get("error") == "already_in_combat":
         status = 409
@@ -1842,6 +1901,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
+    app.router.add_get("/api/game/dungeons", handle_game_dungeons)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)

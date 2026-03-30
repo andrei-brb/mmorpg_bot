@@ -22,6 +22,7 @@ import type {
   SpecGatePayload,
   SpecOption,
 } from "@/lib/apiTypes";
+import type { StartCombatParams } from "@/lib/gameApi";
 import * as api from "@/lib/gameApi";
 
 type Phase = "boot" | "loading" | "ready" | "error" | "no_client";
@@ -58,7 +59,9 @@ type GameSessionValue = {
     state?: CombatStatePayload;
     enemies: CombatEnemy[];
   }>;
-  startCombat: (enemyKey: string) => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
+  startCombat: (
+    params: StartCombatParams,
+  ) => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
   combatAction: (body: Record<string, unknown>) => Promise<api.CombatActionJson>;
   rest: () => Promise<{ ok: boolean; message?: string; cooldown_s?: number }>;
   itemPost: (endpoint: string, body: Record<string, unknown>) => Promise<Response>;
@@ -273,9 +276,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   }, [accessToken, guildId]);
 
   const startCombat = useCallback(
-    async (enemyKey: string) => {
+    async (params: StartCombatParams) => {
       if (!accessToken) return { ok: false, message: "no token" };
-      const startRes = await api.postCombatStart(accessToken, enemyKey, guildId);
+      const startRes = await api.postCombatStart(accessToken, guildId, params);
       const startJson = (await startRes.json()) as {
         ok?: boolean;
         error?: string;

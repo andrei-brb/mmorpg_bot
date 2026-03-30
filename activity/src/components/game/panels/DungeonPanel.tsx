@@ -1,190 +1,198 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CombatEncounterView } from "@/components/game/CombatEncounterView";
+import { useGameSession } from "@/context/GameSessionContext";
+import type { CombatStatePayload, DungeonCatalogEntry } from "@/lib/apiTypes";
+import * as api from "@/lib/gameApi";
 
-type DungeonConfigUi = {
-  key: string;
-  name: string;
-  emoji: string;
-  description: string;
-  levelReq: number;
-  floors: number;
-  xpPerFloor: number;
-  goldPerFloorMin: number;
-  goldPerFloorMax: number;
-};
+function stripMd(s: string): string {
+  return s.replace(/\*\*/g, "").trim();
+}
 
-const DUNGEONS: DungeonConfigUi[] = [
-  {
-    key: "deadmines",
-    name: "The Deadmines",
-    emoji: "⛏️",
-    description: "A goblin mining operation turned bandit hideout. Watch for traps!",
-    levelReq: 10,
-    floors: 3,
-    xpPerFloor: 150,
-    goldPerFloorMin: 50,
-    goldPerFloorMax: 150,
-  },
-  {
-    key: "stockades",
-    name: "The Stockades",
-    emoji: "🔒",
-    description: "Stormwind's maximum security prison. The inmates have taken over.",
-    levelReq: 20,
-    floors: 4,
-    xpPerFloor: 250,
-    goldPerFloorMin: 100,
-    goldPerFloorMax: 250,
-  },
-  {
-    key: "blackrock_depths_dungeon",
-    name: "Blackrock Depths",
-    emoji: "🌋",
-    description: "A labyrinthine dungeon-city inside an active volcano. The ultimate challenge.",
-    levelReq: 50,
-    floors: 5,
-    xpPerFloor: 500,
-    goldPerFloorMin: 300,
-    goldPerFloorMax: 600,
-  },
-];
-
-const MOCK_PARTY = [
-  { name: "Shadowblade", level: 25, isLeader: true },
-  { name: "Lightbringer", level: 23, isLeader: false },
-  { name: "Frostweaver", level: 24, isLeader: false },
-];
-
-const FLOOR_ENEMIES: Record<string, string[][]> = {
-  deadmines: [
-    ["Kobold Miner 🐀", "Defias Thug 🦹"],
-    ["Goblin Engineer 💣", "Defias Overseer ⚔️"],
-    ["⭐ Edwin VanCleef 🏴‍☠️"],
-  ],
-  stockades: [
-    ["Crazed Inmate 😤", "Defias Prisoner 🔒"],
-    ["Insurgent 🗡️", "Rioter 💢"],
-    ["Kam Deepfury 👹", "Guard Captain ⚔️"],
-    ["⭐ Bazil Thredd 👑"],
-  ],
-  blackrock_depths_dungeon: [
-    ["Dark Iron Dwarf ⛏️", "Fire Imp 🔥"],
-    ["Shadowforge Sentinel ⚔️", "Lava Elemental 🌋"],
-    ["Molten Giant 🔥", "Dark Iron Sorcerer 🔮"],
-    ["Magmadar 🐕‍🦺", "Flame Wraith 👻"],
-    ["⭐ Emperor Thaurissan 👑"],
-  ],
-};
-
-type DungeonView = "browser" | "running" | "floor_combat" | "complete" | "failed";
-
-type FloorLog = { floor: number; text: string };
+type RunState = { dungeon: DungeonCatalogEntry; floor: number };
 
 export type DungeonPanelProps = {
   playerLevel?: number;
 };
 
-export function DungeonPanel({ playerLevel = 25 }: DungeonPanelProps) {
-  const [view, setView] = useState<DungeonView>("browser");
-  const [activeDungeon, setActiveDungeon] = useState<DungeonConfigUi | null>(null);
-  const [currentFloor, setCurrentFloor] = useState(1);
-  const [playerHp, setPlayerHp] = useState(100);
-  const [enemyHp, setEnemyHp] = useState(100);
-  const [totalXp, setTotalXp] = useState(0);
-  const [totalGold, setTotalGold] = useState(0);
-  const [logs, setLogs] = useState<FloorLog[]>([]);
+export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
+  const { accessToken, guildId, inventory, loadCombatSnapshot, startCombat, combatAction, refreshInventory, refreshProgress } =
+    useGameSession();
 
-  const resetRun = () => {
-    setView("browser");
-    setActiveDungeon(null);
-    setCurrentFloor(1);
-    setPlayerHp(100);
-    setEnemyHp(100);
-    setTotalXp(0);
-    setTotalGold(0);
-    setLogs([]);
+  const [catalog, setCatalog] = useState<DungeonCatalogEntry[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [run, setRun] = useState<RunState | null>(null);
+  const [combatState, setCombatState] = useState<CombatStatePayload | null>(null);
+  const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<"browser" | "run" | "fight" | "complete" | "failed">("browser");
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    void api
+      .getDungeons(accessToken, guildId)
+      .then((j) => {
+        if (cancelled) return;
+        setCatalog(j.dungeons || []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCatalog([]);
+        toast.error("Could not load dungeons.");
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId]);
+
+  const resetAll = useCallback(() => {
+    setRun(null);
+    setCombatState(null);
+    setOutcome(null);
+    setPhase("browser");
+  }, []);
+
+  // Resume Activity dungeon combat if the server still has an active session
+  useEffect(() => {
+    if (!catalog.length) return;
+    let cancelled = false;
+    void (async () => {
+      const snap = await loadCombatSnapshot();
+      if (cancelled) return;
+      const st = snap.state;
+      if (!snap.active || !st?.dungeon_key || st.dungeon_floor == null) return;
+      const d = catalog.find((x) => x.key === st.dungeon_key);
+      if (!d) return;
+      setRun({ dungeon: d, floor: st.dungeon_floor });
+      setCombatState(st);
+      setPhase("fight");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [catalog, loadCombatSnapshot]);
+
+  const enterSolo = (d: DungeonCatalogEntry) => {
+    setRun({ dungeon: d, floor: 1 });
+    setPhase("run");
+    toast(`Entering ${d.name}…`, { description: `${d.floors} floors — fight each floor with your real skills.` });
   };
 
-  const onDungeonEnter = (dungeonKey: string) => {
-    const d = DUNGEONS.find((x) => x.key === dungeonKey)!;
-    setActiveDungeon(d);
-    setCurrentFloor(1);
-    setPlayerHp(100);
-    setEnemyHp(100);
-    setTotalXp(0);
-    setTotalGold(0);
-    setLogs([]);
-    setView("running");
-    toast(`Entering ${d.name}...`, { description: `${d.floors} floors await!` });
-  };
-
-  const onDungeonCreateParty = (dungeonKey: string) => {
-    toast("Party flow later", { description: "Invite/start in Discord for now." });
-    console.log("onDungeonCreateParty", dungeonKey);
-  };
-
-  const startFloorCombat = () => {
-    setEnemyHp(100);
-    setView("floor_combat");
-  };
-
-  const attackEnemy = () => {
-    if (!activeDungeon) return;
-    const dmg = Math.floor(Math.random() * 25 + 15);
-    const enemyDmg = Math.floor(Math.random() * 12 + 3);
-    const newEnemyHp = Math.max(0, enemyHp - dmg);
-    const newPlayerHp = Math.max(0, playerHp - enemyDmg);
-    setEnemyHp(newEnemyHp);
-    setPlayerHp(newPlayerHp);
-
-    const enemies = FLOOR_ENEMIES[activeDungeon.key]?.[currentFloor - 1] ?? ["Unknown Enemy"];
-    setLogs((prev) => [
-      ...prev,
-      { floor: currentFloor, text: `⚔️ You deal ${dmg} damage to ${enemies[0]}` },
-      { floor: currentFloor, text: `💥 ${enemies[0]} hits you for ${enemyDmg} damage` },
-    ]);
-
-    if (newPlayerHp <= 0) {
-      setLogs((prev) => [...prev, { floor: currentFloor, text: "💀 You have been defeated..." }]);
-      setView("failed");
-      return;
-    }
-
-    if (newEnemyHp <= 0) {
-      const floorXp = activeDungeon.xpPerFloor;
-      const floorGold =
-        Math.floor(Math.random() * (activeDungeon.goldPerFloorMax - activeDungeon.goldPerFloorMin)) +
-        activeDungeon.goldPerFloorMin;
-      setTotalXp((prev) => prev + floorXp);
-      setTotalGold((prev) => prev + floorGold);
-      setLogs((prev) => [
-        ...prev,
-        { floor: currentFloor, text: `✅ Floor ${currentFloor} cleared! +${floorXp} XP, +${floorGold} 🪙` },
-      ]);
-
-      if (currentFloor >= activeDungeon.floors) {
-        setView("complete");
-      } else {
-        setCurrentFloor((f) => f + 1);
-        setView("running");
+  const startFloorFight = async () => {
+    if (!run) return;
+    setLoading(true);
+    try {
+      const r = await startCombat({ kind: "dungeon", dungeonKey: run.dungeon.key, floor: run.floor });
+      if (r.state) {
+        setCombatState(r.state);
+        setPhase("fight");
+        return;
       }
+      toast.error(r.message || "Could not start combat");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const usePotion = () => {
-    const heal = Math.floor(Math.random() * 15 + 20);
-    setPlayerHp((hp) => Math.min(100, hp + heal));
-    setLogs((prev) => [...prev, { floor: currentFloor, text: `🧪 Used potion! +${heal} HP` }]);
-    toast(`Healed for ${heal} HP`);
+  const onAbility = async (key: string) => {
+    setLoading(true);
+    try {
+      const json = await combatAction({ ability: key });
+      if (json.ended && json.outcome) {
+        setCombatState(null);
+        const t = json.outcome.type;
+        if (t === "victory") {
+          await refreshInventory();
+          await refreshProgress();
+          setRun((prev) => {
+            if (!prev) return prev;
+            const f = prev.floor;
+            if (f >= prev.dungeon.floors) {
+              setOutcome({ title: json.outcome?.title, lines: json.outcome?.lines });
+              setPhase("complete");
+              return prev;
+            }
+            toast.success(`Floor ${f} cleared!`);
+            setPhase("run");
+            return { ...prev, floor: f + 1 };
+          });
+          return;
+        }
+        if (t === "flee") {
+          await refreshInventory();
+          await refreshProgress();
+          resetAll();
+          return;
+        }
+        setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
+        setPhase("failed");
+        await refreshInventory();
+        await refreshProgress();
+        return;
+      }
+      if (json.state) setCombatState(json.state);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const flee = () => {
-    toast("You fled the dungeon!");
-    setLogs((prev) => [...prev, { floor: currentFloor, text: "🏃 You fled the dungeon!" }]);
-    resetRun();
+  const onFlee = async () => {
+    setLoading(true);
+    try {
+      const json = await combatAction({ flee: true });
+      if (json.ended && json.outcome) {
+        setCombatState(null);
+        await refreshInventory();
+        await refreshProgress();
+        resetAll();
+        toast.info("You left the encounter.");
+        return;
+      }
+      if (json.state) setCombatState(json.state);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (view === "complete" && activeDungeon) {
+  const onPotion = async () => {
+    setLoading(true);
+    try {
+      const json = await combatAction({ potion: true });
+      if (json.state) setCombatState(json.state);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onCreateParty = () => {
+    toast("Party flow: use /dungeon in Discord for now.", { description: "Invites and co-op stay in the bot." });
+  };
+
+  if (phase === "fight" && combatState && run) {
+    return (
+      <CombatEncounterView
+        dungeonHeader={{
+          emoji: run.dungeon.emoji,
+          name: run.dungeon.name,
+          floor: run.floor,
+          totalFloors: run.dungeon.floors,
+        }}
+        state={combatState}
+        inventory={inventory}
+        loading={loading}
+        onAbility={onAbility}
+        onFlee={onFlee}
+        onPotion={onPotion}
+      />
+    );
+  }
+
+  if (phase === "complete" && outcome && run) {
     return (
       <div className="space-y-4">
         <div className="game-panel text-center py-8">
@@ -193,195 +201,64 @@ export function DungeonPanel({ playerLevel = 25 }: DungeonPanelProps) {
             className="font-cinzel text-xl font-bold text-foreground mb-1"
             style={{ textShadow: "0 0 8px hsl(43 78% 50% / 0.3)" }}
           >
-            Dungeon Complete!
+            {run.dungeon.emoji} {run.dungeon.name} complete!
           </h2>
-          <p className="text-sm text-muted-foreground mb-1">
-            {activeDungeon.emoji} {activeDungeon.name}
-          </p>
+          <p className="text-sm text-muted-foreground mb-2">Rewards are applied from the server (XP, gold, loot).</p>
           <div className="ornament-divider my-3 mx-auto max-w-[200px]" />
-          <div className="flex justify-center gap-6 mb-4">
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground font-cinzel uppercase tracking-wider">XP Earned</p>
-              <p className="text-lg font-bold text-primary" style={{ textShadow: "0 0 6px hsl(43 78% 50% / 0.3)" }}>
-                {totalXp}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground font-cinzel uppercase tracking-wider">Gold Earned</p>
-              <p className="text-lg font-bold text-primary" style={{ textShadow: "0 0 6px hsl(43 78% 50% / 0.3)" }}>
-                {totalGold} 🪙
-              </p>
-            </div>
-          </div>
-          <button type="button" onClick={resetRun} className="game-btn-primary px-6 py-2">
-            Return to Dungeons
-          </button>
-        </div>
-
-        <div className="game-panel max-h-32 overflow-y-auto">
-          <div className="game-panel-header">Run Log</div>
-          <div className="space-y-1">
-            {logs.map((l, i) => (
-              <p key={i} className="text-xs text-muted-foreground">
-                <span className="text-foreground/40">[F{l.floor}]</span> {l.text}
-              </p>
+          <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto mb-4">
+            {(outcome.lines || []).map((l, i) => (
+              <li key={i}>{stripMd(l)}</li>
             ))}
-          </div>
+          </ul>
+          <button type="button" onClick={resetAll} className="game-btn-primary px-6 py-2">
+            Back to dungeons
+          </button>
         </div>
       </div>
     );
   }
 
-  if (view === "failed" && activeDungeon) {
+  if (phase === "failed" && outcome) {
     return (
       <div className="space-y-4">
         <div className="game-panel text-center py-8">
           <div className="text-5xl mb-4" style={{ filter: "drop-shadow(0 2px 6px hsl(0 0% 0% / 0.6))" }}>💀</div>
-          <h2 className="font-cinzel text-xl font-bold text-foreground mb-1">Dungeon Failed</h2>
-          <p className="text-sm text-muted-foreground mb-1">
-            Defeated on floor {currentFloor} of {activeDungeon.name}
-          </p>
-          <div className="ornament-divider my-3 mx-auto max-w-[200px]" />
-          <p className="text-xs text-muted-foreground mb-4">
-            You kept {Math.floor(totalXp * 0.5)} XP and {Math.floor(totalGold * 0.5)} 🪙 (50% penalty)
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button type="button" onClick={resetRun} className="game-btn-primary px-5 py-2">
-              Try Again
-            </button>
-          </div>
+          <h2 className="font-cinzel text-xl font-bold text-foreground mb-1">{outcome.title || "Defeated"}</h2>
+          <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto mb-4">
+            {(outcome.lines || []).map((l, i) => (
+              <li key={i}>{stripMd(l)}</li>
+            ))}
+          </ul>
+          <button type="button" onClick={resetAll} className="game-btn-primary px-5 py-2">
+            Back to dungeons
+          </button>
         </div>
       </div>
     );
   }
 
-  if (view === "floor_combat" && activeDungeon) {
-    const enemies = FLOOR_ENEMIES[activeDungeon.key]?.[currentFloor - 1] ?? ["Unknown Enemy"];
-    const isBoss = currentFloor === activeDungeon.floors;
-
-    return (
-      <div className="space-y-4">
-        <div className="game-panel py-2 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
-            {activeDungeon.emoji} {activeDungeon.name}
-          </span>
-          <span
-            className={`text-xs font-pixel ${isBoss ? "text-destructive" : "text-primary"}`}
-            style={{ textShadow: isBoss ? "0 0 4px hsl(0 68% 46% / 0.4)" : "0 0 4px hsl(43 78% 50% / 0.3)" }}
-          >
-            Floor {currentFloor}/{activeDungeon.floors} {isBoss ? "⭐ BOSS" : ""}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="game-panel text-center">
-            <div className="text-3xl mb-2" style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}>🧝</div>
-            <p className="text-sm font-cinzel font-semibold text-foreground">You</p>
-            <div className="mt-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-muted-foreground text-[10px] font-cinzel uppercase tracking-wider">HP</span>
-                <span className="text-foreground tabular-nums">{playerHp}/100</span>
-              </div>
-              <div className="hp-bar-track">
-                <div
-                  className="hp-bar-fill"
-                  style={{
-                    width: `${playerHp}%`,
-                    background:
-                      playerHp <= 25
-                        ? "linear-gradient(90deg, hsl(0 68% 46%), hsl(0 60% 55%))"
-                        : undefined,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="game-panel text-center">
-            <div className="text-3xl mb-2" style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}>
-              {isBoss ? "👹" : "⚔️"}
-            </div>
-            <p className="text-sm font-cinzel font-semibold text-foreground truncate">{enemies[0]}</p>
-            {enemies.length > 1 && <p className="text-[10px] text-muted-foreground">+{enemies.length - 1} more</p>}
-            <div className="mt-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-muted-foreground text-[10px] font-cinzel uppercase tracking-wider">HP</span>
-                <span className="text-foreground tabular-nums">{enemyHp}/100</span>
-              </div>
-              <div className="hp-bar-track">
-                <div className="hp-bar-fill" style={{ width: `${enemyHp}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="game-panel">
-          <div className="game-panel-header">Actions</div>
-          <div className="grid grid-cols-3 gap-2">
-            <button type="button" onClick={attackEnemy} className="game-btn-primary text-xs py-2">
-              ⚔️ Attack
-            </button>
-            <button type="button" onClick={usePotion} className="game-btn-secondary text-xs py-2">
-              🧪 Potion
-            </button>
-            <button type="button" onClick={flee} className="game-btn-danger text-xs py-2">
-              🏃 Flee
-            </button>
-          </div>
-        </div>
-
-        <div className="game-panel max-h-28 overflow-y-auto">
-          <div className="game-panel-header">Combat Log</div>
-          <div className="space-y-1">
-            {logs
-              .filter((l) => l.floor === currentFloor)
-              .map((l, i) => (
-                <p key={i} className="text-xs text-muted-foreground">{l.text}</p>
-              ))}
-            {logs.filter((l) => l.floor === currentFloor).length === 0 && (
-              <p className="text-xs text-muted-foreground/50 italic">Ready to fight...</p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-center gap-1">
-          {Array.from({ length: activeDungeon.floors }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-5 h-5 rounded-sm border text-[10px] flex items-center justify-center font-pixel ${
-                i < currentFloor - 1
-                  ? "border-primary/60 bg-primary/20 text-primary"
-                  : i === currentFloor - 1
-                    ? "border-primary bg-primary/30 text-primary ring-1 ring-primary/40"
-                    : "border-border bg-muted/30 text-muted-foreground"
-              }`}
-            >
-              {i + 1}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (view === "running" && activeDungeon) {
-    const enemies = FLOOR_ENEMIES[activeDungeon.key]?.[currentFloor - 1] ?? ["Unknown Enemy"];
-    const isBoss = currentFloor === activeDungeon.floors;
+  if (phase === "run" && run) {
+    const preview = run.dungeon.floor_preview.find((p) => p.floor === run.floor);
+    const isBossFloor = preview?.is_boss ?? run.floor === run.dungeon.floors;
 
     return (
       <div className="space-y-4">
         <div className="game-panel">
           <div className="game-panel-header">
-            {activeDungeon.emoji} {activeDungeon.name} — Floor {currentFloor}/{activeDungeon.floors}
+            {run.dungeon.emoji} {run.dungeon.name} — Floor {run.floor}/{run.dungeon.floors}
           </div>
-
-          <div className="flex items-center gap-1 mb-4">
-            {Array.from({ length: activeDungeon.floors }).map((_, i) => (
+          <p className="text-xs text-muted-foreground mb-3">
+            Uses the same combat engine as Overworld: your class skills, stats, and potions. You must be in a valid zone on
+            the map (travel in Explore if needed).
+          </p>
+          <div className="flex items-center gap-1 mb-4 flex-wrap">
+            {Array.from({ length: run.dungeon.floors }).map((_, i) => (
               <div
                 key={i}
                 className={`w-6 h-6 rounded-sm border text-[10px] flex items-center justify-center font-pixel ${
-                  i < currentFloor - 1
+                  i < run.floor - 1
                     ? "border-primary/60 bg-primary/20 text-primary"
-                    : i === currentFloor - 1
+                    : i === run.floor - 1
                       ? "border-primary bg-primary/30 text-primary ring-1 ring-primary/40"
                       : "border-border bg-muted/30 text-muted-foreground"
                 }`}
@@ -390,93 +267,34 @@ export function DungeonPanel({ playerLevel = 25 }: DungeonPanelProps) {
               </div>
             ))}
             <span className="text-[10px] text-muted-foreground ml-2 font-cinzel">
-              {isBoss ? "⭐ BOSS FLOOR" : `Floor ${currentFloor}`}
+              {isBossFloor ? "⭐ Boss floor" : `Trash`}
             </span>
           </div>
 
-          <div className="mb-4">
-            <p className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
-              Party ({MOCK_PARTY.length}/5)
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {MOCK_PARTY.map((m) => (
-                <div
-                  key={m.name}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs"
-                  style={{
-                    background: "hsl(228 18% 14% / 0.6)",
-                    border: "1px solid hsl(228 16% 20% / 0.5)",
-                  }}
-                >
-                  {m.isLeader && <span className="text-primary text-[10px]">👑</span>}
-                  <span className="text-foreground font-semibold">{m.name}</span>
-                  <span className="text-muted-foreground text-[10px]">Lv{m.level}</span>
-                </div>
-              ))}
+          {preview && (
+            <div className="mb-4">
+              <p className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-1">This encounter</p>
+              <p className={`text-sm font-cinzel font-semibold ${isBossFloor ? "text-destructive" : "text-foreground"}`}>
+                {preview.emoji} {preview.name}
+              </p>
             </div>
-          </div>
+          )}
 
-          <div className="ornament-divider my-3" />
-
-          <div className="mb-4">
-            <p className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
-              {isBoss ? "⭐ Boss Encounter" : "Enemies on this floor"}
-            </p>
-            <div className="space-y-1">
-              {enemies.map((e, i) => (
-                <p key={i} className={`text-xs ${isBoss ? "text-destructive font-semibold" : "text-foreground"}`}>
-                  {e}
-                </p>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground text-[10px] font-cinzel uppercase tracking-wider">Your HP</span>
-              <span className="text-foreground tabular-nums">{playerHp}/100</span>
-            </div>
-            <div className="hp-bar-track">
-              <div
-                className="hp-bar-fill"
-                style={{
-                  width: `${playerHp}%`,
-                  background:
-                    playerHp <= 25
-                      ? "linear-gradient(90deg, hsl(0 68% 46%), hsl(0 60% 55%))"
-                      : undefined,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button type="button" onClick={startFloorCombat} className="game-btn-danger text-xs px-4 py-2 flex-1">
-              ⚔️ {isBoss ? "Fight Boss!" : `Fight Floor ${currentFloor}`}
+          <div className="flex gap-2 flex-wrap">
+            <button type="button" onClick={() => void startFloorFight()} disabled={loading} className="game-btn-danger text-xs px-4 py-2 flex-1 min-w-[140px]">
+              ⚔️ {isBossFloor ? "Fight boss" : `Fight floor ${run.floor}`}
             </button>
-            <button type="button" onClick={usePotion} className="game-btn-secondary text-xs px-4 py-2">
-              🧪 Potion
-            </button>
-            <button type="button" onClick={flee} className="game-btn-secondary text-xs px-4 py-2">
-              🏃 Flee
+            <button type="button" onClick={resetAll} disabled={loading} className="game-btn-secondary text-xs px-4 py-2">
+              Leave
             </button>
           </div>
         </div>
-
-        {logs.length > 0 && (
-          <div className="game-panel max-h-28 overflow-y-auto">
-            <div className="game-panel-header">Run Log</div>
-            <div className="space-y-1">
-              {logs.map((l, i) => (
-                <p key={i} className="text-xs text-muted-foreground">
-                  <span className="text-foreground/40">[F{l.floor}]</span> {l.text}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
+  }
+
+  if (catalogLoading) {
+    return <p className="text-sm text-muted-foreground">Loading dungeons…</p>;
   }
 
   return (
@@ -484,12 +302,13 @@ export function DungeonPanel({ playerLevel = 25 }: DungeonPanelProps) {
       <div className="game-panel">
         <div className="game-panel-header">⚔️ Dungeons</div>
         <p className="text-xs text-muted-foreground mb-4">
-          Instanced runs with multiple floors. Mock run — connect to server APIs later.
+          Server-driven runs — enemies match <code className="text-[10px]">/dungeon</code> in Discord. Requires a valid map
+          zone (use Explore to travel).
         </p>
 
         <div className="space-y-3">
-          {DUNGEONS.map((d) => {
-            const locked = playerLevel < d.levelReq;
+          {catalog.map((d) => {
+            const locked = playerLevel < d.level_req;
             return (
               <div
                 key={d.key}
@@ -515,18 +334,18 @@ export function DungeonPanel({ playerLevel = 25 }: DungeonPanelProps) {
                       <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{d.description}</p>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
                         <span className="text-muted-foreground">
-                          Lv <span className="text-foreground font-semibold">{d.levelReq}+</span>
+                          Lv <span className="text-foreground font-semibold">{d.level_req}+</span>
                         </span>
                         <span className="text-muted-foreground">
                           Floors <span className="text-foreground font-semibold">{d.floors}</span>
                         </span>
                         <span className="text-muted-foreground">
-                          XP <span className="text-primary font-semibold">{d.xpPerFloor}/floor</span>
+                          XP <span className="text-primary font-semibold">~{d.xp_per_floor}/floor</span>
                         </span>
                         <span className="text-muted-foreground">
                           Gold{" "}
                           <span className="text-primary font-semibold">
-                            {d.goldPerFloorMin}–{d.goldPerFloorMax} 🪙/floor
+                            {d.gold_min}–{d.gold_max} 🪙/floor
                           </span>
                         </span>
                       </div>
@@ -536,19 +355,19 @@ export function DungeonPanel({ playerLevel = 25 }: DungeonPanelProps) {
                   <div className="flex gap-2 mt-3">
                     <button
                       type="button"
-                      onClick={() => onDungeonEnter(d.key)}
+                      onClick={() => enterSolo(d)}
                       disabled={locked}
                       className={`text-xs px-3 py-1.5 flex-1 ${locked ? "game-btn-secondary opacity-50 cursor-not-allowed" : "game-btn-primary"}`}
                     >
-                      ⚔️ Enter Solo
+                      ⚔️ Enter solo
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDungeonCreateParty(d.key)}
+                      onClick={() => onCreateParty()}
                       disabled={locked}
                       className={`text-xs px-3 py-1.5 flex-1 ${locked ? "game-btn-secondary opacity-50 cursor-not-allowed" : "game-btn-secondary"}`}
                     >
-                      👥 Create Party
+                      👥 Party (Discord)
                     </button>
                   </div>
                 </div>
