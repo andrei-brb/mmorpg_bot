@@ -11,7 +11,7 @@ const App = () => (
   <GameSessionProvider>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
+      <Sonner position="top-right" />
       <ActivityGate>
         <BrowserRouter>
           <Routes>

@@ -541,10 +541,13 @@ export function HeroTab() {
                     : null;
               try {
                 const j = await postEnhance(enhanceItemId, prot, fragments);
-                toast(j.message || (j.ok !== false ? "Enhanced!" : "Failed"));
+                const enhanceMsg = j.message || (j.ok !== false ? "Enhanced!" : "Failed");
                 if (j.ok !== false) {
+                  toast.success(enhanceMsg);
                   const p = await getEnhanceInfo(enhanceItemId);
                   setEnhancePayload(p);
+                } else {
+                  toast.error(enhanceMsg);
                 }
               } catch (e) {
                 toast.error(String(e));
