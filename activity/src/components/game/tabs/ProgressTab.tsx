@@ -1,18 +1,44 @@
 import { useEffect } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
+import type { ProgressPayload } from "@/lib/apiTypes";
 
 const TYPE_ICONS: Record<string, string> = {
   victory: "🏆",
   defeat: "💀",
   gold: "✨",
+  combat_session: "⚔️",
+  combat_gold: "🪙",
 };
 
+function formatHistoryAt(at: string | undefined): string {
+  if (!at) return "";
+  const d = new Date(at);
+  return Number.isNaN(d.getTime()) ? at : d.toLocaleString();
+}
+
+function historyLine(h: NonNullable<ProgressPayload["history"]>[number]): string {
+  if (h.type === "combat_session") {
+    const o = h.outcome || "unknown";
+    const z = h.zone ? ` · ${h.zone}` : "";
+    return `${o}${z}`;
+  }
+  if (h.type === "combat_gold" || h.amount != null) {
+    const amt = h.amount ?? 0;
+    const r = h.reason || "reward";
+    return `+${amt} ${r}`;
+  }
+  return h.reason || h.type || "—";
+}
+
 export function ProgressTab() {
-  const { progress, refreshProgress } = useGameSession();
+  const { progress, refreshProgress, inventory } = useGameSession();
 
-  useEffect(() => { void refreshProgress(); }, [refreshProgress]);
+  useEffect(() => {
+    void refreshProgress();
+  }, [refreshProgress]);
 
-  const c = progress?.character;
+  /** Match legacy: fall back to inventory character until progress API returns. */
+  const c = progress?.character ?? inventory?.character ?? undefined;
   const s = progress?.stats;
   const ach = progress?.achievements || [];
   const hist = progress?.history || [];
@@ -21,9 +47,18 @@ export function ProgressTab() {
     { label: "Level", value: c?.level ?? "—", icon: "⭐" },
     { label: "Specialization", value: c?.specialization_name || c?.specialization || "—", icon: "🗡️" },
     { label: "Gold", value: c?.gold != null ? Number(c.gold).toLocaleString() : "—", icon: "🪙" },
-    { label: "Win Rate", value: s?.win_rate != null ? `${Math.round(s.win_rate * 100) / 100}%` : "—", icon: "📈" },
-    { label: "Combats", value: s?.total_combats ?? 0, icon: "⚔️" },
-    { label: "Record", value: `${s?.wins ?? 0}W / ${s?.losses ?? 0}L`, icon: "🏆" },
+    {
+      label: "Win Rate",
+      value: s?.win_rate != null ? `${Math.round(s.win_rate * 10000) / 100}%` : "—",
+      icon: "📈",
+    },
+    { label: "Combats", value: s?.total_combats != null ? s.total_combats : "—", icon: "⚔️" },
+    {
+      label: "Record",
+      value:
+        s?.wins != null || s?.losses != null ? `${s?.wins ?? 0}W / ${s?.losses ?? 0}L` : "—",
+      icon: "🏆",
+    },
   ];
 
   return (
@@ -42,7 +77,13 @@ export function ProgressTab() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Combats: {s?.total_combats ?? 0} · W {s?.wins ?? 0} / L {s?.losses ?? 0} / Fled {s?.fled ?? 0}
+          {s ? (
+            <>
+              Combats: {s.total_combats ?? 0} · W {s.wins ?? 0} / L {s.losses ?? 0} / Fled {s.fled ?? 0}
+            </>
+          ) : (
+            <>Loading combat stats…</>
+          )}
         </p>
       </div>
 
@@ -77,9 +118,11 @@ export function ProgressTab() {
             <div key={i}>
               <div className="flex items-center gap-2 text-xs py-2">
                 <span>{TYPE_ICONS[h.type || ""] || "✨"}</span>
-                <span className="text-foreground flex-1">{h.reason || h.type || "—"}</span>
-                {h.zone && <span className="text-muted-foreground hidden sm:inline">{h.zone}</span>}
-                <span className="text-muted-foreground shrink-0 tabular-nums">{h.at || ""}</span>
+                <span className="text-foreground flex-1">{historyLine(h)}</span>
+                {h.type !== "combat_session" && h.zone && (
+                  <span className="text-muted-foreground hidden sm:inline">{h.zone}</span>
+                )}
+                <span className="text-muted-foreground shrink-0 tabular-nums">{formatHistoryAt(h.at)}</span>
               </div>
               {i < hist.length - 1 && <div className="ornament-divider" />}
             </div>

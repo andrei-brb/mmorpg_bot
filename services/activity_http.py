@@ -1835,6 +1835,19 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
         else:
             log.warning("No activity/dist/skills — run `cd activity && npm run build`; combat skill icons may 404")
 
+        # Character class/spec icons: `public/classes/*` + `public/specs/*` → `/classes/...` + `/specs/...`
+        classes_dir = os.path.join(static_root, "classes")
+        if os.path.isdir(classes_dir):
+            app.router.add_static("/classes/", classes_dir, show_index=False)
+        else:
+            log.warning("No activity/dist/classes — run `cd activity && npm run build`; class icons may 404")
+
+        specs_dir = os.path.join(static_root, "specs")
+        if os.path.isdir(specs_dir):
+            app.router.add_static("/specs/", specs_dir, show_index=False)
+        else:
+            log.warning("No activity/dist/specs — run `cd activity && npm run build`; spec icons may 404")
+
     runner = web.AppRunner(app)
     await runner.setup()
 

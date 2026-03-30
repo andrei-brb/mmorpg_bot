@@ -450,6 +450,11 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     void refreshLiveEvents();
   }, [phase, accessToken, refreshLiveEvents]);
 
+  useEffect(() => {
+    if (phase !== "ready" || !accessToken) return;
+    void refreshProgress();
+  }, [phase, accessToken, refreshProgress]);
+
   const displayName = useMemo(() => {
     const d = inventory?.discord;
     const gn = d?.global_name || d?.username;
