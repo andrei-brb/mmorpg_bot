@@ -6,6 +6,7 @@ import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
 import { CombatTab } from "./tabs/CombatTab";
 import { ProgressTab } from "./tabs/ProgressTab";
+import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 
 const TABS = ["Hero", "Explore", "Quests", "Combat", "Progress"] as const;
 type TabName = (typeof TABS)[number];
@@ -58,7 +59,20 @@ export function GameShell() {
                   <input type="radio" name="spec" value={o.key} checked={specSel === o.key} onChange={() => setSpecSel(o.key)} />
                   <div>
                     <div className="font-cinzel text-sm">
-                      {o.emoji} {o.name}{" "}
+                      <span className="inline-flex items-center gap-2">
+                        <img
+                          src={specIconUrl(o.key)}
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="w-[18px] h-[18px] object-contain shrink-0 rounded-[2px]"
+                          style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                        <span>{o.emoji} {o.name}</span>
+                      </span>{" "}
                       <span className="text-[10px] text-muted-foreground">({o.role})</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{o.description}</p>

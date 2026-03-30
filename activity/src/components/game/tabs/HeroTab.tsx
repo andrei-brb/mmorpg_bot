@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { EnhanceInfoPayload, InvRow } from "@/lib/apiTypes";
+import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
@@ -177,11 +178,39 @@ export function HeroTab() {
                 <span className="text-primary font-pixel text-[10px]"
                   style={{ textShadow: '0 0 6px hsl(43 78% 50% / 0.3)' }}>Lv {char.level ?? "?"}</span>
                 <span className="ornament-divider w-px h-4 inline-block" style={{ background: 'hsl(228 16% 25%)' }} />
-                <span className="text-secondary-foreground">{char.class}</span>
+                <span className="flex items-center gap-2">
+                  <img
+                    src={classIconUrl(char.class || "")}
+                    alt=""
+                    width={20}
+                    height={20}
+                    className="w-5 h-5 object-contain shrink-0 rounded-[2px]"
+                    style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                  <span className="text-secondary-foreground">{char.class}</span>
+                </span>
                 {(char.specialization_name || char.specialization) && (
                   <>
                     <span className="ornament-divider w-px h-4 inline-block" style={{ background: 'hsl(228 16% 25%)' }} />
-                    <span className="text-accent-foreground text-xs italic">{char.specialization_name || char.specialization}</span>
+                    <span className="flex items-center gap-2">
+                      {char.specialization && (
+                        <img
+                          src={specIconUrl(char.specialization)}
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="w-[18px] h-[18px] object-contain shrink-0 rounded-[2px]"
+                          style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      )}
+                      <span className="text-accent-foreground text-xs italic">{char.specialization_name || char.specialization}</span>
+                    </span>
                   </>
                 )}
                 {!char.specialization && !char.specialization_name && (
