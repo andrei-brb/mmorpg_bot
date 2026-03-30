@@ -4,6 +4,9 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatEnemy, CombatStatePayload } from "@/lib/apiTypes";
 import { skillIconUrl } from "@/lib/skillIconUrl";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
+import { DungeonPanel } from "@/components/game/panels/DungeonPanel";
+
+type CombatTabMode = "overworld" | "dungeon";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -22,6 +25,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [enemyPick, setEnemyPick] = useState("");
   const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [combatTabMode, setCombatTabMode] = useState<CombatTabMode>("overworld");
 
   const zoneLabel = map?.zones?.find((z) => z.key === map?.current_zone);
 
@@ -50,16 +54,19 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  // Tell the shell when to enter/exit Combat Focus Mode.
+  // Tell the shell when to enter/exit Combat Focus Mode (overworld API combat only).
   useEffect(() => {
+    if (combatTabMode !== "overworld") {
+      setCombatFocusActive(false);
+      return;
+    }
     const active = mode === "fight" && Boolean(state);
     if (combatFocusActive !== active) setCombatFocusActive(active);
     return () => {
-      // Ensure we exit focus mode if the tab unmounts mid-fight.
       setCombatFocusActive(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, state]);
+  }, [combatTabMode, mode, state]);
 
   const onStart = async () => {
     if (!enemyPick) return;
@@ -117,15 +124,85 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     } finally { setLoading(false); }
   };
 
+  const modeSegment = (
+    <div
+      className="flex rounded-sm mb-4 p-0.5"
+      style={{
+        background: "hsl(228 20% 10%)",
+        border: "1px solid hsl(43 45% 35% / 0.35)",
+        boxShadow: "inset 0 1px 0 hsl(228 14% 22% / 0.25)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setCombatTabMode("overworld")}
+        className={`flex-1 px-3 py-1.5 text-xs font-cinzel font-semibold rounded-sm transition-all ${
+          combatTabMode === "overworld"
+            ? "text-primary"
+            : "text-muted-foreground hover:text-foreground/80"
+        }`}
+        style={
+          combatTabMode === "overworld"
+            ? {
+                background: "linear-gradient(180deg, hsl(228 18% 16%) 0%, hsl(228 20% 12%) 100%)",
+                border: "1px solid hsl(43 50% 35% / 0.45)",
+                boxShadow: "0 0 8px hsl(43 78% 50% / 0.12), inset 0 1px 0 hsl(228 14% 22% / 0.35)",
+                textShadow: "0 0 6px hsl(43 78% 50% / 0.25)",
+              }
+            : { border: "1px solid transparent" }
+        }
+      >
+        Overworld
+      </button>
+      <button
+        type="button"
+        onClick={() => setCombatTabMode("dungeon")}
+        className={`flex-1 px-3 py-1.5 text-xs font-cinzel font-semibold rounded-sm transition-all ${
+          combatTabMode === "dungeon"
+            ? "text-primary"
+            : "text-muted-foreground hover:text-foreground/80"
+        }`}
+        style={
+          combatTabMode === "dungeon"
+            ? {
+                background: "linear-gradient(180deg, hsl(228 18% 16%) 0%, hsl(228 20% 12%) 100%)",
+                border: "1px solid hsl(43 50% 35% / 0.45)",
+                boxShadow: "0 0 8px hsl(43 78% 50% / 0.12), inset 0 1px 0 hsl(228 14% 22% / 0.35)",
+                textShadow: "0 0 6px hsl(43 78% 50% / 0.25)",
+              }
+            : { border: "1px solid transparent" }
+        }
+      >
+        Dungeon
+      </button>
+    </div>
+  );
+
+  if (combatTabMode === "dungeon") {
+    return (
+      <div>
+        {modeSegment}
+        <DungeonPanel playerLevel={inventory?.character?.level ?? 1} />
+      </div>
+    );
+  }
+
   if (loading && mode === "pick" && !enemies.length) {
-    return <p className="text-sm text-muted-foreground">Loading combat…</p>;
+    return (
+      <div>
+        {modeSegment}
+        <p className="text-sm text-muted-foreground">Loading combat…</p>
+      </div>
+    );
   }
 
   // Outcome screen (Lovable style)
   if (mode === "outcome" && outcome) {
     const isVictory = (outcome.title || "").toLowerCase().includes("victory") || (outcome.title || "").toLowerCase().includes("won");
     return (
-      <div className="game-panel text-center py-8">
+      <div>
+        {modeSegment}
+        <div className="game-panel text-center py-8">
         <div className="text-5xl mb-4" style={{ filter: 'drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))' }}>
           {isVictory ? "🏆" : "💀"}
         </div>
@@ -138,8 +215,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           {(outcome.lines || []).map((l, i) => <li key={i}>{stripMd(l)}</li>)}
         </ul>
         <div className="flex gap-3 justify-center mt-5">
-          <button onClick={() => void refresh()} className="game-btn-primary">Fight Again</button>
-          <button onClick={() => void onRest()} className="game-btn-secondary">Rest</button>
+          <button type="button" onClick={() => void refresh()} className="game-btn-primary">Fight Again</button>
+          <button type="button" onClick={() => void onRest()} className="game-btn-secondary">Rest</button>
+        </div>
         </div>
       </div>
     );
@@ -156,6 +234,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     const inDungeon = Boolean(state.in_dungeon);
     return (
       <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
+        {modeSegment}
         {/* Zone bar */}
         <div className="game-panel py-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
@@ -327,7 +406,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   // Idle / pick screen (Lovable style)
   return (
-    <div className="game-panel">
+    <div>
+      {modeSegment}
+      <div className="game-panel">
       <div className="game-panel-header">Choose an Enemy</div>
       {enemies.length === 0 ? (
         <p className="text-xs text-muted-foreground">No enemies in this zone — travel elsewhere or create a character.</p>
@@ -354,6 +435,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
