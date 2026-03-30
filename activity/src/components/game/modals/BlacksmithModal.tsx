@@ -114,22 +114,25 @@ export function BlacksmithModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 sm:items-center"
       style={{ background: "hsl(0 0% 0% / 0.7)", backdropFilter: "blur(4px)" }}
     >
-      <div className="game-panel w-full max-w-[540px]" onClick={(e) => e.stopPropagation()}>
-        <div className="game-panel-header">🔨 Blacksmith — Enhance</div>
+      <div
+        className="game-panel my-4 flex w-full max-w-[540px] max-h-[min(92dvh,680px)] flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="game-panel-header shrink-0">🔨 Blacksmith — Enhance</div>
 
         {infoLoading && (
-          <p className="text-sm text-muted-foreground py-6 text-center">Loading enhancement data…</p>
+          <p className="shrink-0 py-6 text-center text-sm text-muted-foreground">Loading enhancement data…</p>
         )}
 
         {!infoLoading && loadError && (
-          <p className="text-sm text-destructive py-4">{enhancePayload?.message || enhancePayload?.error || "Could not load enhancement info."}</p>
+          <p className="shrink-0 py-4 text-sm text-destructive">{enhancePayload?.message || enhancePayload?.error || "Could not load enhancement info."}</p>
         )}
 
         {!infoLoading && !loadError && (
-          <>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 [-webkit-overflow-scrolling:touch]">
             <div className="flex items-center gap-3 mb-4">
               <div
                 className="slot-filled w-12 h-12 text-2xl shrink-0"
@@ -369,10 +372,13 @@ export function BlacksmithModal({
                 <div className="ornament-divider mb-4" />
               </>
             )}
-          </>
+          </div>
         )}
 
-        <div className="flex justify-end gap-2">
+        <div
+          className="mt-auto flex shrink-0 flex-wrap justify-end gap-2 border-t border-border/60 bg-background/95 py-3 pt-3 supports-[backdrop-filter]:backdrop-blur-sm"
+          style={{ boxShadow: "0 -8px 24px hsl(0 0% 0% / 0.25)" }}
+        >
           <button type="button" onClick={onClose} disabled={enhancePending} className="game-btn-secondary text-xs">
             Cancel
           </button>
