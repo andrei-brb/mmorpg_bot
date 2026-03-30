@@ -196,7 +196,7 @@ export function HeroTab() {
                   <>
                     <span className="ornament-divider w-px h-4 inline-block" style={{ background: 'hsl(228 16% 25%)' }} />
                     <span className="flex items-center gap-2">
-                      {char.specialization && (
+                      {char.specialization && specIconUrl(char.specialization) && (
                         <img
                           src={specIconUrl(char.specialization)}
                           alt=""

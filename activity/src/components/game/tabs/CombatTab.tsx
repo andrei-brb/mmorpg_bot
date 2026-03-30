@@ -182,7 +182,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
               )}
             </div>
             <p className="text-sm font-cinzel font-semibold text-foreground">{state.player.name}</p>
-            {specKey && (
+            {specKey && specIconUrl(specKey) && (
               <div className="mt-1 flex items-center justify-center">
                 <img
                   src={specIconUrl(specKey)}

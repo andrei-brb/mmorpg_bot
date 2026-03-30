@@ -61,17 +61,16 @@ export function GameShell() {
                   <div>
                     <div className="font-cinzel text-sm">
                       <span className="inline-flex items-center gap-2">
-                        <img
-                          src={specIconUrl(o.key)}
-                          alt=""
-                          width={18}
-                          height={18}
-                          className="w-[18px] h-[18px] object-contain shrink-0 rounded-[2px]"
-                          style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
-                        />
+                        {specIconUrl(o.key) && (
+                          <img
+                            src={specIconUrl(o.key)}
+                            alt=""
+                            width={18}
+                            height={18}
+                            className="w-[18px] h-[18px] object-contain shrink-0 rounded-[2px]"
+                            style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
+                          />
+                        )}
                         <span>{o.emoji} {o.name}</span>
                       </span>{" "}
                       <span className="text-[10px] text-muted-foreground">({o.role})</span>
