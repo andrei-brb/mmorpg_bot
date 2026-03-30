@@ -70,6 +70,7 @@ type GameSessionValue = {
   ) => Promise<{ ok?: boolean; message?: string }>;
   buyProtection: (key: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
   npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  abandonQuest: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   /** Opens API-driven spec modal when eligible, otherwise explains why (toast). */
   requestSpecChoice: () => Promise<void>;
   displayName: string;
@@ -369,6 +370,23 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
   );
 
+  const abandonQuest = useCallback(
+    async (questId: string) => {
+      if (!accessToken) return { ok: false, error: "no_token" };
+      const res = await api.postQuestAbandon(accessToken, questId, guildId);
+      let j: { ok?: boolean; message?: string; error?: string } = {};
+      try {
+        j = (await res.json()) as typeof j;
+      } catch {
+        /* ignore */
+      }
+      await refreshQuests();
+      const ok = res.ok && j.ok !== false;
+      return { ok, message: j.message, error: j.error };
+    },
+    [accessToken, guildId, refreshQuests],
+  );
+
   useEffect(() => {
     let cancelled = false;
     async function boot() {
@@ -496,6 +514,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       postEnhance,
       buyProtection,
       npcInteract,
+      abandonQuest,
       requestSpecChoice,
       displayName,
     }),
@@ -532,6 +551,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       postEnhance,
       buyProtection,
       npcInteract,
+      abandonQuest,
       requestSpecChoice,
       displayName,
     ],

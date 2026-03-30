@@ -12,6 +12,8 @@ Endpoints:
   POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
   POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
   POST /api/game/rest           — Bearer token → full HP/resource restore (rest cooldown; clears iframe combat)
+  GET  /api/game/quests         — Bearer token → active quest log
+  POST /api/game/quest/abandon  — JSON { quest_id } → abandon active/offered quest
 
 Requires DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID (same app as the bot).
 See ACTIVITY_SETUP.md.
@@ -847,6 +849,43 @@ async def handle_quests(request: web.Request) -> web.Response:
         )
 
     return web.json_response(_json_safe({"ok": True, "quests": out}))
+
+
+async def handle_quest_abandon(request: web.Request) -> web.Response:
+    """Abandon an active or offered quest (same effect as Discord /quest abandon)."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "message": "No character."}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    quest_id = (body.get("quest_id") or body.get("questId") or "").strip()
+    if not quest_id:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "missing_quest_id", "message": "Missing quest_id."}),
+            status=400,
+        )
+
+    qs = NPCQuestService(db)
+    char_id = _uuid_from_any(char["id"])
+    ok = await qs.abandon_quest(char_id, quest_id)
+    if not ok:
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": False,
+                    "error": "not_abandoned",
+                    "message": "No active or offered quest with that id (already completed or not found).",
+                }
+            ),
+            status=404,
+        )
+    return web.json_response(_json_safe({"ok": True, "message": "Quest abandoned.", "quest_id": quest_id}))
 
 
 async def handle_travel(request: web.Request) -> web.Response:
@@ -1790,6 +1829,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/character/specialization", handle_specialization_choose)
     app.router.add_get("/api/game/map", handle_map)
     app.router.add_get("/api/game/quests", handle_quests)
+    app.router.add_post("/api/game/quest/abandon", handle_quest_abandon)
     app.router.add_get("/api/game/live-events", handle_live_events)
     app.router.add_post("/api/game/travel", handle_travel)
     app.router.add_post("/api/game/explore", handle_explore)

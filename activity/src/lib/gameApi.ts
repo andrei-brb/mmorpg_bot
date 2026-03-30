@@ -196,6 +196,14 @@ export async function postNpcInteract(token: string, npc: string | undefined, gu
   });
 }
 
+export async function postQuestAbandon(token: string, questId: string, guildId?: string) {
+  return fetch(apiUrl("/api/game/quest/abandon"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ quest_id: questId }),
+  });
+}
+
 export type CombatActionJson = {
   ok?: boolean;
   ended?: boolean;

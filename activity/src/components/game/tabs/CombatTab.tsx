@@ -153,6 +153,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       state.player.class || inventory?.character?.class || "";
     const specKey =
       state.player.specialization || inventory?.character?.specialization || "";
+    const inDungeon = Boolean(state.in_dungeon);
     return (
       <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
         {/* Zone bar */}
@@ -164,6 +165,25 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
             Turn {state.turn}
           </span>
         </div>
+
+        {inDungeon && (
+          <div
+            className="rounded-sm px-3 py-2 text-xs"
+            style={{
+              border: "1px solid hsl(43 45% 35% / 0.45)",
+              background: "linear-gradient(180deg, hsl(228 22% 12%) 0%, hsl(228 20% 8%) 100%)",
+            }}
+          >
+            <div className="font-cinzel font-semibold text-primary flex items-center gap-2">
+              <span className="text-base" aria-hidden>🏰</span>
+              Dungeon run
+            </div>
+            <p className="text-muted-foreground mt-1 leading-relaxed">
+              You’re on the battlefield below — allies column shows reserved slots for party dungeons (same rules as{" "}
+              <code className="text-[10px]">/fight</code>).
+            </p>
+          </div>
+        )}
 
         {/* Player vs Enemy */}
         <div className="grid grid-cols-2 gap-4">
@@ -237,6 +257,30 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
             ⚔️ Your Turn
           </span>
         </div>
+
+        {inDungeon && (
+          <div className="game-panel py-2">
+            <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-2">Allies</div>
+            <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
+              <div
+                className="rounded-sm p-2 text-center opacity-60"
+                style={{ border: "1px solid hsl(228 16% 22%)", background: "hsl(228 20% 10%)" }}
+              >
+                <div className="text-lg mb-0.5" aria-hidden>🛡️</div>
+                <div className="text-[10px] font-cinzel text-foreground">Slot 2</div>
+                <div className="text-[9px] text-muted-foreground">Unlocks with party mode</div>
+              </div>
+              <div
+                className="rounded-sm p-2 text-center opacity-60"
+                style={{ border: "1px solid hsl(228 16% 22%)", background: "hsl(228 20% 10%)" }}
+              >
+                <div className="text-lg mb-0.5" aria-hidden>🏹</div>
+                <div className="text-[10px] font-cinzel text-foreground">Slot 3</div>
+                <div className="text-[9px] text-muted-foreground">Unlocks with party mode</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Skills */}
         <div className="game-panel">
