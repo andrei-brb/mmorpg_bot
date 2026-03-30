@@ -24,6 +24,7 @@ export function GameShell() {
   const {
     displayName,
     liveEvents,
+    combatFocusActive,
     specModal,
     closeSpecModal,
     chooseSpecialization,
@@ -130,7 +131,7 @@ export function GameShell() {
 
             <div className="ornament-divider mb-4" />
 
-            {liveEvents.length > 0 && (
+            {!combatFocusActive && liveEvents.length > 0 && (
               <div
                 className="mb-4 p-3 rounded-sm text-xs"
                 style={{
@@ -152,21 +153,29 @@ export function GameShell() {
               </div>
             )}
 
-            <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
-              {TABS.map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)}
-                  className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}>
-                  <span className="mr-1.5">{TAB_ICONS[tab]}</span>
-                  <span className="hidden sm:inline">{tab}</span>
-                </button>
-              ))}
-            </div>
+            {!combatFocusActive && (
+              <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}
+                  >
+                    <span className="mr-1.5">{TAB_ICONS[tab]}</span>
+                    <span className="hidden sm:inline">{tab}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <div className="sm:px-1">
+            <div
+              className={combatFocusActive ? "sm:px-1 flex flex-col min-h-0" : "sm:px-1"}
+              style={combatFocusActive ? { height: "calc(100vh - 210px)" } : undefined}
+            >
               {activeTab === "Hero" && <HeroTab />}
               {activeTab === "Explore" && <ExploreTab />}
               {activeTab === "Quests" && <QuestsTab />}
-              {activeTab === "Combat" && <CombatTab />}
+              {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
               {activeTab === "Progress" && <ProgressTab />}
             </div>
           </div>

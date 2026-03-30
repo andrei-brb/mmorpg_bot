@@ -39,6 +39,9 @@ type GameSessionValue = {
   quests: QuestLogPayload | null;
   liveEvents: LiveEventRow[];
   refreshLiveEvents: () => Promise<void>;
+  /** UI-only: when true, shell switches to combat focus layout (hide tabs, fit in viewport). */
+  combatFocusActive: boolean;
+  setCombatFocusActive: (active: boolean) => void;
   specModal: { open: boolean; options: SpecOption[]; unlockLevel: number };
   closeSpecModal: () => void;
   chooseSpecialization: (specKey: string) => Promise<void>;
@@ -103,6 +106,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [quests, setQuests] = useState<QuestLogPayload | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
+  const [combatFocusActive, setCombatFocusActive] = useState(false);
   const [specModal, setSpecModal] = useState<{
     open: boolean;
     options: SpecOption[];
@@ -466,6 +470,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       quests,
       liveEvents,
       refreshLiveEvents,
+      combatFocusActive,
+      setCombatFocusActive,
       specModal,
       closeSpecModal,
       chooseSpecialization,
@@ -501,6 +507,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       quests,
       liveEvents,
       refreshLiveEvents,
+      combatFocusActive,
+      setCombatFocusActive,
       specModal,
       closeSpecModal,
       chooseSpecialization,

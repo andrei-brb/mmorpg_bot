@@ -3,15 +3,17 @@ import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatEnemy, CombatStatePayload } from "@/lib/apiTypes";
 import { skillIconUrl } from "@/lib/skillIconUrl";
+import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
 }
 
-export function CombatTab() {
+export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const {
     loadCombatSnapshot, startCombat, combatAction, rest,
     pendingCombatEnemyKey, refreshInventory, refreshProgress, map,
+    inventory, combatFocusActive, setCombatFocusActive,
   } = useGameSession();
 
   const [mode, setMode] = useState<"pick" | "fight" | "outcome">("pick");
@@ -47,6 +49,17 @@ export function CombatTab() {
   }, [loadCombatSnapshot, startCombat, pendingCombatEnemyKey]);
 
   useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // Tell the shell when to enter/exit Combat Focus Mode.
+  useEffect(() => {
+    const active = mode === "fight" && Boolean(state);
+    if (combatFocusActive !== active) setCombatFocusActive(active);
+    return () => {
+      // Ensure we exit focus mode if the tab unmounts mid-fight.
+      setCombatFocusActive(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, state]);
 
   const onStart = async () => {
     if (!enemyPick) return;
@@ -136,8 +149,10 @@ export function CombatTab() {
   if (mode === "fight" && state) {
     const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
     const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
+    const classKey = inventory?.character?.class || "";
+    const specKey = inventory?.character?.specialization || "";
     return (
-      <div className="space-y-4">
+      <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
         {/* Zone bar */}
         <div className="game-panel py-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
@@ -151,8 +166,37 @@ export function CombatTab() {
         {/* Player vs Enemy */}
         <div className="grid grid-cols-2 gap-4">
           <div className="game-panel text-center">
-            <div className="text-3xl mb-2" style={{ filter: 'drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))' }}>🧝</div>
+            <div className="mb-2 flex items-center justify-center" style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}>
+              {classKey ? (
+                <img
+                  src={classIconUrl(classKey)}
+                  alt=""
+                  width={48}
+                  height={48}
+                  className="w-12 h-12 object-contain rounded-sm"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <span className="text-3xl">🧝</span>
+              )}
+            </div>
             <p className="text-sm font-cinzel font-semibold text-foreground">{state.player.name}</p>
+            {specKey && (
+              <div className="mt-1 flex items-center justify-center">
+                <img
+                  src={specIconUrl(specKey)}
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="w-[18px] h-[18px] object-contain rounded-[2px]"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              </div>
+            )}
             <div className="mt-3">
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-muted-foreground text-[10px] font-cinzel uppercase tracking-wider">HP</span>
@@ -217,7 +261,7 @@ export function CombatTab() {
         </div>
 
         {/* Combat log */}
-        <div className="game-panel max-h-36 overflow-y-auto">
+        <div className={focusMode ? "game-panel flex-1 min-h-0 overflow-y-auto" : "game-panel max-h-36 overflow-y-auto"}>
           <div className="game-panel-header">Combat Log</div>
           <div className="space-y-1.5">
             {(state.log || []).slice(-12).map((line, i) => (
