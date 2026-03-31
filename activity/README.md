@@ -22,7 +22,7 @@ npm run build   # output: dist/
 | Variable | Description |
 |----------|-------------|
 | `VITE_DISCORD_CLIENT_ID` | Application ID (same app as the bot). Required at build time. |
-| `VITE_API_BASE_URL` | Optional. API origin if not same-host (e.g. Railway URL while UI is on Vercel). |
+| `VITE_API_BASE_URL` | Leave **empty** on Vercel when you use **`vercel.json`** to rewrite `/api/*` → Railway (required inside Discord). See **`../ACTIVITY_SETUP.md`**. |
 | `VITE_DEV_PROXY_TARGET` | Local dev: where to proxy `/api` (default `http://127.0.0.1:8080`). |
 
 The bot must run with **`DISCORD_CLIENT_SECRET`** so `POST /api/token` works. See **`../ACTIVITY_SETUP.md`**.

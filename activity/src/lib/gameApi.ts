@@ -11,10 +11,39 @@ import type {
   SpecGatePayload,
 } from "./apiTypes";
 
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function shouldPreferSameOrigin(base: string, path: string): boolean {
+  if (!base || typeof window === "undefined" || !path.startsWith("/api")) return false;
+  try {
+    const baseUrl = new URL(base);
+    const pageUrl = new URL(window.location.origin);
+    if (baseUrl.origin === pageUrl.origin) return false;
+    if (isLocalHost(pageUrl.hostname)) return false;
+    // Discord Activities and Vercel-hosted UI should call same-origin /api and let
+    // the host/proxy forward to Railway.
+    return pageUrl.hostname.endsWith(".discordsays.com") || pageUrl.hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 export function apiUrl(path: string): string {
   const base = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
+  if (shouldPreferSameOrigin(base, p)) return p;
   return `${base}${p}`;
+}
+
+/** Clearer errors when fetch fails (e.g. Discord Activity CSP blocks cross-origin API). */
+export function describeFetchError(e: unknown, url: string): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (msg === "Failed to fetch" || msg.includes("Load failed") || msg.includes("NetworkError")) {
+    return `${msg} (${url}). Inside Discord, requests must go to the same host as the Activity (e.g. Vercel rewrites /api to Railway). See ACTIVITY_SETUP.md — Split UI + API.`;
+  }
+  return msg;
 }
 
 export function publicBaseUrl(): string {

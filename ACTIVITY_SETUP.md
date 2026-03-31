@@ -100,12 +100,20 @@ If you see a placeholder page like *“Rebuild with Docker build-arg VITE_DISCOR
 
 Without this, the container only contains a stub `index.html` and the Activity UI will not load.
 
-## Split UI + API (optional)
+## Split UI + API (Vercel + Railway)
 
-- Host **only** `activity/dist` on Vercel/Netlify.
-- Set **`VITE_API_BASE_URL`** at build time to your Railway API origin.
-- Set **`ACTIVITY_CORS_ORIGINS`** on the bot to your static site origin (e.g. `https://your-app.vercel.app`).
-- Set **`ACTIVITY_SERVE_STATIC=0`** on Railway if you don’t copy `dist` there.
+Discord’s Activity **sandbox blocks direct network requests** to arbitrary external origins (your Railway URL). The browser shows this as **`Failed to fetch`** even when CORS on Railway is “correct,” because the request never reaches your server.
+
+**Recommended:** keep the API **under the same hostname as the Activity UI** so `fetch()` is same-origin:
+
+1. Copy **`activity/vercel.json.example`** to **`activity/vercel.json`** (or add the same rewrite in the Vercel project → Settings → Rewrites).
+2. Set **`destination`** to your Railway public API base, e.g. `https://worker-production-1427.up.railway.app/api/:path*` (keep the `/api/:path*` suffix on the destination).
+3. In **Vercel** environment variables, **remove** `VITE_API_BASE_URL` or leave it **empty**, then **redeploy** so the built JS uses relative URLs like `/api/token` (same origin as `https://your-app.vercel.app`).
+4. On **Railway**, `ACTIVITY_CORS_ORIGINS` is optional for this setup (same-origin from the browser’s perspective). You can still set it for debugging or alternate clients.
+
+**Alternative (not recommended for Discord):** point `VITE_API_BASE_URL` at Railway and rely on CORS — works in a **normal browser tab** only; **inside Discord** it will still fail until you add [Developer Portal → Activities → URL mappings](https://discord.com/developers/docs/activities/development-guides/local-development#url-mapping) and usually `patchUrlMappings` from `@discord/embedded-app-sdk`. Same-origin proxying on Vercel is simpler.
+
+Set **`ACTIVITY_SERVE_STATIC=0`** on Railway if you don’t serve `activity/dist` from the bot.
 
 ## How to open the Activity in Discord
 

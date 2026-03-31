@@ -532,8 +532,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setPhase("ready");
       } catch (e) {
         setPhase("error");
+        const detail =
+          e instanceof Error ? api.describeFetchError(e, api.apiUrl("/api/token")) : String(e);
         setErrorHtml(
-          `Sign-in failed: ${e instanceof Error ? e.message : String(e)}. Is the bot running with DISCORD_CLIENT_SECRET?`,
+          `Sign-in failed: ${detail} If you see HTTP status errors, confirm DISCORD_CLIENT_SECRET on Railway and OAuth redirect URLs in the Developer Portal.`,
         );
       }
     }
