@@ -223,6 +223,22 @@ export async function postQuestAbandon(token: string, questId: string, guildId?:
   });
 }
 
+export async function postQuestAccept(token: string, questId: string, guildId?: string) {
+  return fetch(apiUrl("/api/game/quest/accept"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ quest_id: questId }),
+  });
+}
+
+export async function postQuestDecline(token: string, questId: string, guildId?: string) {
+  return fetch(apiUrl("/api/game/quest/decline"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ quest_id: questId }),
+  });
+}
+
 export type CombatActionJson = {
   ok?: boolean;
   ended?: boolean;

@@ -17,7 +17,9 @@ import type {
   ExploreResultPayload,
   InventoryPayload,
   LiveEventRow,
+  NpcInteractPayload,
   ProgressPayload,
+  QuestOfferPayload,
   QuestLogPayload,
   SpecGatePayload,
   SpecOption,
@@ -74,6 +76,9 @@ type GameSessionValue = {
   buyProtection: (key: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
   npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   abandonQuest: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  questOffer: QuestOfferPayload | null;
+  acceptQuestOffer: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  declineQuestOffer: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   /** Opens API-driven spec modal when eligible, otherwise explains why (toast). */
   requestSpecChoice: () => Promise<void>;
   displayName: string;
@@ -109,6 +114,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [lastExplore, setLastExplore] = useState<ExploreResultPayload | null>(null);
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [quests, setQuests] = useState<QuestLogPayload | null>(null);
+  const [questOffer, setQuestOffer] = useState<QuestOfferPayload | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [combatFocusActive, setCombatFocusActive] = useState(false);
   const [specModal, setSpecModal] = useState<{
@@ -358,11 +364,14 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     async (npc?: string) => {
       if (!accessToken) return { ok: false, error: "no_token" };
       const res = await api.postNpcInteract(accessToken, npc, guildId);
-      let j: { ok?: boolean; message?: string; error?: string } = {};
+      let j: NpcInteractPayload = {};
       try {
-        j = (await res.json()) as typeof j;
+        j = (await res.json()) as NpcInteractPayload;
       } catch {
         /* ignore */
+      }
+      if (res.ok && j.ok !== false && j.offer) {
+        setQuestOffer(j.offer);
       }
       await refreshInventory();
       await refreshProgress();
@@ -371,6 +380,42 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       return { ok, message: j.message, error: j.error };
     },
     [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
+  );
+
+  const acceptQuestOffer = useCallback(
+    async (questId: string) => {
+      if (!accessToken) return { ok: false, error: "no_token" };
+      const res = await api.postQuestAccept(accessToken, questId, guildId);
+      let j: { ok?: boolean; message?: string; error?: string } = {};
+      try {
+        j = (await res.json()) as typeof j;
+      } catch {
+        /* ignore */
+      }
+      await refreshQuests();
+      setQuestOffer(null);
+      const ok = res.ok && j.ok !== false;
+      return { ok, message: j.message, error: j.error };
+    },
+    [accessToken, guildId, refreshQuests],
+  );
+
+  const declineQuestOffer = useCallback(
+    async (questId: string) => {
+      if (!accessToken) return { ok: false, error: "no_token" };
+      const res = await api.postQuestDecline(accessToken, questId, guildId);
+      let j: { ok?: boolean; message?: string; error?: string } = {};
+      try {
+        j = (await res.json()) as typeof j;
+      } catch {
+        /* ignore */
+      }
+      await refreshQuests();
+      setQuestOffer(null);
+      const ok = res.ok && j.ok !== false;
+      return { ok, message: j.message, error: j.error };
+    },
+    [accessToken, guildId, refreshQuests],
   );
 
   const abandonQuest = useCallback(
@@ -518,6 +563,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       buyProtection,
       npcInteract,
       abandonQuest,
+      questOffer,
+      acceptQuestOffer,
+      declineQuestOffer,
       requestSpecChoice,
       displayName,
     }),
@@ -555,6 +603,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       buyProtection,
       npcInteract,
       abandonQuest,
+      questOffer,
+      acceptQuestOffer,
+      declineQuestOffer,
       requestSpecChoice,
       displayName,
     ],

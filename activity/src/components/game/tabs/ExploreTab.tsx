@@ -149,7 +149,7 @@ export function ExploreTab() {
           )}
           <div className="ornament-divider my-2" />
           <p className="text-[10px] text-muted-foreground mb-2">
-            Opens the quest / DM flow (same as <span className="text-foreground">Talk</span> on the Quests tab). Check Discord DMs.
+            Opens a quest offer popup (same as <span className="text-foreground">Talk</span> on the Quests tab).
           </p>
           <button
             type="button"
@@ -161,9 +161,7 @@ export function ExploreTab() {
               void npcInteract(id)
                 .then((r) => {
                   if (r.ok) {
-                    toast.success(r.message || "Interact sent", {
-                      description: "Check Discord DMs for a message from this NPC.",
-                    });
+                    toast.success(r.message || "NPC interaction");
                   } else {
                     toast.error(r.message || r.error || "Could not interact.");
                   }

@@ -200,6 +200,38 @@ export type QuestLogRow = {
 
 export type QuestLogPayload = { ok?: boolean; error?: string; quests?: QuestLogRow[] };
 
+export type QuestOfferPayload = {
+  npc_id?: string;
+  npc_name?: string;
+  npc_title?: string;
+  intro?: string;
+  quest_id?: string;
+  quest_name?: string;
+  quest_desc?: string;
+  level_req?: number;
+  time_limit_hours?: number | null;
+  rewards?: {
+    xp?: number;
+    gold?: number;
+    items?: string[];
+    reputation?: Record<string, number>;
+  };
+  objectives?: { objective?: string | null; hint?: string | null }[];
+  dialogue?: { accept?: string | null; decline?: string | null };
+};
+
+export type NpcInteractPayload = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  npc_id?: string;
+  quest_completed?: boolean;
+  rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
+  quest_step_updated?: boolean;
+  quest_offered?: boolean;
+  offer?: QuestOfferPayload;
+};
+
 export type SpecOption = {
   key: string;
   name: string;

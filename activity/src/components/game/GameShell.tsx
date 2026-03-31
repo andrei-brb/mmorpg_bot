@@ -8,6 +8,8 @@ import { CombatTab } from "./tabs/CombatTab";
 import { ProgressTab } from "./tabs/ProgressTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
+import { QuestOfferModal } from "./modals/QuestOfferModal";
+import { toast } from "sonner";
 
 const TABS = ["Hero", "Explore", "Quests", "Combat", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
@@ -30,15 +32,51 @@ export function GameShell() {
     specModal,
     closeSpecModal,
     chooseSpecialization,
+    questOffer,
+    acceptQuestOffer,
+    declineQuestOffer,
   } = useGameSession();
 
   const [specSel, setSpecSel] = useState("");
+  const [questBusy, setQuestBusy] = useState(false);
   useEffect(() => {
     if (specModal.options[0]?.key) setSpecSel(specModal.options[0].key);
   }, [specModal.open, specModal.options]);
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">
+      {questOffer?.quest_id && (
+        <QuestOfferModal
+          offer={questOffer}
+          busy={questBusy}
+          onClose={() => {
+            if (questBusy) return;
+            // Closing doesn't auto-decline; user can come back via NPC again if needed.
+          }}
+          onIgnore={async () => {
+            if (!questOffer.quest_id || questBusy) return;
+            setQuestBusy(true);
+            try {
+              const r = await declineQuestOffer(questOffer.quest_id);
+              if (r.ok) toast.success(r.message || "Quest ignored.");
+              else toast.error(r.message || r.error || "Could not ignore quest.");
+            } finally {
+              setQuestBusy(false);
+            }
+          }}
+          onAccept={async () => {
+            if (!questOffer.quest_id || questBusy) return;
+            setQuestBusy(true);
+            try {
+              const r = await acceptQuestOffer(questOffer.quest_id);
+              if (r.ok) toast.success(r.message || "Quest accepted.");
+              else toast.error(r.message || r.error || "Could not accept quest.");
+            } finally {
+              setQuestBusy(false);
+            }
+          }}
+        />
+      )}
       {/* Specialization gate modal (from API) */}
       {specModal.open && specModal.options.length > 0 && (
         <div

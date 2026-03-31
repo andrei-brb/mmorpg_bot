@@ -1112,6 +1112,59 @@ async def handle_quest_abandon(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"ok": True, "message": "Quest abandoned.", "quest_id": quest_id}))
 
 
+async def handle_quest_accept(request: web.Request) -> web.Response:
+    """Accept a pending quest offer (state='offered')."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "message": "No character."}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    quest_id = str(body.get("quest_id") or body.get("questId") or "").strip()
+    if not quest_id:
+        return web.json_response(_json_safe({"ok": False, "error": "missing_quest_id", "message": "Missing quest_id."}), status=400)
+
+    qs = NPCQuestService(db)
+    char_id = _uuid_from_any(char["id"])
+    prog = await qs.get_quest_progress(char_id, quest_id)
+    if not prog or prog.get("state") != "offered":
+        return web.json_response(_json_safe({"ok": False, "error": "no_offer", "message": "No pending quest offer."}), status=400)
+    await qs.accept_quest(char_id, quest_id)
+    npc_id = prog.get("npc_id")
+    if npc_id:
+        await qs.update_npc_state(char_id, str(npc_id), "introduced")
+    return web.json_response(_json_safe({"ok": True, "message": "Quest accepted.", "quest_id": quest_id}))
+
+
+async def handle_quest_decline(request: web.Request) -> web.Response:
+    """Decline/ignore a pending quest offer (removes state='offered')."""
+    _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "message": "No character."}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    quest_id = str(body.get("quest_id") or body.get("questId") or "").strip()
+    if not quest_id:
+        return web.json_response(_json_safe({"ok": False, "error": "missing_quest_id", "message": "Missing quest_id."}), status=400)
+
+    qs = NPCQuestService(db)
+    char_id = _uuid_from_any(char["id"])
+    prog = await qs.get_quest_progress(char_id, quest_id)
+    if not prog or prog.get("state") != "offered":
+        return web.json_response(_json_safe({"ok": False, "error": "no_offer", "message": "No pending quest offer."}), status=400)
+    await qs.cancel_quest_offer(char_id, quest_id)
+    npc_id = prog.get("npc_id")
+    if npc_id:
+        await qs.update_npc_state(char_id, str(npc_id), "introduced")
+    return web.json_response(_json_safe({"ok": True, "message": "Quest ignored.", "quest_id": quest_id}))
+
 async def handle_travel(request: web.Request) -> web.Response:
     """Travel to a zone key (Explore tab)."""
     _user, discord_id, char, db = await _authed_discord_user_and_char(request)
@@ -1295,7 +1348,7 @@ async def handle_live_events(request: web.Request) -> web.Response:
 
 
 async def handle_npc_interact(request: web.Request) -> web.Response:
-    """Trigger the NPC DM interaction/quest offer flow (Activity button)."""
+    """NPC interaction/quest offer flow (Activity). Returns UI payload (no DMs)."""
     bot = request.app["bot"]
     user, discord_id, char, db = await _authed_discord_user_and_char(request)
     if not char:
@@ -1490,100 +1543,48 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             status=400,
         )
 
-    # Send DM with buttons (release reserved row if DM cannot be sent)
-    try:
-        uobj = bot.get_user(discord_id) or await bot.fetch_user(discord_id)
-        dm = await uobj.create_dm()
-    except Exception:
-        await quest_svc.cancel_quest_offer(char_id, qid)
-        return web.json_response(
-            _json_safe(
-                _merge_completion_payload(
-                    {"ok": False, "error": "dm_forbidden", "message": "Enable DMs from server members."}
-                )
-            ),
-            status=403,
-        )
-
-    # Reuse the same UI view class from QuestCog
-    from cogs.quest.quest_cog import QuestOfferView
-
     char_class = char.get("class", "warrior")
     char_level = int(char.get("level") or 1)
     intro_text = get_dynamic_intro(npc_id, npc_data, char_class, char_level)
 
-    import discord as _discord
-
-    embed = _discord.Embed(
-        title=f"{npc_data.get('title','')} {npc_data.get('name','')}".strip(),
-        description=intro_text,
-        color=0x4A90E2,
-    )
-    embed.add_field(
-        name="📜 Quest Available",
-        value=f"**{next_quest['name']}**\n{next_quest['description']}",
-        inline=False,
-    )
     rewards = next_quest.get("rewards", {}) or {}
-    reward_lines = []
-    if rewards.get("xp"):
-        reward_lines.append(f"⭐ {int(rewards['xp']):,} XP")
-    if rewards.get("gold"):
-        reward_lines.append(f"🪙 {int(rewards['gold']):,} Gold")
-    if rewards.get("items"):
-        reward_lines.append("🎁 Unique Item Reward")
-    if rewards.get("reputation"):
-        for fid, amt in rewards["reputation"].items():
-            faction = FACTIONS.get(fid, {})
-            reward_lines.append(f"{faction.get('emoji', '⭐')} +{amt} {faction.get('name', fid)} Rep")
-    if reward_lines:
-        embed.add_field(name="🏆 Rewards", value="\n".join(reward_lines), inline=True)
-
-    step_text = "\n".join(f"`{i+1}.` {s['objective']}" for i, s in enumerate(next_quest.get("steps") or []))
-    if step_text:
-        embed.add_field(name="📋 Objectives", value=step_text, inline=False)
-
-    view = QuestOfferView()
-    try:
-        dm_msg = await dm.send(embed=embed, view=view)
-    except Exception:
-        await quest_svc.cancel_quest_offer(char_id, qid)
-        return web.json_response(_json_safe({"ok": False, "error": "dm_send_failed", "message": "Could not send DM."}), status=500)
+    reward_summary = {
+        "xp": int(rewards.get("xp") or 0),
+        "gold": int(rewards.get("gold") or 0),
+        "items": list(rewards.get("items") or []),
+        "reputation": {k: int(v) for k, v in (rewards.get("reputation") or {}).items()},
+    }
+    objectives = [
+        {"objective": s.get("objective"), "hint": s.get("hint")}
+        for s in (next_quest.get("steps") or [])
+        if isinstance(s, dict)
+    ]
 
     await quest_svc.update_npc_state(char_id, npc_id, "quest_offered")
-
-    # Wait for choice, then apply accept/decline.
-    await view.wait()
-    if view.choice == "accept":
-        await quest_svc.accept_quest(char_id, next_quest["id"])
-        accept_embed = _discord.Embed(title="✅ Quest Accepted!", description=next_quest["dialogue"]["accept"], color=0x2ECC71)
-        first_step = (next_quest.get("steps") or [{}])[0]
-        if first_step.get("objective"):
-            accept_embed.add_field(name="📍 First Objective", value=f"{first_step['objective']}\n*{first_step.get('hint','')}*", inline=False)
-        await dm_msg.edit(embed=accept_embed, view=None)
-        accept_body: Dict[str, Any] = {
-            "ok": True,
-            "message": "Quest accepted in DMs.",
+    body: Dict[str, Any] = {
+        "ok": True,
+        "message": "Quest offer ready.",
+        "npc_id": npc_id,
+        "quest_offered": True,
+        "offer": {
             "npc_id": npc_id,
-            "quest_id": next_quest["id"],
-        }
-        if pending_completion:
-            accept_body["next_quest_auto_offered"] = True
-        return web.json_response(_json_safe(_merge_completion_payload(accept_body)))
-    if view.choice == "decline":
-        await quest_svc.cancel_quest_offer(char_id, next_quest["id"])
-        decline_embed = _discord.Embed(title="Quest Declined", description=next_quest["dialogue"]["decline"], color=0x95A5A6)
-        await dm_msg.edit(embed=decline_embed, view=None)
-        decline_body: Dict[str, Any] = {"ok": True, "message": "Quest declined.", "npc_id": npc_id}
-        if pending_completion:
-            decline_body["next_quest_auto_offered"] = True
-        return web.json_response(_json_safe(_merge_completion_payload(decline_body)))
-
-    await quest_svc.cancel_quest_offer(char_id, next_quest["id"])
-    ended_body: Dict[str, Any] = {"ok": True, "message": "Interaction ended.", "npc_id": npc_id}
-    if pending_completion:
-        ended_body["next_quest_auto_offered"] = True
-    return web.json_response(_json_safe(_merge_completion_payload(ended_body)))
+            "npc_name": npc_data.get("name"),
+            "npc_title": npc_data.get("title"),
+            "intro": intro_text,
+            "quest_id": next_quest.get("id"),
+            "quest_name": next_quest.get("name"),
+            "quest_desc": next_quest.get("description"),
+            "level_req": int(next_quest.get("level_req") or 1),
+            "time_limit_hours": next_quest.get("time_limit_hours"),
+            "rewards": reward_summary,
+            "objectives": objectives,
+            "dialogue": {
+                "accept": (next_quest.get("dialogue") or {}).get("accept"),
+                "decline": (next_quest.get("dialogue") or {}).get("decline"),
+            },
+        },
+    }
+    return web.json_response(_json_safe(_merge_completion_payload(body)))
 
 async def handle_item_equip(request: web.Request) -> web.Response:
     bot = request.app["bot"]
@@ -2054,6 +2055,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/map", handle_map)
     app.router.add_get("/api/game/quests", handle_quests)
     app.router.add_post("/api/game/quest/abandon", handle_quest_abandon)
+    app.router.add_post("/api/game/quest/accept", handle_quest_accept)
+    app.router.add_post("/api/game/quest/decline", handle_quest_decline)
     app.router.add_get("/api/game/live-events", handle_live_events)
     app.router.add_post("/api/game/travel", handle_travel)
     app.router.add_post("/api/game/explore", handle_explore)

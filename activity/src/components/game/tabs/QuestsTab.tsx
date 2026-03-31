@@ -76,7 +76,7 @@ export function QuestsTab() {
                       void npcInteract(q.npc_id).then((r) => {
                         if (r.ok) {
                           toast.success(r.message || "NPC interaction sent.", {
-                            description: "Check Discord DMs if a quest was offered.",
+                            description: "A quest offer popup will open if available.",
                           });
                         } else {
                           toast.error(r.message || r.error || "Could not talk to NPC.");
