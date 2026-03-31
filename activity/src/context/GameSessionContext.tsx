@@ -159,6 +159,21 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     try {
       const p = await api.getProgress(accessToken, guildId);
       setProgress(p);
+      // Keep Hero tab (inventory.character) in sync with level/gold updates that can occur
+      // via server-side actions (e.g., XP grants) without forcing a full app refresh.
+      const pc = p?.character;
+      if (pc && (pc.level != null || pc.gold != null || pc.class != null || pc.specialization != null)) {
+        setInventory((inv) => {
+          if (!inv || !inv.character) return inv;
+          const next = { ...inv, character: { ...inv.character } } as any;
+          if (pc.level != null) next.character.level = pc.level;
+          if (pc.gold != null) next.character.gold = pc.gold;
+          if (pc.class != null) next.character.class = pc.class;
+          if (pc.specialization !== undefined) next.character.specialization = pc.specialization;
+          if (pc.specialization_name !== undefined) next.character.specialization_name = pc.specialization_name;
+          return next;
+        });
+      }
     } catch (e) {
       console.warn("refreshProgress", e);
     }

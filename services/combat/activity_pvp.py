@@ -22,6 +22,8 @@ log = logging.getLogger("activity_pvp")
 ACTIVE_PVP: Dict[str, "PvpRuntime"] = {}
 # discord_id -> match_id
 DISCORD_TO_MATCH: Dict[int, str] = {}
+# discord_id -> (expires_ts, finished_payload)
+FINISHED_TOAST: Dict[int, Tuple[float, Dict[str, Any]]] = {}
 # queues: list of discord_ids waiting
 QUEUE_CASUAL: List[int] = []
 QUEUE_RANKED: List[int] = []
@@ -31,6 +33,7 @@ CHALLENGE_INBOX: Dict[int, Dict[str, Any]] = {}
 CHALLENGE_OUTBOX: Dict[int, Dict[str, Any]] = {}
 
 TURN_SECONDS = 90
+FINISHED_TOAST_TTL_S = 90
 
 
 @dataclass
@@ -272,6 +275,15 @@ async def build_status_payload(bot, discord_id: int) -> Dict[str, Any]:
         sp = SPECIALIZATIONS.get(char["specialization"])
         if sp:
             out["player"]["spec"] = sp.name
+
+    toast = FINISHED_TOAST.get(discord_id)
+    if toast:
+        expires_ts, payload = toast
+        if time.time() <= float(expires_ts):
+            # One-shot: return finished payload, then clear so UI can pop once.
+            FINISHED_TOAST.pop(discord_id, None)
+            return {**out, "match_status": "finished", **payload}
+        FINISHED_TOAST.pop(discord_id, None)
 
     mid = DISCORD_TO_MATCH.get(discord_id)
     if mid and mid in ACTIVE_PVP:
@@ -879,12 +891,14 @@ async def _finalize_pvp_match_casual_offline(
     ACTIVE_PVP.pop(match_id, None)
 
     rd_viewer: Optional[int] = None
-    return {
+    finished = {
         "ok": True,
         "ended": True,
         "winner": winner_discord,
         "match": build_finished_match(rt, viewer_discord, winner_discord, loser_discord, rd_viewer),
     }
+    FINISHED_TOAST[human_did] = (time.time() + FINISHED_TOAST_TTL_S, finished)
+    return finished
 
 
 async def _finalize_pvp_match(
@@ -1025,12 +1039,29 @@ async def _finalize_pvp_match(
     if mode == "ranked" and delta_w is not None and delta_l is not None:
         rd_viewer = delta_w if viewer_discord == winner_discord else delta_l
 
-    return {
+    finished_viewer = {
         "ok": True,
         "ended": True,
         "winner": winner_discord,
         "match": build_finished_match(rt, viewer_discord, winner_discord, loser_discord, rd_viewer),
     }
+
+    # Ensure BOTH sides get a finished popup via /pvp/status polling.
+    # Viewer gets it immediately (action response), other side gets it via FINISHED_TOAST.
+    other_viewer = loser_discord if viewer_discord == winner_discord else winner_discord
+    rd_other: Optional[int] = None
+    if mode == "ranked" and delta_w is not None and delta_l is not None:
+        rd_other = delta_l if other_viewer == loser_discord else delta_w
+    FINISHED_TOAST[other_viewer] = (
+        time.time() + FINISHED_TOAST_TTL_S,
+        {
+            "ok": True,
+            "ended": True,
+            "winner": winner_discord,
+            "match": build_finished_match(rt, other_viewer, winner_discord, loser_discord, rd_other),
+        },
+    )
+    return finished_viewer
 
 
 async def get_history(bot, discord_id: int, page: int) -> Dict[str, Any]:
