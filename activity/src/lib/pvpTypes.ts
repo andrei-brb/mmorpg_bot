@@ -49,6 +49,12 @@ export interface SkillSlot {
   description: string;
 }
 
+export interface IncomingChallenge {
+  from_discord_id: string;
+  from_name: string;
+  mode: PvpMode;
+}
+
 export interface PvpStatus {
   match_status: MatchStatus;
   mode?: PvpMode;
@@ -58,6 +64,11 @@ export interface PvpStatus {
   queue_time?: number;
   challenge_target?: string;
   challenge_timer?: number;
+  /** Present when another player challenged you (poll GET /pvp/status). */
+  incoming_challenge?: IncomingChallenge;
+  /** Embedded active match from server (GET /pvp/status). */
+  match?: PvpMatchState;
+  error?: string;
 }
 
 export interface PvpMatchState {

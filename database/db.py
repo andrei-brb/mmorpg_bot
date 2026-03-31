@@ -335,6 +335,39 @@ class Database:
                 ON guild_live_events(guild_id, starts_at, ends_at);
             """)
 
+            # ── Activity PvP (Arena) ─────────────────────────────────────────────
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS pvp_stats (
+                    character_id    UUID PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                    rating          INT NOT NULL DEFAULT 1500,
+                    wins            INT NOT NULL DEFAULT 0,
+                    losses          INT NOT NULL DEFAULT 0,
+                    draws           INT NOT NULL DEFAULT 0,
+                    streak          INT NOT NULL DEFAULT 0,
+                    updated_at      TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS pvp_match_history (
+                    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    character_id            UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    opponent_character_id   UUID REFERENCES characters(id) ON DELETE SET NULL,
+                    opponent_name           VARCHAR(100),
+                    mode                    VARCHAR(16) NOT NULL,
+                    result                  VARCHAR(16) NOT NULL,
+                    rating_delta            INT,
+                    damage_dealt            INT DEFAULT 0,
+                    damage_taken            INT DEFAULT 0,
+                    crits                   INT DEFAULT 0,
+                    duration_seconds        INT DEFAULT 0,
+                    created_at              TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pvp_history_char
+                ON pvp_match_history(character_id, created_at DESC);
+            """)
+
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:
                 import os

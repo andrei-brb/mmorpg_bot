@@ -12,6 +12,13 @@ Endpoints:
   POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
   POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
   POST /api/game/rest           — Bearer token → full HP/resource restore (rest cooldown; clears iframe combat)
+  GET  /api/game/pvp/status     — Bearer token → Arena hub + optional embedded match state
+  POST /api/game/pvp/queue      — JSON { mode: casual|ranked }
+  DELETE /api/game/pvp/queue    — leave queue / cancel outgoing challenge
+  POST /api/game/pvp/challenge  — JSON { target_user_id }
+  POST /api/game/pvp/accept     — accept pending challenge
+  POST /api/game/pvp/action     — JSON { action, skill_key? }
+  GET  /api/game/pvp/history    — ?page=
   GET  /api/game/quests         — Bearer token → active quest log
   POST /api/game/quest/abandon  — JSON { quest_id } → abandon active/offered quest
 
@@ -36,6 +43,7 @@ from aiohttp import web
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.combat import activity_combat as activity_combat_api
+from services.combat import activity_pvp as activity_pvp_api
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.quest.npc_quest_service import NPCQuestService, NPC_TEMPLATES, FACTIONS, get_dynamic_intro, get_rep_level
@@ -79,8 +87,8 @@ def _cors_headers(request: web.Request) -> Dict[str, str]:
         allow_origin = origin if origin else "*"
     return {
         "Access-Control-Allow-Origin": allow_origin,
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Authorization, Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Guild-Id, X-Guild-ID",
         "Access-Control-Max-Age": "86400",
     }
 
@@ -796,6 +804,131 @@ async def handle_rest(request: web.Request) -> web.Response:
             }
         )
     )
+
+
+async def handle_pvp_status(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"match_status": "idle", "error": "no_character"}))
+    payload = await activity_pvp_api.build_status_payload(bot, discord_id)
+    return web.json_response(_json_safe(payload))
+
+
+async def handle_pvp_queue_post(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    mode = str((body.get("mode") or "casual")).strip().lower()
+    if mode not in ("casual", "ranked"):
+        mode = "casual"
+    guild_id = _guild_id_from_request(request, body)
+    r = await activity_pvp_api.join_queue(bot, discord_id, mode, guild_id)
+    return web.json_response(_json_safe(r), status=200 if r.get("ok") else 400)
+
+
+async def handle_pvp_queue_delete(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    r = await activity_pvp_api.leave_queue(discord_id)
+    return web.json_response(_json_safe(r))
+
+
+async def handle_pvp_challenge(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    target = body.get("target_user_id") or body.get("target")
+    if target is None:
+        return web.json_response(_json_safe({"ok": False, "error": "missing_target"}), status=400)
+    guild_id = _guild_id_from_request(request, body)
+    r = await activity_pvp_api.send_challenge(bot, discord_id, str(target), guild_id)
+    return web.json_response(_json_safe(r), status=200 if r.get("ok") else 400)
+
+
+async def handle_pvp_accept(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    guild_id = _guild_id_from_request(request, body)
+    r = await activity_pvp_api.accept_challenge(bot, discord_id, guild_id)
+    return web.json_response(_json_safe(r), status=200 if r.get("ok") else 400)
+
+
+async def handle_pvp_action(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    guild_id = _guild_id_from_request(request, body)
+    r = await activity_pvp_api.process_pvp_action(bot, discord_id, guild_id, body)
+    err = r.get("error")
+    if err:
+        code = 409 if err == "not_your_turn" else 400
+        return web.json_response(_json_safe(r), status=code)
+    return web.json_response(_json_safe(r))
+
+
+async def handle_pvp_history(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"matches": [], "has_more": False, "page": 1}))
+    try:
+        page = int(request.query.get("page") or "1")
+    except (TypeError, ValueError):
+        page = 1
+    r = await activity_pvp_api.get_history(bot, discord_id, max(1, page))
+    return web.json_response(_json_safe(r))
 
 
 async def handle_map(request: web.Request) -> web.Response:
@@ -1906,6 +2039,13 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)
     app.router.add_post("/api/game/rest", handle_rest)
+    app.router.add_get("/api/game/pvp/status", handle_pvp_status)
+    app.router.add_post("/api/game/pvp/queue", handle_pvp_queue_post)
+    app.router.add_delete("/api/game/pvp/queue", handle_pvp_queue_delete)
+    app.router.add_post("/api/game/pvp/challenge", handle_pvp_challenge)
+    app.router.add_post("/api/game/pvp/accept", handle_pvp_accept)
+    app.router.add_post("/api/game/pvp/action", handle_pvp_action)
+    app.router.add_get("/api/game/pvp/history", handle_pvp_history)
     app.router.add_get("/health", handle_health)
 
     static_root = _static_dir()

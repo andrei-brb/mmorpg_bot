@@ -8,18 +8,42 @@ interface PvpHubProps {
   onLeaveQueue: () => void;
   onChallenge: (target: string) => void;
   onCancelChallenge: () => void;
+  onAcceptChallenge: () => void;
 }
 
-export function PvpHub({ status, onJoinQueue, onLeaveQueue, onChallenge, onCancelChallenge }: PvpHubProps) {
+export function PvpHub({
+  status,
+  onJoinQueue,
+  onLeaveQueue,
+  onChallenge,
+  onCancelChallenge,
+  onAcceptChallenge,
+}: PvpHubProps) {
   const [challengeTarget, setChallengeTarget] = useState("");
   const [showRules, setShowRules] = useState(false);
-  const { stats, player, rules, match_status } = status;
+  const { stats, player, rules, match_status, incoming_challenge } = status;
 
   const isQueued = match_status === "queued";
   const isChallenged = match_status === "challenged";
 
   return (
     <div className="space-y-4">
+      {incoming_challenge && (
+        <div className="game-panel border-gold/40">
+          <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="font-cinzel text-sm text-gold">Challenge received</p>
+              <p className="text-xs text-muted-foreground font-crimson mt-1">
+                <span className="text-foreground font-semibold">{incoming_challenge.from_name}</span> wants a{" "}
+                {incoming_challenge.mode} duel.
+              </p>
+            </div>
+            <button type="button" className="game-btn-primary shrink-0" onClick={() => void onAcceptChallenge()}>
+              Accept
+            </button>
+          </div>
+        </div>
+      )}
       {stats && (
         <div className="game-panel">
           <div className="game-panel-header">PvP Stats</div>

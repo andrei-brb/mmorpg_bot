@@ -20,6 +20,7 @@ export function PvpPage() {
     leaveQueue,
     challenge,
     cancelChallenge,
+    acceptChallenge,
     sendAction,
     fetchHistory,
     backToHub,
@@ -96,6 +97,7 @@ export function PvpPage() {
           onLeaveQueue={leaveQueue}
           onChallenge={challenge}
           onCancelChallenge={cancelChallenge}
+          onAcceptChallenge={acceptChallenge}
         />
       )}
 

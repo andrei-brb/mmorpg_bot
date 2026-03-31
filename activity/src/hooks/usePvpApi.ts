@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useGameSession } from "@/context/GameSessionContext";
+import { apiUrl, authHeaders } from "@/lib/gameApi";
 import type {
   PvpStatus,
   PvpMatchState,
@@ -6,15 +8,13 @@ import type {
   PvpMode,
 } from "@/lib/pvpTypes";
 
-const USE_MOCK = import.meta.env.VITE_USE_PVP_MOCK !== "false";
-
-// ── Mock Data ──────────────────────────────────────────────────────────────
+const USE_MOCK = import.meta.env.VITE_USE_PVP_MOCK === "true";
 
 const mockStatus: PvpStatus = {
   match_status: "idle",
   stats: {
     rating: 1547,
-    rank_tier: "Gold II",
+    rank_tier: "Gold",
     wins: 42,
     losses: 28,
     draws: 3,
@@ -49,7 +49,7 @@ const mockMatch: PvpMatchState = {
   player: { ...mockStatus.player! },
   opponent: {
     user_id: "opp-1",
-    username: "DarkMage99",
+    username: "",
     character_name: "Malachar",
     level: 36,
     class: "Mage",
@@ -62,40 +62,42 @@ const mockMatch: PvpMatchState = {
   combat_log: [
     { id: "1", timestamp: "12:00:01", message: "Battle begins!", type: "system" },
     { id: "2", timestamp: "12:00:05", message: "Arathorn attacks Malachar for 128 damage.", type: "damage" },
-    { id: "3", timestamp: "12:00:08", message: "Malachar casts Shadow Bolt for 95 damage.", type: "damage" },
-    { id: "4", timestamp: "12:00:12", message: "Arathorn uses Whirlwind for 160 damage. Critical hit!", type: "damage" },
-    { id: "5", timestamp: "12:00:15", message: "Malachar applies Curse of Weakness.", type: "debuff" },
   ],
   skills: [
-    { key: "whirlwind", name: "Whirlwind", cooldown: 0, max_cooldown: 3, description: "Deal 160% damage to opponent." },
-    { key: "execute", name: "Execute", cooldown: 2, max_cooldown: 5, description: "Massive damage when opponent below 30% HP." },
-    { key: "shield_wall", name: "Shield Wall", cooldown: 0, max_cooldown: 4, description: "Reduce incoming damage by 50% for 1 turn." },
-    { key: "battle_cry", name: "Battle Cry", cooldown: 1, max_cooldown: 3, description: "Increase crit chance by 25% for 2 turns." },
+    {
+      key: "whirlwind",
+      name: "Whirlwind",
+      cooldown: 0,
+      max_cooldown: 3,
+      description: "Spin attack.",
+    },
   ],
 };
 
 const mockHistory: PvpHistoryResponse = {
   matches: [
-    { match_id: "h1", date: "2025-03-29", opponent_name: "ShadowKnight", result: "victory", mode: "ranked", rating_delta: 15 },
-    { match_id: "h2", date: "2025-03-28", opponent_name: "IceMage42", result: "defeat", mode: "ranked", rating_delta: -12 },
-    { match_id: "h3", date: "2025-03-28", opponent_name: "BladeDancer", result: "victory", mode: "casual" },
-    { match_id: "h4", date: "2025-03-27", opponent_name: "DarkMage99", result: "victory", mode: "ranked", rating_delta: 18 },
-    { match_id: "h5", date: "2025-03-26", opponent_name: "HolyPaladin", result: "draw", mode: "casual" },
-    { match_id: "h6", date: "2025-03-25", opponent_name: "StormArcher", result: "victory", mode: "ranked", rating_delta: 14 },
+    {
+      match_id: "h1",
+      date: "2026-03-29",
+      opponent_name: "ShadowKnight",
+      result: "victory",
+      mode: "ranked",
+      rating_delta: 15,
+    },
   ],
-  has_more: true,
+  has_more: false,
   page: 1,
 };
 
-// ── Hook ───────────────────────────────────────────────────────────────────
 
 export function usePvpApi() {
+  const { accessToken, guildId, phase } = useGameSession();
   const [status, setStatus] = useState<PvpStatus | null>(null);
   const [match, setMatch] = useState<PvpMatchState | null>(null);
   const [history, setHistory] = useState<PvpHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finishedRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     if (USE_MOCK) {
@@ -103,149 +105,239 @@ export function usePvpApi() {
       setLoading(false);
       return;
     }
+    if (!accessToken) {
+      setLoading(phase === "boot" || phase === "loading");
+      return;
+    }
     try {
-      const res = await fetch("/api/game/pvp/status");
-      if (!res.ok) throw new Error("Could not connect to Arena service");
-      setStatus(await res.json());
+      const res = await fetch(apiUrl("/api/game/pvp/status"), {
+        headers: authHeaders(accessToken, guildId),
+      });
+      if (!res.ok) throw new Error(`Arena status ${res.status}`);
+      const data = (await res.json()) as PvpStatus;
+      if (data.error === "no_character") {
+        setError("Create a character with /character create in Discord first.");
+        setStatus(null);
+        return;
+      }
+      setError(null);
+      setStatus(data);
+      if (data.match) {
+        setMatch(data.match as PvpMatchState);
+      } else if (data.match_status !== "active") {
+        setMatch((prev) => (prev?.status === "finished" ? prev : null));
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken, guildId, phase]);
 
-  const joinQueue = useCallback(async (mode: PvpMode) => {
-    if (USE_MOCK) {
-      setStatus((s) => (s ? { ...s, match_status: "queued", mode, queue_time: 0 } : s));
-      setTimeout(() => {
-        setStatus((s) => (s ? { ...s, match_status: "active" } : s));
-        setMatch({ ...mockMatch, mode });
-      }, 3000);
-      return;
-    }
-    await fetch("/api/game/pvp/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode }),
-    });
-    setStatus((s) => (s ? { ...s, match_status: "queued", mode } : s));
-  }, []);
+  const fetchHistory = useCallback(
+    async (page = 1) => {
+      if (USE_MOCK) {
+        setHistory(mockHistory);
+        return;
+      }
+      if (!accessToken) return;
+      const res = await fetch(apiUrl(`/api/game/pvp/history?page=${page}`), {
+        headers: authHeaders(accessToken, guildId),
+      });
+      if (!res.ok) return;
+      setHistory((await res.json()) as PvpHistoryResponse);
+    },
+    [accessToken, guildId],
+  );
+
+  const joinQueue = useCallback(
+    async (mode: PvpMode) => {
+      if (USE_MOCK) {
+        setStatus((s) => (s ? { ...s, match_status: "queued", mode, queue_time: 0 } : s));
+        setTimeout(() => {
+          setStatus((s) => (s ? { ...s, match_status: "active" } : s));
+          setMatch({ ...mockMatch, mode });
+        }, 3000);
+        return;
+      }
+      if (!accessToken) return;
+      const res = await fetch(apiUrl("/api/game/pvp/queue"), {
+        method: "POST",
+        headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      await res.json();
+      finishedRef.current = false;
+      await fetchStatus();
+    },
+    [accessToken, guildId, fetchStatus],
+  );
 
   const leaveQueue = useCallback(async () => {
     if (USE_MOCK) {
       setStatus((s) => (s ? { ...s, match_status: "idle" } : s));
       return;
     }
-    await fetch("/api/game/pvp/queue", { method: "DELETE" });
-    setStatus((s) => (s ? { ...s, match_status: "idle" } : s));
-  }, []);
-
-  const challenge = useCallback(async (targetUserId: string) => {
-    if (USE_MOCK) {
-      setStatus((s) =>
-        s ? { ...s, match_status: "challenged", challenge_target: targetUserId, challenge_timer: 60 } : s
-      );
-      setTimeout(() => {
-        setStatus((s) => (s ? { ...s, match_status: "active" } : s));
-        setMatch({ ...mockMatch });
-      }, 3000);
-      return;
-    }
-    await fetch("/api/game/pvp/challenge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target_user_id: targetUserId }),
+    if (!accessToken) return;
+    await fetch(apiUrl("/api/game/pvp/queue"), {
+      method: "DELETE",
+      headers: authHeaders(accessToken, guildId),
     });
-  }, []);
+    finishedRef.current = false;
+    await fetchStatus();
+  }, [accessToken, guildId, fetchStatus]);
+
+  const challenge = useCallback(
+    async (targetUserId: string) => {
+      if (USE_MOCK) {
+        setStatus((s) =>
+          s ? { ...s, match_status: "challenged", challenge_target: targetUserId, challenge_timer: 60 } : s,
+        );
+        setTimeout(() => {
+          setStatus((s) => (s ? { ...s, match_status: "active" } : s));
+          setMatch({ ...mockMatch });
+        }, 3000);
+        return;
+      }
+      if (!accessToken) return;
+      await fetch(apiUrl("/api/game/pvp/challenge"), {
+        method: "POST",
+        headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+        body: JSON.stringify({ target_user_id: targetUserId }),
+      });
+      await fetchStatus();
+    },
+    [accessToken, guildId, fetchStatus],
+  );
+
+  const acceptChallenge = useCallback(async () => {
+    if (USE_MOCK) return;
+    if (!accessToken) return;
+    const res = await fetch(apiUrl("/api/game/pvp/accept"), {
+      method: "POST",
+      headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      finishedRef.current = false;
+      await fetchStatus();
+    }
+  }, [accessToken, guildId, fetchStatus]);
 
   const cancelChallenge = useCallback(async () => {
     if (USE_MOCK) {
       setStatus((s) => (s ? { ...s, match_status: "idle" } : s));
       return;
     }
-    await fetch("/api/game/pvp/queue", { method: "DELETE" });
-    setStatus((s) => (s ? { ...s, match_status: "idle" } : s));
-  }, []);
+    await leaveQueue();
+  }, [leaveQueue]);
 
-  const sendAction = useCallback(async (action: "attack" | "skill" | "defend" | "pass", skillKey?: string) => {
-    if (USE_MOCK) {
-      const newLog = {
-        id: String(Date.now()),
-        timestamp: new Date().toLocaleTimeString(),
-        message:
-          action === "attack"
-            ? "Arathorn attacks Malachar for 115 damage."
-            : action === "defend"
-              ? "Arathorn takes a defensive stance."
-              : action === "skill" && skillKey
-                ? `Arathorn uses ${skillKey}!`
-                : "Arathorn passes.",
-        type: "damage" as const,
-      };
-      setMatch((m) => {
-        if (!m) return m;
-        const oHp = Math.max(0, m.opponent.hp - (action === "attack" ? 115 : action === "skill" ? 160 : 0));
-        const finished = oHp <= 0;
-        return {
-          ...m,
-          status: finished ? "finished" : "active",
-          result: finished ? "victory" : undefined,
-          is_your_turn: false,
-          opponent: { ...m.opponent, hp: oHp },
-          combat_log: [...m.combat_log, newLog].slice(-15),
-          result_stats: finished
-            ? { damage_dealt: 1250, damage_taken: 680, crits: 4, duration_seconds: 127, rating_delta: 15 }
-            : undefined,
+  const sendAction = useCallback(
+    async (action: "attack" | "skill" | "defend" | "pass", skillKey?: string) => {
+      if (USE_MOCK) {
+        const newLog = {
+          id: String(Date.now()),
+          timestamp: new Date().toLocaleTimeString(),
+          message:
+            action === "attack"
+              ? "You attack for damage."
+              : action === "defend"
+                ? "You take a defensive stance."
+                : action === "skill" && skillKey
+                  ? `You use ${skillKey}!`
+                  : "You pass.",
+          type: "damage" as const,
         };
-      });
-      setTimeout(() => {
         setMatch((m) => {
-          if (!m || m.status === "finished") return m;
-          const pHp = Math.max(0, m.player.hp - 85);
+          if (!m) return m;
+          const oHp = Math.max(0, m.opponent.hp - (action === "attack" ? 115 : action === "skill" ? 160 : 0));
+          const finished = oHp <= 0;
           return {
             ...m,
-            is_your_turn: true,
-            turn_timer: 60,
-            player: { ...m.player, hp: pHp },
-            combat_log: [
-              ...m.combat_log,
-              {
-                id: String(Date.now()),
-                timestamp: new Date().toLocaleTimeString(),
-                message: "Malachar casts Shadow Bolt for 85 damage.",
-                type: "damage" as const,
-              },
-            ].slice(-15),
+            status: finished ? "finished" : "active",
+            result: finished ? "victory" : undefined,
+            is_your_turn: false,
+            opponent: { ...m.opponent, hp: oHp },
+            combat_log: [...m.combat_log, newLog].slice(-15),
+            result_stats: finished
+              ? {
+                  damage_dealt: 1250,
+                  damage_taken: 680,
+                  crits: 4,
+                  duration_seconds: 127,
+                  rating_delta: 15,
+                }
+              : undefined,
           };
         });
-      }, 1500);
-      return;
-    }
-    await fetch("/api/game/pvp/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, skill_key: skillKey }),
-    });
-  }, []);
-
-  const fetchHistory = useCallback(async (page = 1) => {
-    if (USE_MOCK) {
-      setHistory(mockHistory);
-      return;
-    }
-    const res = await fetch(`/api/game/pvp/history?page=${page}`);
-    setHistory(await res.json());
-  }, []);
+        setTimeout(() => {
+          setMatch((m) => {
+            if (!m || m.status === "finished") return m;
+            return {
+              ...m,
+              is_your_turn: true,
+              turn_timer: 60,
+              combat_log: [
+                ...m.combat_log,
+                {
+                  id: String(Date.now()),
+                  timestamp: new Date().toLocaleTimeString(),
+                  message: "Opponent hits you.",
+                  type: "damage" as const,
+                },
+              ].slice(-15),
+            };
+          });
+        }, 1500);
+        return;
+      }
+      if (!accessToken) return;
+      const res = await fetch(apiUrl("/api/game/pvp/action"), {
+        method: "POST",
+        headers: { ...authHeaders(accessToken, guildId), "Content-Type": "application/json" },
+        body: JSON.stringify({ action, skill_key: skillKey }),
+      });
+      const json = (await res.json()) as { match?: PvpMatchState; error?: string; ended?: boolean };
+      if (json.match) {
+        finishedRef.current = json.match.status === "finished";
+        setMatch(json.match);
+      }
+      if (!res.ok && json.error) {
+        setError(json.error);
+      }
+    },
+    [accessToken, guildId],
+  );
 
   const backToHub = useCallback(() => {
+    finishedRef.current = false;
     setMatch(null);
     setStatus((s) => (s ? { ...s, match_status: "idle" } : s));
-  }, []);
+    void fetchStatus();
+  }, [fetchStatus]);
 
   useEffect(() => {
-    void fetchStatus();
-    void fetchHistory();
-  }, [fetchStatus, fetchHistory]);
+    if (USE_MOCK) {
+      void fetchStatus();
+      void fetchHistory();
+      return;
+    }
+    if (phase === "ready" && accessToken) {
+      void fetchStatus();
+      void fetchHistory(1);
+    }
+  }, [phase, accessToken, fetchStatus, fetchHistory]);
+
+  useEffect(() => {
+    if (USE_MOCK || !accessToken) return;
+    const poll = () => {
+      const q = status?.match_status === "queued";
+      const act = status?.match_status === "active" || match?.status === "active";
+      if (q || act) void fetchStatus();
+    };
+    const id = window.setInterval(poll, 2000);
+    return () => window.clearInterval(id);
+  }, [USE_MOCK, accessToken, status?.match_status, match?.status, fetchStatus]);
 
   return {
     status,
@@ -257,6 +349,7 @@ export function usePvpApi() {
     leaveQueue,
     challenge,
     cancelChallenge,
+    acceptChallenge,
     sendAction,
     fetchHistory,
     backToHub,
