@@ -1968,6 +1968,29 @@ async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
 
+def _deployed_version() -> dict:
+    """Best-effort deployed version info for debugging hosting issues."""
+    return {
+        "git_sha": (os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GIT_SHA") or "").strip() or None,
+        "railway_service": (os.getenv("RAILWAY_SERVICE_NAME") or "").strip() or None,
+        "railway_environment": (os.getenv("RAILWAY_ENVIRONMENT_NAME") or "").strip() or None,
+        "activity_public_url": (os.getenv("ACTIVITY_PUBLIC_URL") or "").strip() or None,
+        "discord_oauth_redirect_uri": (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or "").strip() or None,
+        "has_discord_client_secret": bool((os.getenv("DISCORD_CLIENT_SECRET") or "").strip()),
+    }
+
+
+async def handle_meta(request: web.Request) -> web.Response:
+    """
+    Debug endpoint: shows backend host + version + oauth redirect config.
+    Safe to expose because it does not return secrets, only presence/strings.
+    """
+    host = request.headers.get("Host")
+    proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+    base = f"{proto}://{host}" if host else None
+    return web.json_response({"ok": True, "backend_base_url": base, **_deployed_version()})
+
+
 async def _serve_activity_index(request: web.Request) -> web.StreamResponse:
     """Serve SPA root — aiohttp add_static(show_index=True) lists dirs instead of index.html."""
     root = request.app.get("activity_static_root")
@@ -2083,6 +2106,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/pvp/action", handle_pvp_action)
     app.router.add_get("/api/game/pvp/history", handle_pvp_history)
     app.router.add_get("/health", handle_health)
+    app.router.add_get("/api/meta", handle_meta)
 
     static_root = _static_dir()
     serve = (os.getenv("ACTIVITY_SERVE_STATIC") or "1").strip().lower() in ("1", "true", "yes")

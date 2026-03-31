@@ -475,10 +475,33 @@ class AdminCog(commands.Cog, name="Admin"):
         embed.add_field(name="/admin setup",         value="Configure server settings, multipliers, announce channel", inline=False)
         embed.add_field(name="/admin givegold",      value="Give gold to a player", inline=False)
         embed.add_field(name="/admin givexp",        value="Give XP to a player", inline=False)
+        embed.add_field(name="/admin givelevel",     value="Set a player's level", inline=False)
         embed.add_field(name="/admin giveitem",      value="Give an item to a player", inline=False)
         embed.add_field(name="/admin spawn_event",   value="Manually trigger a world event", inline=False)
         embed.add_field(name="/admin stats",         value="View server game statistics", inline=False)
         embed.add_field(name="/admin sync_commands",  value="Force re-sync commands (fixes duplicates)", inline=False)
+        embed.add_field(name="/admin version",       value="Show deployed version info", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @admin.command(name="version", description="Show deployed version info")
+    async def version(self, interaction: discord.Interaction):
+        if not await self._check_admin(interaction):
+            return
+        import os
+
+        git_sha = (os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GIT_SHA") or "").strip() or "unknown"
+        svc = (os.getenv("RAILWAY_SERVICE_NAME") or "").strip() or "unknown"
+        env = (os.getenv("RAILWAY_ENVIRONMENT_NAME") or "").strip() or "unknown"
+        pub = (os.getenv("ACTIVITY_PUBLIC_URL") or "").strip() or "(not set)"
+        redir = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or "").strip() or "(not set)"
+        has_secret = "yes" if (os.getenv("DISCORD_CLIENT_SECRET") or "").strip() else "no"
+        await interaction.response.send_message(
+            f"**Version**: `{git_sha}`\n"
+            f"**Railway**: service `{svc}` env `{env}`\n"
+            f"**ACTIVITY_PUBLIC_URL**: `{pub}`\n"
+            f"**DISCORD_OAUTH_REDIRECT_URI**: `{redir}`\n"
+            f"**DISCORD_CLIENT_SECRET set**: `{has_secret}`",
+            ephemeral=True,
+        )
 
 async def setup(bot): await bot.add_cog(AdminCog(bot))
