@@ -5,7 +5,6 @@ Embedded Activity PvP — turn-based duels using CombatEngine (player vs player 
 from __future__ import annotations
 
 import logging
-import random
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -342,21 +341,21 @@ async def _start_pvp_match(
     discord_b: int,
     mode: str,
     guild_id: Optional[int],
-) -> None:
+) -> bool:
     from services.character.character_service import CharacterService
 
     db = getattr(bot, "db", None)
     if db is None:
-        return
+        return False
     char_svc = CharacterService(db)
     ca = await char_svc.get_character(discord_a)
     cb = await char_svc.get_character(discord_b)
     if not ca or not cb:
-        return
+        return False
 
     # Block if either in PvE iframe combat
     if discord_a in ACTIVE_ACTIVITY or discord_b in ACTIVE_ACTIVITY:
-        return
+        return False
 
     stats_a = await char_svc.total_stats(ca["id"])
     stats_b = await char_svc.total_stats(cb["id"])
@@ -405,6 +404,7 @@ async def _start_pvp_match(
     ACTIVE_PVP[match_id] = rt
     DISCORD_TO_MATCH[discord_a] = match_id
     DISCORD_TO_MATCH[discord_b] = match_id
+    return True
 
 
 async def join_queue(bot, discord_id: int, mode: str, guild_id: Optional[int]) -> Dict[str, Any]:
