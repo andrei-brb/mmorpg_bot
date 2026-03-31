@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import type { EnhanceInfoPayload } from "@/lib/apiTypes";
+import { ItemIcon } from "@/components/game/ItemIcon";
 
 interface EnhancableItem {
+  id: string;
   name: string;
-  icon: string;
+  template_id?: string | null;
+  icon?: string | null;
   rarity: string;
   level: number;
 }
@@ -138,7 +141,21 @@ export function BlacksmithModal({
                 className="slot-filled w-12 h-12 text-2xl shrink-0"
                 style={{ filter: "drop-shadow(0 1px 3px hsl(0 0% 0% / 0.5))" }}
               >
-                {item.icon}
+                {item.template_id ? (
+                  <ItemIcon
+                    item={{
+                      // Minimal fields used by itemIcons helpers
+                      id: item.id,
+                      template_id: item.template_id,
+                      name: item.name,
+                      icon: item.icon ?? undefined,
+                    } as any}
+                    size={40}
+                    className="mx-auto my-auto"
+                  />
+                ) : (
+                  <span aria-hidden>{item.icon || "⚔️"}</span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-cinzel font-semibold text-foreground">

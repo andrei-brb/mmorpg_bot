@@ -484,7 +484,9 @@ export function HeroTab() {
                       setBlacksmithPickerOpen(false);
                     }}
                   >
-                    <span className="text-lg shrink-0">{it.icon || SLOT_ICONS[gearSlot(it) || ""] || "⚔️"}</span>
+                    <span className="shrink-0">
+                      <ItemIcon item={it} size={22} />
+                    </span>
                     <span className="min-w-0 flex-1">
                       <span className="font-cinzel font-semibold">{it.name}</span>
                       {Number(it.enhancement_level ?? 0) > 0 && (
@@ -512,8 +514,10 @@ export function HeroTab() {
         return (
           <BlacksmithModal
             item={{
+              id: it.id,
               name: it.name,
-              icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "⚔️",
+              template_id: it.template_id,
+              icon: it.icon || null,
               rarity: rarityKey(it.rarity),
               level: Number(it.enhancement_level ?? 0),
             }}
