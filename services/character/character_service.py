@@ -95,6 +95,13 @@ class CharacterService:
             player_id,
         )
 
+    async def get_character_latest(self, player_id: int) -> Optional[asyncpg.Record]:
+        """Most recent character row for this player (active or not). Used for PvP vs offline roster."""
+        return await self.db.fetchrow(
+            "SELECT * FROM characters WHERE player_id=$1 ORDER BY created_at DESC LIMIT 1",
+            player_id,
+        )
+
     async def get_by_id(self, char_id: UUID) -> Optional[asyncpg.Record]:
         return await self.db.fetchrow("SELECT * FROM characters WHERE id=$1", char_id)
 

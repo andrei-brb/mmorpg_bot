@@ -5,6 +5,7 @@ Embedded Activity PvP — turn-based duels using CombatEngine (player vs player 
 from __future__ import annotations
 
 import logging
+import random
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -44,6 +45,8 @@ class PvpRuntime:
     char_b: dict
     turn: int  # 0 = A acts, 1 = B acts
     started_at: float
+    """Casual fill: other Discord user is not in the match; their character is controlled automatically."""
+    opponent_offline: bool = False
     log_ui: List[Dict[str, Any]] = field(default_factory=list)
     damage_dealt: Dict[int, int] = field(default_factory=dict)
     damage_taken: Dict[int, int] = field(default_factory=dict)
@@ -335,12 +338,40 @@ async def _try_match_queue(bot, mode: str) -> None:
     await _start_pvp_match(bot, a, b, mode, None)
 
 
+async def _try_random_casual_opponent(bot, discord_id: int, guild_id: Optional[int]) -> None:
+    """If alone in casual queue, fight a random other player's character (same rules; they are not in session)."""
+    if discord_id not in QUEUE_CASUAL:
+        return
+    db = getattr(bot, "db", None)
+    if db is None:
+        return
+    row = await db.fetchrow(
+        """
+        SELECT player_id AS discord_id
+        FROM characters
+        WHERE player_id != $1
+        ORDER BY RANDOM()
+        LIMIT 1
+        """,
+        discord_id,
+    )
+    if not row:
+        return
+    opp = int(row["discord_id"])
+    if opp == discord_id:
+        return
+    await _start_pvp_match(
+        bot, discord_id, opp, "casual", guild_id, opponent_offline=True
+    )
+
+
 async def _start_pvp_match(
     bot,
     discord_a: int,
     discord_b: int,
     mode: str,
     guild_id: Optional[int],
+    opponent_offline: bool = False,
 ) -> bool:
     from services.character.character_service import CharacterService
 
@@ -349,12 +380,16 @@ async def _start_pvp_match(
         return False
     char_svc = CharacterService(db)
     ca = await char_svc.get_character(discord_a)
-    cb = await char_svc.get_character(discord_b)
+    if opponent_offline:
+        cb = await char_svc.get_character_latest(discord_b)
+    else:
+        cb = await char_svc.get_character(discord_b)
     if not ca or not cb:
         return False
 
-    # Block if either in PvE iframe combat
-    if discord_a in ACTIVE_ACTIVITY or discord_b in ACTIVE_ACTIVITY:
+    if discord_a in ACTIVE_ACTIVITY:
+        return False
+    if not opponent_offline and discord_b in ACTIVE_ACTIVITY:
         return False
 
     stats_a = await char_svc.total_stats(ca["id"])
@@ -399,11 +434,20 @@ async def _start_pvp_match(
         char_b=dict(cb),
         turn=0,
         started_at=time.time(),
+        opponent_offline=opponent_offline,
     )
-    _log_line(rt, f"⚔️ {p1.name} faces {p2.name} in a {mode} duel!", "system")
+    if opponent_offline:
+        _log_line(
+            rt,
+            f"⚔️ {p1.name} vs {p2.name} — casual match (same PvP rules; other player not in session).",
+            "system",
+        )
+    else:
+        _log_line(rt, f"⚔️ {p1.name} faces {p2.name} in a {mode} duel!", "system")
     ACTIVE_PVP[match_id] = rt
     DISCORD_TO_MATCH[discord_a] = match_id
-    DISCORD_TO_MATCH[discord_b] = match_id
+    if not opponent_offline:
+        DISCORD_TO_MATCH[discord_b] = match_id
     return True
 
 
@@ -419,6 +463,8 @@ async def join_queue(bot, discord_id: int, mode: str, guild_id: Optional[int]) -
     else:
         QUEUE_CASUAL.append(discord_id)
     await _try_match_queue(bot, mode)
+    if mode == "casual" and discord_id in QUEUE_CASUAL:
+        await _try_random_casual_opponent(bot, discord_id, guild_id)
     return {"ok": True}
 
 
@@ -487,6 +533,100 @@ def _get_actor_for_turn(rt: PvpRuntime) -> Tuple[Combatant, Combatant, dict, int
     return p2, p1, cb, rt.discord_b
 
 
+def _pick_offline_skill(me: Combatant, me_char: dict) -> str:
+    cls = CLASSES.get(me_char["class"])
+    if not cls:
+        return "auto_attack"
+    keys = ["auto_attack"] + list(cls.starter_abilities)
+    if me_char.get("specialization"):
+        spec = SPECIALIZATIONS.get(me_char["specialization"])
+        if spec:
+            keys.extend(spec.bonus_abilities)
+    cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(me_char["class"], 1.0)
+    valid: List[str] = []
+    for k in keys:
+        ab = ABILITIES.get(k)
+        if not ab:
+            continue
+        if ABILITY_UNLOCK_LEVELS.get(k, 1) > me_char.get("level", 1):
+            continue
+        if k in me.ability_cooldowns:
+            continue
+        eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
+        if ab.cost_type in ("mana", "energy", "rage") and me.current_res < eff_cost:
+            continue
+        valid.append(k)
+    if not valid:
+        return "auto_attack"
+    return random.choice(valid)
+
+
+async def _one_offline_turn(
+    bot,
+    rt: PvpRuntime,
+    guild_id: Optional[int],
+    viewer_discord: int,
+) -> Optional[Dict[str, Any]]:
+    """Resolve one turn for the offline player's character (slot B). Returns finalize dict if match ends."""
+    engine = CombatEngine()
+    sess = rt.session
+    p1, p2 = sess.players[0], sess.enemies[0]
+    me, opp, me_char = p2, p1, rt.char_b
+
+    for t in engine.tick_turn(me):
+        _log_line(rt, t.replace("**", ""), "system")
+
+    skill_key = _pick_offline_skill(me, me_char)
+    ab = ABILITIES.get(skill_key) or ABILITIES["auto_attack"]
+    cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(me_char["class"], 1.0)
+    eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
+    if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
+        me.current_res = max(0, me.current_res - eff_cost)
+
+    other_did = rt.discord_a
+    results = engine.use_ability(skill_key, me, [opp], session=sess)
+    for r in results:
+        plain = (r.narrative or "").replace("**", "")
+        if r.damage and r.damage > 0:
+            rt.damage_dealt[rt.discord_b] = rt.damage_dealt.get(rt.discord_b, 0) + r.damage
+            rt.damage_taken[other_did] = rt.damage_taken.get(other_did, 0) + r.damage
+        if r.is_crit:
+            rt.crits[rt.discord_b] = rt.crits.get(rt.discord_b, 0) + 1
+        _log_line(rt, plain or f"{me.name} uses {ab.name}.", "damage" if r.damage else "system")
+
+    if sess.over:
+        winner_discord = rt.discord_a if sess.players_won else rt.discord_b
+        loser_discord = rt.discord_b if winner_discord == rt.discord_a else rt.discord_a
+        return await _finalize_pvp_match(bot, rt, winner_discord, loser_discord, guild_id, viewer_discord)
+
+    for t in engine.tick_turn(opp):
+        _log_line(rt, t.replace("**", ""), "system")
+
+    if sess.over:
+        winner_discord = rt.discord_a if sess.players_won else rt.discord_b
+        loser_discord = rt.discord_b if winner_discord == rt.discord_a else rt.discord_a
+        return await _finalize_pvp_match(bot, rt, winner_discord, loser_discord, guild_id, viewer_discord)
+
+    rt.turn = 0
+    return None
+
+
+async def _run_offline_turns_until_human(
+    bot,
+    rt: PvpRuntime,
+    guild_id: Optional[int],
+    viewer_discord: int,
+) -> Optional[Dict[str, Any]]:
+    if not rt.opponent_offline:
+        return None
+    sess = rt.session
+    while not sess.over and rt.turn == 1:
+        out = await _one_offline_turn(bot, rt, guild_id, viewer_discord)
+        if out is not None:
+            return out
+    return None
+
+
 async def process_pvp_action(
     bot,
     discord_id: int,
@@ -522,6 +662,9 @@ async def process_pvp_action(
     if action == "pass":
         _log_line(rt, f"{me.name} passes.", "system")
         rt.turn = 1 - rt.turn
+        fin = await _run_offline_turns_until_human(bot, rt, guild_id, discord_id)
+        if fin is not None:
+            return fin
         return {"ok": True, "match": _serialize_match(rt, discord_id)}
 
     if action == "defend":
@@ -533,6 +676,9 @@ async def process_pvp_action(
             _log_line(rt, f"{me.name} braces for impact (+dodge).", "system")
             me.add_status(StatusEffect.DODGE_UP, 12, 2, "defend")
         rt.turn = 1 - rt.turn
+        fin = await _run_offline_turns_until_human(bot, rt, guild_id, discord_id)
+        if fin is not None:
+            return fin
         return {"ok": True, "match": _serialize_match(rt, discord_id)}
 
     if action == "attack":
@@ -581,7 +727,113 @@ async def process_pvp_action(
         return await _finalize_pvp_match(bot, rt, winner_discord, loser_discord, guild_id, discord_id)
 
     rt.turn = 1 - rt.turn
+    fin = await _run_offline_turns_until_human(bot, rt, guild_id, discord_id)
+    if fin is not None:
+        return fin
     return {"ok": True, "match": _serialize_match(rt, discord_id)}
+
+
+async def _finalize_pvp_match_casual_offline(
+    bot,
+    rt: PvpRuntime,
+    winner_discord: int,
+    loser_discord: int,
+    guild_id: Optional[int],
+    viewer_discord: int,
+) -> Dict[str, Any]:
+    """Casual vs offline roster: only the queuing player (discord_a) gets HP/stats/history updates."""
+    from services.character.character_service import CharacterService
+
+    db = getattr(bot, "db", None)
+    if db is None:
+        DISCORD_TO_MATCH.pop(rt.discord_a, None)
+        ACTIVE_PVP.pop(rt.match_id, None)
+        return {"error": "database_unavailable"}
+
+    char_svc = CharacterService(db)
+    match_id = rt.match_id
+    mode = rt.mode
+    human_did = rt.discord_a
+
+    hc = await char_svc.get_character(human_did)
+    if not hc:
+        DISCORD_TO_MATCH.pop(rt.discord_a, None)
+        ACTIVE_PVP.pop(match_id, None)
+        return {"error": "character_missing"}
+
+    p1 = rt.session.players[0]
+    await char_svc.sync_combat_hp(hc["id"], p1.current_hp, p1.current_res)
+
+    opp_char = rt.char_b
+    opp_cid = opp_char["id"]
+    opp_name = str(opp_char.get("name") or "Opponent")
+
+    duration = max(1, int(time.time() - rt.started_at))
+    did_win = winner_discord == human_did
+
+    if did_win:
+        await db.execute(
+            """
+            UPDATE pvp_stats
+            SET wins=wins+1, streak=CASE WHEN streak >= 0 THEN streak + 1 ELSE 1 END, updated_at=NOW()
+            WHERE character_id=$1
+            """,
+            hc["id"],
+        )
+        await db.execute(
+            """
+            INSERT INTO pvp_match_history
+            (character_id, opponent_character_id, opponent_name, mode, result, rating_delta, damage_dealt, damage_taken, crits, duration_seconds)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            """,
+            hc["id"],
+            opp_cid,
+            opp_name,
+            mode,
+            "victory",
+            None,
+            rt.damage_dealt.get(human_did, 0),
+            rt.damage_taken.get(human_did, 0),
+            rt.crits.get(human_did, 0),
+            duration,
+        )
+    else:
+        await db.execute(
+            """
+            UPDATE pvp_stats
+            SET losses=losses+1, streak=CASE WHEN streak <= 0 THEN streak - 1 ELSE -1 END, updated_at=NOW()
+            WHERE character_id=$1
+            """,
+            hc["id"],
+        )
+        await db.execute(
+            """
+            INSERT INTO pvp_match_history
+            (character_id, opponent_character_id, opponent_name, mode, result, rating_delta, damage_dealt, damage_taken, crits, duration_seconds)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            """,
+            hc["id"],
+            opp_cid,
+            opp_name,
+            mode,
+            "defeat",
+            None,
+            rt.damage_dealt.get(human_did, 0),
+            rt.damage_taken.get(human_did, 0),
+            rt.crits.get(human_did, 0),
+            duration,
+        )
+
+    DISCORD_TO_MATCH.pop(rt.discord_a, None)
+    ACTIVE_PVP.pop(match_id, None)
+
+    rd_viewer: Optional[int] = None
+    return {
+        "ok": True,
+        "ended": True,
+        "winner": winner_discord,
+        "match": build_finished_match(rt, viewer_discord, winner_discord, loser_discord, rd_viewer),
+    }
 
 
 async def _finalize_pvp_match(
@@ -593,6 +845,11 @@ async def _finalize_pvp_match(
     viewer_discord: int,
 ) -> Dict[str, Any]:
     from services.character.character_service import CharacterService
+
+    if rt.opponent_offline and rt.mode == "casual":
+        return await _finalize_pvp_match_casual_offline(
+            bot, rt, winner_discord, loser_discord, guild_id, viewer_discord
+        )
 
     db = getattr(bot, "db", None)
     char_svc = CharacterService(db)
