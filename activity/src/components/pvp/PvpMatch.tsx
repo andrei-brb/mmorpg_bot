@@ -138,20 +138,28 @@ export function PvpMatch({ match, onAction }: PvpMatchProps) {
               <Swords className="w-3 h-3 inline mr-1" /> Attack
             </button>
 
-            {skills.map((skill) => (
-              <button
-                key={skill.key}
-                type="button"
-                className="game-btn-secondary"
-                disabled={!is_your_turn || skill.cooldown > 0}
-                onClick={() => onAction("skill", skill.key)}
-                title={skill.description + (skill.cooldown > 0 ? ` (CD: ${skill.cooldown})` : "")}
-              >
-                <Zap className="w-3 h-3 inline mr-1" />
-                {skill.name}
-                {skill.cooldown > 0 && <span className="text-muted-foreground ml-1">({skill.cooldown})</span>}
-              </button>
-            ))}
+            {skills.map((skill) => {
+              const notEnough = typeof skill.cost === "number" && skill.cost > match.player.resource;
+              return (
+                <button
+                  key={skill.key}
+                  type="button"
+                  className="game-btn-secondary"
+                  disabled={!is_your_turn || skill.cooldown > 0 || notEnough}
+                  onClick={() => onAction("skill", skill.key)}
+                  title={
+                    (skill.description || "") +
+                    (skill.cooldown > 0 ? ` (CD: ${skill.cooldown})` : "") +
+                    (notEnough ? ` — Requires ${skill.cost} ${skill.cost_type || "resource"}` : "")
+                  }
+                >
+                  <Zap className="w-3 h-3 inline mr-1" />
+                  {skill.name}
+                  {skill.cooldown > 0 && <span className="text-muted-foreground ml-1">({skill.cooldown})</span>}
+                  {notEnough && <span className="text-xs text-muted-foreground ml-2">(No {skill.cost_type || "resource"})</span>}
+                </button>
+              );
+            })}
 
             <button type="button" className="game-btn-secondary" disabled={!is_your_turn} onClick={() => onAction("defend")}>
               <Shield className="w-3 h-3 inline mr-1" /> Defend

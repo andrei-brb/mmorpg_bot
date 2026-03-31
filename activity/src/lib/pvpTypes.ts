@@ -47,6 +47,10 @@ export interface SkillSlot {
   cooldown: number;
   max_cooldown: number;
   description: string;
+  /** Effective resource cost (after class/resource multipliers) — 0 for free */
+  cost?: number;
+  /** Resource type: 'mana'|'energy'|'rage' or undefined for no cost */
+  cost_type?: string | null;
 }
 
 export interface IncomingChallenge {

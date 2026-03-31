@@ -73,13 +73,19 @@ def _log_line(rt: PvpRuntime, message: str, kind: str = "system") -> None:
 
 
 def _ability_options(char: dict, combatant: Combatant) -> List[Dict[str, Any]]:
-    cls = CLASSES[char["class"]]
-    keys = ["auto_attack"] + list(cls.starter_abilities)
+    cls = CLASSES.get(char.get("class"))
+    keys = ["auto_attack"]
+    if cls:
+        try:
+            keys.extend(list(cls.starter_abilities))
+        except Exception:
+            # Defensive: if class config is malformed, fall back to auto_attack only
+            pass
     if char.get("specialization"):
         spec = SPECIALIZATIONS.get(char["specialization"])
         if spec:
             keys.extend(spec.bonus_abilities)
-    cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
+    cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char.get("class"), 1.0)
     char_level = char.get("level", 1)
     out: List[Dict[str, Any]] = []
     seen = set()
@@ -102,6 +108,8 @@ def _ability_options(char: dict, combatant: Combatant) -> List[Dict[str, Any]]:
                 "cooldown": cd,
                 "max_cooldown": ab.cooldown,
                 "description": (ab.description or "")[:160],
+                "cost": int(ab.cost * cost_mult) if ab.cost else 0,
+                "cost_type": getattr(ab, "cost_type", None),
             }
         )
     return out[:12]
@@ -756,8 +764,16 @@ async def process_pvp_action(
     cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(me_char["class"], 1.0)
     eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
     if ab.cost_type in ("mana", "energy", "rage") and me.current_res < eff_cost:
+        # Log a human-friendly line for the combat log/UI
         _log_line(rt, f"Not enough resource for {ab.name}.", "system")
-        return {"error": "not_enough_resource", "match": _serialize_match(rt, discord_id)}
+        # Return structured error with current and required amounts to help clients
+        return {
+            "error": "not_enough_resource",
+            "message": f"Not enough resource for {ab.name}.",
+            "required": int(eff_cost),
+            "current": int(me.current_res),
+            "match": _serialize_match(rt, discord_id),
+        }
     if skill_key in me.ability_cooldowns:
         _log_line(rt, f"{ab.name} is on cooldown.", "system")
         return {"error": "on_cooldown", "match": _serialize_match(rt, discord_id)}

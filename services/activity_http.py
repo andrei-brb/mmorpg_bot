@@ -41,6 +41,7 @@ from uuid import UUID
 
 import aiohttp
 from aiohttp import web
+import random
 
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
@@ -1061,10 +1062,17 @@ async def handle_pvp_action(request: web.Request) -> web.Response:
     if not isinstance(body, dict):
         body = {}
     guild_id = _guild_id_from_request(request, body)
-    r = await activity_pvp_api.process_pvp_action(bot, discord_id, guild_id, body)
+    try:
+        r = await activity_pvp_api.process_pvp_action(bot, discord_id, guild_id, body)
+    except Exception:
+        # Unexpected server-side error during PvP action — log full traceback and return 500 JSON
+        log.exception("Unhandled exception while processing PvP action for discord_id=%s", discord_id)
+        return web.json_response(_json_safe({"error": "server_error", "message": "Internal server error."}), status=500)
+
     err = r.get("error")
     if err:
-        code = 409 if err == "not_your_turn" else 400
+        # Treat 'not_your_turn' and 'not_enough_resource' as 409 conflict so client can react specially
+        code = 409 if err in ("not_your_turn", "not_enough_resource") else 400
         return web.json_response(_json_safe(r), status=code)
     return web.json_response(_json_safe(r))
 

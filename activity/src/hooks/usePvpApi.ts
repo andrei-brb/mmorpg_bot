@@ -324,7 +324,9 @@ export function usePvpApi() {
         setMatch(json.match);
       }
       if (!res.ok && json.error) {
-        setError(json.error);
+        // Prefer server-provided human message if available, otherwise use error key
+        // Server may include `message`, `required`, and `current` for not_enough_resource
+        setError((json as any).message || json.error);
       }
     },
     [accessToken, guildId],
