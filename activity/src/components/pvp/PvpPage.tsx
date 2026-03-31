@@ -21,6 +21,7 @@ export function PvpPage() {
     challenge,
     cancelChallenge,
     acceptChallenge,
+    searchPlayers,
     sendAction,
     fetchHistory,
     backToHub,
@@ -98,6 +99,7 @@ export function PvpPage() {
           onChallenge={challenge}
           onCancelChallenge={cancelChallenge}
           onAcceptChallenge={acceptChallenge}
+          onSearchPlayers={searchPlayers}
         />
       )}
 

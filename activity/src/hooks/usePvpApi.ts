@@ -8,6 +8,8 @@ import type {
   PvpMode,
 } from "@/lib/pvpTypes";
 
+export type PvpPlayerSearchRow = { id: string; username: string };
+
 const USE_MOCK = import.meta.env.VITE_USE_PVP_MOCK === "true";
 
 const mockStatus: PvpStatus = {
@@ -232,6 +234,25 @@ export function usePvpApi() {
     await leaveQueue();
   }, [leaveQueue]);
 
+  const searchPlayers = useCallback(
+    async (q: string): Promise<PvpPlayerSearchRow[]> => {
+      if (USE_MOCK) return [];
+      if (!accessToken) return [];
+      const qs = new URLSearchParams({ q });
+      const res = await fetch(apiUrl(`/api/game/pvp/players?${qs.toString()}`), {
+        method: "GET",
+        headers: authHeaders(accessToken, guildId),
+      });
+      if (!res.ok) return [];
+      const j = await res.json();
+      const rows = (j?.players ?? []) as any[];
+      return rows
+        .map((r) => ({ id: String(r.id ?? ""), username: String(r.username ?? "") }))
+        .filter((r) => r.id && r.username);
+    },
+    [accessToken, guildId],
+  );
+
   const sendAction = useCallback(
     async (action: "attack" | "skill" | "defend" | "pass", skillKey?: string) => {
       if (USE_MOCK) {
@@ -350,6 +371,7 @@ export function usePvpApi() {
     challenge,
     cancelChallenge,
     acceptChallenge,
+    searchPlayers,
     sendAction,
     fetchHistory,
     backToHub,

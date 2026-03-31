@@ -487,10 +487,27 @@ async def leave_queue(discord_id: int) -> Dict[str, Any]:
 
 
 async def send_challenge(bot, discord_id: int, target_user_id: str, guild_id: Optional[int]) -> Dict[str, Any]:
-    try:
-        tid = int(str(target_user_id).strip())
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "invalid_target"}
+    raw = str(target_user_id or "").strip()
+    tid: Optional[int] = None
+    if raw.startswith("@"):
+        name = raw[1:].strip()
+        if not name:
+            return {"ok": False, "error": "invalid_target"}
+        db = getattr(bot, "db", None)
+        if db is None:
+            return {"ok": False, "error": "database_unavailable"}
+        row = await db.fetchrow(
+            "SELECT id FROM players WHERE LOWER(username)=LOWER($1) LIMIT 1",
+            name,
+        )
+        if not row:
+            return {"ok": False, "error": "invalid_target"}
+        tid = int(row["id"])
+    else:
+        try:
+            tid = int(raw)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "invalid_target"}
     if tid == discord_id:
         return {"ok": False, "error": "cannot_challenge_self"}
     mid = DISCORD_TO_MATCH.get(discord_id)

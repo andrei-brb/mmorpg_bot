@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Swords, Search, Trophy, UserPlus, X, Loader2, Shield, Eye } from "lucide-react";
 import type { PvpStatus } from "@/lib/pvpTypes";
+import type { PvpPlayerSearchRow } from "@/hooks/usePvpApi";
 
 interface PvpHubProps {
   status: PvpStatus;
@@ -9,6 +10,7 @@ interface PvpHubProps {
   onChallenge: (target: string) => void;
   onCancelChallenge: () => void;
   onAcceptChallenge: () => void;
+  onSearchPlayers: (q: string) => Promise<PvpPlayerSearchRow[]>;
 }
 
 export function PvpHub({
@@ -18,13 +20,66 @@ export function PvpHub({
   onChallenge,
   onCancelChallenge,
   onAcceptChallenge,
+  onSearchPlayers,
 }: PvpHubProps) {
   const [challengeTarget, setChallengeTarget] = useState("");
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<PvpPlayerSearchRow[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const lastQueryRef = useRef("");
+  const debounceRef = useRef<number | null>(null);
   const [showRules, setShowRules] = useState(false);
   const { stats, player, rules, match_status, incoming_challenge } = status;
 
   const isQueued = match_status === "queued";
   const isChallenged = match_status === "challenged";
+
+  const query = useMemo(() => {
+    const v = challengeTarget.trim();
+    if (!v.startsWith("@")) return "";
+    const q = v.slice(1).trim();
+    return q.length >= 1 ? q : "";
+  }, [challengeTarget]);
+
+  useEffect(() => {
+    // If user edits after selecting, clear selected id unless they keep exact @username.
+    if (!selectedTargetId) return;
+    const v = challengeTarget.trim();
+    if (!v.startsWith("@")) {
+      setSelectedTargetId(null);
+      return;
+    }
+  }, [challengeTarget, selectedTargetId]);
+
+  useEffect(() => {
+    if (!query) {
+      setSuggestions([]);
+      setSuggestOpen(false);
+      lastQueryRef.current = "";
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+      return;
+    }
+    if (query === lastQueryRef.current) return;
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      void onSearchPlayers(query)
+        .then((rows) => {
+          lastQueryRef.current = query;
+          setSuggestions(rows);
+          setSuggestOpen(true);
+        })
+        .catch(() => {
+          lastQueryRef.current = query;
+          setSuggestions([]);
+          setSuggestOpen(false);
+        });
+    }, 120);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    };
+  }, [query, onSearchPlayers]);
 
   return (
     <div className="space-y-4">
@@ -95,20 +150,57 @@ export function PvpHub({
             </div>
             <div className="p-4 space-y-3">
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="@username or ID"
-                  value={challengeTarget}
-                  onChange={(e) => setChallengeTarget(e.target.value)}
-                  className="flex-1 bg-input border border-border rounded-sm px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-crimson"
-                />
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="@username"
+                    value={challengeTarget}
+                    onChange={(e) => {
+                      setChallengeTarget(e.target.value);
+                      setSelectedTargetId(null);
+                    }}
+                    onFocus={() => {
+                      if (suggestions.length) setSuggestOpen(true);
+                    }}
+                    onBlur={() => {
+                      // Allow click selection to register.
+                      window.setTimeout(() => setSuggestOpen(false), 120);
+                    }}
+                    className="w-full bg-input border border-border rounded-sm px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-crimson"
+                  />
+                  {suggestOpen && suggestions.length > 0 && (
+                    <div
+                      className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-sm border border-border bg-popover shadow-lg overflow-hidden"
+                      role="listbox"
+                    >
+                      {suggestions.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-muted/60 font-crimson flex items-center justify-between gap-2"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setSelectedTargetId(p.id);
+                            setChallengeTarget(`@${p.username}`);
+                            setSuggestOpen(false);
+                          }}
+                        >
+                          <span className="truncate text-foreground">{p.username}</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{p.id}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   className="game-btn-primary"
                   disabled={!challengeTarget.trim()}
                   onClick={() => {
-                    onChallenge(challengeTarget.trim());
+                    onChallenge((selectedTargetId || challengeTarget.trim()).trim());
                     setChallengeTarget("");
+                    setSelectedTargetId(null);
+                    setSuggestions([]);
                   }}
                 >
                   Send

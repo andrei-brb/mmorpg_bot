@@ -873,6 +873,38 @@ async def handle_pvp_challenge(request: web.Request) -> web.Response:
     return web.json_response(_json_safe(r), status=200 if r.get("ok") else 400)
 
 
+async def handle_pvp_player_search(request: web.Request) -> web.Response:
+    """Search players by username prefix for @-autocomplete in PvP hub."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "players": []}), status=400)
+
+    q = str((request.query.get("q") or request.query.get("prefix") or "")).strip()
+    if q.startswith("@"):
+        q = q[1:].strip()
+    if not q:
+        return web.json_response(_json_safe({"ok": True, "players": []}))
+
+    q = q[:32]
+    rows = await db.fetch(
+        """
+        SELECT id, username
+        FROM players
+        WHERE id != $1
+          AND username IS NOT NULL
+          AND username ILIKE $2
+        ORDER BY username ASC
+        LIMIT 12
+        """,
+        discord_id,
+        q + "%",
+    )
+    players = [{"id": str(r["id"]), "username": str(r["username"])} for r in rows if r.get("username")]
+    return web.json_response(_json_safe({"ok": True, "players": players}))
+
 async def handle_pvp_accept(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     try:
@@ -2043,6 +2075,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/pvp/queue", handle_pvp_queue_post)
     app.router.add_delete("/api/game/pvp/queue", handle_pvp_queue_delete)
     app.router.add_post("/api/game/pvp/challenge", handle_pvp_challenge)
+    app.router.add_get("/api/game/pvp/players", handle_pvp_player_search)
     app.router.add_post("/api/game/pvp/accept", handle_pvp_accept)
     app.router.add_post("/api/game/pvp/action", handle_pvp_action)
     app.router.add_get("/api/game/pvp/history", handle_pvp_history)
