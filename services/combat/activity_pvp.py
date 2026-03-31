@@ -399,6 +399,13 @@ async def _start_pvp_match(
     # Mark both as players for resource/rage rules on hit
     p1.is_player = True
     p2.is_player = True
+    # Always start PvP at full HP (rematch-safe). Resources start full for mana/energy.
+    p1.current_hp = p1.max_hp
+    p2.current_hp = p2.max_hp
+    if p1.res_type in ("mana", "energy"):
+        p1.current_res = p1.max_res
+    if p2.res_type in ("mana", "energy"):
+        p2.current_res = p2.max_res
 
     session = CombatSession(
         session_id=uuid4(),
