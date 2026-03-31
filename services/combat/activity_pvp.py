@@ -530,7 +530,34 @@ async def send_challenge(bot, discord_id: int, target_user_id: str, guild_id: Op
         "guild_id": guild_id,
     }
     CHALLENGE_OUTBOX[discord_id] = {"target": tid, "started": time.time()}
-    return {"ok": True}
+    # Notify target: DM first, fallback to #🎮-game-general if possible.
+    notify = "none"
+    try:
+        uobj = bot.get_user(tid) or await bot.fetch_user(tid)
+        dm = await uobj.create_dm()
+        await dm.send(
+            f"⚔️ **{char['name']}** challenged you to a casual duel!\n"
+            f"Open the Activity → **Arena** tab to **Accept**."
+        )
+        notify = "dm"
+    except Exception:
+        try:
+            if guild_id:
+                guild = bot.get_guild(int(guild_id))
+                if guild and hasattr(bot, "channels") and bot.channels:
+                    ch_id = await bot.channels.get_or_setup(guild, "general")
+                    if ch_id:
+                        ch = guild.get_channel(ch_id)
+                        if ch:
+                            await ch.send(
+                                f"<@{tid}> ⚔️ **{char['name']}** challenged you to a casual duel! "
+                                f"Open the Activity → **Arena** tab to **Accept**."
+                            )
+                            notify = "channel"
+        except Exception:
+            pass
+
+    return {"ok": True, "notified": notify}
 
 
 async def accept_challenge(bot, discord_id: int, guild_id: Optional[int]) -> Dict[str, Any]:
