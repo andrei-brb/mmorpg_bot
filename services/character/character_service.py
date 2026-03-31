@@ -6,7 +6,7 @@
 
 import logging
 import math
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from uuid import UUID
 
 import asyncpg

@@ -135,7 +135,13 @@ class MMORPGBot(commands.Bot):
             await self.tree.sync()
             log.info("✓ Commands synced")
         except Exception as e:
-            log.error(f"Failed to sync commands: {e}")
+            # Discord Activities have an "Entry Point" command that cannot be removed
+            # in a bulk update. If sync hits that API error, keep the bot running.
+            err = str(e)
+            if "50240" in err or "Entry Point" in err:
+                log.warning(f"Command sync skipped (Activity Entry Point constraint): {e}")
+            else:
+                log.error(f"Failed to sync commands: {e}")
 
         # Optional: HTTP API for Discord Activity (OAuth + inventory JSON)
         from services.activity_http import start_activity_http
