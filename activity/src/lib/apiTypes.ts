@@ -232,6 +232,13 @@ export type NpcInteractPayload = {
   offer?: QuestOfferPayload;
 };
 
+export type QuestCompletionPayload = {
+  npc_id?: string;
+  quest_completed?: boolean;
+  message?: string;
+  rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
+};
+
 export type SpecOption = {
   key: string;
   name: string;

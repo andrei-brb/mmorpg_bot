@@ -9,6 +9,7 @@ import { ProgressTab } from "./tabs/ProgressTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
+import { QuestCompleteModal } from "./modals/QuestCompleteModal";
 import { toast } from "sonner";
 
 const TABS = ["Hero", "Explore", "Quests", "Combat", "Arena", "Progress"] as const;
@@ -33,8 +34,10 @@ export function GameShell() {
     closeSpecModal,
     chooseSpecialization,
     questOffer,
+    questCompletion,
     acceptQuestOffer,
     declineQuestOffer,
+    ackQuestCompletion,
   } = useGameSession();
 
   const [specSel, setSpecSel] = useState("");
@@ -45,6 +48,16 @@ export function GameShell() {
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">
+      {questCompletion?.quest_completed && (
+        <QuestCompleteModal
+          completion={questCompletion}
+          busy={questBusy}
+          onContinue={() => {
+            if (questBusy) return;
+            ackQuestCompletion();
+          }}
+        />
+      )}
       {questOffer?.quest_id && (
         <QuestOfferModal
           offer={questOffer}

@@ -19,6 +19,7 @@ import type {
   LiveEventRow,
   NpcInteractPayload,
   ProgressPayload,
+  QuestCompletionPayload,
   QuestOfferPayload,
   QuestLogPayload,
   SpecGatePayload,
@@ -77,8 +78,10 @@ type GameSessionValue = {
   npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   abandonQuest: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   questOffer: QuestOfferPayload | null;
+  questCompletion: QuestCompletionPayload | null;
   acceptQuestOffer: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   declineQuestOffer: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  ackQuestCompletion: () => void;
   /** Opens API-driven spec modal when eligible, otherwise explains why (toast). */
   requestSpecChoice: () => Promise<void>;
   displayName: string;
@@ -115,6 +118,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [quests, setQuests] = useState<QuestLogPayload | null>(null);
   const [questOffer, setQuestOffer] = useState<QuestOfferPayload | null>(null);
+  const [questCompletion, setQuestCompletion] = useState<QuestCompletionPayload | null>(null);
+  const [queuedOfferAfterCompletion, setQueuedOfferAfterCompletion] = useState<QuestOfferPayload | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [combatFocusActive, setCombatFocusActive] = useState(false);
   const [specModal, setSpecModal] = useState<{
@@ -370,8 +375,18 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignore */
       }
-      if (res.ok && j.ok !== false && j.offer) {
-        setQuestOffer(j.offer);
+      if (res.ok && j.ok !== false) {
+        if (j.quest_completed) {
+          setQuestCompletion({
+            npc_id: j.npc_id,
+            quest_completed: true,
+            message: j.message,
+            rewards: j.rewards,
+          });
+          if (j.offer) setQueuedOfferAfterCompletion(j.offer);
+        } else if (j.offer) {
+          setQuestOffer(j.offer);
+        }
       }
       await refreshInventory();
       await refreshProgress();
@@ -381,6 +396,14 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     },
     [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
   );
+
+  const ackQuestCompletion = useCallback(() => {
+    setQuestCompletion(null);
+    if (queuedOfferAfterCompletion) {
+      setQuestOffer(queuedOfferAfterCompletion);
+      setQueuedOfferAfterCompletion(null);
+    }
+  }, [queuedOfferAfterCompletion]);
 
   const acceptQuestOffer = useCallback(
     async (questId: string) => {
@@ -564,8 +587,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       npcInteract,
       abandonQuest,
       questOffer,
+      questCompletion,
       acceptQuestOffer,
       declineQuestOffer,
+      ackQuestCompletion,
       requestSpecChoice,
       displayName,
     }),
@@ -604,8 +629,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       npcInteract,
       abandonQuest,
       questOffer,
+      questCompletion,
       acceptQuestOffer,
       declineQuestOffer,
+      ackQuestCompletion,
       requestSpecChoice,
       displayName,
     ],
