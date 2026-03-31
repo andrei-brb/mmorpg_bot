@@ -406,14 +406,18 @@ class CombatEngine:
 
         # Determine actual targets based on ability.target type
         if session:
+            # In PvP, either side can be the attacker; "all_enemies"/"all_allies" must be relative.
+            attacker_is_player_side = any(p.id == attacker.id for p in session.players)
+            allies = session.alive_players if attacker_is_player_side else session.alive_enemies
+            enemies = session.alive_enemies if attacker_is_player_side else session.alive_players
             if ability.target == "all_allies":
-                actual_targets = session.alive_players
+                actual_targets = allies
             elif ability.target == "all_enemies":
-                actual_targets = session.alive_enemies
+                actual_targets = enemies
             elif ability.target == "ally":
                 # Target first alive ally (excluding self if possible)
-                allies = [p for p in session.alive_players if p.id != attacker.id]
-                actual_targets = [allies[0]] if allies else [attacker]
+                other_allies = [a for a in allies if a.id != attacker.id]
+                actual_targets = [other_allies[0]] if other_allies else [attacker]
             elif ability.target == "self":
                 actual_targets = [attacker]
             elif ability.target == "enemy":
