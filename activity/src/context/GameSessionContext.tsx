@@ -53,6 +53,8 @@ type GameSessionValue = {
   refreshMap: () => Promise<void>;
   refreshProgress: () => Promise<void>;
   refreshQuests: () => Promise<void>;
+  /** Create first character (Activity); same rules as `/character create` in Discord. */
+  createCharacter: (name: string, classKey: string) => Promise<{ ok: boolean; message?: string }>;
   travel: (zoneKey: string) => Promise<{ ok: boolean; message?: string }>;
   explore: () => Promise<ExploreResultPayload>;
   /** After explore encounter — Combat tab consumes to auto-start. */
@@ -473,6 +475,20 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     [accessToken, guildId, refreshQuests],
   );
 
+  const createCharacter = useCallback(
+    async (name: string, classKey: string) => {
+      if (!accessToken) return { ok: false, message: "Not signed in" };
+      const j = await api.postCharacterCreate(accessToken, name, classKey, guildId);
+      if (!j.ok || !j.character) {
+        return { ok: false, message: j.message || j.error || "Could not create character." };
+      }
+      setInventory(j);
+      await Promise.all([refreshMap(), refreshProgress(), refreshQuests(), refreshLiveEvents()]);
+      return { ok: true };
+    },
+    [accessToken, guildId, refreshMap, refreshProgress, refreshQuests, refreshLiveEvents],
+  );
+
   useEffect(() => {
     let cancelled = false;
     async function boot() {
@@ -590,6 +606,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       refreshMap,
       refreshProgress,
       refreshQuests,
+      createCharacter,
       travel,
       explore,
       pendingCombatEnemyKey,
@@ -633,6 +650,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       refreshMap,
       refreshProgress,
       refreshQuests,
+      createCharacter,
       travel,
       explore,
       loadCombatSnapshot,

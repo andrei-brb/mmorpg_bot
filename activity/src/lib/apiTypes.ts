@@ -41,6 +41,16 @@ export type InvRow = {
   effect_duration?: number | null;
 };
 
+/** Row from GET /api/game/character/class-options */
+export type ClassOptionRow = {
+  key: string;
+  name: string;
+  emoji: string;
+  role: string;
+  resource: string;
+  description: string;
+};
+
 export type InventoryPayload = {
   discord?: { id?: string; username?: string; global_name?: string | null };
   character: {

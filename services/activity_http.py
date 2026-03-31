@@ -21,6 +21,8 @@ Endpoints:
   GET  /api/game/pvp/history    — ?page=
   GET  /api/game/quests         — Bearer token → active quest log
   POST /api/game/quest/abandon  — JSON { quest_id } → abandon active/offered quest
+  GET  /api/game/character/class-options — Public list of playable classes (for create UI)
+  POST /api/game/character/create — Bearer JSON { name, class_key, guild_id? } → same shape as GET inventory
 
 Requires DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID (same app as the bot).
 See ACTIVITY_SETUP.md.
@@ -265,7 +267,11 @@ async def handle_inventory(request: web.Request) -> web.Response:
         return web.json_response(
             _json_safe(
                 {
-                    "discord": {"id": str(discord_id), "username": user.get("username")},
+                    "discord": {
+                        "id": str(discord_id),
+                        "username": user.get("username"),
+                        "global_name": user.get("global_name"),
+                    },
                     "character": None,
                     "items": [],
                 }
@@ -283,6 +289,118 @@ async def handle_inventory(request: web.Request) -> web.Response:
         _json_safe(
             {
                 "discord": {"id": str(discord_id), "username": user.get("username"), "global_name": user.get("global_name")},
+                "character": char_dict,
+                "items": items,
+            }
+        )
+    )
+
+
+async def handle_character_class_options(_request: web.Request) -> web.Response:
+    """GET — class keys and display metadata for Activity character creation."""
+    classes: List[Dict[str, Any]] = []
+    for key, cls in CLASSES.items():
+        classes.append(
+            {
+                "key": key,
+                "name": cls.name,
+                "emoji": cls.emoji,
+                "role": cls.role,
+                "resource": cls.resource,
+                "description": cls.description[:200],
+            }
+        )
+    return web.json_response({"classes": classes})
+
+
+async def handle_character_create(request: web.Request) -> web.Response:
+    """POST — create first character (same rules as /character create in Discord)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "invalid_json"}), content_type="application/json")
+    if not isinstance(body, dict):
+        body = {}
+
+    name = body.get("name")
+    class_key = body.get("class_key")
+    if not isinstance(name, str):
+        return web.json_response(
+            _json_safe({"ok": False, "error": "invalid_name", "message": "Name is required."}),
+            status=400,
+        )
+    name = name.strip()
+    if not (3 <= len(name) <= 32):
+        return web.json_response(
+            _json_safe({"ok": False, "error": "invalid_name", "message": "Name must be 3–32 characters."}),
+            status=400,
+        )
+    if not isinstance(class_key, str) or class_key not in CLASSES:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "invalid_class", "message": "Invalid class."}),
+            status=400,
+        )
+
+    discord_id = int(user["id"])
+    display = str(user.get("global_name") or user.get("username") or "unknown")
+
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+
+    await char_svc.ensure_player(discord_id, display)
+
+    ok, msg, char = await char_svc.create_character(discord_id, name, class_key)
+    if not ok or not char:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+
+    guild_id = _guild_id_from_request(request, body)
+    if guild_id:
+        try:
+            from services.milestones.milestone_service import MilestoneService
+
+            ms = MilestoneService(bot.db)
+            completed = await ms.increment(
+                guild_id,
+                "characters_created",
+                1,
+                source="character_create",
+                actor_id=discord_id,
+            )
+            await ms.announce_completions(bot, guild_id, completed)
+        except Exception:
+            pass
+
+    items = await inv_svc.get_all(char["id"])
+    char_dict = dict(char)
+    sk = char_dict.get("specialization")
+    if sk:
+        spec = SPECIALIZATIONS.get(sk)
+        if spec:
+            char_dict["specialization_name"] = spec.name
+
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "discord": {
+                    "id": str(discord_id),
+                    "username": user.get("username"),
+                    "global_name": user.get("global_name"),
+                },
                 "character": char_dict,
                 "items": items,
             }
@@ -2075,6 +2193,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
 
     app.router.add_post("/api/token", handle_token)
     app.router.add_get("/api/game/inventory", handle_inventory)
+    app.router.add_get("/api/game/character/class-options", handle_character_class_options)
+    app.router.add_post("/api/game/character/create", handle_character_create)
     app.router.add_get("/api/game/equipment", handle_equipment)
     app.router.add_get("/api/game/progress", handle_progress)
     app.router.add_get("/api/game/specializations", handle_specializations)

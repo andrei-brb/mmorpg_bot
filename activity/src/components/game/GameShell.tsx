@@ -10,6 +10,7 @@ import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
 import { QuestCompleteModal } from "./modals/QuestCompleteModal";
+import { CreateCharacterModal } from "./modals/CreateCharacterModal";
 import { toast } from "sonner";
 
 const TABS = ["Hero", "Explore", "Quests", "Combat", "Arena", "Progress"] as const;
@@ -38,6 +39,8 @@ export function GameShell() {
     acceptQuestOffer,
     declineQuestOffer,
     ackQuestCompletion,
+    inventory,
+    createCharacter,
   } = useGameSession();
 
   const [specSel, setSpecSel] = useState("");
@@ -45,6 +48,25 @@ export function GameShell() {
   useEffect(() => {
     if (specModal.options[0]?.key) setSpecSel(specModal.options[0].key);
   }, [specModal.open, specModal.options]);
+
+  if (!inventory) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!inventory.character) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex flex-col">
+        <CreateCharacterModal
+          createCharacter={createCharacter}
+          onCreated={() => toast.success("Welcome to World of Discord!")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">

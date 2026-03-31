@@ -1,4 +1,5 @@
 import type {
+  ClassOptionRow,
   CombatStatePayload,
   DungeonCatalogEntry,
   EnhanceInfoPayload,
@@ -73,6 +74,28 @@ export async function getInventory(token: string, guildId?: string): Promise<Inv
   const res = await fetch(apiUrl("/api/game/inventory"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`inventory ${res.status}`);
   return res.json() as Promise<InventoryPayload>;
+}
+
+export async function getCharacterClassOptions(): Promise<{ classes: ClassOptionRow[] }> {
+  const res = await fetch(apiUrl("/api/game/character/class-options"));
+  if (!res.ok) throw new Error(`class-options ${res.status}`);
+  return res.json() as Promise<{ classes: ClassOptionRow[] }>;
+}
+
+export async function postCharacterCreate(
+  token: string,
+  name: string,
+  classKey: string,
+  guildId?: string,
+): Promise<InventoryPayload & { ok?: boolean; message?: string; error?: string }> {
+  const res = await fetch(apiUrl("/api/game/character/create"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, class_key: classKey }),
+  });
+  const j = (await res.json()) as InventoryPayload & { ok?: boolean; message?: string; error?: string };
+  if (!res.ok) return { ...j, ok: false };
+  return { ...j, ok: true };
 }
 
 export async function getMap(token: string, guildId?: string): Promise<ExploreMapPayload> {
