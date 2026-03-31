@@ -76,13 +76,17 @@ def _json_safe(obj: Any) -> Any:
 
 def _cors_headers(request: web.Request) -> Dict[str, str]:
     origin = request.headers.get("Origin", "*")
-    allowed = (os.getenv("ACTIVITY_CORS_ORIGINS") or "").strip()
+    allowed = (
+        (os.getenv("ACTIVITY_CORS_ORIGINS") or "").strip()
+        or (os.getenv("ACTIVITY_ALLOWED_ORIGINS") or "").strip()
+    )
     if allowed:
         parts = [x.strip() for x in allowed.split(",") if x.strip()]
         if origin in parts:
             allow_origin = origin
         else:
-            allow_origin = parts[0] if parts else "*"
+            # Don't silently allow a different origin; browsers will block this anyway.
+            allow_origin = "null"
     else:
         allow_origin = origin if origin else "*"
     return {
