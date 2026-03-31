@@ -248,6 +248,21 @@ class AdminCog(commands.Cog, name="Admin"):
             msg += f" They leveled up to **{result['new_level']}**!"
         await interaction.followup.send(msg)
 
+    @admin.command(name="givelevel", description="Set a player's level (admin)")
+    @app_commands.describe(member="Target player", level="New level (1..MAX)")
+    async def give_level(self, interaction: discord.Interaction, member: discord.Member, level: int):
+        if not await self._check_admin(interaction):
+            return
+        char = await self.svc.get_character(member.id)
+        if not char:
+            return await interaction.followup.send(f"❌ {member.display_name} has no character.")
+        res = await self.svc.set_level(char["id"], int(level))
+        if not res.get("ok"):
+            return await interaction.followup.send("❌ Could not set level.")
+        await interaction.followup.send(
+            f"✅ Set **{char['name']}** to level **{res['level']}** (HP refilled)."
+        )
+
     @admin.command(name="giveitem", description="Give an item to a player")
     @app_commands.describe(member="Target player", item_id="Item template ID (use autocomplete)", rarity="Item rarity")
     @app_commands.choices(rarity=[

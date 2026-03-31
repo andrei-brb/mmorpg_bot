@@ -176,6 +176,39 @@ class CharacterService:
             "levels_gained":gained,
         }
 
+    async def set_level(self, char_id: UUID, new_level: int) -> Dict[str, Any]:
+        """
+        Admin utility: force-set a character's level.
+        - Sets XP to the minimum total XP for that level.
+        - Recalculates max_hp/max_res and refills HP; mana/energy refill resources, rage is capped.
+        """
+        char = await self.get_by_id(char_id)
+        if not char:
+            return {"ok": False, "error": "no_character"}
+        lvl = int(max(1, min(int(new_level), int(Settings.MAX_LEVEL))))
+        xp_total = int(self.total_xp_to_reach(lvl))
+        stats = self._leveled_stats(char, lvl)
+        cls = CLASSES[char["class"]]
+        new_cur_res = (
+            min(int(char["current_res"] or 0), stats["max_res"])
+            if cls.resource == "rage"
+            else stats["max_res"]
+        )
+        await self.db.execute(
+            """UPDATE characters SET
+               xp=$2, level=$3,
+               max_hp=$4, current_hp=$4,
+               max_res=$5, current_res=$6
+               WHERE id=$1""",
+            char_id,
+            xp_total,
+            lvl,
+            int(stats["max_hp"]),
+            int(stats["max_res"]),
+            int(new_cur_res),
+        )
+        return {"ok": True, "level": lvl, "xp": xp_total, "max_hp": int(stats["max_hp"]), "max_res": int(stats["max_res"])}
+
     def _leveled_stats(self, char: asyncpg.Record, new_level: int) -> Dict:
         cls = CLASSES[char["class"]]
         bonus = (new_level - 1) * 5
