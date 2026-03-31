@@ -6,9 +6,10 @@ import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
 import { CombatTab } from "./tabs/CombatTab";
 import { ProgressTab } from "./tabs/ProgressTab";
+import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 
-const TABS = ["Hero", "Explore", "Quests", "Combat", "Progress"] as const;
+const TABS = ["Hero", "Explore", "Quests", "Combat", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabName, string> = {
@@ -16,6 +17,7 @@ const TAB_ICONS: Record<TabName, string> = {
   Explore: "🗺️",
   Quests: "📜",
   Combat: "💀",
+  Arena: "🏟️",
   Progress: "📊",
 };
 
@@ -172,6 +174,7 @@ export function GameShell() {
               {activeTab === "Explore" && <ExploreTab />}
               {activeTab === "Quests" && <QuestsTab />}
               {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
+              {activeTab === "Arena" && <PvpPage />}
               {activeTab === "Progress" && <ProgressTab />}
             </div>
           </div>
