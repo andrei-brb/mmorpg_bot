@@ -535,6 +535,289 @@ async def handle_game_dungeons(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"ok": True, "dungeons": dungeons_out}))
 
 
+async def handle_dungeon_party_create(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/create — Create a dungeon party."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    dungeon_key = body.get("dungeon_key")
+    if not dungeon_key or not isinstance(dungeon_key, str):
+        return web.json_response({"error": "missing_dungeon_key", "message": "Dungeon key required."}, status=400)
+
+    from config.settings import DUNGEONS
+    from services.dungeon.dungeon_service import DungeonService
+    from services.character.character_service import CharacterService
+
+    char_svc = CharacterService(db)
+    dungeon_svc = DungeonService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    if char["in_dungeon"]:
+        return web.json_response({"error": "already_in_dungeon", "message": "You're already in a dungeon!"}, status=400)
+
+    dungeon_config = DUNGEONS.get(dungeon_key)
+    if not dungeon_config:
+        return web.json_response({"error": "invalid_dungeon", "message": "Unknown dungeon."}, status=400)
+
+    if char["level"] < dungeon_config.level_req:
+        return web.json_response(
+            {"error": "level_too_low", "message": f"Requires level {dungeon_config.level_req}+."},
+            status=400
+        )
+
+    run_id = await dungeon_svc.create_run(dungeon_key, char["id"], is_solo=False)
+    if not run_id:
+        return web.json_response({"error": "create_failed", "message": "Failed to create party."}, status=500)
+
+    run = await dungeon_svc.get_run(run_id)
+    return web.json_response({
+        "ok": True,
+        "run_id": str(run_id),
+        "dungeon": {
+            "key": dungeon_key,
+            "name": dungeon_config.name,
+            "emoji": dungeon_config.emoji,
+        },
+        "participants": run["participants"],
+    })
+
+
+async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/invite — Invite a player to the party (leader only)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    target_user_id = body.get("target_user_id")
+    if not target_user_id:
+        return web.json_response({"error": "missing_target", "message": "Target user ID required."}, status=400)
+
+    from services.dungeon.dungeon_service import DungeonService
+    from services.character.character_service import CharacterService
+
+    char_svc = CharacterService(db)
+    dungeon_svc = DungeonService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    run = await dungeon_svc.get_active_run(char["id"])
+    if not run:
+        return web.json_response({"error": "not_in_dungeon", "message": "You're not in a dungeon party."}, status=400)
+
+    # Check if leader
+    is_leader = any(p["id"] == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
+    if not is_leader:
+        return web.json_response({"error": "not_leader", "message": "Only the leader can invite."}, status=403)
+
+    # Get target character
+    target_char = await char_svc.get_character(int(target_user_id))
+    if not target_char:
+        return web.json_response({"error": "target_no_character", "message": "That user has no character."}, status=400)
+
+    if target_char["in_dungeon"]:
+        return web.json_response({"error": "target_in_dungeon", "message": "That player is already in a dungeon."}, status=400)
+
+    # Add participant
+    success = await dungeon_svc.add_participant(run["id"], target_char["id"])
+    if not success:
+        return web.json_response({"error": "invite_failed", "message": "Failed to invite player."}, status=500)
+
+    run = await dungeon_svc.get_run(run["id"])
+    return web.json_response({
+        "ok": True,
+        "message": f"Invited {target_char['name']} to the party.",
+        "participants": run["participants"],
+    })
+
+
+async def handle_dungeon_party_join(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/join — Join a dungeon party by run ID."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    run_id = body.get("run_id")
+    if not run_id:
+        return web.json_response({"error": "missing_run_id", "message": "Run ID required."}, status=400)
+
+    from uuid import UUID
+    from services.dungeon.dungeon_service import DungeonService
+    from services.character.character_service import CharacterService
+
+    char_svc = CharacterService(db)
+    dungeon_svc = DungeonService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    if char["in_dungeon"]:
+        return web.json_response({"error": "already_in_dungeon", "message": "You're already in a dungeon!"}, status=400)
+
+    try:
+        run_id_uuid = UUID(str(run_id))
+    except ValueError:
+        return web.json_response({"error": "invalid_run_id", "message": "Invalid run ID."}, status=400)
+
+    run = await dungeon_svc.get_run(run_id_uuid)
+    if not run:
+        return web.json_response({"error": "run_not_found", "message": "Party not found."}, status=404)
+
+    if not run["is_active"]:
+        return web.json_response({"error": "run_not_active", "message": "This party is no longer active."}, status=400)
+
+    success = await dungeon_svc.add_participant(run_id_uuid, char["id"])
+    if not success:
+        return web.json_response({"error": "join_failed", "message": "Failed to join party (may be full)."}, status=400)
+
+    run = await dungeon_svc.get_run(run_id_uuid)
+    return web.json_response({
+        "ok": True,
+        "message": "Joined the party!",
+        "run_id": str(run_id),
+        "participants": run["participants"],
+    })
+
+
+async def handle_dungeon_party_leave(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/leave — Leave the current dungeon party."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+
+    from services.dungeon.dungeon_service import DungeonService
+    from services.character.character_service import CharacterService
+
+    char_svc = CharacterService(db)
+    dungeon_svc = DungeonService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    run = await dungeon_svc.get_active_run(char["id"])
+    if not run:
+        return web.json_response({"error": "not_in_dungeon", "message": "You're not in a dungeon party."}, status=400)
+
+    await dungeon_svc.leave_run(char["id"])
+    return web.json_response({"ok": True, "message": "Left the party."})
+
+
+async def handle_dungeon_party_status(request: web.Request) -> web.Response:
+    """GET /api/game/dungeon/party/status — Get current party status."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+
+    from services.dungeon.dungeon_service import DungeonService
+    from services.character.character_service import CharacterService
+
+    char_svc = CharacterService(db)
+    dungeon_svc = DungeonService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    run = await dungeon_svc.get_active_run(char["id"])
+    if not run:
+        return web.json_response({"ok": True, "in_party": False})
+
+    is_leader = any(p["id"] == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
+    return web.json_response({
+        "ok": True,
+        "in_party": True,
+        "run_id": str(run["id"]),
+        "is_leader": is_leader,
+        "dungeon_key": run["dungeon_key"],
+        "participants": run["participants"],
+    })
+
+
 async def handle_combat_state(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -2253,6 +2536,11 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)
+    app.router.add_get("/api/game/dungeon/party/status", handle_dungeon_party_status)
+    app.router.add_post("/api/game/dungeon/party/create", handle_dungeon_party_create)
+    app.router.add_post("/api/game/dungeon/party/invite", handle_dungeon_party_invite)
+    app.router.add_post("/api/game/dungeon/party/join", handle_dungeon_party_join)
+    app.router.add_post("/api/game/dungeon/party/leave", handle_dungeon_party_leave)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)

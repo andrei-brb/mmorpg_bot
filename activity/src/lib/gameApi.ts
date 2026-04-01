@@ -2,6 +2,8 @@ import type {
   ClassOptionRow,
   CombatStatePayload,
   DungeonCatalogEntry,
+  DungeonPartyStatus,
+  DungeonPartyCreateResponse,
   EnhanceInfoPayload,
   ExploreMapPayload,
   ExploreResultPayload,
@@ -161,6 +163,68 @@ export async function getDungeons(
   const res = await fetch(apiUrl("/api/game/dungeons"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`dungeons ${res.status}`);
   return res.json() as Promise<{ ok?: boolean; dungeons?: DungeonCatalogEntry[] }>;
+}
+
+// ── Dungeon Party API ──────────────────────────────────────────────────────────
+
+export async function getDungeonPartyStatus(
+  token: string,
+  guildId?: string,
+): Promise<DungeonPartyStatus> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/status"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`party-status ${res.status}`);
+  return res.json() as Promise<DungeonPartyStatus>;
+}
+
+export async function postDungeonPartyCreate(
+  token: string,
+  dungeonKey: string,
+  guildId?: string,
+): Promise<DungeonPartyCreateResponse> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/create"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ dungeon_key: dungeonKey, guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<DungeonPartyCreateResponse>;
+}
+
+export async function postDungeonPartyInvite(
+  token: string,
+  targetUserId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; participants?: DungeonParticipant[] }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/invite"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ target_user_id: targetUserId, guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; participants?: DungeonParticipant[] }>;
+}
+
+export async function postDungeonPartyJoin(
+  token: string,
+  runId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; run_id?: string; participants?: DungeonParticipant[] }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/join"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; run_id?: string; participants?: DungeonParticipant[] }>;
+}
+
+export async function postDungeonPartyLeave(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/leave"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
 }
 
 export async function postCombatAction(token: string, body: Record<string, unknown>, guildId?: string) {

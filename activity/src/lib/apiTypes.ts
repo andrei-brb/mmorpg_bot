@@ -122,6 +122,32 @@ export type DungeonCatalogEntry = {
   floor_preview: DungeonFloorPreview[];
 };
 
+export type DungeonParticipant = {
+  id: string;
+  name: string;
+  level: number;
+  class: string;
+  role: "leader" | "member";
+};
+
+export type DungeonPartyStatus = {
+  ok?: boolean;
+  in_party: boolean;
+  run_id?: string;
+  is_leader?: boolean;
+  dungeon_key?: string;
+  participants?: DungeonParticipant[];
+};
+
+export type DungeonPartyCreateResponse = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  run_id?: string;
+  dungeon?: { key: string; name: string; emoji: string };
+  participants?: DungeonParticipant[];
+};
+
 export type ExploreZone = {
   key: string;
   name: string;

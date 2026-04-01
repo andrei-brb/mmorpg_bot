@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { CombatStatePayload, DungeonCatalogEntry } from "@/lib/apiTypes";
+import type { CombatStatePayload, DungeonCatalogEntry, DungeonPartyStatus, DungeonParticipant } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 
 function stripMd(s: string): string {
@@ -26,6 +26,11 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
   const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<"browser" | "run" | "fight" | "complete" | "failed">("browser");
+  
+  // Party state
+  const [partyStatus, setPartyStatus] = useState<DungeonPartyStatus | null>(null);
+  const [partyLoading, setPartyLoading] = useState(false);
+  const [inviteUserId, setInviteUserId] = useState<string>("");
 
   useEffect(() => {
     if (!accessToken) return;
@@ -50,12 +55,102 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     };
   }, [accessToken, guildId]);
 
+  // Load party status on mount and when phase changes
+  useEffect(() => {
+    if (!accessToken || phase !== "browser") return;
+    let cancelled = false;
+    void api
+      .getDungeonPartyStatus(accessToken, guildId)
+      .then((status) => {
+        if (cancelled) return;
+        setPartyStatus(status);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPartyStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId, phase]);
+
   const resetAll = useCallback(() => {
     setRun(null);
     setCombatState(null);
     setOutcome(null);
     setPhase("browser");
   }, []);
+
+  // Refresh party status
+  const refreshPartyStatus = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const status = await api.getDungeonPartyStatus(accessToken, guildId);
+      setPartyStatus(status);
+    } catch (e) {
+      setPartyStatus(null);
+    }
+  }, [accessToken, guildId]);
+
+  // Create party
+  const onCreateParty = async (d: DungeonCatalogEntry) => {
+    if (!accessToken) return;
+    setPartyLoading(true);
+    try {
+      const result = await api.postDungeonPartyCreate(accessToken, d.key, guildId);
+      if (result.ok && result.run_id) {
+        setPartyStatus({ in_party: true, run_id: result.run_id, is_leader: true, dungeon_key: d.key, participants: result.participants });
+        toast.success(`Party created for ${d.name}! Invite members or start when ready.`);
+        await refreshPartyStatus();
+      } else {
+        toast.error(result.message || "Failed to create party.");
+      }
+    } catch (e) {
+      toast.error("Failed to create party.");
+    } finally {
+      setPartyLoading(false);
+    }
+  };
+
+  // Invite player
+  const onInvitePlayer = async () => {
+    if (!accessToken || !partyStatus?.run_id || !inviteUserId.trim()) return;
+    setPartyLoading(true);
+    try {
+      const result = await api.postDungeonPartyInvite(accessToken, inviteUserId.trim(), guildId);
+      if (result.ok) {
+        toast.success(result.message || "Player invited!");
+        setInviteUserId("");
+        await refreshPartyStatus();
+      } else {
+        toast.error(result.message || "Failed to invite player.");
+      }
+    } catch (e) {
+      toast.error("Failed to invite player.");
+    } finally {
+      setPartyLoading(false);
+    }
+  };
+
+  // Leave party
+  const onLeaveParty = async () => {
+    if (!accessToken) return;
+    setPartyLoading(true);
+    try {
+      const result = await api.postDungeonPartyLeave(accessToken, guildId);
+      if (result.ok) {
+        toast.success("Left the party.");
+        setPartyStatus({ in_party: false });
+        await refreshPartyStatus();
+      } else {
+        toast.error(result.message || "Failed to leave party.");
+      }
+    } catch (e) {
+      toast.error("Failed to leave party.");
+    } finally {
+      setPartyLoading(false);
+    }
+  };
 
   // Resume Activity dungeon combat if the server still has an active session
   useEffect(() => {
@@ -299,6 +394,62 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
 
   return (
     <div className="space-y-4">
+      {/* Party Panel */}
+      {partyStatus?.in_party && (
+        <div className="game-panel">
+          <div className="game-panel-header">
+            🏰 Dungeon Party {partyStatus.is_leader && "(Leader)"}
+          </div>
+          <div className="mb-3">
+            <p className="text-xs text-muted-foreground mb-2">
+              Dungeon: <span className="text-foreground font-semibold">{partyStatus.dungeon_key}</span>
+            </p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Members: <span className="text-foreground font-semibold">{partyStatus.participants?.length || 0}/{5}</span>
+            </p>
+            
+            <div className="space-y-1 mb-3">
+              {(partyStatus.participants || []).map((p, i) => (
+                <div key={i} className="text-xs flex items-center gap-2">
+                  <span className={p.role === "leader" ? "text-primary font-semibold" : "text-muted-foreground"}>
+                    {p.role === "leader" ? "👑 " : "• "} {p.name} (Lv {p.level})
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {partyStatus.is_leader && (
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  placeholder="User ID to invite..."
+                  value={inviteUserId}
+                  onChange={(e) => setInviteUserId(e.target.value)}
+                  className="flex-1 bg-muted/30 border border-border rounded px-2 py-1 text-xs text-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={onInvitePlayer}
+                  disabled={partyLoading || !inviteUserId.trim()}
+                  className="game-btn-primary text-xs px-3 py-1 disabled:opacity-50"
+                >
+                  Invite
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={onLeaveParty}
+              disabled={partyLoading}
+              className="game-btn-secondary text-xs px-4 py-2 w-full"
+            >
+              Leave Party
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="game-panel">
         <div className="game-panel-header">⚔️ Dungeons</div>
         <p className="text-xs text-muted-foreground mb-4">
@@ -356,18 +507,18 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
                     <button
                       type="button"
                       onClick={() => enterSolo(d)}
-                      disabled={locked}
-                      className={`text-xs px-3 py-1.5 flex-1 ${locked ? "game-btn-secondary opacity-50 cursor-not-allowed" : "game-btn-primary"}`}
+                      disabled={locked || partyStatus?.in_party}
+                      className={`text-xs px-3 py-1.5 flex-1 ${locked || partyStatus?.in_party ? "game-btn-secondary opacity-50 cursor-not-allowed" : "game-btn-primary"}`}
                     >
                       ⚔️ Enter solo
                     </button>
                     <button
                       type="button"
-                      onClick={() => onCreateParty()}
-                      disabled={locked}
-                      className={`text-xs px-3 py-1.5 flex-1 ${locked ? "game-btn-secondary opacity-50 cursor-not-allowed" : "game-btn-secondary"}`}
+                      onClick={() => onCreateParty(d)}
+                      disabled={locked || partyStatus?.in_party || partyLoading}
+                      className={`text-xs px-3 py-1.5 flex-1 ${locked || partyStatus?.in_party ? "game-btn-secondary opacity-50 cursor-not-allowed" : "game-btn-secondary"}`}
                     >
-                      👥 Party (Discord)
+                      👥 {partyStatus?.in_party ? "In Party" : "Create Party"}
                     </button>
                   </div>
                 </div>
