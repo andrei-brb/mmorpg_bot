@@ -592,7 +592,7 @@ async def handle_dungeon_party_create(request: web.Request) -> web.Response:
         return web.json_response({"error": "create_failed", "message": "Failed to create party."}, status=500)
 
     run = await dungeon_svc.get_run(run_id)
-    return web.json_response({
+    return web.json_response(_json_safe({
         "ok": True,
         "run_id": str(run_id),
         "dungeon": {
@@ -601,7 +601,7 @@ async def handle_dungeon_party_create(request: web.Request) -> web.Response:
             "emoji": dungeon_config.emoji,
         },
         "participants": run["participants"],
-    })
+    }))
 
 
 async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
@@ -665,11 +665,11 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
         return web.json_response({"error": "invite_failed", "message": "Failed to invite player."}, status=500)
 
     run = await dungeon_svc.get_run(run["id"])
-    return web.json_response({
+    return web.json_response(_json_safe({
         "ok": True,
         "message": f"Invited {target_char['name']} to the party.",
         "participants": run["participants"],
-    })
+    }))
 
 
 async def handle_dungeon_party_join(request: web.Request) -> web.Response:
@@ -731,12 +731,12 @@ async def handle_dungeon_party_join(request: web.Request) -> web.Response:
         return web.json_response({"error": "join_failed", "message": "Failed to join party (may be full)."}, status=400)
 
     run = await dungeon_svc.get_run(run_id_uuid)
-    return web.json_response({
+    return web.json_response(_json_safe({
         "ok": True,
         "message": "Joined the party!",
         "run_id": str(run_id),
         "participants": run["participants"],
-    })
+    }))
 
 
 async def handle_dungeon_party_leave(request: web.Request) -> web.Response:
@@ -808,14 +808,14 @@ async def handle_dungeon_party_status(request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "in_party": False})
 
     is_leader = any(p["id"] == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
-    return web.json_response({
+    return web.json_response(_json_safe({
         "ok": True,
         "in_party": True,
         "run_id": str(run["id"]),
         "is_leader": is_leader,
         "dungeon_key": run["dungeon_key"],
         "participants": run["participants"],
-    })
+    }))
 
 
 async def handle_combat_state(request: web.Request) -> web.Response:
