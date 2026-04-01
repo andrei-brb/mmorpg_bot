@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -37,6 +38,8 @@ class ActivityCombatState:
     potion_used: bool = False
     dungeon_key: Optional[str] = None
     dungeon_floor: Optional[int] = None
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    hp_start: int = 0
 
 
 def _make_enemy(key: str, char_level: int, zone=None) -> Combatant:
@@ -365,6 +368,8 @@ async def start_activity_combat(
         potion_used=False,
         dungeon_key=resolved_dungeon_key,
         dungeon_floor=resolved_dungeon_floor,
+        started_at=datetime.now(timezone.utc),
+        hp_start=player_c.current_hp,
     )
     ACTIVE_ACTIVITY[discord_id] = ac
 
@@ -441,7 +446,7 @@ async def process_activity_action(
         flee_roll = Settings.FLEE_BASE_CHANCE + player.dodge_chance * 0.01
         if random.random() < flee_roll:
             log_lines.append("🏃 You escaped!")
-            await _activity_fled(bot, guild_id, char, player, char_svc, db)
+            await _activity_fled(bot, guild_id, char, player, char_svc, db, ac)
             _clear_activity_session(discord_id)
             return {
                 "ok": True,
@@ -453,7 +458,7 @@ async def process_activity_action(
         ticks = engine.tick_turn(player)
         log_lines.extend(ticks)
         if player.is_dead:
-            return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines)
+            return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines, ac)
         has_potion = await _has_healing_potion(db, char_id)
         can_potion = bool(has_potion) and not ac.potion_used
         fresh = await char_svc.get_character(discord_id)
@@ -490,7 +495,7 @@ async def process_activity_action(
         ticks = engine.tick_turn(player)
         log_lines.extend(ticks)
         if player.is_dead:
-            return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines)
+            return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines, ac)
         has_potion = await _has_healing_potion(db, char_id)
         can_potion = bool(has_potion) and not ac.potion_used
         fresh = await char_svc.get_character(discord_id)
@@ -537,10 +542,10 @@ async def process_activity_action(
                 log.exception("activity auto_attack fallback failed: %s", e2)
 
     if session.over and session.players_won:
-        return await _finish_victory(bot, guild_id, discord_id, char, session, player, char_svc, inv_svc, engine, db, log_lines)
+        return await _finish_victory(bot, guild_id, discord_id, char, session, player, char_svc, inv_svc, engine, db, log_lines, ac)
 
     if session.over:
-        return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines)
+        return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines, ac)
 
     # Enemy phase (same as Discord /fight)
     e_ticks = engine.tick_turn(enemy)
@@ -559,8 +564,8 @@ async def process_activity_action(
 
     if session.over:
         if session.players_won:
-            return await _finish_victory(bot, guild_id, discord_id, char, session, player, char_svc, inv_svc, engine, db, log_lines)
-        return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines)
+            return await _finish_victory(bot, guild_id, discord_id, char, session, player, char_svc, inv_svc, engine, db, log_lines, ac)
+        return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines, ac)
 
     session.turn += 1
     fresh = await char_svc.get_character(discord_id)
@@ -568,7 +573,7 @@ async def process_activity_action(
     ticks2 = engine.tick_turn(player2)
     log_lines.extend(ticks2)
     if player2.is_dead:
-        return await _finish_defeat(bot, guild_id, discord_id, char, player2, char_svc, db, log_lines)
+        return await _finish_defeat(bot, guild_id, discord_id, char, player2, char_svc, db, log_lines, ac)
 
     has_potion = await _has_healing_potion(db, char_id)
     can_potion = bool(has_potion) and not ac.potion_used
@@ -588,7 +593,20 @@ async def _finish_defeat(
     char_svc,
     db,
     log_lines: List[str],
+    ac: ActivityCombatState,
 ) -> Dict[str, Any]:
+    # Record combat session for Progress tab
+    await _record_combat_session(
+        db,
+        char["id"],
+        "defeat",
+        ac.session.zone_key,
+        ac.started_at,
+        ac.session.turn,
+        ac.hp_start,
+        player.current_hp,
+    )
+
     revive_hp = max(1, char["max_hp"] // 5)
     await db.execute(
         "UPDATE characters SET current_hp=$2, combat_status='idle' WHERE id=$1",
@@ -608,9 +626,60 @@ async def _finish_defeat(
     }
 
 
-async def _activity_fled(bot, guild_id, char, player, char_svc, db) -> None:
+async def _activity_fled(bot, guild_id, char, player, char_svc, db, ac: ActivityCombatState) -> None:
+    # Record combat session for Progress tab
+    await _record_combat_session(
+        db,
+        char["id"],
+        "fled",
+        ac.session.zone_key,
+        ac.started_at,
+        ac.session.turn,
+        ac.hp_start,
+        player.current_hp,
+    )
+
     await char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
     await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
+
+
+async def _record_combat_session(
+    db,
+    char_id: str,
+    outcome: str,
+    zone: Optional[str],
+    started_at: datetime,
+    turn_count: int,
+    hp_start: int,
+    hp_end: int,
+) -> None:
+    """Record Activity combat to combat_sessions for Progress tab tracking."""
+    try:
+        session_id = await db.fetchval(
+            """
+            INSERT INTO combat_sessions
+            (channel_id, session_type, zone, started_at, ended_at, is_active, outcome, turn_count)
+            VALUES (0, 'solo', $1, $2, NOW(), FALSE, $3, $4)
+            RETURNING id
+            """,
+            zone,
+            started_at,
+            outcome,
+            turn_count,
+        )
+        await db.execute(
+            """
+            INSERT INTO combat_participants
+            (session_id, character_id, is_player, hp_start, hp_end)
+            VALUES ($1, $2, TRUE, $3, $4)
+            """,
+            session_id,
+            char_id,
+            hp_start,
+            hp_end,
+        )
+    except Exception as e:
+        log.warning("Failed to record combat session: %s", e)
 
 
 async def _finish_victory(
@@ -625,11 +694,24 @@ async def _finish_victory(
     engine: CombatEngine,
     db,
     log_lines: List[str],
+    ac: ActivityCombatState,
 ) -> Dict[str, Any]:
     from services.achievement.achievement_service import AchievementService
     from services.quest.npc_quest_service import NPCQuestService
 
     from services.reward_multipliers import get_combined_reward_multipliers
+
+    # Record combat session for Progress tab
+    await _record_combat_session(
+        db,
+        char["id"],
+        "victory",
+        session.zone_key,
+        ac.started_at,
+        session.turn,
+        ac.hp_start,
+        player.current_hp,
+    )
 
     xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id)
 
