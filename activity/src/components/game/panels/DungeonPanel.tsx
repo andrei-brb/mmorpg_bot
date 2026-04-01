@@ -34,6 +34,10 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
   const [inviteUsername, setInviteUsername] = useState<string>("");
   const [playerSuggestions, setPlayerSuggestions] = useState<Array<{ id: string; username: string; level: number; class: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Incoming invites state
+  const [incomingInvites, setIncomingInvites] = useState<DungeonPartyInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -77,6 +81,12 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     };
   }, [accessToken, guildId, phase]);
 
+  // Load incoming invites on mount and when phase changes
+  useEffect(() => {
+    if (!accessToken || phase !== "browser") return;
+    fetchIncomingInvites();
+  }, [accessToken, guildId, phase, fetchIncomingInvites]);
+
   const resetAll = useCallback(() => {
     setRun(null);
     setCombatState(null);
@@ -109,6 +119,52 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       setPlayerSuggestions([]);
     }
   }, [accessToken, guildId]);
+
+  // Fetch incoming invites
+  const fetchIncomingInvites = useCallback(async () => {
+    if (!accessToken || phase !== "browser") return;
+    setInvitesLoading(true);
+    try {
+      const data = await api.getDungeonPartyInvites(accessToken, guildId);
+      setIncomingInvites(data.invites || []);
+    } catch (e) {
+      console.error("Failed to fetch invites:", e);
+    } finally {
+      setInvitesLoading(false);
+    }
+  }, [accessToken, guildId, phase]);
+
+  // Accept invite
+  const onAcceptInvite = useCallback(async (inviteId: string) => {
+    if (!accessToken) return;
+    setPartyLoading(true);
+    try {
+      const result = await api.postDungeonPartyInviteAccept(accessToken, inviteId, guildId);
+      if (result.ok) {
+        toast.success("Joined the party!");
+        setPartyStatus({ in_party: true, run_id: result.run_id, is_leader: false, participants: result.participants });
+        fetchIncomingInvites(); // Refresh invites
+      } else {
+        toast.error(result.message || "Failed to accept invite.");
+      }
+    } catch (e) {
+      toast.error("Failed to accept invite.");
+    } finally {
+      setPartyLoading(false);
+    }
+  }, [accessToken, guildId, fetchIncomingInvites]);
+
+  // Decline invite
+  const onDeclineInvite = useCallback(async (inviteId: string) => {
+    if (!accessToken) return;
+    try {
+      await api.postDungeonPartyInviteDecline(accessToken, inviteId, guildId);
+      toast.success("Invite declined.");
+      fetchIncomingInvites(); // Refresh invites
+    } catch (e) {
+      toast.error("Failed to decline invite.");
+    }
+  }, [accessToken, guildId, fetchIncomingInvites]);
 
   // Create party
   const onCreateParty = async (d: DungeonCatalogEntry) => {
@@ -437,6 +493,50 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
 
   return (
     <div className="space-y-4">
+      {/* Incoming Invites Panel */}
+      {incomingInvites.length > 0 && (
+        <div className="game-panel">
+          <div className="game-panel-header">
+            📨 Dungeon Party Invites ({incomingInvites.length})
+          </div>
+          <div className="space-y-2">
+            {incomingInvites.map((invite) => (
+              <div
+                key={invite.invite_id}
+                className="flex items-center justify-between gap-2 p-2 rounded-sm bg-muted/30 border border-border"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-cinzel font-semibold text-foreground truncate">
+                    {invite.inviter.name} (Lv.{invite.inviter.level} {invite.inviter.class})
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {invite.dungeon_key} • Expires in {invite.expires_at ? Math.round((new Date(invite.expires_at).getTime() - Date.now()) / 60000) : 15} min
+                  </p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onAcceptInvite(invite.invite_id)}
+                    disabled={partyLoading}
+                    className="game-btn-primary text-[10px] px-2 py-1"
+                  >
+                    ✓ Accept
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeclineInvite(invite.invite_id)}
+                    disabled={partyLoading}
+                    className="game-btn-secondary text-[10px] px-2 py-1"
+                  >
+                    ✗ Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Party Panel */}
       {partyStatus?.in_party && (
         <div className="game-panel">
