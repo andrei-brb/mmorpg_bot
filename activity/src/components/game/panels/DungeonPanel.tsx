@@ -117,13 +117,21 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     try {
       const result = await api.postDungeonPartyCreate(accessToken, d.key, guildId);
       if (result.ok && result.run_id) {
-        setPartyStatus({ in_party: true, run_id: result.run_id, is_leader: true, dungeon_key: d.key, participants: result.participants });
+        // Set party status directly from create response (we ARE the leader)
+        setPartyStatus({ 
+          in_party: true, 
+          run_id: result.run_id, 
+          is_leader: true, 
+          dungeon_key: d.key, 
+          participants: result.participants 
+        });
         toast.success(`Party created for ${d.name}! Invite members or start when ready.`);
-        await refreshPartyStatus();
+        // Don't refresh immediately - we already have the correct status
       } else {
         toast.error(result.message || "Failed to create party.");
       }
     } catch (e) {
+      console.error("Failed to create party:", e);
       toast.error("Failed to create party.");
     } finally {
       setPartyLoading(false);

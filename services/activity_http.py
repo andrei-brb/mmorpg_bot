@@ -810,6 +810,12 @@ async def handle_dungeon_party_status(request: web.Request) -> web.Response:
     # Compare as strings to handle UUID types correctly
     char_id_str = str(char["id"])
     is_leader = any(str(p["id"]) == char_id_str and p.get("role") == "leader" for p in run["participants"])
+    
+    # Debug logging
+    import logging
+    log = logging.getLogger("activity_http")
+    log.debug(f"Dungeon party status: char_id={char_id_str}, participants={[{'id': str(p['id']), 'role': p.get('role')} for p in run['participants']]}, is_leader={is_leader}")
+    
     return web.json_response(_json_safe({
         "ok": True,
         "in_party": True,
