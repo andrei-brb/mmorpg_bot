@@ -646,8 +646,8 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
     if not run:
         return web.json_response({"error": "not_in_dungeon", "message": "You're not in a dungeon party."}, status=400)
 
-    # Check if leader
-    is_leader = any(p["id"] == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
+    # Check if leader - convert both IDs to strings for proper UUID comparison
+    is_leader = any(str(p["id"]) == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
     if not is_leader:
         return web.json_response({"error": "not_leader", "message": "Only the leader can invite."}, status=403)
 
