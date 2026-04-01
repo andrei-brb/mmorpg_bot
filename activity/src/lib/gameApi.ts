@@ -3,6 +3,7 @@ import type {
   CombatStatePayload,
   DungeonCatalogEntry,
   DungeonParticipant,
+  DungeonPartyInvitesResponse,
   DungeonPartyStatus,
   DungeonPartyCreateResponse,
   EnhanceInfoPayload,
