@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { CombatStatePayload, DungeonCatalogEntry, DungeonPartyStatus, DungeonParticipant } from "@/lib/apiTypes";
+import type { CombatStatePayload, DungeonCatalogEntry, DungeonPartyStatus, DungeonParticipant, DungeonPartyInvite } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 
 function stripMd(s: string): string {
@@ -81,12 +81,6 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     };
   }, [accessToken, guildId, phase]);
 
-  // Load incoming invites on mount and when phase changes
-  useEffect(() => {
-    if (!accessToken || phase !== "browser") return;
-    fetchIncomingInvites();
-  }, [accessToken, guildId, phase, fetchIncomingInvites]);
-
   const resetAll = useCallback(() => {
     setRun(null);
     setCombatState(null);
@@ -133,6 +127,12 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       setInvitesLoading(false);
     }
   }, [accessToken, guildId, phase]);
+
+  // Load incoming invites on mount and when phase changes
+  useEffect(() => {
+    if (!accessToken || phase !== "browser") return;
+    fetchIncomingInvites();
+  }, [accessToken, guildId, phase, fetchIncomingInvites]);
 
   // Accept invite
   const onAcceptInvite = useCallback(async (inviteId: string) => {
