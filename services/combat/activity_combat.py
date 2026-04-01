@@ -283,21 +283,6 @@ async def start_activity_combat(
     if not dungeon_mode and not (enemy_key or "").strip():
         return {"error": "missing_enemy_key", "message": "Missing enemy_key or dungeon_key/floor."}
 
-    if discord_id in ACTIVE_ACTIVITY:
-        if not force:
-            ac = ACTIVE_ACTIVITY[discord_id]
-            has_potion = await _has_healing_potion(db, char["id"])
-            can_potion = bool(has_potion) and not ac.potion_used
-            return {
-                "error": "already_in_combat",
-                "state": serialize_activity_state(ac, char, awaiting_action=True, can_potion=can_potion),
-            }
-        _clear_activity_session(discord_id)
-        await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
-        char = await char_svc.get_character(discord_id)
-        if not char:
-            return {"error": "no_character", "message": "Create a character with /character create in Discord."}
-
     resolved_dungeon_key: Optional[str] = None
     resolved_dungeon_floor: Optional[int] = None
     zone = ZONES.get(char["current_zone"])
@@ -316,7 +301,7 @@ async def start_activity_combat(
             enemy_key, is_boss = _enemy_key_for_dungeon_floor(cfg, int(dungeon_floor))
         except (ValueError, TypeError):
             return {"error": "invalid_floor", "message": "Invalid dungeon floor."}
-        resolved_dungeon_key = dungeon_key
+        resolved_dungeon_key = (dungeon_key or "").strip() or None
         resolved_dungeon_floor = int(dungeon_floor)
         if not zone:
             return {"error": "unknown_zone", "message": "Travel to a valid zone first."}
@@ -333,6 +318,47 @@ async def start_activity_combat(
         if enemy_key not in zone.enemies and enemy_key not in zone.bosses:
             return {"error": "invalid_enemy", "message": "That enemy is not in your current zone."}
         is_boss = enemy_key in zone.bosses
+
+    # Resume only the *same* Activity fight; otherwise clear (e.g. Overworld → Dungeon tab).
+    if discord_id in ACTIVE_ACTIVITY:
+        ac = ACTIVE_ACTIVITY[discord_id]
+        if force:
+            _clear_activity_session(discord_id)
+            await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
+            char = await char_svc.get_character(discord_id)
+            if not char:
+                return {"error": "no_character", "message": "Create a character with /character create in Discord."}
+        elif ac.session.over:
+            _clear_activity_session(discord_id)
+            await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
+            char = await char_svc.get_character(discord_id)
+            if not char:
+                return {"error": "no_character", "message": "Create a character with /character create in Discord."}
+        else:
+            ex_dungeon = ac.dungeon_key
+            new_dungeon = resolved_dungeon_key
+            same_fight = False
+            if ex_dungeon is None and new_dungeon is None:
+                same_fight = ac.session.enemy_key == enemy_key
+            elif ex_dungeon and new_dungeon:
+                same_fight = (
+                    ex_dungeon == new_dungeon
+                    and ac.dungeon_floor is not None
+                    and resolved_dungeon_floor is not None
+                    and int(ac.dungeon_floor) == int(resolved_dungeon_floor)
+                )
+            if same_fight:
+                has_potion = await _has_healing_potion(db, char["id"])
+                can_potion = bool(has_potion) and not ac.potion_used
+                return {
+                    "error": "already_in_combat",
+                    "state": serialize_activity_state(ac, char, awaiting_action=True, can_potion=can_potion),
+                }
+            _clear_activity_session(discord_id)
+            await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
+            char = await char_svc.get_character(discord_id)
+            if not char:
+                return {"error": "no_character", "message": "Create a character with /character create in Discord."}
 
     # Same combat_status rules as /fight (Discord channel sessions)
     if char["combat_status"] == "in_combat":
