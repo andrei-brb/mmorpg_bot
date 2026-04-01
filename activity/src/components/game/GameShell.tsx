@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { HeroTab } from "./tabs/HeroTab";
 import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
@@ -244,12 +245,13 @@ export function GameShell() {
                     }}
                   />
                   <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
-                    <div className="w-full h-full flex items-center justify-center text-sm font-bold text-primary"
-                      style={{
-                        background: 'linear-gradient(135deg, hsl(228 18% 18%) 0%, hsl(228 20% 12%) 100%)',
-                      }}>
-                      SB
-                    </div>
+                    <Avatar className="w-full h-full">
+                      {inventory?.discord?.avatar_url ? (
+                        <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
+                      ) : (
+                        <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
+                      )}
+                    </Avatar>
                   </div>
                 </button>
 
@@ -342,9 +344,13 @@ export function GameShell() {
             <div className="relative mb-4">
               <div className="absolute -inset-[5px] rounded-full" style={{ background: 'conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))', filter: 'blur(0.5px)' }} />
               <div className="relative w-24 h-24 rounded-full overflow-hidden border-3 border-background">
-                <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-primary" style={{ background: 'linear-gradient(135deg, hsl(228 18% 18%) 0%, hsl(228 20% 12%) 100%)' }}>
-                  SB
-                </div>
+                <Avatar className="w-full h-full">
+                  {inventory?.discord?.avatar_url ? (
+                    <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
+                  ) : (
+                    <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
+                  )}
+                </Avatar>
               </div>
             </div>
 

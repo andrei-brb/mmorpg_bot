@@ -52,7 +52,7 @@ export type ClassOptionRow = {
 };
 
 export type InventoryPayload = {
-  discord?: { id?: string; username?: string; global_name?: string | null };
+  discord?: { id?: string; username?: string; global_name?: string | null; avatar?: string | null; avatar_url?: string | null };
   character: {
     name?: string;
     level?: number;

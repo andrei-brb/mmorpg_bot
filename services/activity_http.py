@@ -127,6 +127,26 @@ async def _discord_user_from_token(token: str) -> Optional[Dict[str, Any]]:
             return await resp.json()
 
 
+def _discord_avatar_url(user: Dict[str, Any], discord_id: int) -> str:
+    """Compute a usable Discord CDN avatar URL from the /users/@me payload.
+
+    Returns a fallback embed avatar when no custom avatar is set.
+    """
+    avatar = user.get("avatar")
+    # discriminator may be missing on some tokens; fall back to id modulo if needed
+    disc = user.get("discriminator") or user.get("discrim") or "0"
+    try:
+        disc_int = int(disc) if isinstance(disc, str) and disc.isdigit() else 0
+    except Exception:
+        disc_int = 0
+    if avatar:
+        ext = "gif" if str(avatar).startswith("a_") else "png"
+        return f"https://cdn.discordapp.com/avatars/{discord_id}/{avatar}.{ext}?size=128"
+    # fallback embed avatar (0-4)
+    idx = disc_int % 5
+    return f"https://cdn.discordapp.com/embed/avatars/{idx}.png"
+
+
 def _oauth_redirect_attempts() -> list[Optional[str]]:
     """
     Discord requires token exchange redirect_uri to match OAuth2 → Redirects exactly.
@@ -272,6 +292,8 @@ async def handle_inventory(request: web.Request) -> web.Response:
                         "id": str(discord_id),
                         "username": user.get("username"),
                         "global_name": user.get("global_name"),
+                        "avatar": user.get("avatar"),
+                        "avatar_url": _discord_avatar_url(user, discord_id),
                     },
                     "character": None,
                     "items": [],
@@ -289,7 +311,13 @@ async def handle_inventory(request: web.Request) -> web.Response:
     return web.json_response(
         _json_safe(
             {
-                "discord": {"id": str(discord_id), "username": user.get("username"), "global_name": user.get("global_name")},
+                "discord": {
+                    "id": str(discord_id),
+                    "username": user.get("username"),
+                    "global_name": user.get("global_name"),
+                    "avatar": user.get("avatar"),
+                    "avatar_url": _discord_avatar_url(user, discord_id),
+                },
                 "character": char_dict,
                 "items": items,
             }
