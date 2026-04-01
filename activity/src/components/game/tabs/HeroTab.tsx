@@ -56,7 +56,7 @@ function isEnhanceableGear(it: InvRow): boolean {
 export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
-    getEnhanceInfo, postEnhance, buyProtection, requestSpecChoice,
+    getEnhanceInfo, postEnhance, requestSpecChoice,
   } = useGameSession();
 
   /** Hover: stats only. Click: `pinnedKey` keeps actions open until outside click or same slot toggled. */
@@ -547,18 +547,6 @@ export function HeroTab() {
             enhancePayload={enhancePayload}
             infoLoading={enhanceInfoLoading}
             onClose={() => setEnhanceItemId(null)}
-            onBuyProtection={async (protectionKey: string, quantity: number) => {
-              try {
-                const j = await buyProtection(protectionKey, quantity);
-                toast(j.message || (j.ok !== false ? "Purchased" : "Failed"));
-                if (j.ok !== false) {
-                  const p = await getEnhanceInfo(enhanceItemId);
-                  setEnhancePayload(p);
-                }
-              } catch (e) {
-                toast.error(String(e));
-              }
-            }}
             onEnhance={async (protection: BlacksmithProtection, fragments: number) => {
               const prot =
                 protection === "blessing"
