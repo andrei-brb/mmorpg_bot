@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -13,6 +13,7 @@ import { QuestOfferModal } from "./modals/QuestOfferModal";
 import { QuestCompleteModal } from "./modals/QuestCompleteModal";
 import { CreateCharacterModal } from "./modals/CreateCharacterModal";
 import { toast } from "sonner";
+import { usePvpApi } from "@/hooks/usePvpApi";
 
 const TABS = ["Hero", "Explore", "Quests", "Combat", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
@@ -29,18 +30,7 @@ const TAB_ICONS: Record<TabName, string> = {
 export function GameShell() {
   const [activeTab, setActiveTab] = useState<TabName>("Hero");
   const [profileOpen, setProfileOpen] = useState(false);
-  const playerStats = {
-    name: "Shadowblade",
-    level: 14,
-    class: "Rogue",
-    hp: "320 / 380",
-    atk: 48,
-    def: 22,
-    crit: "18%",
-    xp: "2,450 / 4,000",
-    guild: "None",
-    border: "Golden Legendary",
-  };
+  // playerStats will be derived after we get the session values from useGameSession()
   const {
     displayName,
     liveEvents,
@@ -56,6 +46,55 @@ export function GameShell() {
     inventory,
     createCharacter,
   } = useGameSession();
+
+  const { status: pvpStatus } = usePvpApi();
+
+  // Derive live player stats from the game session / inventory (no random values)
+  const playerStats = useMemo(() => {
+    const char = inventory?.character || null;
+    const items = inventory?.items || [];
+    // build equipped map
+    const equipped: Record<string, typeof items[number]> = {};
+    for (const it of items) {
+      if (it.is_equipped && it.equip_slot) equipped[it.equip_slot] = it;
+    }
+
+    const hpCur = Number(char?.current_hp ?? 0);
+    const hpMax = Number(char?.max_hp ?? 0) || "—";
+
+    // Attack: prefer main hand damage range when available
+    const main = equipped["main_hand"];
+    const dMin = main ? Number(main.s_dmg_min ?? 0) : 0;
+    const dMax = main ? Number(main.s_dmg_max ?? 0) : 0;
+    const atk = main ? `${dMin}–${dMax}` : String(
+      items.reduce((acc, it) => acc + (Number(it.s_dmg_min ?? 0) + Number(it.s_dmg_max ?? 0)) / 2, 0) | 0,
+    );
+
+    // Defense: sum of armor from equipped pieces
+    const def = items.reduce((acc, it) => acc + (Number(it.s_armor ?? 0) || 0), 0) | 0;
+
+    // Crit/hit: show hit rating if present
+    const hitRating = items.reduce((acc, it) => acc + (Number(it.s_hit_rating ?? 0) || 0), 0) | 0;
+    const crit = hitRating ? `${hitRating}%` : "—";
+
+    const xp = "—"; // XP currently not provided by inventory payload
+    const guild = "—"; // guild info not available in inventory payload
+
+    const border = pvpStatus?.stats?.rank_tier ?? "—";
+
+    return {
+      name: (inventory?.character?.name || displayName || "Adventurer"),
+      level: inventory?.character?.level ?? "—",
+      class: inventory?.character?.class ?? "—",
+      hp: `${hpCur} / ${hpMax}`,
+      atk,
+      def,
+      crit,
+      xp,
+      guild,
+      border,
+    };
+  }, [inventory, displayName, pvpStatus]);
 
   const [specSel, setSpecSel] = useState("");
   const [questBusy, setQuestBusy] = useState(false);
