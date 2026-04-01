@@ -1018,14 +1018,14 @@ async def handle_dungeon_party_enter(request: web.Request) -> web.Response:
     if not char:
         return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
 
-    # Check if in a party
+    # Check if in a party (dungeon run)
     run = await dungeon_svc.get_active_run(char["id"])
     if not run:
         return web.json_response({"error": "not_in_party", "message": "You're not in a dungeon party. Create or join one first."}, status=400)
 
-    # Check if already in dungeon combat
-    if char.get("in_dungeon"):
-        return web.json_response({"error": "already_in_dungeon", "message": "You're already in a dungeon!"}, status=400)
+    # Check if already in COMBAT (not just in party)
+    if char.get("combat_status") == "in_combat":
+        return web.json_response({"error": "already_in_combat", "message": "You're already in combat!"}, status=400)
 
     dungeon_config = DUNGEONS.get(run["dungeon_key"])
     if not dungeon_config:
@@ -1055,12 +1055,6 @@ async def handle_dungeon_party_enter(request: web.Request) -> web.Response:
 
     if result.get("error"):
         return web.json_response(result, status=400 if result["error"] != "already_in_combat" else 409)
-
-    # Mark character as in dungeon
-    await db.execute(
-        "UPDATE characters SET in_dungeon=TRUE WHERE id=$1",
-        char["id"],
-    )
 
     return web.json_response(_json_safe(result))
 
