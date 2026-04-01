@@ -137,6 +137,14 @@ export async function getCombatState(token: string, guildId?: string) {
   return res;
 }
 
+export async function postCombatStateAck(token: string, guildId?: string) {
+  return fetch(apiUrl("/api/game/combat/state/ack"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
+
 export async function getCombatEnemies(token: string, guildId?: string) {
   const res = await fetch(apiUrl("/api/game/combat/enemies"), { headers: authHeaders(token, guildId) });
   return res;
@@ -542,6 +550,11 @@ export type CombatActionJson = {
 export async function parseCombatState(res: Response): Promise<{
   active?: boolean;
   state?: CombatStatePayload;
+  ended_outcome?: CombatActionJson;
 }> {
-  return res.json() as Promise<{ active?: boolean; state?: CombatStatePayload }>;
+  return res.json() as Promise<{
+    active?: boolean;
+    state?: CombatStatePayload;
+    ended_outcome?: CombatActionJson;
+  }>;
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CombatStatePayload, ExploreZone, InventoryPayload } from "@/lib/apiTypes";
+import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
 import { skillIconUrl } from "@/lib/skillIconUrl";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 
@@ -38,6 +38,8 @@ export function CombatEncounterView({
   const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
   const classKey = state.player.class || inventory?.character?.class || "";
   const specKey = state.player.specialization || inventory?.character?.specialization || "";
+  const partyMode = Boolean(state.party_mode && state.party_players && state.party_players.length > 0);
+  const canAct = !state.party_mode || state.your_turn === true;
 
   return (
     <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
@@ -155,11 +157,43 @@ export function CombatEncounterView({
             textShadow: "0 0 6px hsl(43 78% 50% / 0.3)",
           }}
         >
-          ⚔️ Your Turn
+          {canAct ? "⚔️ Your Turn" : "⏳ Ally's Turn"}
         </span>
       </div>
 
-      {showDiscordDungeonBanner && (
+      {partyMode ? (
+        <div className="game-panel py-2">
+          <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-2">Party</div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-lg mx-auto">
+            {(state.party_players as PartyCombatRow[]).map((row, i) => {
+              const pk = row.class || "";
+              const pct = row.max_hp ? (100 * row.current_hp) / row.max_hp : 0;
+              return (
+                <div
+                  key={`${row.name}-${i}`}
+                  className={`rounded-sm p-2 text-center ${row.your_turn ? "ring-1 ring-primary/60" : "opacity-90"}`}
+                  style={{ border: "1px solid hsl(228 16% 22%)", background: "hsl(228 20% 10%)" }}
+                >
+                  <div className="flex justify-center mb-0.5">
+                    {pk ? (
+                      <img src={classIconUrl(pk)} alt="" width={28} height={28} className="w-7 h-7 object-contain rounded-sm" />
+                    ) : (
+                      <span className="text-lg">🧝</span>
+                    )}
+                  </div>
+                  <div className="text-[10px] font-cinzel text-foreground truncate">{row.name}</div>
+                  <div className="hp-bar-track mt-1">
+                    <div className="hp-bar-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[9px] text-muted-foreground tabular-nums mt-0.5">
+                    {row.current_hp}/{row.max_hp}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : showDiscordDungeonBanner ? (
         <div className="game-panel py-2">
           <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-2">Allies</div>
           <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
@@ -171,7 +205,7 @@ export function CombatEncounterView({
                 🛡️
               </div>
               <div className="text-[10px] font-cinzel text-foreground">Slot 2</div>
-              <div className="text-[9px] text-muted-foreground">Unlocks with party mode</div>
+              <div className="text-[9px] text-muted-foreground">Solo / invite friends</div>
             </div>
             <div
               className="rounded-sm p-2 text-center opacity-60"
@@ -181,11 +215,11 @@ export function CombatEncounterView({
                 🏹
               </div>
               <div className="text-[10px] font-cinzel text-foreground">Slot 3</div>
-              <div className="text-[9px] text-muted-foreground">Unlocks with party mode</div>
+              <div className="text-[9px] text-muted-foreground">Solo / invite friends</div>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="game-panel">
         <div className="game-panel-header">Skills</div>
@@ -194,7 +228,7 @@ export function CombatEncounterView({
             <button
               key={a.key}
               type="button"
-              disabled={Boolean(a.disabled) || loading}
+              disabled={Boolean(a.disabled) || loading || !canAct}
               title={a.disabled || undefined}
               className="skill-btn"
               onClick={() => void onAbility(a.key)}
@@ -221,11 +255,21 @@ export function CombatEncounterView({
       </div>
 
       <div className="flex gap-2">
-        <button type="button" onClick={() => void onFlee()} disabled={loading} className="game-btn-secondary text-xs px-3 py-1.5">
+        <button
+          type="button"
+          onClick={() => void onFlee()}
+          disabled={loading || !canAct}
+          className="game-btn-secondary text-xs px-3 py-1.5"
+        >
           🏃 Flee
         </button>
         {state.can_potion && (
-          <button type="button" onClick={() => void onPotion()} disabled={loading} className="game-btn-secondary text-xs px-3 py-1.5">
+          <button
+            type="button"
+            onClick={() => void onPotion()}
+            disabled={loading || !canAct}
+            className="game-btn-secondary text-xs px-3 py-1.5"
+          >
             🧪 Potion
           </button>
         )}

@@ -835,6 +835,15 @@ async def handle_dungeon_party_invite_accept(request: web.Request) -> web.Respon
 
     dungeon_svc = DungeonService(db)
 
+    # Hard guard: accepting an invite while already in another active run creates
+    # split-state behavior (different users resolving different runs).
+    # Require leaving current run before accepting a new invite.
+    if char.get("in_dungeon"):
+        return web.json_response(
+            {"error": "already_in_dungeon", "message": "Leave your current dungeon party before accepting an invite."},
+            status=400,
+        )
+
     # Get invite
     invite = await db.fetchrow(
         """
@@ -860,10 +869,21 @@ async def handle_dungeon_party_invite_accept(request: web.Request) -> web.Respon
     if len(run["participants"]) >= 5:
         return web.json_response({"error": "party_full", "message": "This party is full."}, status=400)
 
+    # Double-check active-run ownership via service (defense in depth).
+    active_run = await dungeon_svc.get_active_run(char["id"])
+    if active_run and str(active_run["id"]) != str(invite["run_id"]):
+        return web.json_response(
+            {"error": "already_in_dungeon", "message": "Leave your current dungeon party before accepting a new invite."},
+            status=400,
+        )
+
     # Add to party
     success = await dungeon_svc.add_participant(invite["run_id"], char["id"])
     if not success:
-        return web.json_response({"error": "join_failed", "message": "Failed to join party."}, status=500)
+        return web.json_response(
+            {"error": "join_failed", "message": "Failed to join party (already in another run, full, or invalid)."},
+            status=400,
+        )
 
     # Mark invite as accepted
     await db.execute(
@@ -1048,26 +1068,42 @@ async def handle_dungeon_party_enter(request: web.Request) -> web.Response:
     if char["level"] < dungeon_config.level_req:
         return web.json_response({"error": "level_too_low", "message": f"Requires level {dungeon_config.level_req}."}, status=400)
 
-    # Start combat (Activity handles each player's combat individually)
-    floor = run["current_floor"]
-    is_boss = floor == dungeon_config.floors
-
-    # Get enemy for this floor
-    if is_boss:
-        enemy_key = dungeon_config.floor_bosses[-1]
-    else:
-        enemy_key = dungeon_config.enemies_per_floor[(floor - 1) % len(dungeon_config.enemies_per_floor)]
-
-    # Start Activity combat
-    result = await activity_combat_api.start_activity_combat(
-        bot, discord_id, guild_id,
-        dungeon_key=run["dungeon_key"],
-        dungeon_floor=floor,
-        force=False,
+    participants = run.get("participants") or []
+    is_leader = any(
+        str(p.get("id")) == str(char["id"]) and p.get("role") == "leader" for p in participants
     )
+    if not is_leader:
+        return web.json_response(
+            {"error": "not_leader", "message": "Only the party leader can start the dungeon encounter."},
+            status=403,
+        )
+
+    floor = run["current_floor"]
+    run_id_uuid = run["id"]
+    if run_id_uuid is None:
+        return web.json_response({"error": "internal", "message": "Missing run id."}, status=500)
+
+    if len(participants) >= 2:
+        result = await activity_combat_api.start_party_dungeon_combat(
+            bot, run_id_uuid, guild_id, discord_id
+        )
+    else:
+        result = await activity_combat_api.start_activity_combat(
+            bot, discord_id, guild_id,
+            dungeon_key=run["dungeon_key"],
+            dungeon_floor=floor,
+            force=False,
+        )
 
     if result.get("error"):
-        return web.json_response(result, status=400 if result["error"] != "already_in_combat" else 409)
+        err = result["error"]
+        if err == "not_leader":
+            status = 403
+        elif err == "already_in_combat":
+            status = 409
+        else:
+            status = 400
+        return web.json_response(result, status=status)
 
     return web.json_response(_json_safe(result))
 
@@ -1179,6 +1215,27 @@ async def handle_combat_state(request: web.Request) -> web.Response:
     return web.json_response(_json_safe(payload))
 
 
+async def handle_combat_state_ack(request: web.Request) -> web.Response:
+    """POST — dismiss pending party/dungeon ended_outcome after the client applied it."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    activity_combat_api.ack_party_pending_outcome(discord_id)
+    return web.json_response(_json_safe({"ok": True}))
+
+
 async def handle_combat_start(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -1226,6 +1283,8 @@ async def handle_combat_start(request: web.Request) -> web.Response:
     status = 200
     if result.get("error") == "already_in_combat":
         status = 409
+    elif result.get("error") == "party_dungeon_use_enter":
+        status = 403
     elif result.get("error"):
         status = 400
     return web.json_response(_json_safe(result), status=status)
@@ -1258,7 +1317,7 @@ async def handle_combat_action(request: web.Request) -> web.Response:
     result = await activity_combat_api.process_activity_action(bot, discord_id, guild_id, body)
     status = 200
     if result.get("error"):
-        status = 400
+        status = 403 if result["error"] == "not_your_turn" else 400
     return web.json_response(_json_safe(result), status=status)
 
 
@@ -1551,6 +1610,7 @@ async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int
 
 async def handle_rest(request: web.Request) -> web.Response:
     """Full HP/resource restore — same rules as Discord /rest; clears Activity iframe combat if any."""
+    bot = request.app["bot"]
     _user, discord_id, char, db = await _authed_discord_user_and_char(request)
     if not char:
         return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
@@ -1563,6 +1623,7 @@ async def handle_rest(request: web.Request) -> web.Response:
             status=429,
         )
 
+    await activity_combat_api.dissolve_party_dungeon_combat_for_user(bot, discord_id)
     activity_combat_api.clear_activity_combat_session(discord_id)
     await char_svc.full_restore(_uuid_from_any(char["id"]))
     await char_svc.set_cooldown(_uuid_from_any(char["id"]), "rest", Settings.REST_COOLDOWN)
@@ -3296,6 +3357,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/dungeon/party/join", handle_dungeon_party_join)
     app.router.add_post("/api/game/dungeon/party/leave", handle_dungeon_party_leave)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
+    app.router.add_post("/api/game/combat/state/ack", handle_combat_state_ack)
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)
     app.router.add_post("/api/game/rest", handle_rest)

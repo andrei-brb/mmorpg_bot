@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatEnemy, CombatStatePayload } from "@/lib/apiTypes";
 import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { DungeonPanel } from "@/components/game/panels/DungeonPanel";
+import * as api from "@/lib/gameApi";
 
 type CombatTabMode = "overworld" | "dungeon";
 
@@ -13,6 +14,8 @@ function stripMd(s: string): string {
 
 export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const {
+    accessToken,
+    guildId,
     loadCombatSnapshot, startCombat, combatAction, rest,
     pendingCombatEnemyKey, refreshInventory, refreshProgress, map,
     inventory, combatFocusActive, setCombatFocusActive,
@@ -32,6 +35,13 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     setLoading(true);
     try {
       const snap = await loadCombatSnapshot();
+      if (snap.ended_outcome?.outcome) {
+        toast.info(snap.ended_outcome.outcome.title || "Encounter ended", {
+          description: (snap.ended_outcome.outcome.lines || []).slice(0, 3).map(stripMd).join(" "),
+        });
+        if (accessToken) await api.postCombatStateAck(accessToken, guildId);
+        return;
+      }
       if (snap.active && snap.state) {
         setState(snap.state);
         setMode("fight");
@@ -49,7 +59,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       setState(null); setMode("pick"); setOutcome(null);
       if (snap.enemies.length) setEnemyPick((prev) => prev || snap.enemies[0].key);
     } finally { setLoading(false); }
-  }, [loadCombatSnapshot, startCombat, pendingCombatEnemyKey]);
+  }, [accessToken, guildId, loadCombatSnapshot, startCombat, pendingCombatEnemyKey]);
 
   useEffect(() => {
     if (combatTabMode !== "overworld") return;

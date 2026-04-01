@@ -78,6 +78,18 @@ export type CombatAbility = {
   disabled?: string | null;
 };
 
+export type PartyCombatRow = {
+  name: string;
+  current_hp: number;
+  max_hp: number;
+  current_res?: number;
+  max_res?: number;
+  res_type?: string;
+  class?: string | null;
+  specialization?: string | null;
+  your_turn?: boolean;
+};
+
 export type CombatStatePayload = {
   turn: number;
   player: {
@@ -99,6 +111,11 @@ export type CombatStatePayload = {
   /** Activity Dungeon tab — combat started with dungeon_key + floor (see server). */
   dungeon_key?: string | null;
   dungeon_floor?: number | null;
+  /** Shared party dungeon — same encounter for all members; abilities only on your turn. */
+  party_mode?: boolean;
+  your_turn?: boolean;
+  active_turn_discord_id?: string | null;
+  party_players?: PartyCombatRow[];
 };
 
 export type DungeonFloorPreview = {
@@ -127,6 +144,8 @@ export type DungeonParticipant = {
   name: string;
   level: number;
   class: string;
+  /** Discord snowflake — used server-side for shared combat. */
+  player_id?: string;
   role: "leader" | "member";
 };
 

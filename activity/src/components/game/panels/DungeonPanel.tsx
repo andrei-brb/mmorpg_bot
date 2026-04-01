@@ -4,6 +4,7 @@ import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatStatePayload, DungeonCatalogEntry, DungeonPartyStatus, DungeonParticipant, DungeonPartyInvite } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
+import type { CombatActionJson } from "@/lib/gameApi";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -16,8 +17,16 @@ export type DungeonPanelProps = {
 };
 
 export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
-  const { accessToken, guildId, inventory, loadCombatSnapshot, startCombat, combatAction, refreshInventory, refreshProgress } =
-    useGameSession();
+  const {
+    accessToken,
+    guildId,
+    inventory,
+    loadCombatSnapshot,
+    startCombat,
+    combatAction,
+    refreshInventory,
+    refreshProgress,
+  } = useGameSession();
 
   const [catalog, setCatalog] = useState<DungeonCatalogEntry[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -87,6 +96,47 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     setOutcome(null);
     setPhase("browser");
   }, []);
+
+  const applyEndedOutcome = useCallback(
+    async (json: CombatActionJson) => {
+      if (!json.ended || !json.outcome) return;
+      try {
+        setCombatState(null);
+        const t = json.outcome.type;
+        if (t === "victory") {
+          await refreshInventory();
+          await refreshProgress();
+          setRun((prev) => {
+            if (!prev) return prev;
+            const f = prev.floor;
+            if (f >= prev.dungeon.floors) {
+              setOutcome({ title: json.outcome?.title, lines: json.outcome?.lines });
+              setPhase("complete");
+              return prev;
+            }
+            toast.success(`Floor ${f} cleared!`);
+            setPhase("run");
+            return { ...prev, floor: f + 1 };
+          });
+          return;
+        }
+        if (t === "flee") {
+          await refreshInventory();
+          await refreshProgress();
+          resetAll();
+          toast.info("You left the encounter.");
+          return;
+        }
+        setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
+        setPhase("failed");
+        await refreshInventory();
+        await refreshProgress();
+      } finally {
+        if (accessToken) await api.postCombatStateAck(accessToken, guildId);
+      }
+    },
+    [accessToken, guildId, refreshInventory, refreshProgress, resetAll],
+  );
 
   // Refresh party status
   const refreshPartyStatus = useCallback(async () => {
@@ -330,6 +380,10 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     void (async () => {
       const snap = await loadCombatSnapshot();
       if (cancelled) return;
+      if (snap.ended_outcome) {
+        await applyEndedOutcome(snap.ended_outcome);
+        return;
+      }
       const st = snap.state;
       if (!snap.active || !st?.dungeon_key || st.dungeon_floor == null) return;
       const d = catalog.find((x) => x.key === st.dungeon_key);
@@ -341,9 +395,57 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [catalog, loadCombatSnapshot]);
+  }, [catalog, loadCombatSnapshot, applyEndedOutcome]);
+
+  // Party members: poll until leader starts shared combat (leader POSTs enter; members GET state)
+  useEffect(() => {
+    if (!accessToken) return;
+    if (phase === "fight" || phase === "complete" || phase === "failed") return;
+    if (!partyStatus?.in_party || partyStatus.is_leader) return;
+    if ((partyStatus.participants?.length || 0) < 2) return;
+
+    const id = setInterval(() => {
+      void (async () => {
+        const snap = await loadCombatSnapshot();
+        if (snap.ended_outcome) {
+          await applyEndedOutcome(snap.ended_outcome);
+          return;
+        }
+        if (snap.active && snap.state?.dungeon_key != null && snap.state.dungeon_floor != null) {
+          const st = snap.state;
+          const dk = st.dungeon_key;
+          const d = dk ? catalog.find((x) => x.key === dk) : undefined;
+          setRun({
+            dungeon: d ?? {
+              key: dk ?? "dungeon",
+              name: dk ?? "Dungeon",
+              emoji: "⚔️",
+              description: "",
+              level_req: 1,
+              floors: Math.max(st.dungeon_floor ?? 1, 1),
+              xp_per_floor: 0,
+              gold_min: 0,
+              gold_max: 0,
+              floor_preview: [],
+            },
+            floor: st.dungeon_floor ?? 1,
+          });
+          setCombatState(st);
+          setPhase("fight");
+        }
+      })();
+    }, 2500);
+    return () => clearInterval(id);
+  }, [accessToken, phase, partyStatus, catalog, loadCombatSnapshot, applyEndedOutcome]);
+
+  const partyBlocksSoloDungeon =
+    Boolean(partyStatus?.in_party) && (partyStatus?.participants?.length || 0) >= 2;
 
   const enterSolo = (d: DungeonCatalogEntry) => {
+    if (partyBlocksSoloDungeon) {
+      toast.error("You're in a party with 2+ players. Use the leader's Enter Dungeon — do not start a solo run.");
+      return;
+    }
     setRun({ dungeon: d, floor: 1 });
     setPhase("run");
     toast(`Entering ${d.name}…`, { description: `${d.floors} floors — fight each floor with your real skills.` });
@@ -351,6 +453,10 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
 
   const startFloorFight = async () => {
     if (!run) return;
+    if (partyBlocksSoloDungeon) {
+      toast.error("Party mode: the leader must start from Enter Dungeon above — this button would start a separate fight.");
+      return;
+    }
     setLoading(true);
     try {
       const r = await startCombat({ kind: "dungeon", dungeonKey: run.dungeon.key, floor: run.floor });
@@ -370,35 +476,7 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     try {
       const json = await combatAction({ ability: key });
       if (json.ended && json.outcome) {
-        setCombatState(null);
-        const t = json.outcome.type;
-        if (t === "victory") {
-          await refreshInventory();
-          await refreshProgress();
-          setRun((prev) => {
-            if (!prev) return prev;
-            const f = prev.floor;
-            if (f >= prev.dungeon.floors) {
-              setOutcome({ title: json.outcome?.title, lines: json.outcome?.lines });
-              setPhase("complete");
-              return prev;
-            }
-            toast.success(`Floor ${f} cleared!`);
-            setPhase("run");
-            return { ...prev, floor: f + 1 };
-          });
-          return;
-        }
-        if (t === "flee") {
-          await refreshInventory();
-          await refreshProgress();
-          resetAll();
-          return;
-        }
-        setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
-        setPhase("failed");
-        await refreshInventory();
-        await refreshProgress();
+        await applyEndedOutcome(json);
         return;
       }
       if (json.state) setCombatState(json.state);
@@ -412,11 +490,7 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     try {
       const json = await combatAction({ flee: true });
       if (json.ended && json.outcome) {
-        setCombatState(null);
-        await refreshInventory();
-        await refreshProgress();
-        resetAll();
-        toast.info("You left the encounter.");
+        await applyEndedOutcome(json);
         return;
       }
       if (json.state) setCombatState(json.state);
@@ -543,13 +617,24 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
           )}
 
           <div className="flex gap-2 flex-wrap">
-            <button type="button" onClick={() => void startFloorFight()} disabled={loading} className="game-btn-danger text-xs px-4 py-2 flex-1 min-w-[140px]">
+            <button
+              type="button"
+              onClick={() => void startFloorFight()}
+              disabled={loading || partyBlocksSoloDungeon}
+              className="game-btn-danger text-xs px-4 py-2 flex-1 min-w-[140px] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               ⚔️ {isBossFloor ? "Fight boss" : `Fight floor ${run.floor}`}
             </button>
             <button type="button" onClick={onLeaveDungeon} disabled={loading} className="game-btn-secondary text-xs px-4 py-2">
               Leave Dungeon
             </button>
           </div>
+          {partyBlocksSoloDungeon && (
+            <p className="text-[10px] text-amber-600/90 mt-2">
+              Party (2+): close this solo view and use the party panel — only the leader can press Enter Dungeon so everyone
+              shares one fight.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -676,15 +761,21 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
               </div>
             )}
 
-            <div className="flex gap-2 mb-3">
-              <button
-                type="button"
-                onClick={onEnterDungeon}
-                disabled={partyLoading || (partyStatus.participants?.length || 0) < 2}
-                className="game-btn-danger text-xs px-4 py-2 flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ⚔️ Enter Dungeon
-              </button>
+            <div className="flex gap-2 mb-3 flex-wrap">
+              {partyStatus.is_leader ? (
+                <button
+                  type="button"
+                  onClick={onEnterDungeon}
+                  disabled={partyLoading || (partyStatus.participants?.length || 0) < 2}
+                  className="game-btn-danger text-xs px-4 py-2 flex-1 min-w-[140px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ⚔️ Enter Dungeon
+                </button>
+              ) : (
+                <p className="text-xs text-muted-foreground flex-1 min-w-[140px] py-2">
+                  Wait for the party leader to start the encounter. You will join the same fight automatically.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={onLeaveParty}
@@ -694,9 +785,9 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
                 Leave Party
               </button>
             </div>
-            {(partyStatus.participants?.length || 0) < 2 && (
+            {partyStatus.is_leader && (partyStatus.participants?.length || 0) < 2 && (
               <p className="text-[10px] text-muted-foreground">
-                💡 Need 2+ players to enter dungeon
+                💡 Need 2+ players for shared party combat
               </p>
             )}
           </div>

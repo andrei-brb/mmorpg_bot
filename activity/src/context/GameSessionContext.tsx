@@ -63,6 +63,7 @@ type GameSessionValue = {
   loadCombatSnapshot: () => Promise<{
     active: boolean;
     state?: CombatStatePayload;
+    ended_outcome?: api.CombatActionJson;
     enemies: CombatEnemy[];
   }>;
   startCombat: (
@@ -302,6 +303,13 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     ]);
     const stJson = await api.parseCombatState(stRes);
     const enJson = (await enRes.json()) as { enemies?: CombatEnemy[] };
+    if (stJson.ended_outcome) {
+      return {
+        active: false,
+        ended_outcome: stJson.ended_outcome,
+        enemies: enJson.enemies || [],
+      };
+    }
     return {
       active: Boolean(stJson.active && stJson.state),
       state: stJson.state,

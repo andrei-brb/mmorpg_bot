@@ -87,6 +87,24 @@ class DungeonService:
         )
         if existing:
             return False
+
+        # Safety: a character must not belong to two active runs at once.
+        # (Invite-accept path also checks this, but service-level guard keeps it invariant.)
+        other_active = await self.db.fetchrow(
+            """
+            SELECT dr.id
+            FROM dungeon_runs dr
+            JOIN dungeon_participants dp ON dr.id = dp.run_id
+            WHERE dp.character_id = $1
+              AND dr.is_active = TRUE
+              AND dr.id <> $2
+            LIMIT 1
+            """,
+            char_id,
+            run_id,
+        )
+        if other_active:
+            return False
         
         await self.db.execute(
             """
@@ -117,7 +135,7 @@ class DungeonService:
         
         participants = await self.db.fetch(
             """
-            SELECT c.id, c.name, c.level, c.class, dp.role
+            SELECT c.id, c.name, c.level, c.class, c.player_id, dp.role
             FROM dungeon_participants dp
             JOIN characters c ON dp.character_id = c.id
             WHERE dp.run_id = $1
@@ -134,9 +152,17 @@ class DungeonService:
         """Get active dungeon run for a character."""
         run = await self.db.fetchrow(
             """
-            SELECT dr.* FROM dungeon_runs dr
+            SELECT dr.*
+            FROM dungeon_runs dr
             JOIN dungeon_participants dp ON dr.id = dp.run_id
+            LEFT JOIN (
+                SELECT run_id, COUNT(*)::int AS participant_count
+                FROM dungeon_participants
+                GROUP BY run_id
+            ) pc ON pc.run_id = dr.id
             WHERE dp.character_id = $1 AND dr.is_active = TRUE
+            ORDER BY COALESCE(pc.participant_count, 0) DESC, dr.started_at DESC
+            LIMIT 1
             """,
             char_id,
         )
