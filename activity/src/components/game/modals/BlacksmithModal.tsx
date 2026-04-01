@@ -215,46 +215,6 @@ export function BlacksmithModal({
 
                 <div className="ornament-divider mb-4" />
 
-                {onBuyProtection && (
-                  <div className="mb-4">
-                    <div className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
-                      Blacksmith shop
-                    </div>
-                    <div className="grid grid-cols-1 gap-2">
-                      {PROTECTION_SHOP.map((row) => (
-                        <div
-                          key={row.key}
-                          className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-sm text-xs"
-                          style={{
-                            background: "hsl(228 18% 12% / 0.6)",
-                            border: "1px solid hsl(228 16% 22%)",
-                          }}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <span className="mr-1.5" aria-hidden>
-                              {row.emoji}
-                            </span>
-                            <span className="font-semibold text-foreground">{row.label}</span>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">{row.hint}</div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-gold font-cinzel tabular-nums">{row.price.toLocaleString()} 🪙</span>
-                            <button
-                              type="button"
-                              onClick={() => void handleBuy(row.key)}
-                              disabled={Boolean(buyPendingKey) || enhancePending}
-                              className="game-btn-secondary text-[10px] px-2 py-1 whitespace-nowrap"
-                            >
-                              {buyPendingKey === row.key ? "…" : "Buy ×1"}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="ornament-divider mt-4 mb-4" />
-                  </div>
-                )}
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <div className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
@@ -297,8 +257,23 @@ export function BlacksmithModal({
                         <div className="flex-1">
                           <div className="text-xs text-foreground font-semibold">📜 Blessing Scroll</div>
                           <div className="text-[10px] text-muted-foreground">On fail when item can break → downgrade by 1 instead</div>
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            In inventory: <span className="text-foreground">{blessingStock}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              In inventory: <span className="text-foreground">{blessingStock}</span>
+                            </span>
+                            {onBuyProtection && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  void handleBuy("blessing_scroll");
+                                }}
+                                disabled={Boolean(buyPendingKey) || enhancePending}
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 transition"
+                              >
+                                {buyPendingKey === "blessing_scroll" ? "…" : "10,000 🪙"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </label>
@@ -321,8 +296,23 @@ export function BlacksmithModal({
                           <div className="text-xs text-foreground font-semibold">🛡️ Safety Charm</div>
                           <div className="text-[10px] text-muted-foreground">Guarantees success (tiers +1–+5 only)</div>
                           {!charmUsable && <div className="text-[10px] text-destructive mt-0.5">Not usable at this tier</div>}
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            In inventory: <span className="text-foreground">{charmStock}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              In inventory: <span className="text-foreground">{charmStock}</span>
+                            </span>
+                            {onBuyProtection && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  void handleBuy("safety_charm");
+                                }}
+                                disabled={Boolean(buyPendingKey) || enhancePending}
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 transition"
+                              >
+                                {buyPendingKey === "safety_charm" ? "…" : "5,000 🪙"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </label>
@@ -355,8 +345,20 @@ export function BlacksmithModal({
                           ))}
                         </select>
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        In inventory: <span className="text-foreground">{fragmentStock}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          In inventory: <span className="text-foreground">{fragmentStock}</span>
+                        </span>
+                        {onBuyProtection && (
+                          <button
+                            type="button"
+                            onClick={() => void handleBuy("enhancement_fragment")}
+                            disabled={Boolean(buyPendingKey) || enhancePending}
+                            className="text-[9px] px-1.5 py-0.5 rounded bg-primary/20 hover:bg-primary/30 text-primary border border-primary/40 transition"
+                          >
+                            {buyPendingKey === "enhancement_fragment" ? "…" : "2,000 🪙"}
+                          </button>
+                        )}
                       </div>
                     </div>
 
