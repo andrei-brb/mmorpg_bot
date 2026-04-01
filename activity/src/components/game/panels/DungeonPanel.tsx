@@ -102,14 +102,10 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       return;
     }
     try {
-      const res = await fetch(`${api.apiUrl("/api/game/dungeon/party/players?q=")}${encodeURIComponent(query)}`, {
-        headers: api.authHeaders(accessToken, guildId),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPlayerSuggestions(data.players || []);
-      }
+      const data = await api.getDungeonPartyPlayers(accessToken, query, guildId);
+      setPlayerSuggestions(data.players || []);
     } catch (e) {
+      console.error("Failed to fetch player suggestions:", e);
       setPlayerSuggestions([]);
     }
   }, [accessToken, guildId]);

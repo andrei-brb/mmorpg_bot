@@ -228,6 +228,18 @@ export async function postDungeonPartyLeave(
   return res.json() as Promise<{ ok?: boolean; message?: string }>;
 }
 
+export async function getDungeonPartyPlayers(
+  token: string,
+  query: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; players?: Array<{ id: string; username: string; level: number; class: string }> }> {
+  const res = await fetch(
+    apiUrl(`/api/game/dungeon/party/players?q=${encodeURIComponent(query)}`),
+    { headers: authHeaders(token, guildId) }
+  );
+  return res.json() as Promise<{ ok?: boolean; players?: Array<{ id: string; username: string; level: number; class: string }> }>;
+}
+
 export async function postCombatAction(token: string, body: Record<string, unknown>, guildId?: string) {
   return fetch(apiUrl("/api/game/combat/action"), {
     method: "POST",
