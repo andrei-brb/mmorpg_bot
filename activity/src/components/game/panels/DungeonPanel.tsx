@@ -166,6 +166,44 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     }
   }, [accessToken, guildId, fetchIncomingInvites]);
 
+  // Enter dungeon (party mode)
+  const onEnterDungeon = useCallback(async () => {
+    if (!accessToken) return;
+    setPartyLoading(true);
+    try {
+      const result = await api.postDungeonPartyEnter(accessToken, guildId);
+      if (result.ok && result.state) {
+        toast.success("Entering dungeon...");
+        // Combat state will be loaded by existing combat snapshot logic
+      } else {
+        toast.error(result.message || result.error || "Failed to enter dungeon.");
+      }
+    } catch (e) {
+      toast.error("Failed to enter dungeon.");
+    } finally {
+      setPartyLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  // Leave dungeon (reset combat status)
+  const onLeaveDungeon = useCallback(async () => {
+    if (!accessToken) return;
+    setPartyLoading(true);
+    try {
+      // Call rest endpoint to clear combat status
+      await api.postRest(accessToken, guildId);
+      toast.success("Left dungeon and resting.");
+      // Reset local state
+      setRun(null);
+      setCombatState(null);
+      setPhase("browser");
+    } catch (e) {
+      toast.error("Failed to leave dungeon.");
+    } finally {
+      setPartyLoading(false);
+    }
+  }, [accessToken, guildId]);
+
   // Create party
   const onCreateParty = async (d: DungeonCatalogEntry) => {
     if (!accessToken) return;
@@ -478,8 +516,8 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
             <button type="button" onClick={() => void startFloorFight()} disabled={loading} className="game-btn-danger text-xs px-4 py-2 flex-1 min-w-[140px]">
               ⚔️ {isBossFloor ? "Fight boss" : `Fight floor ${run.floor}`}
             </button>
-            <button type="button" onClick={resetAll} disabled={loading} className="game-btn-secondary text-xs px-4 py-2">
-              Leave
+            <button type="button" onClick={onLeaveDungeon} disabled={loading} className="game-btn-secondary text-xs px-4 py-2">
+              Leave Dungeon
             </button>
           </div>
         </div>
@@ -608,14 +646,29 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={onLeaveParty}
-              disabled={partyLoading}
-              className="game-btn-secondary text-xs px-4 py-2 w-full"
-            >
-              Leave Party
-            </button>
+            <div className="flex gap-2 mb-3">
+              <button
+                type="button"
+                onClick={onEnterDungeon}
+                disabled={partyLoading || (partyStatus.participants?.length || 0) < 2}
+                className="game-btn-danger text-xs px-4 py-2 flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ⚔️ Enter Dungeon
+              </button>
+              <button
+                type="button"
+                onClick={onLeaveParty}
+                disabled={partyLoading}
+                className="game-btn-secondary text-xs px-4 py-2"
+              >
+                Leave Party
+              </button>
+            </div>
+            {(partyStatus.participants?.length || 0) < 2 && (
+              <p className="text-[10px] text-muted-foreground">
+                💡 Need 2+ players to enter dungeon
+              </p>
+            )}
           </div>
         </div>
       )}

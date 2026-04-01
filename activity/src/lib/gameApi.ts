@@ -293,6 +293,18 @@ export async function deleteDungeonPartyInvite(
   return res.json() as Promise<{ ok?: boolean; message?: string }>;
 }
 
+export async function postDungeonPartyEnter(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string; state?: CombatStatePayload }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/enter"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; state?: CombatStatePayload }>;
+}
+
 export async function postCombatAction(
   token: string,
   body: Record<string, unknown>,

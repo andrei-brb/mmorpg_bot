@@ -980,6 +980,91 @@ async def handle_dungeon_party_invite_cancel(request: web.Request) -> web.Respon
     return web.json_response({"ok": True, "message": "Invite cancelled."})
 
 
+async def handle_dungeon_party_enter(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/enter — Enter dungeon combat (party mode)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    guild_id = _guild_id_from_request(request, body)
+
+    from services.dungeon.dungeon_service import DungeonService
+    from services.character.character_service import CharacterService
+    from services.combat import activity_combat as activity_combat_api
+    from config.settings import DUNGEONS
+
+    char_svc = CharacterService(db)
+    dungeon_svc = DungeonService(db)
+
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    # Check if in a party
+    run = await dungeon_svc.get_active_run(char["id"])
+    if not run:
+        return web.json_response({"error": "not_in_party", "message": "You're not in a dungeon party. Create or join one first."}, status=400)
+
+    # Check if already in dungeon combat
+    if char.get("in_dungeon"):
+        return web.json_response({"error": "already_in_dungeon", "message": "You're already in a dungeon!"}, status=400)
+
+    dungeon_config = DUNGEONS.get(run["dungeon_key"])
+    if not dungeon_config:
+        return web.json_response({"error": "invalid_dungeon", "message": "Invalid dungeon configuration."}, status=500)
+
+    # Check level requirement
+    if char["level"] < dungeon_config.level_req:
+        return web.json_response({"error": "level_too_low", "message": f"Requires level {dungeon_config.level_req}."}, status=400)
+
+    # Start combat (Activity handles each player's combat individually)
+    floor = run["current_floor"]
+    is_boss = floor == dungeon_config.floors
+
+    # Get enemy for this floor
+    if is_boss:
+        enemy_key = dungeon_config.floor_bosses[-1]
+    else:
+        enemy_key = dungeon_config.enemies_per_floor[(floor - 1) % len(dungeon_config.enemies_per_floor)]
+
+    # Start Activity combat
+    result = await activity_combat_api.start_activity_combat(
+        bot, discord_id, guild_id,
+        dungeon_key=run["dungeon_key"],
+        dungeon_floor=floor,
+        force=False,
+    )
+
+    if result.get("error"):
+        return web.json_response(result, status=400 if result["error"] != "already_in_combat" else 409)
+
+    # Mark character as in dungeon
+    await db.execute(
+        "UPDATE characters SET in_dungeon=TRUE WHERE id=$1",
+        char["id"],
+    )
+
+    return web.json_response(_json_safe(result))
+
+
 async def handle_dungeon_party_leave(request: web.Request) -> web.Response:
     """POST /api/game/dungeon/party/leave — Leave the current dungeon party."""
     bot = request.app["bot"]
@@ -3078,6 +3163,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/dungeon/party/invite/accept", handle_dungeon_party_invite_accept)
     app.router.add_post("/api/game/dungeon/party/invite/decline", handle_dungeon_party_invite_decline)
     app.router.add_delete("/api/game/dungeon/party/invite", handle_dungeon_party_invite_cancel)
+    app.router.add_post("/api/game/dungeon/party/enter", handle_dungeon_party_enter)
     app.router.add_post("/api/game/dungeon/party/join", handle_dungeon_party_join)
     app.router.add_post("/api/game/dungeon/party/leave", handle_dungeon_party_leave)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
