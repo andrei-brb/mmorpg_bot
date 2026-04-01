@@ -6,6 +6,7 @@ import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const EQUIP_ORDER = [
   "head", "chest", "hands", "legs", "feet",
@@ -174,6 +175,13 @@ export function HeroTab() {
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div className="flex items-center gap-3 text-sm flex-wrap">
+                <Avatar className="w-7 h-7 shrink-0">
+                  {inventory?.discord?.avatar_url ? (
+                    <AvatarImage src={String(inventory.discord.avatar_url)} alt={char.name || "Avatar"} />
+                  ) : (
+                    <AvatarFallback className="text-[10px]">{(char.name || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
+                  )}
+                </Avatar>
                 <span className="text-foreground font-semibold font-cinzel text-base">{char.name}</span>
                 <span className="text-primary font-pixel text-[10px]"
                   style={{ textShadow: '0 0 6px hsl(43 78% 50% / 0.3)' }}>Lv {char.level ?? "?"}</span>
