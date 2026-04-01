@@ -9,6 +9,7 @@ import type {
   ExploreMapPayload,
   ExploreResultPayload,
   InventoryPayload,
+  InvRow,
   LiveEventRow,
   ProgressPayload,
   QuestLogPayload,
@@ -346,6 +347,37 @@ export async function getMarketListings(token: string, guildId?: string) {
   const res = await fetch(apiUrl("/api/game/market/listings"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`market-listings ${res.status}`);
   return res.json() as Promise<{ ok?: boolean; listings?: Array<{ id: string; price: number; quantity: number; listed_at: string; name: string; icon?: string | null; description?: string | null; rarity: string; enhancement_level?: number | null; seller_name: string }> }>;
+}
+
+export async function postListItemOnMarket(
+  token: string,
+  itemId: string,
+  price: number,
+  guildId?: string
+): Promise<{ ok?: boolean; listing_id?: string; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/market/list-item"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ item_id: itemId, price }),
+  });
+  return res.json() as Promise<{ ok?: boolean; listing_id?: string; message?: string }>;
+}
+
+export function calculateMarketPrice(item: InvRow, vendorBuy?: number): number {
+  const rarity = (item.rarity || "common").toLowerCase();
+  const multipliers: Record<string, number> = {
+    common: 3.0,
+    uncommon: 4.5,
+    rare: 7.0,
+    epic: 10.0,
+    legendary: 15.0,
+  };
+
+  const base = vendorBuy || 50;
+  const rarityMult = multipliers[rarity] || 3.0;
+  const enhancement = 1.0 + ((item.enhancement_level || 0) * 0.15);
+
+  return Math.round(base * rarityMult * enhancement);
 }
 
 export async function postBuyProtection(token: string, key: string, qty: number, guildId?: string) {

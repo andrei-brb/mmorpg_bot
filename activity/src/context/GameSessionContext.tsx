@@ -81,6 +81,7 @@ type GameSessionValue = {
   buyShopItem: (templateId: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
   marketListings: MarketListingRow[];
   refreshMarketListings: () => Promise<void>;
+  listItemOnMarket: (itemId: string, price: number) => Promise<{ ok?: boolean; listing_id?: string; message?: string }>;
   npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   abandonQuest: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   questOffer: QuestOfferPayload | null;
@@ -409,6 +410,18 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [accessToken, guildId]);
 
+  const listItemOnMarket = useCallback(
+    async (itemId: string, price: number) => {
+      if (!accessToken) return { ok: false };
+      const res = await api.postListItemOnMarket(accessToken, itemId, price, guildId);
+      const j = (await res.json()) as { ok?: boolean; listing_id?: string; message?: string };
+      await refreshInventory();
+      await refreshMarketListings();
+      return j;
+    },
+    [accessToken, guildId, refreshInventory, refreshMarketListings],
+  );
+
   const npcInteract = useCallback(
     async (npc?: string) => {
       if (!accessToken) return { ok: false, error: "no_token" };
@@ -648,6 +661,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       buyShopItem,
       marketListings,
       refreshMarketListings,
+      listItemOnMarket,
       npcInteract,
       abandonQuest,
       questOffer,
@@ -694,6 +708,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       buyShopItem,
       marketListings,
       refreshMarketListings,
+      listItemOnMarket,
       npcInteract,
       abandonQuest,
       questOffer,

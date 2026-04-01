@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { EnhanceInfoPayload, InvRow } from "@/lib/apiTypes";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
+import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -65,6 +66,7 @@ export function HeroTab() {
   const [enhancePayload, setEnhancePayload] = useState<EnhanceInfoPayload | null>(null);
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
+  const [listItemId, setListItemId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
 
   const char = inventory?.character;
@@ -452,6 +454,19 @@ export function HeroTab() {
                               </button>
                             </>
                           )}
+                          {gearSlot(it) && !it.is_equipped && (it.item_type || "").toLowerCase() !== "consumable" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPinnedKey(null);
+                                setListItemId(it.id);
+                              }}
+                              className="game-btn-primary px-2 py-0.5 text-[10px]"
+                            >
+                              📦 List
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -564,6 +579,22 @@ export function HeroTab() {
               } catch (e) {
                 toast.error(String(e));
               }
+            }}
+          />
+        );
+      })()}
+
+      {/* List Item Modal */}
+      {listItemId && (() => {
+        const it = items.find(i => i.id === listItemId);
+        if (!it) return null;
+        return (
+          <ListItemModal
+            item={it}
+            onClose={() => setListItemId(null)}
+            onSuccess={() => {
+              setListItemId(null);
+              setPinnedKey(null);
             }}
           />
         );

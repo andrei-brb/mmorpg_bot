@@ -2554,6 +2554,108 @@ async def handle_market_listings(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": str(e), "message": "Failed to fetch market listings."}, status=500)
 
 
+async def handle_list_item_on_market(request: web.Request) -> web.Response:
+    """List a player-owned item on the marketplace."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    item_id = (body.get("item_id") or "").strip()
+    price = int(body.get("price") or 0)
+
+    if not item_id or price <= 0:
+        return web.json_response(
+            {"ok": False, "error": "invalid_params", "message": "Missing or invalid item_id/price."},
+            status=400
+        )
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    # Check listing cap (max 10 active listings per player)
+    active_count = await db.fetchval(
+        "SELECT COUNT(*) FROM market_listings WHERE seller_id=$1 AND is_active=TRUE",
+        char["id"]
+    )
+    if active_count >= 10:
+        return web.json_response(
+            {"ok": False, "error": "listing_cap_reached", "message": "You have reached the maximum of 10 active listings."},
+            status=400
+        )
+
+    # Fetch item and validate
+    inv_row = await db.fetchrow(
+        """SELECT i.*, it.soulbound, it.tradeable, it.item_type, it.vendor_buy
+           FROM inventory i
+           JOIN item_templates it ON i.template_id = it.id
+           WHERE i.id=$1 AND i.character_id=$2""",
+        uid, char["id"]
+    )
+
+    if not inv_row:
+        return web.json_response({"ok": False, "error": "item_not_found", "message": "Item not found in your inventory."}, status=400)
+
+    # Validate item cannot be listed
+    if inv_row["is_equipped"]:
+        return web.json_response({"ok": False, "error": "item_equipped", "message": "Cannot list equipped items."}, status=400)
+
+    if inv_row["soulbound"]:
+        return web.json_response({"ok": False, "error": "item_soulbound", "message": "Cannot list soulbound items."}, status=400)
+
+    if not inv_row["tradeable"]:
+        return web.json_response({"ok": False, "error": "item_not_tradeable", "message": "This item cannot be traded."}, status=400)
+
+    # Whitelist item types: only weapon, armor, accessory, material, gear
+    item_type = (inv_row["item_type"] or "").lower()
+    if item_type not in ("weapon", "armor", "accessory", "material", "gear"):
+        return web.json_response(
+            {"ok": False, "error": "item_type_not_listable", "message": f"Items of type '{item_type}' cannot be listed."},
+            status=400
+        )
+
+    # Insert listing
+    try:
+        listing_id = await db.fetchval(
+            """INSERT INTO market_listings (seller_id, item_id, price, quantity, is_active, listed_at, expires_at)
+               VALUES ($1, $2, $3, 1, TRUE, NOW(), NOW() + INTERVAL '7 days')
+               RETURNING id""",
+            char["id"], uid, price
+        )
+        return web.json_response(
+            {"ok": True, "listing_id": str(listing_id), "message": f"Listed for {price}g"},
+            status=200
+        )
+    except Exception as e:
+        return web.json_response(
+            {"ok": False, "error": "listing_failed", "message": f"Failed to create listing: {str(e)}"},
+            status=500
+        )
+
+
 async def handle_buy_protection(request: web.Request) -> web.Response:
     """Buy protection items for enhancement (Activity modal convenience)."""
     bot = request.app["bot"]
@@ -2723,6 +2825,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/shop/catalog", handle_shop_catalog)
     app.router.add_post("/api/game/shop/buy", handle_shop_buy)
     app.router.add_get("/api/game/market/listings", handle_market_listings)
+    app.router.add_post("/api/game/market/list-item", handle_list_item_on_market)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)
