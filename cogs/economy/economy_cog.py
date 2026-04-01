@@ -87,9 +87,10 @@ class EconomyCog(commands.Cog, name="Economy"):
         except ValueError: return await interaction.followup.send("❌ Invalid listing ID.")
 
         listing = await self.bot.db.fetchrow(
-            """SELECT ml.*, t.name, i.template_id, 
+            """SELECT ml.*, t.name, i.template_id,
                       i.rarity, i.r_str, i.r_agi, i.r_int, i.r_spi, i.r_sta,
-                      i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating
+                      i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating,
+                      COALESCE(i.enhancement_level, 0) as enhancement_level
                FROM market_listings ml JOIN inventory i ON ml.item_id=i.id
                JOIN item_templates t ON i.template_id=t.id
                WHERE ml.id=$1 AND ml.is_active=TRUE AND ml.expires_at>NOW()""", uid
@@ -119,6 +120,21 @@ class EconomyCog(commands.Cog, name="Economy"):
             "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
         }
         await inv.add_item(char["id"], listing["template_id"], rarity=rarity, from_="market", bonus=bonus)
+
+        # Preserve enhancement level if item was upgraded
+        enhancement_level = listing.get("enhancement_level", 0) or 0
+        if enhancement_level > 0:
+            # Update the most recently added item with the enhancement level
+            await self.bot.db.execute(
+                """UPDATE inventory SET enhancement_level=$2
+                   WHERE id = (
+                       SELECT id FROM inventory
+                       WHERE character_id=$1 AND template_id=$3
+                       ORDER BY obtained_at DESC NULLS FIRST LIMIT 1
+                   )""",
+                char["id"], enhancement_level, listing["template_id"]
+            )
+
         await self.bot.db.execute("DELETE FROM inventory WHERE id=$1", listing["item_id"])
         await self.bot.db.execute(
             "UPDATE market_listings SET is_active=FALSE, sold_at=NOW(), buyer_id=$2 WHERE id=$1", uid, char["id"]
