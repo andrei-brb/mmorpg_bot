@@ -146,7 +146,11 @@ export type StartCombatParams =
   | { kind: "zone"; enemyKey: string }
   | { kind: "dungeon"; dungeonKey: string; floor: number };
 
-export async function postCombatStart(token: string, guildId: string | undefined, params: StartCombatParams) {
+export async function postCombatStart(
+  token: string,
+  guildId: string | undefined,
+  params: StartCombatParams,
+): Promise<Response> {
   const body =
     params.kind === "zone"
       ? { enemy_key: params.enemyKey }
@@ -241,7 +245,11 @@ export async function getDungeonPartyPlayers(
   return res.json() as Promise<{ ok?: boolean; players?: Array<{ id: string; username: string; level: number; class: string }> }>;
 }
 
-export async function postCombatAction(token: string, body: Record<string, unknown>, guildId?: string) {
+export async function postCombatAction(
+  token: string,
+  body: Record<string, unknown>,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/combat/action"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -249,7 +257,7 @@ export async function postCombatAction(token: string, body: Record<string, unkno
   });
 }
 
-export async function postRest(token: string, guildId?: string) {
+export async function postRest(token: string, guildId?: string): Promise<Response> {
   return fetch(apiUrl("/api/game/rest"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -282,7 +290,11 @@ export async function getSpecializations(token: string, guildId?: string): Promi
   return res.json() as Promise<SpecGatePayload>;
 }
 
-export async function postSpecialization(token: string, specKey: string, guildId?: string) {
+export async function postSpecialization(
+  token: string,
+  specKey: string,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/character/specialization"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -295,7 +307,7 @@ export async function postItem(
   endpoint: string,
   body: Record<string, unknown>,
   guildId?: string,
-) {
+): Promise<Response> {
   return fetch(apiUrl(endpoint), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -317,7 +329,7 @@ export async function postEnhance(
   protectionType: string | null,
   fragmentCount: number,
   guildId?: string,
-) {
+): Promise<Response> {
   return fetch(apiUrl("/api/game/item/enhance"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -335,7 +347,12 @@ export async function getShopCatalog(token: string, guildId?: string) {
   return res.json() as Promise<{ ok?: boolean; items?: Array<{ id: string; name: string; icon?: string | null; rarity: string; vendor_buy: number; effect_type?: string | null; effect_value?: number | null; effect_duration?: number | null; level_req?: number | null; description?: string | null }> }>;
 }
 
-export async function postShopBuy(token: string, templateId: string, qty: number, guildId?: string) {
+export async function postShopBuy(
+  token: string,
+  templateId: string,
+  qty: number,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/shop/buy"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -349,7 +366,12 @@ export async function getMarketListings(token: string, guildId?: string) {
   return res.json() as Promise<{ ok?: boolean; listings?: Array<{ id: string; price: number; quantity: number; listed_at: string; name: string; icon?: string | null; description?: string | null; rarity: string; enhancement_level?: number | null; seller_name: string }> }>;
 }
 
-export async function postListItemOnMarket(token: string, itemId: string, price: number, guildId?: string) {
+export async function postListItemOnMarket(
+  token: string,
+  itemId: string,
+  price: number,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/market/list-item"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -374,7 +396,12 @@ export function calculateMarketPrice(item: InvRow, vendorBuy?: number): number {
   return Math.round(base * rarityMult * enhancement);
 }
 
-export async function postBuyProtection(token: string, key: string, qty: number, guildId?: string) {
+export async function postBuyProtection(
+  token: string,
+  key: string,
+  qty: number,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/blacksmith/buy-protection"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -382,7 +409,11 @@ export async function postBuyProtection(token: string, key: string, qty: number,
   });
 }
 
-export async function postNpcInteract(token: string, npc: string | undefined, guildId?: string) {
+export async function postNpcInteract(
+  token: string,
+  npc: string | undefined,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/npc/interact"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -390,7 +421,11 @@ export async function postNpcInteract(token: string, npc: string | undefined, gu
   });
 }
 
-export async function postQuestAbandon(token: string, questId: string, guildId?: string) {
+export async function postQuestAbandon(
+  token: string,
+  questId: string,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/quest/abandon"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -398,7 +433,11 @@ export async function postQuestAbandon(token: string, questId: string, guildId?:
   });
 }
 
-export async function postQuestAccept(token: string, questId: string, guildId?: string) {
+export async function postQuestAccept(
+  token: string,
+  questId: string,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/quest/accept"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
@@ -406,7 +445,11 @@ export async function postQuestAccept(token: string, questId: string, guildId?: 
   });
 }
 
-export async function postQuestDecline(token: string, questId: string, guildId?: string) {
+export async function postQuestDecline(
+  token: string,
+  questId: string,
+  guildId?: string,
+): Promise<Response> {
   return fetch(apiUrl("/api/game/quest/decline"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
