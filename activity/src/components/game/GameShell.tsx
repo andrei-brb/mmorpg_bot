@@ -8,6 +8,7 @@ import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
 import { CombatTab } from "./tabs/CombatTab";
 import { ProgressTab } from "./tabs/ProgressTab";
+import { MarketTab } from "./tabs/MarketTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
@@ -16,7 +17,7 @@ import { CreateCharacterModal } from "./modals/CreateCharacterModal";
 import { toast } from "sonner";
 import { usePvpApi } from "@/hooks/usePvpApi";
 
-const TABS = ["Hero", "Explore", "Quests", "Combat", "Arena", "Progress"] as const;
+const TABS = ["Hero", "Explore", "Quests", "Combat", "Market", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabName, string> = {
@@ -24,6 +25,7 @@ const TAB_ICONS: Record<TabName, string> = {
   Explore: "🗺️",
   Quests: "📜",
   Combat: "💀",
+  Market: "🏪",
   Arena: "🏟️",
   Progress: "📊",
 };
@@ -321,6 +323,7 @@ export function GameShell() {
               {activeTab === "Explore" && <ExploreTab />}
               {activeTab === "Quests" && <QuestsTab />}
               {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
+              {activeTab === "Market" && <MarketTab />}
               {activeTab === "Arena" && <PvpPage />}
               {activeTab === "Progress" && <ProgressTab />}
             </div>
