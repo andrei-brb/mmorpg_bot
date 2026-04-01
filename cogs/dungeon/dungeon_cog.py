@@ -415,12 +415,42 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         char = await self.char_svc.get_character(interaction.user.id)
         if not char:
             return await interaction.followup.send("❌ No character.")
-        
+
         if not char["in_dungeon"]:
             return await interaction.followup.send("❌ You're not in a dungeon.")
-        
+
         await self.dungeon_svc.leave_run(char["id"])
         await interaction.followup.send("✅ Left the dungeon.")
+
+    @dungeon.command(name="debug_party", description="Debug party information (admin)")
+    async def debug_party(self, interaction: discord.Interaction):
+        """Debug command to check party state."""
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.")
+
+        run = await self.dungeon_svc.get_active_run(char["id"])
+        if not run:
+            return await interaction.followup.send("❌ No active dungeon run.")
+
+        # Debug info
+        debug_text = f"**Run ID:** `{run['id']}`\n"
+        debug_text += f"**Dungeon:** {run['dungeon_key']}\n"
+        debug_text += f"**Active:** {run['is_active']}\n"
+        debug_text += f"**Floor:** {run['current_floor']}/{run['total_floors']}\n"
+        debug_text += f"**Participants:** {len(run['participants'])}\n\n"
+        
+        for i, p in enumerate(run['participants']):
+            debug_text += f"{i+1}. `{p['id']}` - {p['name']} (Lv.{p['level']}) - Role: `{p['role']}`\n"
+        
+        # Check if current user is leader
+        is_leader = any(p["id"] == char["id"] and p.get("role") == "leader" for p in run["participants"])
+        debug_text += f"\n**You are leader:** {is_leader}\n"
+        debug_text += f"**Your character ID:** `{char['id']}`"
+        
+        await interaction.followup.send(f"🔍 **Debug Info:**\n{debug_text}", ephemeral=True)
 
     async def _start_floor_combat(self, interaction: discord.Interaction, run_id: UUID, dungeon_config, char):
         """Start a dungeon floor combat."""
