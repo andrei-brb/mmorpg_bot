@@ -415,22 +415,27 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
             </div>
 
             {partyStatus.is_leader && (
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  placeholder="User ID to invite..."
-                  value={inviteUserId}
-                  onChange={(e) => setInviteUserId(e.target.value)}
-                  className="flex-1 bg-muted/30 border border-border rounded px-2 py-1 text-xs text-foreground"
-                />
-                <button
-                  type="button"
-                  onClick={onInvitePlayer}
-                  disabled={partyLoading || !inviteUserId.trim()}
-                  className="game-btn-primary text-xs px-3 py-1 disabled:opacity-50"
-                >
-                  Invite
-                </button>
+              <div className="space-y-2 mb-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="User ID to invite..."
+                    value={inviteUserId}
+                    onChange={(e) => setInviteUserId(e.target.value)}
+                    className="flex-1 bg-muted/30 border border-border rounded px-2 py-1 text-xs text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={onInvitePlayer}
+                    disabled={partyLoading || !inviteUserId.trim()}
+                    className="game-btn-primary text-xs px-3 py-1 disabled:opacity-50"
+                  >
+                    Invite
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  💡 To get User ID: Enable Developer Mode in Discord → Right-click user → Copy ID
+                </p>
               </div>
             )}
 
