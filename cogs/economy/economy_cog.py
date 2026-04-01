@@ -119,21 +119,9 @@ class EconomyCog(commands.Cog, name="Economy"):
             "r_resistance": listing.get("r_resistance", 0) or 0,
             "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
         }
-        await inv.add_item(char["id"], listing["template_id"], rarity=rarity, from_="market", bonus=bonus)
-
         # Preserve enhancement level if item was upgraded
         enhancement_level = listing.get("enhancement_level", 0) or 0
-        if enhancement_level > 0:
-            # Update the most recently added item with the enhancement level
-            await self.bot.db.execute(
-                """UPDATE inventory SET enhancement_level=$2
-                   WHERE id = (
-                       SELECT id FROM inventory
-                       WHERE character_id=$1 AND template_id=$3
-                       ORDER BY obtained_at DESC NULLS FIRST LIMIT 1
-                   )""",
-                char["id"], enhancement_level, listing["template_id"]
-            )
+        await inv.add_item(char["id"], listing["template_id"], rarity=rarity, from_="market", bonus=bonus, enhancement_level=enhancement_level)
 
         await self.bot.db.execute("DELETE FROM inventory WHERE id=$1", listing["item_id"])
         await self.bot.db.execute(

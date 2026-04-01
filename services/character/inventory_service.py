@@ -160,6 +160,7 @@ class InventoryService:
         quantity: int = 1,
         bonus: Optional[Dict] = None,
         from_: str = "drop",
+        enhancement_level: int = 0,
     ) -> Tuple[bool, str]:
         tmpl = await self.db.fetchrow("SELECT * FROM item_templates WHERE id=$1", template_id)
         if not tmpl:
@@ -211,14 +212,14 @@ class InventoryService:
                        (character_id,template_id,quantity,rarity,
                         r_str,r_agi,r_int,r_spi,r_sta,
                         r_haste,r_lifesteal,r_resistance,r_hit_rating,
-                        obtained_from)
-                       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
+                        enhancement_level,obtained_from)
+                       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
                     char_id, template_id, chunk, rarity,
                     bonus.get("r_str",0), bonus.get("r_agi",0), bonus.get("r_int",0),
                     bonus.get("r_spi",0), bonus.get("r_sta",0),
                     bonus.get("r_haste",0), bonus.get("r_lifesteal",0),
                     bonus.get("r_resistance",0), bonus.get("r_hit_rating",0),
-                    from_,
+                    enhancement_level, from_,
                 )
                 remaining -= chunk
                 bonus = None
@@ -241,14 +242,14 @@ class InventoryService:
                (character_id,template_id,quantity,rarity,
                 r_str,r_agi,r_int,r_spi,r_sta,
                 r_haste,r_lifesteal,r_resistance,r_hit_rating,
-                obtained_from)
-               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)""",
+                enhancement_level,obtained_from)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
             char_id, template_id, quantity, rarity,
             bonus.get("r_str",0), bonus.get("r_agi",0), bonus.get("r_int",0),
             bonus.get("r_spi",0), bonus.get("r_sta",0),
             bonus.get("r_haste",0), bonus.get("r_lifesteal",0),
             bonus.get("r_resistance",0), bonus.get("r_hit_rating",0),
-            from_,
+            enhancement_level, from_,
         )
         return True, f"Added {RARITIES.get(rarity, RARITIES['common']).name} item."
 
