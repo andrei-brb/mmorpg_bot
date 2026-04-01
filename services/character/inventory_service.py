@@ -304,8 +304,10 @@ class InventoryService:
                      i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating,
                      COALESCE(i.rarity, t.rarity) as rarity,
                      COALESCE(i.enhancement_level, 0) as enhancement_level
-               FROM inventory i JOIN item_templates t ON i.template_id=t.id
-               WHERE i.character_id=$1
+               FROM inventory i
+               JOIN item_templates t ON i.template_id=t.id
+               LEFT JOIN market_listings ml ON i.id=ml.item_id AND ml.is_active=TRUE
+               WHERE i.character_id=$1 AND ml.id IS NULL
                ORDER BY i.is_equipped DESC, COALESCE(i.rarity, t.rarity) DESC, t.name""",
             char_id,
         )

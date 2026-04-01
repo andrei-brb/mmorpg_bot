@@ -12,7 +12,7 @@ from pathlib import Path
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -164,6 +164,46 @@ class MMORPGBot(commands.Bot):
             log.warning("Activity HTTP could not bind: %s", e)
         except Exception as e:
             log.error("Activity HTTP failed to start: %s", e, exc_info=True)
+
+        # Start background task to clean up expired market listings
+        self.cleanup_market_listings.start()
+        log.info("✓ Market listings cleanup task started")
+
+    @tasks.loop(minutes=5)
+    async def cleanup_market_listings(self):
+        """Periodically clean up expired market listings and return items to inventory."""
+        if not self.db or not self.db.pool:
+            return
+
+        try:
+            # Find expired active listings (7 days old, not sold)
+            expired = await self.db.fetch(
+                """SELECT id, seller_id, item_id, expires_at
+                   FROM market_listings
+                   WHERE is_active=TRUE AND sold_at IS NULL AND expires_at <= NOW()"""
+            )
+
+            if not expired:
+                return
+
+            log.info(f"Cleaning up {len(expired)} expired market listings...")
+
+            for listing in expired:
+                # Mark listing as inactive
+                await self.db.execute(
+                    "UPDATE market_listings SET is_active=FALSE WHERE id=$1",
+                    listing["id"]
+                )
+                # Log the expiration
+                log.debug(f"  Expired listing {listing['id']} for item {listing['item_id']}")
+
+        except Exception as e:
+            log.error(f"Market listing cleanup failed: {e}", exc_info=True)
+
+    @cleanup_market_listings.before_loop
+    async def before_cleanup_market_listings(self):
+        """Wait for bot to be ready before running cleanup task."""
+        await self.wait_until_ready()
 
     async def on_ready(self):
         log.info(f"✓ Online as {self.user} (ID: {self.user.id})")
