@@ -134,6 +134,16 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     fetchIncomingInvites();
   }, [accessToken, guildId, phase, fetchIncomingInvites]);
 
+  // Poll party + invites — REST only (no WebSocket), so leaders see new members without reloading
+  useEffect(() => {
+    if (!accessToken || phase !== "browser") return;
+    const id = window.setInterval(() => {
+      void refreshPartyStatus();
+      void fetchIncomingInvites();
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [accessToken, phase, refreshPartyStatus, fetchIncomingInvites]);
+
   // Accept invite
   const onAcceptInvite = useCallback(async (inviteId: string) => {
     if (!accessToken) return;
@@ -166,15 +176,35 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     }
   }, [accessToken, guildId, fetchIncomingInvites]);
 
-  // Enter dungeon (party mode)
+  // Enter dungeon (party mode) — server starts Activity combat; we must mirror solo flow and set local fight UI
   const onEnterDungeon = useCallback(async () => {
     if (!accessToken) return;
     setPartyLoading(true);
     try {
       const result = await api.postDungeonPartyEnter(accessToken, guildId);
       if (result.ok && result.state) {
-        toast.success("Entering dungeon...");
-        // Combat state will be loaded by existing combat snapshot logic
+        toast.success("Entering dungeon…");
+        const st = result.state;
+        const floor = st.dungeon_floor ?? 1;
+        const dk = st.dungeon_key;
+        const d = dk ? catalog.find((x) => x.key === dk) : undefined;
+        setRun({
+          dungeon: d ?? {
+            key: dk ?? "dungeon",
+            name: dk ?? "Dungeon",
+            emoji: "⚔️",
+            description: "",
+            level_req: 1,
+            floors: Math.max(floor, 1),
+            xp_per_floor: 0,
+            gold_min: 0,
+            gold_max: 0,
+            floor_preview: [],
+          },
+          floor,
+        });
+        setCombatState(st);
+        setPhase("fight");
       } else {
         toast.error(result.message || result.error || "Failed to enter dungeon.");
       }
@@ -183,7 +213,7 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     } finally {
       setPartyLoading(false);
     }
-  }, [accessToken, guildId]);
+  }, [accessToken, guildId, catalog]);
 
   // Leave dungeon (reset combat status)
   const onLeaveDungeon = useCallback(async () => {

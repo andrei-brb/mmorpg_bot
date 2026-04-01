@@ -6,6 +6,7 @@ Sessions are keyed by Discord user id. Uses the same CombatEngine / CombatSessio
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 from dataclasses import dataclass, field
@@ -29,6 +30,17 @@ log = logging.getLogger("activity_combat")
 
 # discord_user_id -> in-memory combat (iframe only)
 ACTIVE_ACTIVITY: Dict[int, "ActivityCombatState"] = {}
+
+# Serialize combat actions per user so rapid parallel requests cannot stack extra turns.
+_ACTIVITY_ACTION_LOCKS: Dict[int, asyncio.Lock] = {}
+
+
+def _activity_action_lock(discord_id: int) -> asyncio.Lock:
+    lock = _ACTIVITY_ACTION_LOCKS.get(discord_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _ACTIVITY_ACTION_LOCKS[discord_id] = lock
+    return lock
 
 
 @dataclass
@@ -407,6 +419,18 @@ async def process_activity_action(
     body: Dict[str, Any],
 ) -> Dict[str, Any]:
     """One player action (ability / flee / potion) plus enemy turn when appropriate."""
+    lock = _activity_action_lock(discord_id)
+    async with lock:
+        return await _process_activity_action_impl(bot, discord_id, guild_id, body)
+
+
+async def _process_activity_action_impl(
+    bot,
+    discord_id: int,
+    guild_id: Optional[int],
+    body: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Implementation for process_activity_action (must run under per-user lock)."""
     db = getattr(bot, "db", None)
     if db is None or db.pool is None:
         return {"error": "database_unavailable"}
@@ -514,32 +538,50 @@ async def process_activity_action(
         ability_key = "auto_attack"
         ab = ABILITIES.get("auto_attack", ABILITIES["auto_attack"])
 
-    cls = CLASSES[char["class"]]
     cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
     eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
 
+    async def _return_awaiting() -> Dict[str, Any]:
+        has_potion = await _has_healing_potion(db, char_id)
+        can_potion = bool(has_potion) and not ac.potion_used
+        fresh = await char_svc.get_character(discord_id)
+        return {
+            "ok": True,
+            "ended": False,
+            "state": serialize_activity_state(ac, fresh, awaiting_action=True, can_potion=can_potion),
+        }
+
+    # Invalid ability: still your turn — do not run enemy phase (was causing "spam" feel).
     if ab.cost_type in ("mana", "energy", "rage") and player.current_res < eff_cost:
         log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}**!")
-    elif ability_key in player.ability_cooldowns:
+        return await _return_awaiting()
+    if ability_key in player.ability_cooldowns:
         log_lines.append(f"⏳ **{ab.name}** is on cooldown!")
-    else:
-        if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
-            player.current_res = max(0, player.current_res - eff_cost)
+        return await _return_awaiting()
+
+    ability_resolved = False
+    if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
+        player.current_res = max(0, player.current_res - eff_cost)
+    try:
+        results = engine.use_ability(ability_key, player, [enemy], session=session)
+        for r in results:
+            log_lines.append(r.narrative)
+        session.log.extend(results)
+        ability_resolved = True
+    except Exception as e:
+        log.exception("activity combat ability error")
+        log_lines.append(f"⚠️ **{ab.name}** failed: {str(e)[:80]}")
         try:
-            results = engine.use_ability(ability_key, player, [enemy], session=session)
+            results = engine.use_ability("auto_attack", player, [enemy], session=session)
             for r in results:
                 log_lines.append(r.narrative)
             session.log.extend(results)
-        except Exception as e:
-            log.exception("activity combat ability error")
-            log_lines.append(f"⚠️ **{ab.name}** failed: {str(e)[:80]}")
-            try:
-                results = engine.use_ability("auto_attack", player, [enemy], session=session)
-                for r in results:
-                    log_lines.append(r.narrative)
-                session.log.extend(results)
-            except Exception as e2:
-                log.exception("activity auto_attack fallback failed: %s", e2)
+            ability_resolved = True
+        except Exception as e2:
+            log.exception("activity auto_attack fallback failed: %s", e2)
+
+    if not ability_resolved:
+        return await _return_awaiting()
 
     if session.over and session.players_won:
         return await _finish_victory(bot, guild_id, discord_id, char, session, player, char_svc, inv_svc, engine, db, log_lines, ac)
