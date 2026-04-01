@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { HeroTab } from "./tabs/HeroTab";
 import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
@@ -27,6 +28,19 @@ const TAB_ICONS: Record<TabName, string> = {
 
 export function GameShell() {
   const [activeTab, setActiveTab] = useState<TabName>("Hero");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const playerStats = {
+    name: "Shadowblade",
+    level: 14,
+    class: "Rogue",
+    hp: "320 / 380",
+    atk: 48,
+    def: 22,
+    crit: "18%",
+    xp: "2,450 / 4,000",
+    guild: "None",
+    border: "Golden Legendary",
+  };
   const {
     displayName,
     liveEvents,
@@ -182,14 +196,33 @@ export function GameShell() {
             <div className="rune-band-right hidden sm:block" />
 
             <div className="flex items-center justify-between mb-5 pt-1">
-              <div>
-                <h1 className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
-                  style={{ textShadow: '0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)' }}>
-                  World of Discord
-                </h1>
-                <p className="text-sm text-muted-foreground font-crimson mt-0.5">
-                  Welcome, <span className="text-foreground font-semibold">{displayName}</span>
-                </p>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setProfileOpen(true)} className="relative shrink-0 group cursor-pointer">
+                  <div
+                    className="absolute -inset-[3px] rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
+                    style={{
+                      background: 'conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))',
+                    }}
+                  />
+                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
+                    <div className="w-full h-full flex items-center justify-center text-sm font-bold text-primary"
+                      style={{
+                        background: 'linear-gradient(135deg, hsl(228 18% 18%) 0%, hsl(228 20% 12%) 100%)',
+                      }}>
+                      SB
+                    </div>
+                  </div>
+                </button>
+
+                <div>
+                  <h1 className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
+                    style={{ textShadow: '0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)' }}>
+                    World of Discord
+                  </h1>
+                  <p className="text-sm text-muted-foreground font-crimson mt-0.5">
+                    Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-medium"
                 style={{
@@ -262,6 +295,42 @@ export function GameShell() {
             }} />
         </div>
       </div>
+      {/* Profile Dialog */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="sm:max-w-[360px] border-border/60 p-0 overflow-hidden" style={{ background: 'linear-gradient(180deg, hsl(228 18% 12%) 0%, hsl(228 20% 8%) 100%)' }}>
+          <DialogTitle className="sr-only">Player Profile</DialogTitle>
+          <div className="flex flex-col items-center pt-8 pb-6 px-6">
+            <div className="relative mb-4">
+              <div className="absolute -inset-[5px] rounded-full" style={{ background: 'conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))', filter: 'blur(0.5px)' }} />
+              <div className="relative w-24 h-24 rounded-full overflow-hidden border-3 border-background">
+                <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-primary" style={{ background: 'linear-gradient(135deg, hsl(228 18% 18%) 0%, hsl(228 20% 12%) 100%)' }}>
+                  SB
+                </div>
+              </div>
+            </div>
+
+            <h2 className="font-cinzel text-lg font-bold text-primary tracking-wide" style={{ textShadow: '0 0 10px hsl(43 78% 50% / 0.3)' }}>{playerStats.name}</h2>
+            <p className="text-sm text-muted-foreground font-crimson">Lv. {playerStats.level} {playerStats.class}</p>
+            <span className="text-xs text-primary/60 mt-1 font-crimson italic">🏅 {playerStats.border}</span>
+
+            <div className="w-full mt-5 grid grid-cols-2 gap-2">
+              {[
+                { label: "HP", value: playerStats.hp },
+                { label: "ATK", value: playerStats.atk },
+                { label: "DEF", value: playerStats.def },
+                { label: "CRIT", value: playerStats.crit },
+                { label: "XP", value: playerStats.xp },
+                { label: "Guild", value: playerStats.guild },
+              ].map((s) => (
+                <div key={s.label} className="flex justify-between px-3 py-1.5 rounded-sm text-xs" style={{ background: 'hsl(228 16% 14%)', border: '1px solid hsl(228 14% 20%)' }}>
+                  <span className="text-muted-foreground">{s.label}</span>
+                  <span className="text-foreground font-medium">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
