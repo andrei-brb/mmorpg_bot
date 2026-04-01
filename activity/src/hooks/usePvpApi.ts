@@ -354,7 +354,7 @@ export function usePvpApi() {
   useEffect(() => {
     if (USE_MOCK || !accessToken) return;
     const poll = () => {
-      const q = status?.match_status === "queued";
+      const q = status?.match_status === "queued" || status?.match_status === "challenged";
       const act = status?.match_status === "active" || match?.status === "active";
       if (q || act) void fetchStatus();
     };
