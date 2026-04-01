@@ -31,6 +31,9 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
   const [partyStatus, setPartyStatus] = useState<DungeonPartyStatus | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
   const [inviteUserId, setInviteUserId] = useState<string>("");
+  const [inviteUsername, setInviteUsername] = useState<string>("");
+  const [playerSuggestions, setPlayerSuggestions] = useState<Array<{ id: string; username: string; level: number; class: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -92,6 +95,25 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     }
   }, [accessToken, guildId]);
 
+  // Fetch player suggestions for invite autocomplete
+  const fetchPlayerSuggestions = useCallback(async (query: string) => {
+    if (!accessToken || query.length < 1) {
+      setPlayerSuggestions([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${api.apiUrl("/api/game/dungeon/party/players?q=")}${encodeURIComponent(query)}`, {
+        headers: api.authHeaders(accessToken, guildId),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPlayerSuggestions(data.players || []);
+      }
+    } catch (e) {
+      setPlayerSuggestions([]);
+    }
+  }, [accessToken, guildId]);
+
   // Create party
   const onCreateParty = async (d: DungeonCatalogEntry) => {
     if (!accessToken) return;
@@ -121,6 +143,8 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       if (result.ok) {
         toast.success(result.message || "Player invited!");
         setInviteUserId("");
+        setInviteUsername("");
+        setPlayerSuggestions([]);
         await refreshPartyStatus();
       } else {
         toast.error(result.message || "Failed to invite player.");
@@ -130,6 +154,25 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     } finally {
       setPartyLoading(false);
     }
+  };
+
+  const handleInviteInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInviteUsername(value);
+    if (value.startsWith("@")) {
+      fetchPlayerSuggestions(value.slice(1));
+      setShowSuggestions(true);
+    } else {
+      setPlayerSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectPlayer = (player: { id: string; username: string }) => {
+    setInviteUserId(player.id);
+    setInviteUsername(`@${player.username}`);
+    setShowSuggestions(false);
+    setPlayerSuggestions([]);
   };
 
   // Leave party
@@ -417,13 +460,35 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
             {partyStatus.is_leader && (
               <div className="space-y-2 mb-3">
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="User ID to invite..."
-                    value={inviteUserId}
-                    onChange={(e) => setInviteUserId(e.target.value)}
-                    className="flex-1 bg-muted/30 border border-border rounded px-2 py-1 text-xs text-foreground"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="@username"
+                      value={inviteUsername}
+                      onChange={handleInviteInputChange}
+                      onFocus={() => inviteUsername.startsWith("@") && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      className="w-full bg-input border border-border rounded-sm px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-crimson"
+                    />
+                    {showSuggestions && playerSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-sm border border-border bg-popover shadow-lg overflow-hidden">
+                        {playerSuggestions.map((player) => (
+                          <button
+                            key={player.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-muted/60 font-crimson flex items-center justify-between gap-2"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => selectPlayer(player)}
+                          >
+                            <span className="truncate text-foreground">@{player.username}</span>
+                            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                              Lv.{player.level} {player.class}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={onInvitePlayer}
@@ -434,7 +499,7 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
                   </button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  💡 To get User ID: Enable Developer Mode in Discord → Right-click user → Copy ID
+                  💡 Type @ to search players, or enable Developer Mode → Right-click user → Copy ID
                 </p>
               </div>
             )}

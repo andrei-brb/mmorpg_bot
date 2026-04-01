@@ -1339,6 +1339,54 @@ async def handle_pvp_player_search(request: web.Request) -> web.Response:
     players = [{"id": str(r["id"]), "username": str(r["username"])} for r in rows if r.get("username")]
     return web.json_response(_json_safe({"ok": True, "players": players}))
 
+
+async def handle_dungeon_party_players(request: web.Request) -> web.Response:
+    """Search players by username prefix for dungeon party invite autocomplete."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "players": []}), status=400)
+
+    q = str((request.query.get("q") or "")).strip()
+    if q.startswith("@"):
+        q = q[1:].strip()
+    if not q:
+        # Return empty if no query - let UI show placeholder
+        return web.json_response(_json_safe({"ok": True, "players": []}))
+
+    q = q[:32]
+    # Get players with characters who are not in dungeon
+    rows = await db.fetch(
+        """
+        SELECT p.id, p.username, c.level, c.class
+        FROM players p
+        JOIN characters c ON c.discord_id = p.id
+        WHERE p.id != $1
+          AND p.username IS NOT NULL
+          AND c.is_active = TRUE
+          AND c.in_dungeon = FALSE
+          AND p.username ILIKE $2
+        ORDER BY p.username ASC
+        LIMIT 12
+        """,
+        discord_id,
+        q + "%",
+    )
+    players = [
+        {
+            "id": str(r["id"]),
+            "username": str(r["username"]),
+            "level": r["level"],
+            "class": r["class"],
+        }
+        for r in rows
+        if r.get("username")
+    ]
+    return web.json_response(_json_safe({"ok": True, "players": players}))
+
+
 async def handle_pvp_accept(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     try:
@@ -2539,6 +2587,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/dungeon/party/status", handle_dungeon_party_status)
     app.router.add_post("/api/game/dungeon/party/create", handle_dungeon_party_create)
     app.router.add_post("/api/game/dungeon/party/invite", handle_dungeon_party_invite)
+    app.router.add_get("/api/game/dungeon/party/players", handle_dungeon_party_players)
     app.router.add_post("/api/game/dungeon/party/join", handle_dungeon_party_join)
     app.router.add_post("/api/game/dungeon/party/leave", handle_dungeon_party_leave)
     app.router.add_get("/api/game/combat/state", handle_combat_state)
