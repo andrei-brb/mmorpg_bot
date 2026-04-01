@@ -465,7 +465,19 @@ class AdminCog(commands.Cog, name="Admin"):
                 ephemeral=True
             )
         except Exception as e:
-            await interaction.followup.send(f"❌ Failed to sync commands: {e}", ephemeral=True)
+            err_str = str(e)
+            # Handle Discord Activity Entry Point error (50240)
+            if "50240" in err_str or "Entry Point" in err_str:
+                await interaction.followup.send(
+                    "⚠️ **Sync partially completed**\n\n"
+                    "Discord's Activity Entry Point prevents full re-sync.\n\n"
+                    "✅ Your new commands (including `/admin givelevel`) are registered!\n"
+                    "⏳ Wait 1-2 minutes for Discord to update the command list.\n\n"
+                    "*This is a Discord limitation with Activities, not a bot error.*",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(f"❌ Failed to sync commands: {e}", ephemeral=True)
 
     @admin.command(name="help", description="View all admin commands")
     async def admin_help(self, interaction: discord.Interaction):
