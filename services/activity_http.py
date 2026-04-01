@@ -2424,6 +2424,136 @@ async def handle_item_enhance_info(request: web.Request) -> web.Response:
     )
 
 
+async def handle_shop_catalog(request: web.Request) -> web.Response:
+    """Get available consumables from the vendor shop."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        rows = await db.fetch(
+            """SELECT id, name, icon, rarity, vendor_buy, effect_type, effect_value, effect_duration, level_req, description
+               FROM item_templates
+               WHERE vendor_buy IS NOT NULL AND vendor_buy > 0 AND item_type = 'consumable'
+               ORDER BY level_req, vendor_buy"""
+        )
+        items = [dict(row) for row in rows]
+        return web.json_response({"ok": True, "items": _json_safe(items)})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e), "message": "Failed to fetch shop catalog."}, status=500)
+
+
+async def handle_shop_buy(request: web.Request) -> web.Response:
+    """Buy a consumable item from the vendor shop."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    template_id = (body.get("template_id") or "").strip()
+    qty = int(body.get("quantity") or 1)
+
+    if not template_id or qty <= 0:
+        return web.json_response({"ok": False, "error": "invalid_params", "message": "Missing or invalid template_id/quantity."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    # Fetch template
+    tmpl = await db.fetchrow("SELECT * FROM item_templates WHERE id=$1", template_id)
+    if not tmpl:
+        return web.json_response({"ok": False, "error": "not_found", "message": "Item not found."}, status=400)
+
+    vendor_buy = int(tmpl["vendor_buy"] or 0)
+    if vendor_buy <= 0:
+        return web.json_response({"ok": False, "error": "not_for_sale", "message": "Item is not for sale."}, status=400)
+
+    total_cost = vendor_buy * qty
+    player_gold = int(char.get("gold") or 0)
+    if player_gold < total_cost:
+        return web.json_response(
+            {"ok": False, "error": "insufficient_gold", "message": f"Not enough gold. Need {total_cost}, have {player_gold}."},
+            status=400
+        )
+
+    # Deduct gold and add item
+    ok = await char_svc.deduct_gold(char["id"], total_cost, f"vendor purchase x{qty}")
+    if not ok:
+        return web.json_response({"ok": False, "error": "deduct_failed", "message": "Failed to deduct gold."}, status=500)
+
+    rarity = str(tmpl.get("rarity") or "common")
+    add_ok, add_msg = await inv_svc.add_item(char["id"], template_id, rarity, qty, from_="vendor")
+    if not add_ok:
+        # Refund gold on item add failure
+        await char_svc.add_gold(char["id"], total_cost, "refund: vendor purchase failed")
+        return web.json_response({"ok": False, "error": "add_failed", "message": add_msg}, status=500)
+
+    return web.json_response({"ok": True, "message": f"Purchased {tmpl['name']} x{qty}."})
+
+
+async def handle_market_listings(request: web.Request) -> web.Response:
+    """Get active player market listings."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        rows = await db.fetch(
+            """SELECT ml.id, ml.price, ml.quantity, ml.listed_at,
+                      it.name, it.icon, it.description,
+                      i.rarity, i.enhancement_level,
+                      c.name AS seller_name
+               FROM market_listings ml
+               JOIN inventory i ON ml.item_id = i.id
+               JOIN item_templates it ON i.template_id = it.id
+               JOIN characters c ON ml.seller_id = c.id
+               WHERE ml.is_active = TRUE AND ml.expires_at > NOW()
+               ORDER BY ml.listed_at DESC
+               LIMIT 50"""
+        )
+        listings = [dict(row) for row in rows]
+        return web.json_response({"ok": True, "listings": _json_safe(listings)})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e), "message": "Failed to fetch market listings."}, status=500)
+
+
 async def handle_buy_protection(request: web.Request) -> web.Response:
     """Buy protection items for enhancement (Activity modal convenience)."""
     bot = request.app["bot"]
@@ -2590,6 +2720,9 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)
+    app.router.add_get("/api/game/shop/catalog", handle_shop_catalog)
+    app.router.add_post("/api/game/shop/buy", handle_shop_buy)
+    app.router.add_get("/api/game/market/listings", handle_market_listings)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)

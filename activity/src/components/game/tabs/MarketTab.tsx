@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useGameSession } from "@/context/GameSessionContext";
+import * as api from "@/lib/gameApi";
+import type { ShopCatalogItem } from "@/lib/apiTypes";
 
 type MarketSection = "shop" | "marketplace";
 
@@ -19,76 +22,104 @@ const RARITY_BG: Record<string, string> = {
   legendary: "hsl(43 85% 52% / 0.08)",
 };
 
-interface ShopItem {
-  id: string;
-  name: string;
-  icon: string;
-  rarity: string;
-  price: number;
-  description: string;
-  category: "consumable" | "material" | "gear";
-}
-
-interface MarketListing {
-  id: string;
-  name: string;
-  icon: string;
-  rarity: string;
-  price: number;
-  seller: string;
-  enhanceLevel?: number;
-  description: string;
-}
-
-const SHOP_ITEMS: ShopItem[] = [
-  { id: "hp-pot", name: "Health Potion", icon: "🧪", rarity: "common", price: 25, description: "Restores 50 HP instantly.", category: "consumable" },
-  { id: "mana-pot", name: "Mana Elixir", icon: "🔮", rarity: "uncommon", price: 60, description: "Restores 40 Mana over 5s.", category: "consumable" },
-  { id: "antidote", name: "Antidote", icon: "💊", rarity: "common", price: 15, description: "Cures poison status.", category: "consumable" },
-  { id: "revive", name: "Phoenix Down", icon: "🪶", rarity: "rare", price: 200, description: "Revive with 30% HP.", category: "consumable" },
-  { id: "whetstone", name: "Whetstone", icon: "🪨", rarity: "common", price: 40, description: "Enhancement material. +1 weapon level.", category: "material" },
-  { id: "armor-kit", name: "Armor Kit", icon: "🛡️", rarity: "common", price: 40, description: "Enhancement material. +1 armor level.", category: "material" },
-  { id: "magic-dust", name: "Magic Dust", icon: "✨", rarity: "uncommon", price: 80, description: "Rare enhancement catalyst.", category: "material" },
-  { id: "dragon-scale", name: "Dragon Scale", icon: "🐉", rarity: "epic", price: 500, description: "Legendary crafting material.", category: "material" },
-  { id: "iron-sword", name: "Iron Sword", icon: "⚔️", rarity: "common", price: 150, description: "+8 ATK. A basic but reliable blade.", category: "gear" },
-  { id: "leather-helm", name: "Leather Helm", icon: "🪖", rarity: "common", price: 100, description: "+4 DEF. Light headgear.", category: "gear" },
-];
-
-const MARKETPLACE_LISTINGS: MarketListing[] = [
-  { id: "m1", name: "Duskblade", icon: "🗡️", rarity: "epic", price: 2800, seller: "DarkKnight99", enhanceLevel: 5, description: "+22 ATK, +5 CRIT" },
-  { id: "m2", name: "Shadow Greaves", icon: "🦿", rarity: "rare", price: 950, seller: "ArmorSmith", enhanceLevel: 3, description: "+8 DEF, +3 AGI" },
-  { id: "m3", name: "Phoenix Down", icon: "🪶", rarity: "rare", price: 180, seller: "PotionMaster", description: "Revive with 30% HP." },
-  { id: "m4", name: "Dragon Scale", icon: "🐉", rarity: "epic", price: 420, seller: "DragonHunter", description: "Legendary crafting material." },
-  { id: "m5", name: "Enchanted Gem", icon: "💎", rarity: "rare", price: 300, seller: "GemCollector", description: "Used for high-tier enchants." },
-  { id: "m6", name: "Crimson Cloak", icon: "🧥", rarity: "legendary", price: 5500, seller: "LootGoblin", enhanceLevel: 9, description: "+15 DEF, +10 AGI, Stealth Bonus" },
-  { id: "m7", name: "Whetstone x10", icon: "🪨", rarity: "common", price: 350, seller: "BulkTrader", description: "Bundle of 10 whetstones." },
-  { id: "m8", name: "Magic Dust x5", icon: "✨", rarity: "uncommon", price: 350, seller: "WizardMerch", description: "Bundle of 5 magic dust." },
+const BLACKSMITH_ITEMS = [
+  { key: "blessing_scroll", name: "Blessing Scroll", icon: "🛡️", rarity: "rare", price: 10000, description: "Prevents item destruction on enhancement failure." },
+  { key: "safety_charm", name: "Safety Charm", icon: "✨", rarity: "rare", price: 5000, description: "Guarantees 100% success for enhancements +1 to +5." },
+  { key: "enhancement_fragment", name: "Enhancement Fragment", icon: "💎", rarity: "uncommon", price: 2000, description: "Increases success rate by 10% per fragment (max 3 stack)." },
 ];
 
 const CATEGORIES = ["All", "Consumable", "Material", "Gear"] as const;
 
 export function MarketTab() {
+  const { inventory, buyProtection, buyShopItem, marketListings, refreshMarketListings, accessToken, guildId } = useGameSession();
   const [section, setSection] = useState<MarketSection>("shop");
   const [shopCategory, setShopCategory] = useState<string>("All");
-  const [playerGold] = useState(1247);
+  const [shopCatalog, setShopCatalog] = useState<ShopCatalogItem[]>([]);
+  const [loadingShop, setLoadingShop] = useState(false);
+  const [loadingMarket, setLoadingMarket] = useState(false);
+
+  const playerGold = inventory?.character?.gold ?? 0;
+
+  // Load shop catalog on mount
+  useEffect(() => {
+    const loadShop = async () => {
+      if (!accessToken) return;
+      setLoadingShop(true);
+      try {
+        const r = await api.getShopCatalog(accessToken, guildId);
+        setShopCatalog(r.items || []);
+      } catch (e) {
+        console.error("Failed to load shop catalog:", e);
+        toast.error("Failed to load shop items");
+      } finally {
+        setLoadingShop(false);
+      }
+    };
+    void loadShop();
+  }, [accessToken, guildId]);
+
+  // Load market listings on mount
+  useEffect(() => {
+    const loadMarket = async () => {
+      setLoadingMarket(true);
+      try {
+        await refreshMarketListings();
+      } catch (e) {
+        console.error("Failed to load market listings:", e);
+      } finally {
+        setLoadingMarket(false);
+      }
+    };
+    void loadMarket();
+  }, [refreshMarketListings]);
 
   const filteredShop = shopCategory === "All"
-    ? SHOP_ITEMS
-    : SHOP_ITEMS.filter((i) => i.category === shopCategory.toLowerCase());
+    ? shopCatalog
+    : shopCatalog.filter((i) => {
+      const itype = i.description?.toLowerCase() || "";
+      return shopCategory === "Consumable";
+    });
 
-  const handleBuy = (name: string, price: number) => {
-    if (price > playerGold) {
-      toast.error("Not enough gold!", { description: `You need ${price} 🪙 but only have ${playerGold} 🪙` });
-    } else {
-      toast.success(`Purchased ${name}!`, { description: `−${price} 🪙` });
+  const handleBuy = async (item: ShopCatalogItem) => {
+    if (playerGold < item.vendor_buy) {
+      toast.error("Not enough gold!", { description: `You need ${item.vendor_buy} 🪙 but only have ${playerGold} 🪙` });
+      return;
+    }
+    try {
+      const res = await buyShopItem(item.id, 1);
+      if (res.ok) {
+        toast.success(`Purchased ${item.name}!`, { description: `−${item.vendor_buy} 🪙` });
+      } else {
+        toast.error(res.message || "Purchase failed");
+      }
+    } catch (e) {
+      toast.error("Purchase failed", { description: String(e) });
     }
   };
 
-  const handleListingBuy = (listing: MarketListing) => {
-    if (listing.price > playerGold) {
-      toast.error("Not enough gold!", { description: `You need ${listing.price} 🪙` });
-    } else {
-      toast.success(`Bought ${listing.name} from ${listing.seller}!`, { description: `−${listing.price} 🪙` });
+  const handleBuyBlacksmith = async (key: string, price: number, name: string) => {
+    if (playerGold < price) {
+      toast.error("Not enough gold!", { description: `You need ${price} 🪙 but only have ${playerGold} 🪙` });
+      return;
     }
+    try {
+      const res = await buyProtection(key, 1);
+      if (res.ok) {
+        toast.success(`Purchased ${name}!`, { description: `−${price} 🪙` });
+      } else {
+        toast.error(res.message || "Purchase failed");
+      }
+    } catch (e) {
+      toast.error("Purchase failed", { description: String(e) });
+    }
+  };
+
+  const handleBuyListing = (price: number) => {
+    if (playerGold < price) {
+      toast.error("Not enough gold!", { description: `You need ${price} 🪙 but only have ${playerGold} 🪙` });
+      return;
+    }
+    toast.info("Marketplace purchases coming soon!", { description: "This feature will be available soon." });
   };
 
   return (
@@ -133,57 +164,92 @@ export function MarketTab() {
       {/* ════════════ GAME SHOP ════════════ */}
       {section === "shop" && (
         <>
-          {/* Category filter */}
-          <div className="flex gap-2 flex-wrap">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setShopCategory(cat)}
-                className={`text-[10px] px-3 py-1.5 rounded-sm font-cinzel font-semibold uppercase tracking-wider transition-all ${
-                  shopCategory === cat ? "game-btn-primary" : "game-btn-secondary"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Shop grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {filteredShop.map((item) => (
-              <div key={item.id} className="game-panel p-3 flex items-start gap-3">
-                <div
-                  className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[item.rarity]}`}
-                  style={{ background: RARITY_BG[item.rarity] }}
-                >
-                  {item.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className={`text-sm font-cinzel font-semibold ${RARITY_COLORS[item.rarity]}`}>
-                        {item.name}
-                      </h3>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                        {item.description}
-                      </p>
+          {/* Consumables Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-cinzel font-semibold text-primary px-1">Consumables</h3>
+            {loadingShop ? (
+              <div className="text-xs text-muted-foreground text-center py-4">Loading shop...</div>
+            ) : shopCatalog.length === 0 ? (
+              <div className="text-xs text-muted-foreground text-center py-4">No items available</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {shopCatalog.map((item) => (
+                  <div key={item.id} className="game-panel p-3 flex items-start gap-3">
+                    <div
+                      className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[item.rarity] || ""}`}
+                      style={{ background: RARITY_BG[item.rarity] || "hsl(0 0% 65% / 0.06)" }}
+                    >
+                      {item.icon || "📦"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className={`text-sm font-cinzel font-semibold ${RARITY_COLORS[item.rarity] || ""}`}>
+                            {item.name}
+                          </h3>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                            {item.description || "..."}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs font-cinzel font-bold text-primary"
+                          style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
+                          {item.vendor_buy} 🪙
+                        </span>
+                        <button
+                          onClick={() => void handleBuy(item)}
+                          className="game-btn-primary text-[10px] px-3 py-1"
+                        >
+                          Buy
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs font-cinzel font-bold text-primary"
-                      style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
-                      {item.price} 🪙
-                    </span>
-                    <button
-                      onClick={() => handleBuy(item.name, item.price)}
-                      className="game-btn-primary text-[10px] px-3 py-1"
-                    >
-                      Buy
-                    </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Blacksmith Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-cinzel font-semibold text-primary px-1">⚒️ Blacksmith</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {BLACKSMITH_ITEMS.map((item) => (
+                <div key={item.key} className="game-panel p-3 flex items-start gap-3">
+                  <div
+                    className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[item.rarity]}`}
+                    style={{ background: RARITY_BG[item.rarity] }}
+                  >
+                    {item.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className={`text-sm font-cinzel font-semibold ${RARITY_COLORS[item.rarity]}`}>
+                          {item.name}
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-xs font-cinzel font-bold text-primary"
+                        style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
+                        {item.price.toLocaleString()} 🪙
+                      </span>
+                      <button
+                        onClick={() => void handleBuyBlacksmith(item.key, item.price, item.name)}
+                        className="game-btn-primary text-[10px] px-3 py-1"
+                      >
+                        Buy
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -197,56 +263,69 @@ export function MarketTab() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {MARKETPLACE_LISTINGS.map((listing) => (
-              <div key={listing.id} className="game-panel p-3 flex items-start gap-3">
-                <div
-                  className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[listing.rarity]}`}
-                  style={{ background: RARITY_BG[listing.rarity] }}
-                >
-                  <div className="flex flex-col items-center">
-                    <span>{listing.icon}</span>
-                    {listing.enhanceLevel && listing.enhanceLevel > 0 && (
-                      <span className="text-[8px] text-primary font-bold leading-none"
-                        style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.4)' }}>
-                        +{listing.enhanceLevel}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div>
-                    <h3 className={`text-sm font-cinzel font-semibold ${RARITY_COLORS[listing.rarity]}`}>
-                      {listing.name}
-                      {listing.enhanceLevel && listing.enhanceLevel > 0 && (
-                        <span className="text-primary ml-1">+{listing.enhanceLevel}</span>
+          {loadingMarket ? (
+            <div className="text-xs text-muted-foreground text-center py-8">Loading listings...</div>
+          ) : marketListings.length === 0 ? (
+            <div className="game-panel p-8 text-center">
+              <p className="text-sm font-cinzel font-semibold text-foreground mb-2">
+                📭 No Listings Yet
+              </p>
+              <p className="text-xs text-muted-foreground font-crimson mb-4">
+                Be the first to sell an item! Use <span className="font-mono text-foreground">/market sell</span> in Discord to list an item.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {marketListings.map((listing) => (
+                <div key={listing.id} className="game-panel p-3 flex items-start gap-3">
+                  <div
+                    className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[listing.rarity] || ""}`}
+                    style={{ background: RARITY_BG[listing.rarity] || "hsl(0 0% 65% / 0.06)" }}
+                  >
+                    <div className="flex flex-col items-center">
+                      <span>{listing.icon || "📦"}</span>
+                      {listing.enhancement_level && listing.enhancement_level > 0 && (
+                        <span className="text-[8px] text-primary font-bold leading-none"
+                          style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.4)' }}>
+                          +{listing.enhancement_level}
+                        </span>
                       )}
-                    </h3>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                      {listing.description}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <div>
-                      <span className="text-xs font-cinzel font-bold text-primary"
-                        style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
-                        {listing.price.toLocaleString()} 🪙
-                      </span>
-                      <span className="text-[9px] text-muted-foreground ml-2">
-                        by <span className="text-foreground">{listing.seller}</span>
-                      </span>
                     </div>
-                    <button
-                      onClick={() => handleListingBuy(listing)}
-                      className="game-btn-primary text-[10px] px-3 py-1"
-                    >
-                      Buy
-                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div>
+                      <h3 className={`text-sm font-cinzel font-semibold ${RARITY_COLORS[listing.rarity] || ""}`}>
+                        {listing.name}
+                        {listing.enhancement_level && listing.enhancement_level > 0 && (
+                          <span className="text-primary ml-1">+{listing.enhancement_level}</span>
+                        )}
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                        {listing.description || "..."}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div>
+                        <span className="text-xs font-cinzel font-bold text-primary"
+                          style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
+                          {listing.price.toLocaleString()} 🪙
+                        </span>
+                        <span className="text-[9px] text-muted-foreground ml-2">
+                          by <span className="text-foreground">{listing.seller_name}</span>
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleBuyListing(listing.price)}
+                        className="game-btn-primary text-[10px] px-3 py-1"
+                      >
+                        Buy
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="ornament-divider" />
 
@@ -256,17 +335,23 @@ export function MarketTab() {
               Want to sell your items?
             </p>
             <p className="text-[10px] text-muted-foreground mb-3 font-crimson">
-              List items from your inventory on the Player Market for other adventurers to buy.
+              Use the Discord command <span className="font-mono text-foreground">/market sell</span> to list items from your inventory on the Player Market.
             </p>
-            <button
-              onClick={() => toast("Sell feature coming soon!", { description: "List your items on the marketplace." })}
-              className="game-btn-secondary text-xs px-6 py-2"
-            >
-              📦 List an Item
-            </button>
+            <p className="text-[9px] text-muted-foreground font-crimson">
+              Listings expire after 7 days. A 5% fee is charged when you sell.
+            </p>
           </div>
         </>
       )}
+
+      {/* Gold display */}
+      <div className="game-panel p-3 text-center border-t border-border/40">
+        <p className="text-xs text-muted-foreground">Your Gold</p>
+        <p className="text-lg font-cinzel font-bold text-primary mt-1"
+          style={{ textShadow: '0 0 8px hsl(43 78% 50% / 0.3)' }}>
+          {playerGold.toLocaleString()} 🪙
+        </p>
+      </div>
     </div>
   );
 }

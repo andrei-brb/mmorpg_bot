@@ -17,6 +17,7 @@ import type {
   ExploreResultPayload,
   InventoryPayload,
   LiveEventRow,
+  MarketListingRow,
   NpcInteractPayload,
   ProgressPayload,
   QuestCompletionPayload,
@@ -77,6 +78,9 @@ type GameSessionValue = {
     fragments: number,
   ) => Promise<{ ok?: boolean; message?: string }>;
   buyProtection: (key: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
+  buyShopItem: (templateId: string, qty: number) => Promise<{ ok?: boolean; message?: string }>;
+  marketListings: MarketListingRow[];
+  refreshMarketListings: () => Promise<void>;
   npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   abandonQuest: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   questOffer: QuestOfferPayload | null;
@@ -123,6 +127,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [questCompletion, setQuestCompletion] = useState<QuestCompletionPayload | null>(null);
   const [queuedOfferAfterCompletion, setQueuedOfferAfterCompletion] = useState<QuestOfferPayload | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
+  const [marketListings, setMarketListings] = useState<MarketListingRow[]>([]);
   const [combatFocusActive, setCombatFocusActive] = useState(false);
   const [specModal, setSpecModal] = useState<{
     open: boolean;
@@ -382,6 +387,28 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     [accessToken, guildId, refreshInventory, refreshProgress],
   );
 
+  const buyShopItem = useCallback(
+    async (templateId: string, qty: number) => {
+      if (!accessToken) return { ok: false };
+      const res = await api.postShopBuy(accessToken, templateId, qty, guildId);
+      const j = (await res.json()) as { ok?: boolean; message?: string };
+      await refreshInventory();
+      await refreshProgress();
+      return j;
+    },
+    [accessToken, guildId, refreshInventory, refreshProgress],
+  );
+
+  const refreshMarketListings = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const r = await api.getMarketListings(accessToken, guildId);
+      setMarketListings(r.listings || []);
+    } catch (e) {
+      console.warn("refreshMarketListings", e);
+    }
+  }, [accessToken, guildId]);
+
   const npcInteract = useCallback(
     async (npc?: string) => {
       if (!accessToken) return { ok: false, error: "no_token" };
@@ -618,6 +645,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       getEnhanceInfo,
       postEnhance,
       buyProtection,
+      buyShopItem,
+      marketListings,
+      refreshMarketListings,
       npcInteract,
       abandonQuest,
       questOffer,
@@ -661,6 +691,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       getEnhanceInfo,
       postEnhance,
       buyProtection,
+      buyShopItem,
+      marketListings,
+      refreshMarketListings,
       npcInteract,
       abandonQuest,
       questOffer,

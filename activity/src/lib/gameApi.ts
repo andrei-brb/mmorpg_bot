@@ -328,6 +328,26 @@ export async function postEnhance(
   });
 }
 
+export async function getShopCatalog(token: string, guildId?: string) {
+  const res = await fetch(apiUrl("/api/game/shop/catalog"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`shop-catalog ${res.status}`);
+  return res.json() as Promise<{ ok?: boolean; items?: Array<{ id: string; name: string; icon?: string | null; rarity: string; vendor_buy: number; effect_type?: string | null; effect_value?: number | null; effect_duration?: number | null; level_req?: number | null; description?: string | null }> }>;
+}
+
+export async function postShopBuy(token: string, templateId: string, qty: number, guildId?: string) {
+  return fetch(apiUrl("/api/game/shop/buy"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ template_id: templateId, quantity: qty }),
+  });
+}
+
+export async function getMarketListings(token: string, guildId?: string) {
+  const res = await fetch(apiUrl("/api/game/market/listings"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`market-listings ${res.status}`);
+  return res.json() as Promise<{ ok?: boolean; listings?: Array<{ id: string; price: number; quantity: number; listed_at: string; name: string; icon?: string | null; description?: string | null; rarity: string; enhancement_level?: number | null; seller_name: string }> }>;
+}
+
 export async function postBuyProtection(token: string, key: string, qty: number, guildId?: string) {
   return fetch(apiUrl("/api/game/blacksmith/buy-protection"), {
     method: "POST",

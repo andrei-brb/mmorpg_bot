@@ -324,3 +324,31 @@ export type EnhanceInfoPayload = {
   /** Counts: blessing_scroll, safety_charm, enhancement_fragment */
   protections?: Record<string, number>;
 };
+
+/** Shop catalog item from GET /api/game/shop/catalog. */
+export type ShopCatalogItem = {
+  id: string;
+  name: string;
+  icon?: string | null;
+  rarity: string;
+  vendor_buy: number;
+  effect_type?: string | null;
+  effect_value?: number | null;
+  effect_duration?: number | null;
+  level_req?: number | null;
+  description?: string | null;
+};
+
+/** Player market listing from GET /api/game/market/listings. */
+export type MarketListingRow = {
+  id: string;
+  price: number;
+  quantity: number;
+  listed_at: string;
+  name: string;
+  icon?: string | null;
+  description?: string | null;
+  rarity: string;
+  enhancement_level?: number | null;
+  seller_name: string;
+};
