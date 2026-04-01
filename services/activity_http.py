@@ -807,7 +807,9 @@ async def handle_dungeon_party_status(request: web.Request) -> web.Response:
     if not run:
         return web.json_response({"ok": True, "in_party": False})
 
-    is_leader = any(p["id"] == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
+    # Compare as strings to handle UUID types correctly
+    char_id_str = str(char["id"])
+    is_leader = any(str(p["id"]) == char_id_str and p.get("role") == "leader" for p in run["participants"])
     return web.json_response(_json_safe({
         "ok": True,
         "in_party": True,
