@@ -2,6 +2,7 @@ import type {
   ClassOptionRow,
   CombatStatePayload,
   DungeonCatalogEntry,
+  DungeonParticipant,
   DungeonPartyStatus,
   DungeonPartyCreateResponse,
   EnhanceInfoPayload,

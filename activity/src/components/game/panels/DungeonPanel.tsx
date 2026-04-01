@@ -264,10 +264,6 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     }
   };
 
-  const onCreateParty = () => {
-    toast("Party flow: use /dungeon in Discord for now.", { description: "Invites and co-op stay in the bot." });
-  };
-
   if (phase === "fight" && combatState && run) {
     return (
       <CombatEncounterView
