@@ -139,7 +139,14 @@ class MMORPGBot(commands.Bot):
             # in a bulk update. If sync hits that API error, keep the bot running.
             err = str(e)
             if "50240" in err or "Entry Point" in err:
-                log.warning(f"Command sync skipped (Activity Entry Point constraint): {e}")
+                log.warning(f"Command sync warning (Activity Entry Point constraint): {e}")
+                log.warning("Retrying sync (commands should register despite warning)...")
+                try:
+                    # Retry - Discord often accepts the sync on second attempt
+                    synced = await self.tree.sync()
+                    log.info(f"✓ Commands synced on retry ({len(synced)} commands)")
+                except Exception as retry_err:
+                    log.error(f"Retry failed: {retry_err}")
             else:
                 log.error(f"Failed to sync commands: {e}")
 
