@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
+import { ItemIcon } from "@/components/game/ItemIcon";
 import * as api from "@/lib/gameApi";
-import type { ShopCatalogItem } from "@/lib/apiTypes";
+import type { ShopCatalogItem, InvRow } from "@/lib/apiTypes";
 
 type MarketSection = "shop" | "marketplace";
 
@@ -173,13 +174,19 @@ export function MarketTab() {
               <div className="text-xs text-muted-foreground text-center py-4">No items available</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {shopCatalog.map((item) => (
+                {shopCatalog.map((item) => {
+                  const iconItem: Partial<InvRow> = {
+                    id: item.id,
+                    template_id: item.id,
+                    name: item.name,
+                    icon: item.icon,
+                    rarity: item.rarity,
+                  };
+                  return (
                   <div key={item.id} className="game-panel p-3 flex items-start gap-3">
-                    <div
-                      className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[item.rarity] || ""}`}
-                      style={{ background: RARITY_BG[item.rarity] || "hsl(0 0% 65% / 0.06)" }}
-                    >
-                      {item.icon || "📦"}
+                    <div className="shrink-0 w-12 h-12 rounded-sm flex items-center justify-center slot-filled"
+                      style={{ background: RARITY_BG[item.rarity] || "hsl(0 0% 65% / 0.06)" }}>
+                      <ItemIcon item={iconItem as InvRow} size={46} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -206,7 +213,8 @@ export function MarketTab() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -215,13 +223,19 @@ export function MarketTab() {
           <div className="space-y-3">
             <h3 className="text-sm font-cinzel font-semibold text-primary px-1">⚒️ Blacksmith</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {BLACKSMITH_ITEMS.map((item) => (
+              {BLACKSMITH_ITEMS.map((item) => {
+                const iconItem: Partial<InvRow> = {
+                  id: item.key,
+                  template_id: item.key,
+                  name: item.name,
+                  icon: item.icon,
+                  rarity: item.rarity,
+                };
+                return (
                 <div key={item.key} className="game-panel p-3 flex items-start gap-3">
-                  <div
-                    className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[item.rarity]}`}
-                    style={{ background: RARITY_BG[item.rarity] }}
-                  >
-                    {item.icon}
+                  <div className="shrink-0 w-12 h-12 rounded-sm flex items-center justify-center slot-filled"
+                    style={{ background: RARITY_BG[item.rarity] }}>
+                    <ItemIcon item={iconItem as InvRow} size={46} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
@@ -248,7 +262,8 @@ export function MarketTab() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </>
@@ -276,21 +291,26 @@ export function MarketTab() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {marketListings.map((listing) => (
+              {marketListings.map((listing) => {
+                const iconItem: Partial<InvRow> = {
+                  id: listing.id,
+                  template_id: listing.id,
+                  name: listing.name,
+                  icon: listing.icon,
+                  rarity: listing.rarity,
+                  enhancement_level: listing.enhancement_level,
+                };
+                return (
                 <div key={listing.id} className="game-panel p-3 flex items-start gap-3">
-                  <div
-                    className={`shrink-0 w-12 h-12 rounded-sm flex items-center justify-center text-2xl slot-filled ${RARITY_COLORS[listing.rarity] || ""}`}
-                    style={{ background: RARITY_BG[listing.rarity] || "hsl(0 0% 65% / 0.06)" }}
-                  >
-                    <div className="flex flex-col items-center">
-                      <span>{listing.icon || "📦"}</span>
-                      {listing.enhancement_level && listing.enhancement_level > 0 && (
-                        <span className="text-[8px] text-primary font-bold leading-none"
-                          style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.4)' }}>
-                          +{listing.enhancement_level}
-                        </span>
-                      )}
-                    </div>
+                  <div className="shrink-0 w-12 h-12 rounded-sm flex items-center justify-center slot-filled relative"
+                    style={{ background: RARITY_BG[listing.rarity] || "hsl(0 0% 65% / 0.06)" }}>
+                    <ItemIcon item={iconItem as InvRow} size={46} />
+                    {listing.enhancement_level && listing.enhancement_level > 0 && (
+                      <span className="absolute bottom-0 right-0 text-[8px] text-primary font-bold leading-none bg-black/60 px-1 rounded-tl"
+                        style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.4)' }}>
+                        +{listing.enhancement_level}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div>
@@ -323,7 +343,8 @@ export function MarketTab() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
