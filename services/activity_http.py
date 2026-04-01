@@ -2976,6 +2976,127 @@ async def handle_list_item_on_market(request: web.Request) -> web.Response:
         )
 
 
+async def handle_market_buy(request: web.Request) -> web.Response:
+    """POST /api/game/market/buy — Buy a player listing (same logic as /market buy in Discord)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    listing_id_raw = (body.get("listing_id") or body.get("id") or "").strip()
+    if not listing_id_raw:
+        return web.json_response(
+            {"ok": False, "error": "missing_listing_id", "message": "Missing listing id."},
+            status=400,
+        )
+
+    try:
+        uid = UUID(listing_id_raw)
+    except ValueError:
+        return web.json_response(
+            {"ok": False, "error": "invalid_listing_id", "message": "Invalid listing id."},
+            status=400,
+        )
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    listing = await db.fetchrow(
+        """SELECT ml.*, t.name, i.template_id,
+                  i.rarity, i.r_str, i.r_agi, i.r_int, i.r_spi, i.r_sta,
+                  i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating
+           FROM market_listings ml
+           JOIN inventory i ON ml.item_id = i.id
+           JOIN item_templates t ON i.template_id = t.id
+           WHERE ml.id = $1 AND ml.is_active = TRUE AND ml.expires_at > NOW()""",
+        uid,
+    )
+    if not listing:
+        return web.json_response(
+            {"ok": False, "error": "listing_not_found", "message": "Listing not found or expired."},
+            status=404,
+        )
+    if listing["seller_id"] == char["id"]:
+        return web.json_response(
+            {"ok": False, "error": "own_listing", "message": "You cannot buy your own listing."},
+            status=400,
+        )
+
+    price = int(listing["price"] or 0)
+    paid = await char_svc.deduct_gold(char["id"], price, "market purchase")
+    if not paid:
+        return web.json_response(
+            {"ok": False, "error": "insufficient_gold", "message": f"You need {price:,} gold."},
+            status=400,
+        )
+
+    await char_svc.add_gold(listing["seller_id"], price, "market sale")
+
+    inv = InventoryService(db)
+    rarity = listing.get("rarity") or "common"
+    bonus = {
+        "r_str": listing.get("r_str", 0) or 0,
+        "r_agi": listing.get("r_agi", 0) or 0,
+        "r_int": listing.get("r_int", 0) or 0,
+        "r_spi": listing.get("r_spi", 0) or 0,
+        "r_sta": listing.get("r_sta", 0) or 0,
+        "r_haste": listing.get("r_haste", 0) or 0,
+        "r_lifesteal": listing.get("r_lifesteal", 0) or 0,
+        "r_resistance": listing.get("r_resistance", 0) or 0,
+        "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
+    }
+    add_ok, add_msg = await inv.add_item(
+        char["id"],
+        listing["template_id"],
+        rarity=rarity,
+        from_="market",
+        bonus=bonus,
+    )
+    if not add_ok:
+        await char_svc.add_gold(char["id"], price, "refund: market purchase failed")
+        await char_svc.add_gold(listing["seller_id"], -price, "revert: market sale (buyer inventory full)")
+        return web.json_response(
+            {"ok": False, "error": "transfer_failed", "message": add_msg or "Could not add item to inventory."},
+            status=400,
+        )
+
+    await db.execute("DELETE FROM inventory WHERE id=$1", listing["item_id"])
+    await db.execute(
+        "UPDATE market_listings SET is_active=FALSE, sold_at=NOW(), buyer_id=$2 WHERE id=$1",
+        uid,
+        char["id"],
+    )
+
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "message": f"Purchased {listing['name']} for {price:,} gold.",
+                "item_name": listing["name"],
+                "price": price,
+            }
+        )
+    )
+
+
 async def handle_buy_protection(request: web.Request) -> web.Response:
     """Buy protection items for enhancement (Activity modal convenience)."""
     bot = request.app["bot"]
@@ -3146,6 +3267,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/shop/buy", handle_shop_buy)
     app.router.add_get("/api/game/market/listings", handle_market_listings)
     app.router.add_post("/api/game/market/list-item", handle_list_item_on_market)
+    app.router.add_post("/api/game/market/buy", handle_market_buy)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)

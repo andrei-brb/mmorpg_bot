@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import * as api from "@/lib/gameApi";
-import type { ShopCatalogItem, InvRow } from "@/lib/apiTypes";
+import type { ShopCatalogItem, InvRow, MarketListingRow } from "@/lib/apiTypes";
 
 type MarketSection = "shop" | "marketplace";
 
@@ -32,7 +32,8 @@ const BLACKSMITH_ITEMS = [
 const CATEGORIES = ["All", "Consumable", "Material", "Gear"] as const;
 
 export function MarketTab() {
-  const { inventory, buyProtection, buyShopItem, marketListings, refreshMarketListings, accessToken, guildId } = useGameSession();
+  const { inventory, buyProtection, buyShopItem, marketListings, refreshMarketListings, refreshInventory, accessToken, guildId } =
+    useGameSession();
   const [section, setSection] = useState<MarketSection>("shop");
   const [shopCategory, setShopCategory] = useState<string>("All");
   const [shopCatalog, setShopCatalog] = useState<ShopCatalogItem[]>([]);
@@ -115,12 +116,24 @@ export function MarketTab() {
     }
   };
 
-  const handleBuyListing = (price: number) => {
-    if (playerGold < price) {
-      toast.error("Not enough gold!", { description: `You need ${price} 🪙 but only have ${playerGold} 🪙` });
+  const handleBuyListing = async (listing: MarketListingRow) => {
+    if (!accessToken) return;
+    if (playerGold < listing.price) {
+      toast.error("Not enough gold!", { description: `You need ${listing.price} 🪙 but only have ${playerGold} 🪙` });
       return;
     }
-    toast.info("Marketplace purchases coming soon!", { description: "This feature will be available soon." });
+    try {
+      const res = await api.postMarketBuy(accessToken, listing.id, guildId);
+      if (res.ok) {
+        toast.success(`Purchased ${listing.name}!`, { description: res.message || `−${listing.price.toLocaleString()} 🪙` });
+        await refreshInventory();
+        await refreshMarketListings();
+      } else {
+        toast.error(res.message || "Purchase failed");
+      }
+    } catch (e) {
+      toast.error("Purchase failed", { description: String(e) });
+    }
   };
 
   return (
@@ -335,7 +348,8 @@ export function MarketTab() {
                         </span>
                       </div>
                       <button
-                        onClick={() => handleBuyListing(listing.price)}
+                        type="button"
+                        onClick={() => void handleBuyListing(listing)}
                         className="game-btn-primary text-[10px] px-3 py-1"
                       >
                         Buy

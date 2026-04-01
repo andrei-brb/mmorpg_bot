@@ -439,6 +439,19 @@ export async function postListItemOnMarket(
   });
 }
 
+export async function postMarketBuy(
+  token: string,
+  listingId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string; item_name?: string; price?: number }> {
+  const res = await fetch(apiUrl("/api/game/market/buy"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ listing_id: listingId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; item_name?: string; price?: number }>;
+}
+
 export function calculateMarketPrice(item: InvRow, vendorBuy?: number): number {
   const rarity = (item.rarity || "common").toLowerCase();
   const multipliers: Record<string, number> = {
