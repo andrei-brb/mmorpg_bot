@@ -605,7 +605,7 @@ async def handle_dungeon_party_create(request: web.Request) -> web.Response:
 
 
 async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
-    """POST /api/game/dungeon/party/invite — Invite a player to the party (leader only)."""
+    """POST /api/game/dungeon/party/invite — Send invite to player (creates pending invite)."""
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
     if db is None or db.pool is None:
@@ -644,7 +644,7 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
 
     run = await dungeon_svc.get_active_run(char["id"])
     if not run:
-        return web.json_response({"error": "not_in_dungeon", "message": "You're not in a dungeon party."}, status=400)
+        return web.json_response({"error": "not_in_dungeon", "message": "You're not in a dungeon party.", "status": 400})
 
     # Check if leader - convert both IDs to strings for proper UUID comparison
     is_leader = any(str(p["id"]) == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
@@ -659,16 +659,40 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
     if target_char["in_dungeon"]:
         return web.json_response({"error": "target_in_dungeon", "message": "That player is already in a dungeon."}, status=400)
 
-    # Add participant
-    success = await dungeon_svc.add_participant(run["id"], target_char["id"])
-    if not success:
-        return web.json_response({"error": "invite_failed", "message": "Failed to invite player."}, status=500)
+    # Check if already invited
+    existing = await db.fetchrow(
+        """
+        SELECT id, status FROM dungeon_party_invites
+        WHERE run_id = $1 AND invitee_id = $2 AND status = 'pending'
+        """,
+        run["id"],
+        target_char["id"],
+    )
+    if existing:
+        return web.json_response({
+            "ok": True,
+            "message": f"Invite already sent to {target_char['name']}.",
+            "already_invited": True,
+            "status": existing["status"],
+        })
 
-    run = await dungeon_svc.get_run(run["id"])
+    # Create pending invite
+    invite_id = await db.fetchval(
+        """
+        INSERT INTO dungeon_party_invites (run_id, inviter_id, invitee_id, status)
+        VALUES ($1, $2, $3, 'pending')
+        RETURNING id
+        """,
+        run["id"],
+        char["id"],
+        target_char["id"],
+    )
+
     return web.json_response(_json_safe({
         "ok": True,
-        "message": f"Invited {target_char['name']} to the party.",
-        "participants": run["participants"],
+        "message": f"Invite sent to {target_char['name']}. They can accept in the Activity.",
+        "invite_id": str(invite_id),
+        "expires_in_minutes": 15,
     }))
 
 
@@ -737,6 +761,223 @@ async def handle_dungeon_party_join(request: web.Request) -> web.Response:
         "run_id": str(run_id),
         "participants": run["participants"],
     }))
+
+
+async def handle_dungeon_party_invites_list(request: web.Request) -> web.Response:
+    """GET /api/game/dungeon/party/invites — Get pending invites for current player."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "invites": []}), status=400)
+
+    # Get pending invites (not expired)
+    rows = await db.fetch(
+        """
+        SELECT dpi.id, dpi.run_id, dpi.inviter_id, dpi.created_at, dpi.expires_at,
+               dr.dungeon_key,
+               c_inviter.name as inviter_name,
+               c_inviter.level as inviter_level,
+               c_inviter.class as inviter_class
+        FROM dungeon_party_invites dpi
+        JOIN dungeon_runs dr ON dpi.run_id = dr.id
+        JOIN characters c_inviter ON dpi.inviter_id = c_inviter.id
+        WHERE dpi.invitee_id = $1 AND dpi.status = 'pending' AND dpi.expires_at > NOW()
+        ORDER BY dpi.created_at DESC
+        LIMIT 10
+        """,
+        char["id"],
+    )
+    
+    invites = [
+        {
+            "invite_id": str(r["id"]),
+            "run_id": str(r["run_id"]),
+            "dungeon_key": r["dungeon_key"],
+            "inviter": {
+                "id": str(r["inviter_id"]),
+                "name": r["inviter_name"],
+                "level": r["inviter_level"],
+                "class": r["inviter_class"],
+            },
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "expires_at": r["expires_at"].isoformat() if r["expires_at"] else None,
+        }
+        for r in rows
+    ]
+    
+    return web.json_response(_json_safe({"ok": True, "invites": invites}))
+
+
+async def handle_dungeon_party_invite_accept(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/invite/accept — Accept invite and join party."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    invite_id = body.get("invite_id")
+    if not invite_id:
+        return web.json_response({"error": "missing_invite_id", "message": "Invite ID required."}, status=400)
+
+    from uuid import UUID
+    from services.dungeon.dungeon_service import DungeonService
+
+    dungeon_svc = DungeonService(db)
+
+    # Get invite
+    invite = await db.fetchrow(
+        """
+        SELECT run_id, invitee_id, status FROM dungeon_party_invites WHERE id = $1
+        """,
+        invite_id,
+    )
+    if not invite:
+        return web.json_response({"error": "invite_not_found", "message": "Invite not found."}, status=404)
+
+    if str(invite["invitee_id"]) != str(char["id"]):
+        return web.json_response({"error": "not_your_invite", "message": "This invite is not for you."}, status=403)
+
+    if invite["status"] != "pending":
+        return web.json_response({"error": "invite_already_used", "message": "This invite has already been used."}, status=400)
+
+    # Check if run is still active
+    run = await dungeon_svc.get_run(invite["run_id"])
+    if not run or not run["is_active"]:
+        return web.json_response({"error": "party_not_found", "message": "This party is no longer active."}, status=400)
+
+    # Check party size
+    if len(run["participants"]) >= 5:
+        return web.json_response({"error": "party_full", "message": "This party is full."}, status=400)
+
+    # Add to party
+    success = await dungeon_svc.add_participant(invite["run_id"], char["id"])
+    if not success:
+        return web.json_response({"error": "join_failed", "message": "Failed to join party."}, status=500)
+
+    # Mark invite as accepted
+    await db.execute(
+        """
+        UPDATE dungeon_party_invites SET status = 'accepted' WHERE id = $1
+        """,
+        invite_id,
+    )
+
+    run = await dungeon_svc.get_run(invite["run_id"])
+    return web.json_response(_json_safe({
+        "ok": True,
+        "message": "Joined the party!",
+        "run_id": str(run["id"]),
+        "participants": run["participants"],
+    }))
+
+
+async def handle_dungeon_party_invite_decline(request: web.Request) -> web.Response:
+    """POST /api/game/dungeon/party/invite/decline — Decline invite."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    invite_id = body.get("invite_id")
+    if not invite_id:
+        return web.json_response({"error": "missing_invite_id", "message": "Invite ID required."}, status=400)
+
+    # Get invite
+    invite = await db.fetchrow(
+        """
+        SELECT invitee_id, status FROM dungeon_party_invites WHERE id = $1
+        """,
+        invite_id,
+    )
+    if not invite:
+        return web.json_response({"error": "invite_not_found", "message": "Invite not found."}, status=404)
+
+    if str(invite["invitee_id"]) != str(char["id"]):
+        return web.json_response({"error": "not_your_invite", "message": "This invite is not for you."}, status=403)
+
+    # Mark as declined (or just delete)
+    await db.execute(
+        """
+        DELETE FROM dungeon_party_invites WHERE id = $1
+        """,
+        invite_id,
+    )
+
+    return web.json_response({"ok": True, "message": "Invite declined."})
+
+
+async def handle_dungeon_party_invite_cancel(request: web.Request) -> web.Response:
+    """DELETE /api/game/dungeon/party/invite — Cancel outgoing invite (leader only)."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    invite_id = body.get("invite_id")
+    if not invite_id:
+        return web.json_response({"error": "missing_invite_id", "message": "Invite ID required."}, status=400)
+
+    from services.dungeon.dungeon_service import DungeonService
+
+    dungeon_svc = DungeonService(db)
+
+    # Get invite
+    invite = await db.fetchrow(
+        """
+        SELECT run_id, inviter_id FROM dungeon_party_invites WHERE id = $1
+        """,
+        invite_id,
+    )
+    if not invite:
+        return web.json_response({"error": "invite_not_found", "message": "Invite not found."}, status=404)
+
+    # Check if user is the inviter (leader)
+    run = await dungeon_svc.get_run(invite["run_id"])
+    if not run:
+        return web.json_response({"error": "party_not_found", "message": "Party not found."}, status=404)
+
+    is_leader = any(str(p["id"]) == str(char["id"]) and p.get("role") == "leader" for p in run["participants"])
+    if not is_leader:
+        return web.json_response({"error": "not_leader", "message": "Only the leader can cancel invites."}, status=403)
+
+    # Delete invite
+    await db.execute(
+        """
+        DELETE FROM dungeon_party_invites WHERE id = $1
+        """,
+        invite_id,
+    )
+
+    return web.json_response({"ok": True, "message": "Invite cancelled."})
 
 
 async def handle_dungeon_party_leave(request: web.Request) -> web.Response:
@@ -2833,6 +3074,10 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/dungeon/party/create", handle_dungeon_party_create)
     app.router.add_post("/api/game/dungeon/party/invite", handle_dungeon_party_invite)
     app.router.add_get("/api/game/dungeon/party/players", handle_dungeon_party_players)
+    app.router.add_get("/api/game/dungeon/party/invites", handle_dungeon_party_invites_list)
+    app.router.add_post("/api/game/dungeon/party/invite/accept", handle_dungeon_party_invite_accept)
+    app.router.add_post("/api/game/dungeon/party/invite/decline", handle_dungeon_party_invite_decline)
+    app.router.add_delete("/api/game/dungeon/party/invite", handle_dungeon_party_invite_cancel)
     app.router.add_post("/api/game/dungeon/party/join", handle_dungeon_party_join)
     app.router.add_post("/api/game/dungeon/party/leave", handle_dungeon_party_leave)
     app.router.add_get("/api/game/combat/state", handle_combat_state)

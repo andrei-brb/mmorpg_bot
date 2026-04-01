@@ -680,6 +680,20 @@ CREATE TABLE IF NOT EXISTS dungeon_participants (
     PRIMARY KEY (run_id, character_id)
 );
 
+-- Dungeon party invites (pending invitations)
+CREATE TABLE IF NOT EXISTS dungeon_party_invites (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    run_id          UUID REFERENCES dungeon_runs(id) ON DELETE CASCADE,
+    inviter_id      UUID REFERENCES characters(id) ON DELETE CASCADE,
+    invitee_id      UUID REFERENCES characters(id) ON DELETE CASCADE,
+    status          VARCHAR(16) DEFAULT 'pending',  -- pending, accepted, declined
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '15 minutes'),
+    UNIQUE(run_id, invitee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dungeon_invites_invitee ON dungeon_party_invites(invitee_id, status);
+CREATE INDEX IF NOT EXISTS idx_dungeon_invites_run ON dungeon_party_invites(run_id, status);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- QUESTS
 -- ─────────────────────────────────────────────────────────────────────────────

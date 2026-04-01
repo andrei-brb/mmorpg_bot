@@ -245,6 +245,53 @@ export async function getDungeonPartyPlayers(
   return res.json() as Promise<{ ok?: boolean; players?: Array<{ id: string; username: string; level: number; class: string }> }>;
 }
 
+export async function getDungeonPartyInvites(
+  token: string,
+  guildId?: string,
+): Promise<DungeonPartyInvitesResponse> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/invites"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<DungeonPartyInvitesResponse>;
+}
+
+export async function postDungeonPartyInviteAccept(
+  token: string,
+  inviteId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; run_id?: string; participants?: DungeonParticipant[] }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/invite/accept"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ invite_id: inviteId, guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; run_id?: string; participants?: DungeonParticipant[] }>;
+}
+
+export async function postDungeonPartyInviteDecline(
+  token: string,
+  inviteId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/invite/decline"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ invite_id: inviteId, guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function deleteDungeonPartyInvite(
+  token: string,
+  inviteId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/dungeon/party/invite"), {
+    method: "DELETE",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ invite_id: inviteId, guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
 export async function postCombatAction(
   token: string,
   body: Record<string, unknown>,

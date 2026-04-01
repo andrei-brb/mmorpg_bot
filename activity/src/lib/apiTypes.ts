@@ -148,6 +148,26 @@ export type DungeonPartyCreateResponse = {
   participants?: DungeonParticipant[];
 };
 
+export type DungeonPartyInvite = {
+  invite_id: string;
+  run_id: string;
+  dungeon_key: string;
+  inviter: {
+    id: string;
+    name: string;
+    level: number;
+    class: string;
+  };
+  created_at?: string | null;
+  expires_at?: string | null;
+};
+
+export type DungeonPartyInvitesResponse = {
+  ok?: boolean;
+  error?: string;
+  invites?: DungeonPartyInvite[];
+};
+
 export type ExploreZone = {
   key: string;
   name: string;
