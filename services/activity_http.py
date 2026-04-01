@@ -1360,11 +1360,12 @@ async def handle_dungeon_party_players(request: web.Request) -> web.Response:
 
     q = q[:32]
     # Get players with characters who are not in dungeon
+    # Join players with characters via player_id (not discord_id)
     rows = await db.fetch(
         """
         SELECT p.id, p.username, c.level, c.class
         FROM players p
-        JOIN characters c ON c.discord_id = p.id
+        JOIN characters c ON c.player_id = p.id
         WHERE p.id != $1
           AND p.username IS NOT NULL
           AND c.is_active = TRUE
