@@ -182,7 +182,7 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     setPartyLoading(true);
     try {
       const result = await api.postDungeonPartyEnter(accessToken, guildId);
-      if (result.ok && result.state) {
+      if (result.state) {
         toast.success("Entering dungeon…");
         const st = result.state;
         const floor = st.dungeon_floor ?? 1;

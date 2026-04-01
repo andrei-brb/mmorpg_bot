@@ -1023,9 +1023,22 @@ async def handle_dungeon_party_enter(request: web.Request) -> web.Response:
     if not run:
         return web.json_response({"error": "not_in_party", "message": "You're not in a dungeon party. Create or join one first."}, status=400)
 
-    # Check if already in COMBAT (not just in party)
+    # Match start_activity_combat: only real Discord /fight blocks us; stale Activity rows are cleared.
     if char.get("combat_status") == "in_combat":
-        return web.json_response({"error": "already_in_combat", "message": "You're already in combat!"}, status=400)
+        from services.combat.activity_combat import _char_in_discord_channel_combat
+
+        if _char_in_discord_channel_combat(char["id"]):
+            return web.json_response(
+                {
+                    "error": "in_discord_combat",
+                    "message": "Finish your fight in Discord first, or wait for it to end.",
+                },
+                status=400,
+            )
+        await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
+        char = await char_svc.get_character(discord_id)
+        if not char:
+            return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
 
     dungeon_config = DUNGEONS.get(run["dungeon_key"])
     if not dungeon_config:
