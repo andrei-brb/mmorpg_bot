@@ -275,7 +275,8 @@ export function GameShell() {
                     World of Discord
                   </h1>
                   <p className="text-sm text-muted-foreground font-crimson mt-0.5">
-                    Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>
+                    Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>{" "}
+                    <span className="text-primary/80 font-pixel text-[10px] align-middle">Lv {playerStats.level}</span>
                   </p>
                 </div>
               </div>

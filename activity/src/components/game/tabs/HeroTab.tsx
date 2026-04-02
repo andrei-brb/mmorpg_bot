@@ -166,114 +166,6 @@ export function HeroTab() {
 
   return (
     <div className="space-y-4">
-      {/* Character Stats */}
-      <div className="game-panel">
-        <div className="game-panel-header">Character Stats</div>
-        {!char ? (
-          <p className="text-sm text-muted-foreground">
-            No character — use <code className="text-xs">/character create</code> in Discord.
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <div className="flex items-center gap-3 text-sm flex-wrap">
-                <Avatar className="w-7 h-7 shrink-0">
-                  {inventory?.discord?.avatar_url ? (
-                    <AvatarImage src={String(inventory.discord.avatar_url)} alt={char.name || "Avatar"} />
-                  ) : (
-                    <AvatarFallback className="text-[10px]">{(char.name || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
-                  )}
-                </Avatar>
-                <span className="text-foreground font-semibold font-cinzel text-base">{char.name}</span>
-                <span className="text-primary font-pixel text-[10px]"
-                  style={{ textShadow: '0 0 6px hsl(43 78% 50% / 0.3)' }}>Lv {char.level ?? "?"}</span>
-                <span className="ornament-divider w-px h-4 inline-block" style={{ background: 'hsl(228 16% 25%)' }} />
-                <span className="flex items-center gap-2">
-                  <img
-                    src={classIconUrl(char.class || "")}
-                    alt=""
-                    width={20}
-                    height={20}
-                    className="w-5 h-5 object-contain shrink-0 rounded-[2px]"
-                    style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                  <span className="text-secondary-foreground">{char.class}</span>
-                </span>
-                {(char.specialization_name || char.specialization) && (
-                  <>
-                    <span className="ornament-divider w-px h-4 inline-block" style={{ background: 'hsl(228 16% 25%)' }} />
-                    <span className="flex items-center gap-2">
-                      {char.specialization && specIconUrl(char.specialization) && (
-                        <img
-                          src={specIconUrl(char.specialization)}
-                          alt=""
-                          width={18}
-                          height={18}
-                          className="w-[18px] h-[18px] object-contain shrink-0 rounded-[2px]"
-                          style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      )}
-                      <span className="text-accent-foreground text-xs italic">{char.specialization_name || char.specialization}</span>
-                    </span>
-                  </>
-                )}
-                {!char.specialization && !char.specialization_name && (
-                  <button
-                    type="button"
-                    onClick={() => void requestSpecChoice()}
-                    className="text-primary text-xs hover:underline font-semibold animate-pulse-glow"
-                  >
-                    Choose Spec!
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 text-sm">
-                <span className="text-primary font-semibold font-cinzel"
-                  style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>{Number(char.gold ?? 0).toLocaleString()}</span>
-                <span>🪙</span>
-              </div>
-            </div>
-            <div className="mb-3">
-              <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-muted-foreground font-cinzel tracking-wider uppercase text-[10px]">Hit Points</span>
-                <span className="text-foreground tabular-nums">{hp} / {maxHp || "—"}</span>
-              </div>
-              <div className="hp-bar-track">
-                <div className="hp-bar-fill" style={{ width: `${hpPct}%` }} />
-              </div>
-            </div>
-
-            <div className="ornament-divider mb-3" />
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  if (char.specialization || char.specialization_name) {
-                    toast.info(
-                      `Specialization: ${char.specialization_name || char.specialization}`,
-                    );
-                  } else {
-                    void requestSpecChoice();
-                  }
-                }}
-                className="game-btn-secondary text-xs px-3 py-1.5"
-              >
-                ⚔️ Specialization
-              </button>
-            </div>
-          </>
-        )}
-        {status && <p className="text-xs text-muted-foreground mt-2">{status}</p>}
-      </div>
-
-      <div className="ornament-divider" />
-
       {/* Two columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Equipment */}
@@ -368,7 +260,12 @@ export function HeroTab() {
 
         {/* Inventory */}
         <div className="game-panel">
-          <div className="game-panel-header">Inventory</div>
+          <div className="game-panel-header flex items-center justify-between">
+            <span>Inventory</span>
+            <span className="text-xs font-semibold font-cinzel text-primary tabular-nums" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}>
+              {Number(char?.gold ?? 0).toLocaleString()} 🪙
+            </span>
+          </div>
           <div className="grid grid-cols-5 gap-2">
             {invSlots.map((inv) => {
               const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
