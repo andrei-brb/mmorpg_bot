@@ -726,6 +726,7 @@ class CombatEngine:
         targets: List[Combatant],
         is_boss: bool = False,
         phase: int = 1,
+        enemy_key: Optional[str] = None,
     ) -> Tuple[str, List[Combatant]]:
         alive = [t for t in targets if not t.is_dead]
         if not alive:
@@ -734,9 +735,20 @@ class CombatEngine:
         # Highest-threat target (tank priority)
         target = max(alive, key=lambda t: t.threat)
 
+        # Prefer enemy template ability list when provided (prevents normal mobs using player-only kits).
+        if enemy_key:
+            try:
+                from config.settings import ENEMIES
+
+                tmpl = ENEMIES.get(enemy_key)
+                if tmpl and tmpl.abilities:
+                    usable = [k for k in tmpl.abilities if k not in enemy.ability_cooldowns]
+                    if usable and random.random() < 0.35:
+                        return random.choice(usable), [target]
+            except Exception:
+                pass
+
         if not is_boss:
-            if random.random() < 0.20:
-                return "mortal_strike", [target]
             return "auto_attack", [target]
 
         # Boss AI — phase-aware

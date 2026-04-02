@@ -979,7 +979,9 @@ async def _process_activity_action_impl(
     if not enemy.is_dead:
         if session.is_boss:
             session.boss_phase = engine.boss_phase(enemy)
-        e_ab, e_targets = engine.enemy_turn(enemy, session.alive_players, session.is_boss, session.boss_phase)
+        e_ab, e_targets = engine.enemy_turn(
+            enemy, session.alive_players, session.is_boss, session.boss_phase, enemy_key=session.enemy_key
+        )
         if e_targets:
             e_results = engine.use_ability(e_ab, enemy, e_targets, session=session)
             for r in e_results:
@@ -1241,7 +1243,9 @@ async def _party_enemy_round(
             session.boss_phase = engine.boss_phase(enemy)
         # Party dungeon design: enemy damage applies to all alive party members.
         # Let engine choose the enemy ability, but always target the whole party.
-        e_ab, _ = engine.enemy_turn(enemy, session.alive_players, session.is_boss, session.boss_phase)
+        e_ab, _ = engine.enemy_turn(
+            enemy, session.alive_players, session.is_boss, session.boss_phase, enemy_key=session.enemy_key
+        )
         targets = list(session.alive_players)
         if targets:
             e_results = engine.use_ability(e_ab, enemy, targets, session=session)

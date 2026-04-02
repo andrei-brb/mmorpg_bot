@@ -609,7 +609,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
                 if session.is_boss:
                     session.boss_phase = self.engine.boss_phase(enemy)
                 e_ab, e_targets = self.engine.enemy_turn(
-                    enemy, session.alive_players, session.is_boss, session.boss_phase
+                    enemy, session.alive_players, session.is_boss, session.boss_phase, enemy_key=session.enemy_key
                 )
                 if e_targets:
                     e_results = self.engine.use_ability(e_ab, enemy, e_targets, session=session)
