@@ -438,6 +438,35 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
     return () => clearInterval(id);
   }, [accessToken, phase, partyStatus, catalog, loadCombatSnapshot, applyEndedOutcome]);
 
+  // While in a shared party fight, continuously refresh snapshot so both clients
+  // see turn changes, abilities, and action availability without manual actions.
+  useEffect(() => {
+    if (!accessToken) return;
+    if (phase !== "fight") return;
+    if (!combatState?.party_mode) return;
+
+    const id = setInterval(() => {
+      void (async () => {
+        const snap = await loadCombatSnapshot();
+        if (snap.ended_outcome) {
+          await applyEndedOutcome(snap.ended_outcome);
+          return;
+        }
+        if (snap.active && snap.state) {
+          setCombatState((prev) => {
+            if (!prev) return snap.state;
+            // Avoid unnecessary rerenders if server state is unchanged.
+            const prevJson = JSON.stringify(prev);
+            const nextJson = JSON.stringify(snap.state);
+            return prevJson === nextJson ? prev : snap.state;
+          });
+        }
+      })();
+    }, 1200);
+
+    return () => clearInterval(id);
+  }, [accessToken, phase, combatState?.party_mode, loadCombatSnapshot, applyEndedOutcome]);
+
   const partyBlocksSoloDungeon =
     Boolean(partyStatus?.in_party) && (partyStatus?.participants?.length || 0) >= 2;
 
