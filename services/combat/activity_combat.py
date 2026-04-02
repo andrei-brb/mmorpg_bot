@@ -258,6 +258,14 @@ def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
     return out[:30]
 
 
+def _dungeon_total_floors_payload(ac: ActivityCombatState) -> Optional[int]:
+    """Total floors for the dungeon encounter (Activity UI); avoids client guessing from current floor."""
+    if not ac.dungeon_key:
+        return None
+    cfg = DUNGEONS.get(ac.dungeon_key)
+    return int(cfg.floors) if cfg else None
+
+
 def serialize_activity_state(
     ac: ActivityCombatState,
     char: dict,
@@ -327,6 +335,7 @@ def serialize_activity_state(
             "in_dungeon": bool(char.get("in_dungeon")) or bool(ac.dungeon_key),
             "dungeon_key": ac.dungeon_key,
             "dungeon_floor": ac.dungeon_floor,
+            "dungeon_total_floors": _dungeon_total_floors_payload(ac),
             "party_mode": True,
             "your_turn": your_turn,
             "active_turn_discord_id": str(active_did) if active_did is not None else None,
@@ -355,6 +364,7 @@ def serialize_activity_state(
         "in_dungeon": bool(char.get("in_dungeon")) or bool(ac.dungeon_key),
         "dungeon_key": ac.dungeon_key,
         "dungeon_floor": ac.dungeon_floor,
+        "dungeon_total_floors": _dungeon_total_floors_payload(ac),
     }
 
 

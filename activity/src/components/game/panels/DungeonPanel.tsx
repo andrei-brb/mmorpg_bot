@@ -12,6 +12,33 @@ function stripMd(s: string): string {
 
 type RunState = { dungeon: DungeonCatalogEntry; floor: number };
 
+/** Merge catalog + combat payload so `dungeon.floors` is never `current_floor` (that broke multi-floor victory → floor 2). */
+function runStateFromDungeonCombat(
+  catalog: DungeonCatalogEntry[],
+  st: CombatStatePayload,
+): RunState | null {
+  if (st.dungeon_key == null || st.dungeon_floor == null) return null;
+  const floor = st.dungeon_floor;
+  const dk = st.dungeon_key;
+  const d = catalog.find((x) => x.key === dk);
+  const totalFloors = st.dungeon_total_floors ?? d?.floors ?? Math.max(floor, 1);
+  const dungeon: DungeonCatalogEntry = d
+    ? { ...d, floors: totalFloors }
+    : {
+        key: dk,
+        name: dk,
+        emoji: "⚔️",
+        description: "",
+        level_req: 1,
+        floors: totalFloors,
+        xp_per_floor: 0,
+        gold_min: 0,
+        gold_max: 0,
+        floor_preview: [],
+      };
+  return { dungeon, floor };
+}
+
 export type DungeonPanelProps = {
   playerLevel?: number;
 };
@@ -235,24 +262,8 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       if (result.state) {
         toast.success("Entering dungeon…");
         const st = result.state;
-        const floor = st.dungeon_floor ?? 1;
-        const dk = st.dungeon_key;
-        const d = dk ? catalog.find((x) => x.key === dk) : undefined;
-        setRun({
-          dungeon: d ?? {
-            key: dk ?? "dungeon",
-            name: dk ?? "Dungeon",
-            emoji: "⚔️",
-            description: "",
-            level_req: 1,
-            floors: Math.max(floor, 1),
-            xp_per_floor: 0,
-            gold_min: 0,
-            gold_max: 0,
-            floor_preview: [],
-          },
-          floor,
-        });
+        const pair = runStateFromDungeonCombat(catalog, st);
+        if (pair) setRun(pair);
         setCombatState(st);
         setPhase("fight");
       } else {
@@ -386,9 +397,9 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       }
       const st = snap.state;
       if (!snap.active || !st?.dungeon_key || st.dungeon_floor == null) return;
-      const d = catalog.find((x) => x.key === st.dungeon_key);
-      if (!d) return;
-      setRun({ dungeon: d, floor: st.dungeon_floor });
+      const pair = runStateFromDungeonCombat(catalog, st);
+      if (!pair) return;
+      setRun(pair);
       setCombatState(st);
       setPhase("fight");
     })();
@@ -413,23 +424,8 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
         }
         if (snap.active && snap.state?.dungeon_key != null && snap.state.dungeon_floor != null) {
           const st = snap.state;
-          const dk = st.dungeon_key;
-          const d = dk ? catalog.find((x) => x.key === dk) : undefined;
-          setRun({
-            dungeon: d ?? {
-              key: dk ?? "dungeon",
-              name: dk ?? "Dungeon",
-              emoji: "⚔️",
-              description: "",
-              level_req: 1,
-              floors: Math.max(st.dungeon_floor ?? 1, 1),
-              xp_per_floor: 0,
-              gold_min: 0,
-              gold_max: 0,
-              floor_preview: [],
-            },
-            floor: st.dungeon_floor ?? 1,
-          });
+          const pair = runStateFromDungeonCombat(catalog, st);
+          if (pair) setRun(pair);
           setCombatState(st);
           setPhase("fight");
         }

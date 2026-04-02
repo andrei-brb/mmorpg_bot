@@ -111,6 +111,8 @@ export type CombatStatePayload = {
   /** Activity Dungeon tab — combat started with dungeon_key + floor (see server). */
   dungeon_key?: string | null;
   dungeon_floor?: number | null;
+  /** Server dungeon config floor count (do not infer from current floor). */
+  dungeon_total_floors?: number | null;
   /** Shared party dungeon — same encounter for all members; abilities only on your turn. */
   party_mode?: boolean;
   your_turn?: boolean;
