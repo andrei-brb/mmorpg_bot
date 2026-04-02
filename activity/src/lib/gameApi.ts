@@ -1,6 +1,7 @@
 import type {
   ClassOptionRow,
   CombatStatePayload,
+  CharacterDerivedStatsPayload,
   DungeonCatalogEntry,
   DungeonParticipant,
   DungeonPartyInvitesResponse,
@@ -79,6 +80,13 @@ export async function getInventory(token: string, guildId?: string): Promise<Inv
   const res = await fetch(apiUrl("/api/game/inventory"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`inventory ${res.status}`);
   return res.json() as Promise<InventoryPayload>;
+}
+
+export async function getCharacterDerivedStats(token: string, guildId?: string): Promise<CharacterDerivedStatsPayload> {
+  const res = await fetch(apiUrl("/api/game/character/stats"), { headers: authHeaders(token, guildId) });
+  const j = (await res.json()) as CharacterDerivedStatsPayload;
+  if (!res.ok) return { ...j, ok: false };
+  return { ...j, ok: true };
 }
 
 export async function getCharacterClassOptions(): Promise<{ classes: ClassOptionRow[] }> {

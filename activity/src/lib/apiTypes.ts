@@ -66,6 +66,23 @@ export type InventoryPayload = {
   items: InvRow[];
 };
 
+export type CharacterDerivedStatsPayload = {
+  ok: boolean;
+  attack_power: number;
+  spell_power: number;
+  dmg_min: number;
+  dmg_max: number;
+  armor: number;
+  crit_chance: number;
+  dodge_chance: number;
+  haste: number;
+  lifesteal: number;
+  resistance: number;
+  hit_rating: number;
+  error?: string;
+  message?: string;
+};
+
 export type CombatEnemy = { key: string; name: string; emoji: string; kind: string };
 
 export type CombatAbility = {

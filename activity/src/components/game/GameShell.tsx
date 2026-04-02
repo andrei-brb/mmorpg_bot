@@ -16,6 +16,8 @@ import { QuestCompleteModal } from "./modals/QuestCompleteModal";
 import { CreateCharacterModal } from "./modals/CreateCharacterModal";
 import { toast } from "sonner";
 import { usePvpApi } from "@/hooks/usePvpApi";
+import * as api from "@/lib/gameApi";
+import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
 
 const TABS = ["Hero", "Explore", "Quests", "Combat", "Market", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
@@ -33,8 +35,11 @@ const TAB_ICONS: Record<TabName, string> = {
 export function GameShell() {
   const [activeTab, setActiveTab] = useState<TabName>("Hero");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [derivedStats, setDerivedStats] = useState<CharacterDerivedStatsPayload | null>(null);
   // playerStats will be derived after we get the session values from useGameSession()
   const {
+    accessToken,
+    guildId,
     displayName,
     liveEvents,
     combatFocusActive,
@@ -52,6 +57,24 @@ export function GameShell() {
 
   const { status: pvpStatus } = usePvpApi();
 
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void api
+      .getCharacterDerivedStats(accessToken, guildId)
+      .then((j) => {
+        if (cancelled) return;
+        setDerivedStats(j.ok ? j : null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDerivedStats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId]);
+
   // Derive live player stats from the game session / inventory (no random values)
   const playerStats = useMemo(() => {
     const char = inventory?.character || null;
@@ -65,20 +88,9 @@ export function GameShell() {
     const hpCur = Number(char?.current_hp ?? 0);
     const hpMax = Number(char?.max_hp ?? 0) || "—";
 
-    // Attack: prefer main hand damage range when available
-    const main = equipped["main_hand"];
-    const dMin = main ? Number(main.s_dmg_min ?? 0) : 0;
-    const dMax = main ? Number(main.s_dmg_max ?? 0) : 0;
-    const atk = main ? `${dMin}–${dMax}` : String(
-      items.reduce((acc, it) => acc + (Number(it.s_dmg_min ?? 0) + Number(it.s_dmg_max ?? 0)) / 2, 0) | 0,
-    );
-
-    // Defense: sum of armor from equipped pieces
-    const def = items.reduce((acc, it) => acc + (Number(it.s_armor ?? 0) || 0), 0) | 0;
-
-    // Crit/hit: show hit rating if present
-    const hitRating = items.reduce((acc, it) => acc + (Number(it.s_hit_rating ?? 0) || 0), 0) | 0;
-    const crit = hitRating ? `${hitRating}%` : "—";
+    const atk = derivedStats ? `${derivedStats.dmg_min}–${derivedStats.dmg_max}` : "—";
+    const def = derivedStats ? String(derivedStats.armor) : "—";
+    const crit = derivedStats ? `${derivedStats.crit_chance.toFixed(1)}%` : "—";
 
     const xp = "—"; // XP currently not provided by inventory payload
     const guild = "—"; // guild info not available in inventory payload
@@ -97,7 +109,7 @@ export function GameShell() {
       guild,
       border,
     };
-  }, [inventory, displayName, pvpStatus]);
+  }, [inventory, displayName, pvpStatus, derivedStats]);
 
   const [specSel, setSpecSel] = useState("");
   const [questBusy, setQuestBusy] = useState(false);

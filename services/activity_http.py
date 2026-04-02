@@ -325,6 +325,46 @@ async def handle_inventory(request: web.Request) -> web.Response:
     )
 
 
+async def handle_character_stats(request: web.Request) -> web.Response:
+    """GET /api/game/character/stats — Derived combat stats (includes equipped item rolls)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "Create a character first."}, status=400)
+
+    stats = await char_svc.total_stats(char["id"])
+    payload = {
+        "ok": True,
+        "attack_power": stats.get("attack_power", 0),
+        "spell_power": stats.get("spell_power", 0),
+        "dmg_min": stats.get("dmg_min", 0),
+        "dmg_max": stats.get("dmg_max", 0),
+        "armor": stats.get("armor", 0),
+        "crit_chance": stats.get("crit_chance", 0.0),
+        "dodge_chance": stats.get("dodge_chance", 0.0),
+        "haste": stats.get("haste", 0.0),
+        "lifesteal": stats.get("lifesteal", 0.0),
+        "resistance": stats.get("resistance", 0),
+        "hit_rating": stats.get("hit_rating", 0.0),
+    }
+    return web.json_response(_json_safe(payload))
+
+
 async def handle_character_class_options(_request: web.Request) -> web.Response:
     """GET — class keys and display metadata for Activity character creation."""
     classes: List[Dict[str, Any]] = []
@@ -3319,6 +3359,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
 
     app.router.add_post("/api/token", handle_token)
     app.router.add_get("/api/game/inventory", handle_inventory)
+    app.router.add_get("/api/game/character/stats", handle_character_stats)
     app.router.add_get("/api/game/character/class-options", handle_character_class_options)
     app.router.add_post("/api/game/character/create", handle_character_create)
     app.router.add_get("/api/game/equipment", handle_equipment)
