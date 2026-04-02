@@ -212,22 +212,6 @@ def _serialize_combatant(c: Combatant) -> Dict[str, Any]:
     }
 
 
-def _stats_debug_payload(c: Combatant) -> Dict[str, Any]:
-    return {
-        "attack_power": int(getattr(c, "attack_power", 0) or 0),
-        "spell_power": int(getattr(c, "spell_power", 0) or 0),
-        "dmg_min": int(getattr(c, "dmg_min", 0) or 0),
-        "dmg_max": int(getattr(c, "dmg_max", 0) or 0),
-        "armor": int(getattr(c, "armor", 0) or 0),
-        "crit_chance": float(getattr(c, "crit_chance", 0.0) or 0.0),
-        "dodge_chance": float(getattr(c, "dodge_chance", 0.0) or 0.0),
-        "haste": float(getattr(c, "haste", 0.0) or 0.0),
-        "lifesteal": float(getattr(c, "lifesteal", 0.0) or 0.0),
-        "resistance": int(getattr(c, "resistance", 0) or 0),
-        "hit_rating": float(getattr(c, "hit_rating", 0.0) or 0.0),
-    }
-
-
 def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
     cls = CLASSES[char["class"]]
     keys = ["auto_attack"] + list(cls.starter_abilities)
@@ -301,7 +285,6 @@ def serialize_activity_state(
         player_payload = _serialize_combatant(viewer_player)
         player_payload["class"] = char.get("class")
         player_payload["specialization"] = char.get("specialization")
-        player_payload["stats_debug"] = _stats_debug_payload(viewer_player)
 
         alive_order = _alive_party_discord_order(ac)
         active_did: Optional[int] = None
@@ -366,7 +349,6 @@ def serialize_activity_state(
     # the client does not depend on inventory fetch timing (player name already comes from state).
     player_payload["class"] = char.get("class")
     player_payload["specialization"] = char.get("specialization")
-    player_payload["stats_debug"] = _stats_debug_payload(player)
     return {
         "phase": "combat" if awaiting_action and not session.over else "ended",
         "turn": session.turn,

@@ -119,20 +119,6 @@ export type CombatStatePayload = {
     /** Class key (e.g. `warrior`) — from combat state so icons work without waiting on inventory. */
     class?: string | null;
     specialization?: string | null;
-    /** Debug: derived combat stats used by server engine (viewer only). */
-    stats_debug?: {
-      attack_power: number;
-      spell_power: number;
-      dmg_min: number;
-      dmg_max: number;
-      armor: number;
-      crit_chance: number;
-      dodge_chance: number;
-      haste: number;
-      lifesteal: number;
-      resistance: number;
-      hit_rating: number;
-    } | null;
   };
   enemy: { name: string; current_hp: number; max_hp: number };
   log: string[];
