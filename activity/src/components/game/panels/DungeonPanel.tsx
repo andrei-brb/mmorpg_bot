@@ -601,6 +601,8 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
   if (phase === "run" && run) {
     const preview = run.dungeon.floor_preview.find((p) => p.floor === run.floor);
     const isBossFloor = preview?.is_boss ?? run.floor === run.dungeon.floors;
+    const partySize = partyStatus?.participants?.length || 0;
+    const inLargeParty = Boolean(partyStatus?.in_party) && partySize >= 2;
 
     return (
       <div className="space-y-4">
@@ -650,14 +652,23 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
             >
               ⚔️ {isBossFloor ? "Fight boss" : `Fight floor ${run.floor}`}
             </button>
+            {inLargeParty && (
+              <button
+                type="button"
+                onClick={() => void onEnterDungeon()}
+                disabled={partyLoading || !partyStatus?.is_leader}
+                className="game-btn-primary text-xs px-4 py-2 flex-1 min-w-[140px] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                🏰 {partyStatus?.is_leader ? `Enter Floor ${run.floor} (Party)` : "Waiting for leader…"}
+              </button>
+            )}
             <button type="button" onClick={onLeaveDungeon} disabled={loading} className="game-btn-secondary text-xs px-4 py-2">
               Leave Dungeon
             </button>
           </div>
           {partyBlocksSoloDungeon && (
             <p className="text-[10px] text-amber-600/90 mt-2">
-              Party (2+): close this solo view and use the party panel — only the leader can press Enter Dungeon so everyone
-              shares one fight.
+              Party (2+): only the leader can start the next floor. Party members will auto-join when the fight starts.
             </p>
           )}
         </div>
