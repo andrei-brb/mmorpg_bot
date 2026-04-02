@@ -40,6 +40,7 @@ export function CombatEncounterView({
   const specKey = state.player.specialization || inventory?.character?.specialization || "";
   const partyMode = Boolean(state.party_mode && state.party_players && state.party_players.length > 0);
   const canAct = !state.party_mode || state.your_turn === true;
+  const dbg = state.player.stats_debug || null;
 
   return (
     <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
@@ -125,6 +126,20 @@ export function CombatEncounterView({
               <p className="text-[10px] text-muted-foreground mt-1">
                 {state.player.res_type} {state.player.current_res}/{state.player.max_res}
               </p>
+            )}
+            {dbg && (
+              <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
+                <div className="font-cinzel uppercase tracking-wider opacity-80">Stats</div>
+                <div className="tabular-nums">
+                  AP {Math.round(dbg.attack_power)} · SP {Math.round(dbg.spell_power)} · DMG {dbg.dmg_min}–{dbg.dmg_max}
+                </div>
+                <div className="tabular-nums">
+                  Crit {dbg.crit_chance.toFixed(1)}% · Dodge {dbg.dodge_chance.toFixed(1)}% · Hit {dbg.hit_rating.toFixed(1)}
+                </div>
+                <div className="tabular-nums">
+                  Armor {dbg.armor} · Haste {dbg.haste.toFixed(1)}% · LS {dbg.lifesteal.toFixed(1)}% · Res {dbg.resistance}
+                </div>
+              </div>
             )}
           </div>
         </div>
