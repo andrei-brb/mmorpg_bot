@@ -3096,7 +3096,8 @@ async def handle_market_buy(request: web.Request) -> web.Response:
     listing = await db.fetchrow(
         """SELECT ml.*, t.name, i.template_id,
                   i.rarity, i.r_str, i.r_agi, i.r_int, i.r_spi, i.r_sta,
-                  i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating
+                  i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating,
+                  COALESCE(i.enhancement_level, 0) as enhancement_level
            FROM market_listings ml
            JOIN inventory i ON ml.item_id = i.id
            JOIN item_templates t ON i.template_id = t.id
@@ -3137,12 +3138,14 @@ async def handle_market_buy(request: web.Request) -> web.Response:
         "r_resistance": listing.get("r_resistance", 0) or 0,
         "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
     }
+    enhancement_level = listing.get("enhancement_level", 0) or 0
     add_ok, add_msg = await inv.add_item(
         char["id"],
         listing["template_id"],
         rarity=rarity,
         from_="market",
         bonus=bonus,
+        enhancement_level=enhancement_level,
     )
     if not add_ok:
         await char_svc.add_gold(char["id"], price, "refund: market purchase failed")
