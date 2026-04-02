@@ -1221,12 +1221,18 @@ async def _party_enemy_round(
     if not enemy.is_dead:
         if session.is_boss:
             session.boss_phase = engine.boss_phase(enemy)
-        e_ab, e_targets = engine.enemy_turn(enemy, session.alive_players, session.is_boss, session.boss_phase)
-        if e_targets:
-            e_results = engine.use_ability(e_ab, enemy, e_targets, session=session)
-            for r in e_results:
-                log_lines.append(r.narrative)
-            session.log.extend(e_results)
+        # Party dungeon design: enemy damage applies to all alive party members.
+        # We still let the engine choose *which* enemy ability to use, but we apply it per-target.
+        e_ab, _e_targets = engine.enemy_turn(enemy, session.alive_players, session.is_boss, session.boss_phase)
+        targets = list(session.alive_players)
+        if targets:
+            for t in targets:
+                if session.over:
+                    break
+                e_results = engine.use_ability(e_ab, enemy, [t], session=session)
+                for r in e_results:
+                    log_lines.append(r.narrative)
+                session.log.extend(e_results)
 
     if session.over:
         if session.players_won:
