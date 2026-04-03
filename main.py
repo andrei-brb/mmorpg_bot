@@ -131,27 +131,28 @@ class MMORPGBot(commands.Bot):
                 log.error(f"  ✗ {cog}: {e}", exc_info=True)
 
         log.info("Syncing application commands...")
-        # First sync guild commands (these work without Entry Point issues)
+        # Clear and re-sync guild commands to fix Entry Point corruption (50240)
         guild_synced = 0
         for guild in self.guilds:
             try:
+                await self.tree.clear_commands(guild=guild)
                 await self.tree.sync(guild=guild)
                 guild_synced += 1
+                log.info(f"  ✓ Synced {guild.name}")
             except Exception as e:
                 log.warning(f"Guild sync failed for {guild.name}: {e}")
-        
+
         if guild_synced > 0:
             log.info(f"✓ Synced commands in {guild_synced} guild(s)")
-        
-        # Then try global sync (may fail with Activity Entry Point, but guild commands work)
+
+        # Global sync (skipped if Entry Point limit is hit)
         try:
             synced = await self.tree.sync()
             log.info(f"✓ Commands synced ({len(synced)} global commands)")
         except Exception as e:
             err = str(e)
             if "50240" in err or "Entry Point" in err:
-                log.warning(f"Global sync hit Entry Point limit: {e}")
-                log.warning("Guild commands are still registered - users can use commands in servers")
+                log.warning(f"Global sync skipped due to Entry Point limit. Guild commands are active.")
             else:
                 log.error(f"Failed to sync commands: {e}")
 
