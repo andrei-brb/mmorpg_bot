@@ -35,7 +35,6 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     liveops_group = app_commands.Group(
         name="liveops",
         description="Configurable live events for this server (XP/gold/boss hunt, schedules)",
-        default_permissions=discord.Permissions(administrator=True),
     )
 
     def __init__(self, bot):
