@@ -197,7 +197,7 @@ class MMORPGBot(commands.Bot):
         try:
             for guild in self.guilds:
                 log.info(f"  Clearing commands in {guild.name} (ID: {guild.id})...")
-                await self.tree.clear_commands(guild=guild)
+                self.tree.clear_commands(guild=guild)  # sync method, no await
                 await self.tree.sync(guild=guild)
                 log.info(f"  ✓ Synced {guild.name}")
             if self.guilds:
