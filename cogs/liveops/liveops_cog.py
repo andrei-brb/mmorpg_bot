@@ -35,6 +35,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     liveops_group = app_commands.Group(
         name="liveops",
         description="Configurable live events for this server (XP/gold/boss hunt, schedules)",
+        default_permissions=discord.Permissions(administrator=True),
     )
 
     def __init__(self, bot):
@@ -51,7 +52,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     def _mod_ok(interaction: discord.Interaction) -> bool:
         if not interaction.guild:
             return False
-        return bool(interaction.user.guild_permissions.manage_guild)
+        return bool(interaction.user.guild_permissions.administrator)
 
     async def _announce_channel(self, guild_id: int, override_id: Optional[int]) -> Optional[discord.TextChannel]:
         if override_id:
@@ -150,7 +151,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
         if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Manage Server** permission required.", ephemeral=True)
+            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
         svc = LiveEventService(self.bot.db)
         rows = await svc.list_all(interaction.guild_id)
@@ -215,7 +216,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
         if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Manage Server** permission required.", ephemeral=True)
+            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
         slug = slug.strip().lower()
         if not LiveEventService.validate_slug(slug):
             return await interaction.response.send_message(
@@ -275,7 +276,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
         if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Manage Server** permission required.", ephemeral=True)
+            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
         slug = slug.strip().lower()
         if not LiveEventService.validate_slug(slug):
             return await interaction.response.send_message("❌ Invalid `slug`.", ephemeral=True)
@@ -312,7 +313,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
         if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Manage Server** permission required.", ephemeral=True)
+            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
         svc = LiveEventService(self.bot.db)
         ok = await svc.delete_event(interaction.guild_id, slug.strip().lower())
         if ok:
@@ -325,7 +326,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
         if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Manage Server** permission required.", ephemeral=True)
+            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
         svc = LiveEventService(self.bot.db)
         ok = await svc.disable_event(interaction.guild_id, slug.strip().lower())
         if ok:

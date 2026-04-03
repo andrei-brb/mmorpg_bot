@@ -476,11 +476,14 @@ async def check_channel(interaction: discord.Interaction, command_name: str = No
     if interaction.channel_id == correct_ch_id:
         return True  # ✅ Correct channel - command allowed
 
-    # Staff tools: allow in any channel (e.g. a private staff room) for server managers.
+    # Staff tools: allow in any channel (e.g. a private staff room).
+    # /liveops: administrators only. /admin: managers (Manage Server) or administrators.
     if command_name in ("admin", "liveops") and interaction.guild_id:
         try:
             perms = interaction.user.guild_permissions
-            if perms.administrator or perms.manage_guild:
+            if command_name == "liveops" and perms.administrator:
+                return True
+            if command_name == "admin" and (perms.administrator or perms.manage_guild):
                 return True
         except Exception:
             pass
