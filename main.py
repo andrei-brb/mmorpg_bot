@@ -131,30 +131,8 @@ class MMORPGBot(commands.Bot):
                 log.error(f"  ✗ {cog}: {e}", exc_info=True)
 
         log.info("Syncing application commands...")
-        # Clear and re-sync guild commands to fix Entry Point corruption (50240)
-        guild_synced = 0
-        for guild in self.guilds:
-            try:
-                await self.tree.clear_commands(guild=guild)
-                await self.tree.sync(guild=guild)
-                guild_synced += 1
-                log.info(f"  ✓ Synced {guild.name}")
-            except Exception as e:
-                log.warning(f"Guild sync failed for {guild.name}: {e}")
-
-        if guild_synced > 0:
-            log.info(f"✓ Synced commands in {guild_synced} guild(s)")
-
-        # Global sync (skipped if Entry Point limit is hit)
-        try:
-            synced = await self.tree.sync()
-            log.info(f"✓ Commands synced ({len(synced)} global commands)")
-        except Exception as e:
-            err = str(e)
-            if "50240" in err or "Entry Point" in err:
-                log.warning(f"Global sync skipped due to Entry Point limit. Guild commands are active.")
-            else:
-                log.error(f"Failed to sync commands: {e}")
+        # Guild sync happens in on_ready after gateway connection
+        log.info("  (guild commands will sync after gateway connection)")
 
         # Optional: HTTP API for Discord Activity (OAuth + inventory JSON)
         from services.activity_http import start_activity_http
@@ -215,15 +193,19 @@ class MMORPGBot(commands.Bot):
             )
         )
 
-        # Clear guild-specific commands to prevent duplicates (global + guild = 2x)
+        # Clear and re-sync guild commands to fix Entry Point corruption (50240)
         try:
             for guild in self.guilds:
-                self.tree.clear_commands(guild=guild)
+                log.info(f"  Clearing commands in {guild.name} (ID: {guild.id})...")
+                await self.tree.clear_commands(guild=guild)
                 await self.tree.sync(guild=guild)
+                log.info(f"  ✓ Synced {guild.name}")
             if self.guilds:
-                log.info(f"✓ Cleared guild commands in {len(self.guilds)} server(s)")
+                log.info(f"✓ Guild commands synced in {len(self.guilds)} server(s)")
+            else:
+                log.warning("⚠ No guilds found during sync — is the bot invited to a server?")
         except Exception as e:
-            log.warning(f"Could not clear guild commands: {e}")
+            log.error(f"Guild sync error: {e}", exc_info=True)
 
         # Auto-create game channels in all connected guilds
         for guild in self.guilds:
