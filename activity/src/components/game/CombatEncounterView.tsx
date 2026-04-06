@@ -34,12 +34,16 @@ export function CombatEncounterView({
   showDiscordDungeonBanner,
   dungeonHeader,
 }: CombatEncounterViewProps) {
+  const [showLogModal, setShowLogModal] = useState(false);
   const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
   const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
   const classKey = state.player.class || inventory?.character?.class || "";
   const specKey = state.player.specialization || inventory?.character?.specialization || "";
   const partyMode = Boolean(state.party_mode && state.party_players && state.party_players.length > 0);
   const canAct = !state.party_mode || state.your_turn === true;
+
+  // Detect if combat is in progress
+  const combatInProgress = state.enemy.current_hp > 0;
 
   return (
     <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
@@ -243,16 +247,26 @@ export function CombatEncounterView({
         </div>
       </div>
 
-      <div className={focusMode ? "game-panel flex-1 min-h-0 overflow-y-auto" : "game-panel max-h-36 overflow-y-auto"}>
-        <div className="game-panel-header">Combat Log</div>
-        <div className="space-y-1.5">
-          {(state.log || []).slice(-12).map((line, i) => (
-            <p key={i} className="text-xs text-muted-foreground">
-              {stripMd(line)}
-            </p>
-          ))}
+      {combatInProgress ? (
+        <button
+          type="button"
+          onClick={() => setShowLogModal(true)}
+          className="game-btn-secondary text-xs px-3 py-2 w-full"
+        >
+          📋 Combat Log
+        </button>
+      ) : (
+        <div className={focusMode ? "game-panel flex-1 min-h-0 overflow-y-auto" : "game-panel max-h-36 overflow-y-auto"}>
+          <div className="game-panel-header">Combat Log</div>
+          <div className="space-y-1.5">
+            {(state.log || []).slice(-12).map((line, i) => (
+              <p key={i} className="text-xs text-muted-foreground">
+                {stripMd(line)}
+              </p>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex gap-2">
         <button
@@ -274,6 +288,43 @@ export function CombatEncounterView({
           </button>
         )}
       </div>
+
+      {showLogModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowLogModal(false)}
+        >
+          <div
+            className="game-panel w-full max-w-md max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="game-panel-header flex items-center justify-between pb-2 border-b border-primary/20">
+              <span>📋 Combat Log</span>
+              <button
+                type="button"
+                onClick={() => setShowLogModal(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1.5 p-3">
+              {(state.log || []).map((line, i) => (
+                <p key={i} className="text-xs text-muted-foreground">
+                  {stripMd(line)}
+                </p>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLogModal(false)}
+              className="game-btn-secondary text-xs px-3 py-1.5 mt-2"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
