@@ -7,8 +7,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+# Local wall time for simple date/time inputs when no timezone is given (Netherlands).
+_DEFAULT_SCHEDULE_TZ = ZoneInfo("Europe/Amsterdam")
 
 import discord
 from discord import app_commands
@@ -20,10 +25,35 @@ from services.live_events.live_event_service import LiveEventService
 log = logging.getLogger("cog.liveops")
 
 
+def _normalize_schedule_str(s: str) -> str:
+    s = s.strip().strip("\ufeff")
+    s = s.replace("\u201c", "").replace("\u201d", "").replace("\u2018", "").replace("\u2019", "").strip()
+    return s
+
+
 def _parse_iso(s: str) -> datetime:
-    s = s.strip()
+    """Parse a datetime string for /liveops schedule (ISO 8601 and simple EU date/time)."""
+    s = _normalize_schedule_str(s)
+    # --- Simple EU: day-month-year + time (no ISO timezone) → Europe/Amsterdam ---
+    # 05-04-2025-09-34  →  5 April 2025 09:34 Amsterdam
+    m = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+    if m:
+        day, month, year, hour, minute = (int(x) for x in m.groups())
+        return datetime(year, month, day, hour, minute, tzinfo=_DEFAULT_SCHEDULE_TZ)
+    # 05-04-2025 09:34  or  05-04-2025T09:34
+    m = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$", s)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        hour, minute = int(m.group(4)), int(m.group(5))
+        return datetime(year, month, day, hour, minute, tzinfo=_DEFAULT_SCHEDULE_TZ)
+    # --- ISO-style (UTC if naive) ---
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
+    m = re.match(r"^(\d{4})/(\d{2})/(\d{2})(.*)$", s)
+    if m:
+        s = f"{m.group(1)}-{m.group(2)}-{m.group(3)}{m.group(4)}"
+    if re.match(r"^\d{4}-\d{2}-\d{2} \d", s):
+        s = s[:10] + "T" + s[11:]
     dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -247,12 +277,15 @@ class LiveopsCog(commands.Cog, name="Liveops"):
             ephemeral=True,
         )
 
-    @liveops_group.command(name="schedule", description="Create/replace an event with explicit start/end (ISO 8601 UTC)")
+    @liveops_group.command(
+        name="schedule",
+        description="Create/replace an event with explicit start/end (simple NL date/time or ISO 8601)",
+    )
     @app_commands.describe(
         slug="Short id",
         title="Display title",
-        starts_at='Start time, e.g. 2026-03-30T18:00:00+00:00',
-        ends_at='End time',
+        starts_at="Start: e.g. 05-04-2025-09-34 (day-month-year-time NL) or ISO 2026-04-10T18:00:00+02:00",
+        ends_at="End (same style as starts_at)",
     )
     async def liveops_schedule(
         self,
@@ -278,7 +311,13 @@ class LiveopsCog(commands.Cog, name="Liveops"):
             st = _parse_iso(starts_at)
             en = _parse_iso(ends_at)
         except ValueError:
-            return await interaction.response.send_message("❌ Could not parse datetimes. Use ISO 8601.", ephemeral=True)
+            return await interaction.response.send_message(
+                "❌ Could not parse `starts_at` or `ends_at`.\n\n"
+                "**Simple (Netherlands local time):** `05-04-2025-09-34` (day-month-year-hour-minute, all `-`) "
+                "or `05-04-2025 09:34`.\n"
+                "**ISO:** `2026-04-10T18:00:00+02:00` or `2026-04-10T16:00:00Z`.",
+                ephemeral=True,
+            )
         if en <= st:
             return await interaction.response.send_message("❌ `ends_at` must be after `starts_at`.", ephemeral=True)
         cfg = {
