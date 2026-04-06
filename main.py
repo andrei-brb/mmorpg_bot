@@ -193,13 +193,18 @@ class MMORPGBot(commands.Bot):
             )
         )
 
-        # Clear and re-sync guild commands to fix Entry Point corruption (50240)
+        # Clear and re-sync guild commands to fix Entry Point corruption (50240).
+        # After clear_commands(guild=...), the guild mapping is empty; sync(guild=) only
+        # uploads _guild_commands[guild], NOT _global_commands (where cog slash commands live).
+        # copy_global_to repopulates the guild map from globals so every command (including
+        # new cogs like /liveops) is included in the bulk upsert.
         try:
             for guild in self.guilds:
                 log.info(f"  Clearing commands in {guild.name} (ID: {guild.id})...")
                 self.tree.clear_commands(guild=guild)  # sync method, no await
-                await self.tree.sync(guild=guild)
-                log.info(f"  ✓ Synced {guild.name}")
+                self.tree.copy_global_to(guild=guild)
+                synced = await self.tree.sync(guild=guild)
+                log.info(f"  ✓ Synced {len(synced)} command(s) in {guild.name}")
             if self.guilds:
                 log.info(f"✓ Guild commands synced in {len(self.guilds)} server(s)")
             else:
@@ -290,6 +295,12 @@ class MMORPGBot(commands.Bot):
     async def on_guild_join(self, guild: discord.Guild):
         """Auto-create game channels when bot joins a new server."""
         log.info(f"Joined new guild: {guild.name} (ID: {guild.id})")
+        try:
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            log.info(f"  ✓ Synced {len(synced)} application command(s) for new guild")
+        except Exception as e:
+            log.error(f"Guild application command sync failed: {e}", exc_info=True)
         try:
             channel_map = await self.channels.setup_guild(guild)
             if channel_map:
