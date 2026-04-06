@@ -249,50 +249,54 @@ export function GameShell() {
             <div className="rune-band-left hidden sm:block" />
             <div className="rune-band-right hidden sm:block" />
 
-            <div className="flex items-center justify-between mb-5 pt-1">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setProfileOpen(true)} className="relative shrink-0 group cursor-pointer">
-                  <div
-                    className="absolute -inset-[3px] rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
-                    style={{
-                      background: 'conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))',
-                    }}
-                  />
-                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
-                    <Avatar className="w-full h-full">
-                      {inventory?.discord?.avatar_url ? (
-                        <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
-                      ) : (
-                        <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
-                      )}
-                    </Avatar>
+            {!combatFocusActive && (
+              <>
+                <div className="flex items-center justify-between mb-5 pt-1">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setProfileOpen(true)} className="relative shrink-0 group cursor-pointer">
+                      <div
+                        className="absolute -inset-[3px] rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          background: 'conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))',
+                        }}
+                      />
+                      <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
+                        <Avatar className="w-full h-full">
+                          {inventory?.discord?.avatar_url ? (
+                            <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
+                          ) : (
+                            <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
+                          )}
+                        </Avatar>
+                      </div>
+                    </button>
+
+                    <div>
+                      <h1 className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
+                        style={{ textShadow: '0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)' }}>
+                        World of Discord
+                      </h1>
+                      <p className="text-sm text-muted-foreground font-crimson mt-0.5">
+                        Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>{" "}
+                        <span className="text-primary/80 font-pixel text-[10px] align-middle">Lv {playerStats.level}</span>
+                      </p>
+                    </div>
                   </div>
-                </button>
-
-                <div>
-                  <h1 className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
-                    style={{ textShadow: '0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)' }}>
-                    World of Discord
-                  </h1>
-                  <p className="text-sm text-muted-foreground font-crimson mt-0.5">
-                    Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>{" "}
-                    <span className="text-primary/80 font-pixel text-[10px] align-middle">Lv {playerStats.level}</span>
-                  </p>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-medium"
+                    style={{
+                      background: 'linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)',
+                      border: '1px solid hsl(228 16% 20%)',
+                      boxShadow: 'inset 0 1px 0 hsl(228 14% 22% / 0.4), 0 2px 4px hsl(0 0% 0% / 0.3)',
+                    }}>
+                    <span className="w-2 h-2 rounded-full bg-connected animate-pulse-glow"
+                      style={{ boxShadow: '0 0 6px hsl(140 55% 42% / 0.5)' }} />
+                    <span className="text-foreground">Connected</span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-medium"
-                style={{
-                  background: 'linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)',
-                  border: '1px solid hsl(228 16% 20%)',
-                  boxShadow: 'inset 0 1px 0 hsl(228 14% 22% / 0.4), 0 2px 4px hsl(0 0% 0% / 0.3)',
-                }}>
-                <span className="w-2 h-2 rounded-full bg-connected animate-pulse-glow"
-                  style={{ boxShadow: '0 0 6px hsl(140 55% 42% / 0.5)' }} />
-                <span className="text-foreground">Connected</span>
-              </div>
-            </div>
 
-            <div className="ornament-divider mb-4" />
+                <div className="ornament-divider mb-4" />
+              </>
+            )}
 
             {!combatFocusActive && liveEvents.length > 0 && (
               <div
