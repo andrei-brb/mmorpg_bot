@@ -368,6 +368,39 @@ class CooldownManager:
 
 # ── Channel routing helpers ─────────────────────────────────────────────────
 
+
+def _interaction_root_command_name(interaction: discord.Interaction) -> Optional[str]:
+    """Top-level slash group or command name (e.g. ``liveops`` for ``/liveops list``)."""
+    cmd = interaction.command
+    if not cmd:
+        return None
+    root = cmd
+    while getattr(root, "parent", None) is not None:
+        root = root.parent
+    return getattr(root, "name", None)
+
+
+async def interaction_user_is_guild_administrator(interaction: discord.Interaction) -> bool:
+    """True if the invoker is the guild owner or has the Administrator permission.
+
+    Resolves a full :class:`discord.Member` when the interaction user is not cached,
+    so permissions work even with limited member cache.
+    """
+    guild = interaction.guild
+    if not guild:
+        return False
+    if guild.owner_id == interaction.user.id:
+        return True
+    user = interaction.user
+    member: Optional[discord.Member] = user if isinstance(user, discord.Member) else guild.get_member(user.id)
+    if member is None:
+        try:
+            member = await guild.fetch_member(user.id)
+        except Exception:
+            return False
+    return bool(member.guild_permissions.administrator)
+
+
 # Map command names to their intended channel type
 COMMAND_CHANNEL_MAP = {
     # Combat (⚔️ Combat channel)
@@ -419,27 +452,29 @@ async def check_channel(interaction: discord.Interaction, command_name: str = No
     """
     # Auto-detect command name from interaction if not provided
     if not command_name and interaction.command:
-        try:
-            # Try qualified_name first (works for both groups and regular commands)
-            if hasattr(interaction.command, 'qualified_name'):
-                full_name = interaction.command.qualified_name
-                # For group commands like "character create" or "character.create", get the group name "character"
-                # For regular commands like "explore", get "explore"
-                if ' ' in full_name:
-                    command_name = full_name.split()[0]
-                elif '.' in full_name:
-                    command_name = full_name.split('.')[0]
-                else:
-                    command_name = full_name
-            # Fallback to name attribute
-            elif hasattr(interaction.command, 'name'):
-                command_name = interaction.command.name
-            # For app_commands.Group, try to get the parent
-            elif hasattr(interaction.command, 'parent') and interaction.command.parent:
-                if hasattr(interaction.command.parent, 'name'):
-                    command_name = interaction.command.parent.name
-        except Exception:
-            pass
+        command_name = _interaction_root_command_name(interaction)
+        if not command_name:
+            try:
+                # Try qualified_name first (works for both groups and regular commands)
+                if hasattr(interaction.command, "qualified_name"):
+                    full_name = interaction.command.qualified_name
+                    # For group commands like "character create" or "character.create", get the group name "character"
+                    # For regular commands like "explore", get "explore"
+                    if " " in full_name:
+                        command_name = full_name.split()[0]
+                    elif "." in full_name:
+                        command_name = full_name.split(".")[0]
+                    else:
+                        command_name = full_name
+                # Fallback to name attribute
+                elif hasattr(interaction.command, "name"):
+                    command_name = interaction.command.name
+                # For app_commands.Group, try to get the parent
+                elif hasattr(interaction.command, "parent") and interaction.command.parent:
+                    if hasattr(interaction.command.parent, "name"):
+                        command_name = interaction.command.parent.name
+            except Exception:
+                pass
     
     log.debug(f"[CHECK_CHANNEL] Detected command='{command_name}' channel={interaction.channel_id}")
     
@@ -477,14 +512,16 @@ async def check_channel(interaction: discord.Interaction, command_name: str = No
         return True  # ✅ Correct channel - command allowed
 
     # Staff tools: allow in any channel (e.g. a private staff room).
-    # /liveops: administrators only. /admin: managers (Manage Server) or administrators.
+    # /liveops: guild owner or Administrator. /admin: managers (Manage Server) or administrators.
     if command_name in ("admin", "liveops") and interaction.guild_id:
         try:
-            perms = interaction.user.guild_permissions
-            if command_name == "liveops" and perms.administrator:
-                return True
-            if command_name == "admin" and (perms.administrator or perms.manage_guild):
-                return True
+            if command_name == "liveops":
+                if await interaction_user_is_guild_administrator(interaction):
+                    return True
+            else:
+                perms = interaction.user.guild_permissions
+                if perms.administrator or perms.manage_guild:
+                    return True
         except Exception:
             pass
 

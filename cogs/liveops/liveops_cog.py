@@ -14,6 +14,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from services.channel_manager import interaction_user_is_guild_administrator
 from services.live_events.live_event_service import LiveEventService
 
 log = logging.getLogger("cog.liveops")
@@ -46,12 +47,6 @@ class LiveopsCog(commands.Cog, name="Liveops"):
 
     def cog_unload(self):
         self.live_event_tick.cancel()
-
-    @staticmethod
-    def _mod_ok(interaction: discord.Interaction) -> bool:
-        if not interaction.guild:
-            return False
-        return bool(interaction.user.guild_permissions.administrator)
 
     async def _announce_channel(self, guild_id: int, override_id: Optional[int]) -> Optional[discord.TextChannel]:
         if override_id:
@@ -149,8 +144,8 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     async def liveops_list(self, interaction: discord.Interaction):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
-        if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
+        if not await interaction_user_is_guild_administrator(interaction):
+            return await interaction.response.send_message("❌ **Administrator** permission required (or you must be the server owner).", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
         svc = LiveEventService(self.bot.db)
         rows = await svc.list_all(interaction.guild_id)
@@ -214,8 +209,8 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     ):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
-        if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
+        if not await interaction_user_is_guild_administrator(interaction):
+            return await interaction.response.send_message("❌ **Administrator** permission required (or you must be the server owner).", ephemeral=True)
         slug = slug.strip().lower()
         if not LiveEventService.validate_slug(slug):
             return await interaction.response.send_message(
@@ -274,8 +269,8 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     ):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
-        if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
+        if not await interaction_user_is_guild_administrator(interaction):
+            return await interaction.response.send_message("❌ **Administrator** permission required (or you must be the server owner).", ephemeral=True)
         slug = slug.strip().lower()
         if not LiveEventService.validate_slug(slug):
             return await interaction.response.send_message("❌ Invalid `slug`.", ephemeral=True)
@@ -311,8 +306,8 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     async def liveops_delete(self, interaction: discord.Interaction, slug: str):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
-        if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
+        if not await interaction_user_is_guild_administrator(interaction):
+            return await interaction.response.send_message("❌ **Administrator** permission required (or you must be the server owner).", ephemeral=True)
         svc = LiveEventService(self.bot.db)
         ok = await svc.delete_event(interaction.guild_id, slug.strip().lower())
         if ok:
@@ -324,8 +319,8 @@ class LiveopsCog(commands.Cog, name="Liveops"):
     async def liveops_disable(self, interaction: discord.Interaction, slug: str):
         if not interaction.guild:
             return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
-        if not self._mod_ok(interaction):
-            return await interaction.response.send_message("❌ **Administrator** permission required.", ephemeral=True)
+        if not await interaction_user_is_guild_administrator(interaction):
+            return await interaction.response.send_message("❌ **Administrator** permission required (or you must be the server owner).", ephemeral=True)
         svc = LiveEventService(self.bot.db)
         ok = await svc.disable_event(interaction.guild_id, slug.strip().lower())
         if ok:
