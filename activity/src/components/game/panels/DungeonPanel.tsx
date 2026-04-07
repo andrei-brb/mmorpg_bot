@@ -41,9 +41,11 @@ function runStateFromDungeonCombat(
 
 export type DungeonPanelProps = {
   playerLevel?: number;
+  /** True while the player is in the live dungeon combat view (parent can hide Overworld/Dungeon toggle). */
+  onCombatUiChange?: (inDungeonFight: boolean) => void;
 };
 
-export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
+export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanelProps) {
   const {
     accessToken,
     guildId,
@@ -97,6 +99,11 @@ export function DungeonPanel({ playerLevel = 1 }: DungeonPanelProps) {
       cancelled = true;
     };
   }, [accessToken, guildId]);
+
+  useEffect(() => {
+    onCombatUiChange?.(phase === "fight");
+    return () => onCombatUiChange?.(false);
+  }, [phase, onCombatUiChange]);
 
   // Load party status on mount and when phase changes
   useEffect(() => {

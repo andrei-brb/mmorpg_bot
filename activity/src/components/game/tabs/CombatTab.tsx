@@ -28,8 +28,14 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [combatTabMode, setCombatTabMode] = useState<CombatTabMode>("overworld");
+  /** DungeonPanel sets this while `phase === "fight"` so we can hide the Overworld/Dungeon segment. */
+  const [dungeonInFight, setDungeonInFight] = useState(false);
 
   const zoneLabel = map?.zones?.find((z) => z.key === map?.current_zone);
+
+  const showSubModeToggle =
+    !(combatTabMode === "overworld" && mode === "fight" && Boolean(state)) &&
+    !(combatTabMode === "dungeon" && dungeonInFight);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -144,7 +150,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   const modeSegment = (
     <div
-      className="flex rounded-sm mb-4 p-0.5"
+      className="flex rounded-sm mb-3 p-0.5"
       style={{
         background: "hsl(228 20% 10%)",
         border: "1px solid hsl(43 45% 35% / 0.35)",
@@ -198,9 +204,12 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   if (combatTabMode === "dungeon") {
     return (
-      <div>
-        {modeSegment}
-        <DungeonPanel playerLevel={inventory?.character?.level ?? 1} />
+      <div className={dungeonInFight ? "-mt-2 sm:-mt-3" : undefined}>
+        {showSubModeToggle && modeSegment}
+        <DungeonPanel
+          playerLevel={inventory?.character?.level ?? 1}
+          onCombatUiChange={setDungeonInFight}
+        />
       </div>
     );
   }
@@ -208,7 +217,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   if (loading && mode === "pick" && !enemies.length) {
     return (
       <div>
-        {modeSegment}
+        {showSubModeToggle && modeSegment}
         <p className="text-sm text-muted-foreground">Loading combat…</p>
       </div>
     );
@@ -219,7 +228,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     const isVictory = (outcome.title || "").toLowerCase().includes("victory") || (outcome.title || "").toLowerCase().includes("won");
     return (
       <div>
-        {modeSegment}
+        {showSubModeToggle && modeSegment}
         <div className="game-panel text-center py-8">
         <div className="text-5xl mb-4" style={{ filter: 'drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))' }}>
           {isVictory ? "🏆" : "💀"}
@@ -244,8 +253,14 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   // Fighting screen — same combat engine as Discord /fight (real skills + stats)
   if (mode === "fight" && state) {
     return (
-      <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
-        {modeSegment}
+      <div
+        className={
+          focusMode
+            ? "flex flex-col gap-2 h-full min-h-0 -mt-2 sm:-mt-3 pt-0"
+            : "space-y-4"
+        }
+      >
+        {showSubModeToggle && modeSegment}
         <CombatEncounterView
           focusMode={focusMode}
           zoneLabel={zoneLabel}
@@ -264,7 +279,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   // Idle / pick screen (Lovable style)
   return (
     <div>
-      {modeSegment}
+      {showSubModeToggle && modeSegment}
       <div className="game-panel">
       <div className="game-panel-header">Choose an Enemy</div>
       {enemies.length === 0 ? (

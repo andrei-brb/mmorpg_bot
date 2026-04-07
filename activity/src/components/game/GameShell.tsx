@@ -234,15 +234,27 @@ export function GameShell() {
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-[980px] px-5 py-6 flex-1 min-h-0 flex flex-col">
-        <div className="game-frame rounded-sm p-4 sm:p-5 flex flex-col flex-1 min-h-0">
-          <div className="w-full h-8 -mt-4 sm:-mt-5 mb-4 rounded-t-sm overflow-hidden opacity-40"
+      <div
+        className={`mx-auto w-full max-w-[980px] px-5 flex-1 min-h-0 flex flex-col ${
+          combatFocusActive ? "py-3 sm:py-4" : "py-6"
+        }`}
+      >
+        <div
+          className={`game-frame rounded-sm flex flex-col flex-1 min-h-0 ${
+            combatFocusActive ? "p-3 sm:p-4" : "p-4 sm:p-5"
+          }`}
+        >
+          <div
+            className={`w-full h-8 -mt-4 sm:-mt-5 rounded-t-sm overflow-hidden opacity-40 ${
+              combatFocusActive ? "mb-2" : "mb-4"
+            }`}
             style={{
               backgroundImage: `url('${import.meta.env.BASE_URL}textures/frame-border.jpg')`,
               backgroundSize: '512px 64px',
               backgroundRepeat: 'repeat-x',
-              backgroundPosition: 'center',
-            }} />
+              backgroundPosition: "center",
+            }}
+          />
 
           <div className="game-frame-inner flex flex-col flex-1 min-h-0">
             <div className="crest-motif" />
@@ -335,7 +347,13 @@ export function GameShell() {
               </div>
             )}
 
-            <div className={combatFocusActive ? "sm:px-1 flex flex-col flex-1 min-h-0" : "sm:px-1"}>
+            <div
+              className={
+                combatFocusActive
+                  ? "sm:px-1 flex flex-col flex-1 min-h-0 -mt-1"
+                  : "sm:px-1"
+              }
+            >
               {activeTab === "Hero" && <HeroTab />}
               {activeTab === "Explore" && <ExploreTab />}
               {activeTab === "Quests" && <QuestsTab />}

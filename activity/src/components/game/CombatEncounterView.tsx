@@ -46,7 +46,7 @@ export function CombatEncounterView({
   const combatInProgress = state.enemy.current_hp > 0;
 
   return (
-    <div className={focusMode ? "flex flex-col gap-4 h-full min-h-0" : "space-y-4"}>
+    <div className={focusMode ? "flex flex-col gap-2 sm:gap-3 h-full min-h-0" : "space-y-4"}>
       {dungeonHeader ? (
         <div className="game-panel py-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
