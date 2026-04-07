@@ -57,6 +57,18 @@ export function GameShell() {
 
   const { status: pvpStatus } = usePvpApi();
 
+  // Refetch derived stats when equipped gear changes (so profile updates immediately after equip/unequip).
+  const derivedStatsKey = useMemo(() => {
+    const items = inventory?.items || [];
+    const eq = items
+      .filter((it) => Boolean(it.is_equipped && it.equip_slot))
+      .map((it) => `${it.equip_slot}:${it.template_id || it.id}:${Number(it.enhancement_level ?? 0)}`)
+      .sort()
+      .join("|");
+    const lvl = inventory?.character?.level ?? 0;
+    return `${lvl}|${eq}`;
+  }, [inventory?.character?.level, inventory?.items]);
+
   useEffect(() => {
     if (!accessToken) return;
     let cancelled = false;
@@ -73,7 +85,7 @@ export function GameShell() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, guildId]);
+  }, [accessToken, guildId, derivedStatsKey]);
 
   // Derive live player stats from the game session / inventory (no random values)
   const playerStats = useMemo(() => {
