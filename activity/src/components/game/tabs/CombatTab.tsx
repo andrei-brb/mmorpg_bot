@@ -102,8 +102,11 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         }
         return;
       }
-      // Combat continues - refresh to get latest state
-      await refresh();
+      // Combat continues - use state from response
+      if (json.state) {
+        setState(json.state);
+        setMode("fight");
+      }
     } finally { setLoading(false); }
   };
 
