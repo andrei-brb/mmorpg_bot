@@ -658,6 +658,11 @@ class CombatCog(commands.Cog, name="Combat"):
                             for r in results:
                                 log_lines.append(r.narrative)
                             session.log.extend(results)
+                            # Ability mastery progression (lightweight).
+                            try:
+                                await self.char_svc.award_ability_mastery_xp(char_id, ab_key, 1)
+                            except Exception:
+                                pass
                     except Exception as e:
                         log.error(f"Error executing ability '{ab_key}': {e}", exc_info=True)
                         error_msg = str(e)[:100]  # Truncate long errors
@@ -740,6 +745,12 @@ class CombatCog(commands.Cog, name="Combat"):
         xp_result = await self.char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
         await self.char_svc.add_gold(char["id"], rewards["gold"], "combat drop")
         await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
+        # Class mastery progression (victory-based; boss fights grant more).
+        try:
+            base_gain = 8 + (6 if session.is_boss else 0)
+            await self.char_svc.award_class_mastery_xp(char["id"], char.get("class") or "", base_gain)
+        except Exception:
+            pass
 
         # Loot rolls
         loot_lines = []

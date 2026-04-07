@@ -582,6 +582,11 @@ class DungeonCog(commands.Cog, name="Dungeon"):
                             for r in results:
                                 log_lines.append(r.narrative)
                             session.log.extend(results)
+                            # Ability mastery progression (lightweight).
+                            try:
+                                await self.char_svc.award_ability_mastery_xp(char["id"], ab_key, 1)
+                            except Exception:
+                                pass
                 else:
                     # Other party members auto-attack
                     ticks = self.engine.tick_turn(player)
@@ -652,6 +657,12 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         xp_result = await self.char_svc.award_xp(char["id"], int(base_xp * xp_mult), xp_mult)
         await self.char_svc.add_gold(char["id"], int(base_gold * gold_mult), "dungeon_reward")
         await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
+        # Class mastery progression (victory-based; boss fights grant more).
+        try:
+            base_gain = 8 + (6 if session.is_boss else 0)
+            await self.char_svc.award_class_mastery_xp(char["id"], char.get("class") or "", base_gain)
+        except Exception:
+            pass
         
         # Loot
         loot_lines = []
