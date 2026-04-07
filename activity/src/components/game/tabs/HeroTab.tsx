@@ -53,6 +53,51 @@ function isEnhanceableGear(it: InvRow): boolean {
   return true;
 }
 
+type StatKey =
+  | "STR"
+  | "AGI"
+  | "INT"
+  | "SPI"
+  | "STA"
+  | "Armor"
+  | "Haste"
+  | "Lifesteal"
+  | "Resistance"
+  | "Hit"
+  | "DamageMin"
+  | "DamageMax";
+
+function itemEffectiveStats(item: InvRow): Partial<Record<StatKey, number>> {
+  const out: Partial<Record<StatKey, number>> = {};
+  const type = (item.item_type || "").toLowerCase();
+  if (type === "consumable") return out;
+
+  const enhLevel = Math.max(0, Math.min(10, Number(item.enhancement_level ?? 0) || 0));
+  const enhMult = 1 + enhLevel * 0.1;
+  const n = (v: unknown) => Number(v ?? 0) || 0;
+
+  const sum = (base: unknown, bonus: unknown) => n(base) + n(bonus);
+  const push = (k: StatKey, v: number) => {
+    if (!v) return;
+    out[k] = v;
+  };
+
+  push("STR", Math.floor(sum(item.s_str, item.r_str) * enhMult));
+  push("AGI", Math.floor(sum(item.s_agi, item.r_agi) * enhMult));
+  push("INT", Math.floor(sum(item.s_int, item.r_int) * enhMult));
+  push("SPI", Math.floor(sum(item.s_spi, item.r_spi) * enhMult));
+  push("STA", Math.floor(sum(item.s_sta, item.r_sta) * enhMult));
+  push("Haste", Math.floor(sum(item.s_haste, item.r_haste) * enhMult));
+  push("Lifesteal", Math.floor(sum(item.s_lifesteal, item.r_lifesteal) * enhMult));
+  push("Resistance", Math.floor(sum(item.s_resistance, item.r_resistance) * enhMult));
+  push("Hit", Math.floor(sum(item.s_hit_rating, item.r_hit_rating) * enhMult));
+  push("Armor", Math.floor(n(item.s_armor) * enhMult));
+  push("DamageMin", Math.floor(n(item.s_dmg_min) * enhMult));
+  push("DamageMax", Math.floor(n(item.s_dmg_max) * enhMult));
+
+  return out;
+}
+
 export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
@@ -67,6 +112,7 @@ export function HeroTab() {
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [listItemId, setListItemId] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
 
   const char = inventory?.character;
@@ -164,6 +210,31 @@ export function HeroTab() {
     ...Array.from({ length: Math.max(0, EMPTY_SLOTS - bag.length) }, (_, i) => ({ id: `empty-${i}`, name: null as string | null, icon: null as string | null, rarity: null as string | null, item: null as InvRow | null })),
   ];
 
+  const selectedItem = useMemo(() => {
+    if (!selectedItemId) return null;
+    return items.find((i) => i.id === selectedItemId) || null;
+  }, [items, selectedItemId]);
+
+  const selectedSlot = selectedItem ? gearSlot(selectedItem) : null;
+  const equippedInSelectedSlot = selectedSlot ? equipped[selectedSlot] || null : null;
+
+  const comparison = useMemo(() => {
+    if (!selectedItem || !selectedSlot) return null;
+    const type = (selectedItem.item_type || "").toLowerCase();
+    if (type === "consumable") return null;
+    if (!equippedInSelectedSlot) return { slot: selectedSlot, sel: selectedItem, eq: null as InvRow | null, deltas: null as Record<string, number> | null };
+
+    const a = itemEffectiveStats(selectedItem);
+    const b = itemEffectiveStats(equippedInSelectedSlot);
+    const keys = new Set<StatKey>([...(Object.keys(a) as StatKey[]), ...(Object.keys(b) as StatKey[])]);
+    const deltas: Record<string, number> = {};
+    for (const k of keys) {
+      const dv = (a[k] || 0) - (b[k] || 0);
+      if (dv) deltas[k] = dv;
+    }
+    return { slot: selectedSlot, sel: selectedItem, eq: equippedInSelectedSlot, deltas };
+  }, [selectedItem, selectedSlot, equippedInSelectedSlot]);
+
   return (
     <div className="space-y-4">
       {/* Two columns */}
@@ -187,6 +258,7 @@ export function HeroTab() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!it) return;
+                    setSelectedItemId(it.id);
                     setPinnedKey((p) => (p === slot.id ? null : slot.id));
                   }}
                 >
@@ -283,6 +355,7 @@ export function HeroTab() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!it) return;
+                    setSelectedItemId(it.id);
                     setPinnedKey((p) => (p === invKey ? null : invKey));
                   }}
                 >
@@ -382,6 +455,83 @@ export function HeroTab() {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* Status + comparison */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="game-panel">
+          <div className="game-panel-header">Status</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">HP</p>
+              <p className="text-sm font-cinzel font-semibold text-foreground tabular-nums">
+                {hp}/{maxHp}
+              </p>
+              <div className="hp-bar-track mt-2">
+                <div className="hp-bar-fill" style={{ width: `${hpPct}%` }} />
+              </div>
+            </div>
+            <div className="text-right min-w-[140px]">
+              <p className="text-xs text-muted-foreground">Last action</p>
+              <p className="text-xs text-foreground/90">{status || "—"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="game-panel">
+          <div className="game-panel-header">Compare</div>
+          {!comparison ? (
+            <p className="text-xs text-muted-foreground">
+              Click a piece of gear in your inventory to compare it to what you have equipped.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider">
+                Slot: <span className="text-foreground">{SLOT_LABELS[comparison.slot] || comparison.slot}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-sm p-2" style={{ border: "1px solid hsl(228 16% 20% / 0.6)", background: "hsl(228 20% 10% / 0.6)" }}>
+                  <div className="flex items-center gap-2">
+                    <ItemIcon item={comparison.sel} size={22} />
+                    <div className="min-w-0">
+                      <div className="text-xs font-cinzel font-semibold text-foreground truncate">{comparison.sel.name}</div>
+                      <div className="text-[10px] text-muted-foreground">Selected</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-sm p-2" style={{ border: "1px solid hsl(228 16% 20% / 0.6)", background: "hsl(228 20% 10% / 0.6)" }}>
+                  {comparison.eq ? (
+                    <div className="flex items-center gap-2">
+                      <ItemIcon item={comparison.eq} size={22} />
+                      <div className="min-w-0">
+                        <div className="text-xs font-cinzel font-semibold text-foreground truncate">{comparison.eq.name}</div>
+                        <div className="text-[10px] text-muted-foreground">Equipped</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Nothing equipped</div>
+                  )}
+                </div>
+              </div>
+
+              {comparison.deltas && Object.keys(comparison.deltas).length > 0 ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {Object.entries(comparison.deltas).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{k === "DamageMin" ? "Damage (min)" : k === "DamageMax" ? "Damage (max)" : k}</span>
+                      <span className={v > 0 ? "text-emerald-400 tabular-nums" : "text-destructive tabular-nums"}>
+                        {v > 0 ? `+${v}` : String(v)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No stat differences.</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
