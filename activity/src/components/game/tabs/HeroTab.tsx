@@ -98,6 +98,12 @@ function itemEffectiveStats(item: InvRow): Partial<Record<StatKey, number>> {
   return out;
 }
 
+function statLabel(k: string): string {
+  if (k === "DamageMin") return "Damage (min)";
+  if (k === "DamageMax") return "Damage (max)";
+  return k;
+}
+
 export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
@@ -234,6 +240,47 @@ export function HeroTab() {
     }
     return { slot: selectedSlot, sel: selectedItem, eq: equippedInSelectedSlot, deltas };
   }, [selectedItem, selectedSlot, equippedInSelectedSlot]);
+
+  const compareForItem = useCallback(
+    (it: InvRow) => {
+      const slot = gearSlot(it);
+      if (!slot) return null;
+      const type = (it.item_type || "").toLowerCase();
+      if (type === "consumable") return null;
+      const eq = equipped[slot] || null;
+      if (!eq || eq.id === it.id) return null;
+
+      const a = itemEffectiveStats(it);
+      const b = itemEffectiveStats(eq);
+      const keys = new Set<StatKey>([...(Object.keys(a) as StatKey[]), ...(Object.keys(b) as StatKey[])]);
+      const deltas: Array<{ k: string; v: number }> = [];
+      for (const k of keys) {
+        const dv = (a[k] || 0) - (b[k] || 0);
+        if (dv) deltas.push({ k, v: dv });
+      }
+      deltas.sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+      if (deltas.length === 0) return null;
+
+      return (
+        <div className="mt-1.5">
+          <div className="text-[10px] text-muted-foreground">
+            Equipped: <span className="text-foreground/90">{eq.name}</span>
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
+            {deltas.slice(0, 10).map(({ k, v }) => (
+              <div key={k} className="flex items-center justify-between text-[10px] tabular-nums">
+                <span className="text-muted-foreground">{statLabel(k)}</span>
+                <span className={v > 0 ? "text-emerald-400" : "text-destructive"}>
+                  {v > 0 ? `+${v}` : String(v)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    [equipped],
+  );
 
   return (
     <div className="space-y-4">
@@ -386,7 +433,9 @@ export function HeroTab() {
                   {showPinned && (
                     <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
                       <ItemTooltipPanel item={it} rarityClass={rc}>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="space-y-2">
+                          {compareForItem(it)}
+                          <div className="flex flex-wrap gap-1.5">
                           {(it.item_type || "").toLowerCase() === "consumable" && (
                             <button
                               type="button"
@@ -447,6 +496,7 @@ export function HeroTab() {
                           >
                             Sell
                           </button>
+                          </div>
                         </div>
                       </ItemTooltipPanel>
                     </div>
