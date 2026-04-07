@@ -103,6 +103,7 @@ export function GameShell() {
     const atk = derivedStats ? `${derivedStats.dmg_min}–${derivedStats.dmg_max}` : "—";
     const def = derivedStats ? String(derivedStats.armor) : "—";
     const crit = derivedStats ? `${derivedStats.crit_chance.toFixed(1)}%` : "—";
+    const mastery = derivedStats?.class_mastery?.level ? `Lv ${derivedStats.class_mastery.level}` : "—";
 
     const xp = "—"; // XP currently not provided by inventory payload
     const guild = "—"; // guild info not available in inventory payload
@@ -117,6 +118,7 @@ export function GameShell() {
       atk,
       def,
       crit,
+      mastery,
       xp,
       guild,
       border,
@@ -414,6 +416,7 @@ export function GameShell() {
                 { label: "ATK", value: playerStats.atk },
                 { label: "DEF", value: playerStats.def },
                 { label: "CRIT", value: playerStats.crit },
+                { label: "Mastery", value: playerStats.mastery },
                 { label: "XP", value: playerStats.xp },
                 { label: "Guild", value: playerStats.guild },
               ].map((s) => (

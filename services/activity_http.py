@@ -348,6 +348,8 @@ async def handle_character_stats(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": "no_character", "message": "Create a character first."}, status=400)
 
     stats = await char_svc.total_stats(char["id"])
+    mastery = await char_svc.get_class_mastery(char["id"], char.get("class") or "")
+    top_abilities = await char_svc.top_ability_masteries(char["id"], limit=6)
     payload = {
         "ok": True,
         "attack_power": stats.get("attack_power", 0),
@@ -361,6 +363,8 @@ async def handle_character_stats(request: web.Request) -> web.Response:
         "lifesteal": stats.get("lifesteal", 0.0),
         "resistance": stats.get("resistance", 0),
         "hit_rating": stats.get("hit_rating", 0.0),
+        "class_mastery": mastery,
+        "top_ability_mastery": top_abilities,
     }
     return web.json_response(_json_safe(payload))
 

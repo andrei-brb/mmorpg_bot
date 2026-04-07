@@ -838,6 +838,28 @@ CREATE TABLE IF NOT EXISTS server_config (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- MASTERY (class + ability)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS character_class_mastery (
+    character_id    UUID PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+    class_key       VARCHAR(32) NOT NULL,
+    xp              BIGINT DEFAULT 0,
+    level           INT DEFAULT 1,
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS character_ability_mastery (
+    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    ability_key     VARCHAR(64) NOT NULL,
+    xp              BIGINT DEFAULT 0,
+    level           INT DEFAULT 1,
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (character_id, ability_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ability_mastery_char ON character_ability_mastery(character_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO zone_state (zone_key) VALUES

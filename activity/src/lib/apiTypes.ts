@@ -79,6 +79,8 @@ export type CharacterDerivedStatsPayload = {
   lifesteal: number;
   resistance: number;
   hit_rating: number;
+  class_mastery?: { class_key?: string; xp?: number; level?: number; xp_gained?: number; leveled_up?: boolean } | null;
+  top_ability_mastery?: { ability_key?: string; xp?: number; level?: number }[];
   error?: string;
   message?: string;
 };

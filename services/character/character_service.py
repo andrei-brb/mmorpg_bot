@@ -374,6 +374,20 @@ class CharacterService:
         stats["lifesteal"]    = self._apply_stat_caps("lifesteal", stats["lifesteal"])
         stats["hit_rating"]   = self._apply_stat_caps("hit_rating", stats["hit_rating"])
 
+        # ── Class Mastery bonuses (small, safe) ───────────────────────────────
+        # Mastery is progression across combats; effects are intentionally modest.
+        m = await self.get_class_mastery(char_id, char.get("class") or "")
+        m_lvl = int(m.get("level") or 1)
+        # Universal +hit/+crit, plus role-flavored bonus.
+        stats["hit_rating"] = self._apply_stat_caps("hit_rating", float(stats["hit_rating"]) + max(0, m_lvl - 1) * 0.6)
+        stats["crit_chance"] = self._apply_stat_caps("crit_chance", float(stats["crit_chance"]) + max(0, m_lvl - 1) * 0.15)
+        if cls.role == "tank":
+            stats["armor"] += max(0, m_lvl - 1) * 6
+        elif cls.role == "healer":
+            stats["spell_power"] += max(0, m_lvl - 1) * 2
+        else:
+            stats["attack_power"] += max(0, m_lvl - 1) * 2
+
         # Temporary resistance potion buffs (stored in cooldowns as action_key).
         try:
             res_rows = await self.db.fetch(
@@ -397,6 +411,134 @@ class CharacterService:
         stats["max_hp"]       = char["max_hp"]
         stats["max_res"]      = char["max_res"]
         return stats
+
+    # ── Mastery (class + ability) ─────────────────────────────────────────────
+
+    @staticmethod
+    def mastery_level_from_xp(xp: int) -> int:
+        """
+        Mastery leveling curve (cheap early, slower later).
+        Level 1 starts at 0 XP. Roughly: level ≈ 1 + floor(sqrt(xp / 50)).
+        """
+        try:
+            x = max(0, int(xp))
+        except Exception:
+            x = 0
+        return 1 + int(math.sqrt(x / 50.0))
+
+    @staticmethod
+    def mastery_xp_for_next_level(level: int) -> int:
+        """Total XP needed to reach `level+1` from level 1."""
+        lvl = max(1, int(level))
+        # Invert the sqrt curve above: xp ≈ 50 * (level-1)^2
+        return int(50 * ((lvl) ** 2))
+
+    async def get_class_mastery(self, char_id: UUID, class_key: str) -> Dict[str, Any]:
+        row = await self.db.fetchrow(
+            "SELECT class_key, xp, level FROM character_class_mastery WHERE character_id=$1",
+            char_id,
+        )
+        if not row:
+            return {"class_key": class_key, "xp": 0, "level": 1}
+        return {"class_key": row.get("class_key") or class_key, "xp": int(row.get("xp") or 0), "level": int(row.get("level") or 1)}
+
+    async def award_class_mastery_xp(self, char_id: UUID, class_key: str, xp_gain: int) -> Dict[str, Any]:
+        gain = max(0, int(xp_gain or 0))
+        if gain <= 0:
+            cur = await self.get_class_mastery(char_id, class_key)
+            cur["xp_gained"] = 0
+            return cur
+
+        row = await self.db.fetchrow(
+            """
+            INSERT INTO character_class_mastery(character_id, class_key, xp, level, updated_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (character_id) DO UPDATE
+              SET class_key=EXCLUDED.class_key,
+                  xp=character_class_mastery.xp + EXCLUDED.xp,
+                  updated_at=NOW()
+            RETURNING class_key, xp, level
+            """,
+            char_id,
+            class_key,
+            gain,
+            1,
+        )
+        total_xp = int(row.get("xp") or 0)
+        new_level = self.mastery_level_from_xp(total_xp)
+        old_level = int(row.get("level") or 1)
+        if new_level != old_level:
+            await self.db.execute(
+                "UPDATE character_class_mastery SET level=$2, updated_at=NOW() WHERE character_id=$1",
+                char_id,
+                new_level,
+            )
+        return {
+            "class_key": row.get("class_key") or class_key,
+            "xp": total_xp,
+            "level": new_level,
+            "xp_gained": gain,
+            "leveled_up": new_level > old_level,
+            "old_level": old_level,
+            "new_level": new_level,
+        }
+
+    async def award_ability_mastery_xp(self, char_id: UUID, ability_key: str, xp_gain: int) -> Dict[str, Any]:
+        key = (ability_key or "").strip()
+        gain = max(0, int(xp_gain or 0))
+        if not key or gain <= 0:
+            return {"ability_key": key, "xp": 0, "level": 1, "xp_gained": 0}
+
+        row = await self.db.fetchrow(
+            """
+            INSERT INTO character_ability_mastery(character_id, ability_key, xp, level, updated_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (character_id, ability_key) DO UPDATE
+              SET xp=character_ability_mastery.xp + EXCLUDED.xp,
+                  updated_at=NOW()
+            RETURNING ability_key, xp, level
+            """,
+            char_id,
+            key,
+            gain,
+            1,
+        )
+        total_xp = int(row.get("xp") or 0)
+        new_level = self.mastery_level_from_xp(total_xp)
+        old_level = int(row.get("level") or 1)
+        if new_level != old_level:
+            await self.db.execute(
+                "UPDATE character_ability_mastery SET level=$3, updated_at=NOW() WHERE character_id=$1 AND ability_key=$2",
+                char_id,
+                key,
+                new_level,
+            )
+        return {
+            "ability_key": row.get("ability_key") or key,
+            "xp": total_xp,
+            "level": new_level,
+            "xp_gained": gain,
+            "leveled_up": new_level > old_level,
+            "old_level": old_level,
+            "new_level": new_level,
+        }
+
+    async def top_ability_masteries(self, char_id: UUID, limit: int = 6) -> list[Dict[str, Any]]:
+        rows = await self.db.fetch(
+            """
+            SELECT ability_key, xp, level
+            FROM character_ability_mastery
+            WHERE character_id=$1
+            ORDER BY level DESC, xp DESC
+            LIMIT $2
+            """,
+            char_id,
+            max(1, min(int(limit or 6), 20)),
+        )
+        return [
+            {"ability_key": str(r.get("ability_key") or ""), "xp": int(r.get("xp") or 0), "level": int(r.get("level") or 1)}
+            for r in rows
+        ]
 
     # ── Specialization ────────────────────────────────────────────────────────
 

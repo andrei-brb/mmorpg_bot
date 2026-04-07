@@ -902,6 +902,13 @@ async def _process_activity_action_impl(
         ability_key = "auto_attack"
         ab = ABILITIES.get("auto_attack", ABILITIES["auto_attack"])
 
+    # Ability mastery progression (tracking + UI visibility; small XP per use).
+    # We keep this lightweight so it cannot meaningfully affect balance yet.
+    try:
+        await char_svc.award_ability_mastery_xp(char_id, ability_key, 1)
+    except Exception:
+        pass
+
     cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
     eff_cost = int(ab.cost * cost_mult) if ab.cost else 0
 
@@ -1599,6 +1606,13 @@ async def _finish_victory(
     xp_result = await char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
     await char_svc.add_gold(char["id"], rewards["gold"], "combat drop")
     await char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
+
+    # Class mastery progression (victory-based; boss fights grant more).
+    try:
+        base_gain = 8 + (6 if session.is_boss else 0)
+        await char_svc.award_class_mastery_xp(char["id"], char.get("class") or "", base_gain)
+    except Exception:
+        pass
 
     loot_lines: List[str] = []
     for _ in range(rewards["loot_rolls"]):
