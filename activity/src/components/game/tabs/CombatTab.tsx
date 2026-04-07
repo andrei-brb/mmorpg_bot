@@ -67,18 +67,20 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   }, [combatTabMode, refresh]);
 
   // Tell the shell when to enter/exit Combat Focus Mode (overworld API combat only).
+  // Important: do NOT clear focus in a cleanup that runs on every `state` update — that was
+  // briefly setting combatFocusActive to false after each skill, so tabs/header reappeared.
   useEffect(() => {
     if (combatTabMode !== "overworld") {
       setCombatFocusActive(false);
       return;
     }
     const active = mode === "fight" && Boolean(state);
-    if (combatFocusActive !== active) setCombatFocusActive(active);
-    return () => {
-      setCombatFocusActive(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [combatTabMode, mode, state]);
+    setCombatFocusActive(active);
+  }, [combatTabMode, mode, state, setCombatFocusActive]);
+
+  useEffect(() => {
+    return () => setCombatFocusActive(false);
+  }, [setCombatFocusActive]);
 
   const onStart = async () => {
     if (!enemyPick) return;
