@@ -9,7 +9,7 @@ import random
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from config.settings import RARITIES, Settings
+from config.settings import RARITIES, Settings, zone_tier_for_loot
 
 log = logging.getLogger("inventory")
 
@@ -30,7 +30,7 @@ class InventoryService:
         keys = [k for k, _ in items]
         return random.choices(keys, weights=weights)[0]
 
-    def roll_bonus_stats(self, template: dict, rarity: str) -> Dict[str, int]:
+    def roll_bonus_stats(self, template: dict, rarity: str, zone_tier: int = 1) -> Dict[str, int]:
         # Only equippable gear should receive rolled combat stats.
         # Consumables/materials/quest items must never have STR/AGI/etc.
         if not template.get("equip_slot"):
@@ -40,6 +40,8 @@ class InventoryService:
             }
 
         mult = RARITIES[rarity].stat_multiplier
+        zone_tier = max(1, min(5, int(zone_tier)))
+        zone_tier_bonus = 1.0 + (zone_tier - 1) * 0.12
         bonus = {}
         
         # Calculate total stat budget based on template and rarity
@@ -52,9 +54,9 @@ class InventoryService:
             template.get("s_sta", 0),
         ])
         
-        # Calculate stat budget: base stats × multiplier × random variation
+        # Calculate stat budget: base stats × multiplier × zone tier × random variation
         # This gives us a pool of stat points to distribute
-        stat_budget = int(total_base_stats * mult * random.uniform(0.90, 1.20))
+        stat_budget = int(total_base_stats * mult * zone_tier_bonus * random.uniform(0.90, 1.20))
         
         # For items with no base stats, give a minimum budget based on rarity
         if stat_budget == 0:
@@ -66,6 +68,7 @@ class InventoryService:
                 min_budgets.get(rarity, 5),
                 int(min_budgets.get(rarity, 5) * 1.5)
             )
+            stat_budget = int(stat_budget * zone_tier_bonus)
         
         # Determine which stats can receive bonuses
         # For rare+ items, all stats can get bonuses even if template has 0
@@ -118,7 +121,7 @@ class InventoryService:
                 if random.random() < chance:
                     # Roll value based on rarity
                     min_val = 1 if rarity in ("rare", "epic") else 3
-                    max_val = int(5 * mult) if rarity in ("rare", "epic") else int(10 * mult)
+                    max_val = int(5 * mult * zone_tier_bonus) if rarity in ("rare", "epic") else int(10 * mult * zone_tier_bonus)
                     rolled = random.randint(min_val, max_val)
                     bonus[stat.replace("s_", "r_")] = rolled - base
                 else:
@@ -147,7 +150,8 @@ class InventoryService:
             return None
 
         tmpl = dict(rows[0])
-        bonus = self.roll_bonus_stats(tmpl, rarity)
+        tier = zone_tier_for_loot(zone_key)
+        bonus = self.roll_bonus_stats(tmpl, rarity, zone_tier=tier)
         return {"template": tmpl, "rarity": rarity, "bonus": bonus}
 
     # ── Add / remove items ────────────────────────────────────────────────────

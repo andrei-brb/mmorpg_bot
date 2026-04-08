@@ -611,6 +611,35 @@ DUNGEONS: Dict[str, DungeonConfig] = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#   LOOT TIER (rolled bonus stats scale with zone / dungeon difficulty)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def zone_tier_for_loot(zone_key: str) -> int:
+    """
+    Returns 1–5 for `zone_tier_bonus` in inventory bonus rolls.
+    Unknown keys default to 1 (starter baseline).
+
+    Uses zone level ceiling for overworld; dungeon `level_req` for instances.
+    """
+    if zone_key in DUNGEONS:
+        lv = DUNGEONS[zone_key].level_req
+    elif zone_key in ZONES:
+        lv = ZONES[zone_key].level_range[1]
+    else:
+        return 1
+    if lv <= 10:
+        return 1
+    if lv <= 25:
+        return 2
+    if lv <= 45:
+        return 3
+    if lv <= 55:
+        return 4
+    return 5
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #   BOSS SCALING HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
