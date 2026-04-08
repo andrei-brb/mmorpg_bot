@@ -43,6 +43,7 @@ export function GameShell() {
     displayName,
     liveEvents,
     combatFocusActive,
+    arenaFocusActive,
     specModal,
     closeSpecModal,
     chooseSpecialization,
@@ -56,6 +57,9 @@ export function GameShell() {
   } = useGameSession();
 
   const { status: pvpStatus } = usePvpApi();
+
+  /** Hide main shell chrome (header + tab bar) during overworld combat focus or active Arena match. */
+  const shellChromeHidden = combatFocusActive || arenaFocusActive;
 
   // Refetch derived stats when equipped gear changes (so profile updates immediately after equip/unequip).
   const derivedStatsKey = useMemo(() => {
@@ -250,17 +254,17 @@ export function GameShell() {
 
       <div
         className={`mx-auto w-full max-w-[980px] px-5 flex-1 min-h-0 flex flex-col ${
-          combatFocusActive ? "py-3 sm:py-4" : "py-6"
+          shellChromeHidden ? "py-3 sm:py-4" : "py-6"
         }`}
       >
         <div
           className={`game-frame rounded-sm flex flex-col flex-1 min-h-0 ${
-            combatFocusActive ? "p-3 sm:p-4" : "p-4 sm:p-5"
+            shellChromeHidden ? "p-3 sm:p-4" : "p-4 sm:p-5"
           }`}
         >
           <div
             className={`w-full h-8 -mt-4 sm:-mt-5 rounded-t-sm overflow-hidden opacity-40 ${
-              combatFocusActive ? "mb-2" : "mb-4"
+              shellChromeHidden ? "mb-2" : "mb-4"
             }`}
             style={{
               backgroundImage: `url('${import.meta.env.BASE_URL}textures/frame-border.jpg')`,
@@ -275,7 +279,7 @@ export function GameShell() {
             <div className="rune-band-left hidden sm:block" />
             <div className="rune-band-right hidden sm:block" />
 
-            {!combatFocusActive && (
+            {!shellChromeHidden && (
               <>
                 <div className="flex items-center justify-between mb-5 pt-1">
                   <div className="flex items-center gap-3">
@@ -324,7 +328,7 @@ export function GameShell() {
               </>
             )}
 
-            {!combatFocusActive && liveEvents.length > 0 && (
+            {!shellChromeHidden && liveEvents.length > 0 && (
               <div
                 className="mb-4 p-3 rounded-sm text-xs"
                 style={{
@@ -346,7 +350,7 @@ export function GameShell() {
               </div>
             )}
 
-            {!combatFocusActive && (
+            {!shellChromeHidden && (
               <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
                 {TABS.map((tab) => (
                   <button
@@ -363,7 +367,7 @@ export function GameShell() {
 
             <div
               className={
-                combatFocusActive
+                shellChromeHidden
                   ? "sm:px-1 flex flex-col flex-1 min-h-0 -mt-1"
                   : "sm:px-1"
               }

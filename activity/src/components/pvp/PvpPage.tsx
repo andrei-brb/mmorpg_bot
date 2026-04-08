@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useGameSession } from "@/context/GameSessionContext";
 import { usePvpApi } from "@/hooks/usePvpApi";
 import { PvpHub } from "@/components/pvp/PvpHub";
 import { PvpMatch } from "@/components/pvp/PvpMatch";
@@ -10,6 +11,7 @@ type ArenaTab = "arena" | "history";
 
 export function PvpPage() {
   const [activeTab, setActiveTab] = useState<ArenaTab>("arena");
+  const { setArenaFocusActive } = useGameSession();
   const {
     status,
     match,
@@ -26,6 +28,12 @@ export function PvpPage() {
     fetchHistory,
     backToHub,
   } = usePvpApi();
+
+  useEffect(() => {
+    const active = match?.status === "active";
+    setArenaFocusActive(active);
+    return () => setArenaFocusActive(false);
+  }, [match?.status, setArenaFocusActive]);
 
   if (loading) {
     return (

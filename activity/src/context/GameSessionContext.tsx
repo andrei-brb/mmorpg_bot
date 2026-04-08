@@ -47,6 +47,9 @@ type GameSessionValue = {
   /** UI-only: when true, shell switches to combat focus layout (hide tabs, fit in viewport). */
   combatFocusActive: boolean;
   setCombatFocusActive: (active: boolean) => void;
+  /** Arena PvP match in progress — same shell chrome hide as combat focus. */
+  arenaFocusActive: boolean;
+  setArenaFocusActive: (active: boolean) => void;
   specModal: { open: boolean; options: SpecOption[]; unlockLevel: number };
   closeSpecModal: () => void;
   chooseSpecialization: (specKey: string) => Promise<void>;
@@ -131,6 +134,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [marketListings, setMarketListings] = useState<MarketListingRow[]>([]);
   const [combatFocusActive, setCombatFocusActive] = useState(false);
+  const [arenaFocusActive, setArenaFocusActive] = useState(false);
   const [specModal, setSpecModal] = useState<{
     open: boolean;
     options: SpecOption[];
@@ -647,6 +651,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       refreshLiveEvents,
       combatFocusActive,
       setCombatFocusActive,
+      arenaFocusActive,
+      setArenaFocusActive,
       specModal,
       closeSpecModal,
       chooseSpecialization,
@@ -695,6 +701,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       refreshLiveEvents,
       combatFocusActive,
       setCombatFocusActive,
+      arenaFocusActive,
+      setArenaFocusActive,
       specModal,
       closeSpecModal,
       chooseSpecialization,

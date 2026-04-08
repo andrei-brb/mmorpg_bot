@@ -104,28 +104,6 @@ export function PvpMatch({ match, onAction }: PvpMatchProps) {
       </div>
 
       <div className="game-panel">
-        <div className="game-panel-header">Combat Log</div>
-        <div className="h-40 overflow-y-auto p-3 space-y-0.5 font-mono text-[11px]">
-          {combat_log.map((entry) => (
-            <p
-              key={entry.id}
-              className={
-                entry.type === "system"
-                  ? "text-gold"
-                  : entry.type === "damage"
-                    ? "text-destructive"
-                    : entry.type === "heal"
-                      ? "text-emerald-400"
-                      : "text-muted-foreground"
-              }
-            >
-              <span className="text-muted-foreground">[{entry.timestamp}]</span> {entry.message}
-            </p>
-          ))}
-        </div>
-      </div>
-
-      <div className="game-panel">
         <div className="game-panel-header">Actions</div>
         <div className="p-3">
           <div className="flex flex-wrap gap-2">
@@ -170,6 +148,28 @@ export function PvpMatch({ match, onAction }: PvpMatchProps) {
             </button>
           </div>
           {!is_your_turn && <p className="text-[10px] text-muted-foreground mt-2 font-crimson">Wait for your turn to act.</p>}
+        </div>
+      </div>
+
+      <div className="game-panel">
+        <div className="game-panel-header">Combat Log</div>
+        <div className="h-40 overflow-y-auto p-3 space-y-0.5 font-mono text-[11px]">
+          {combat_log.map((entry) => (
+            <p
+              key={entry.id}
+              className={
+                entry.type === "system"
+                  ? "text-gold"
+                  : entry.type === "damage"
+                    ? "text-destructive"
+                    : entry.type === "heal"
+                      ? "text-emerald-400"
+                      : "text-muted-foreground"
+              }
+            >
+              <span className="text-muted-foreground">[{entry.timestamp}]</span> {entry.message}
+            </p>
+          ))}
         </div>
       </div>
     </div>
