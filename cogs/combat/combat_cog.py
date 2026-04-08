@@ -648,9 +648,19 @@ class CombatCog(commands.Cog, name="Combat"):
 
                         # Resource check
                         if ab.cost_type in ("mana", "energy", "rage") and player.current_res < eff_cost:
-                            log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}**!")
+                            # Don't let a failed selection "skip" the player's turn (feels like the enemy hit instead).
+                            # Fall back to auto attack so the player still acts this turn.
+                            log_lines.append(f"❌ Not enough {ab.cost_type} for **{ab.name}** — using **Auto Attack** instead.")
+                            results = self.engine.use_ability("auto_attack", player, [enemy], session=session)
+                            for r in results:
+                                log_lines.append(r.narrative)
+                            session.log.extend(results)
                         elif ab_key in player.ability_cooldowns:
-                            log_lines.append(f"⏳ **{ab.name}** is on cooldown!")
+                            log_lines.append(f"⏳ **{ab.name}** is on cooldown — using **Auto Attack** instead.")
+                            results = self.engine.use_ability("auto_attack", player, [enemy], session=session)
+                            for r in results:
+                                log_lines.append(r.narrative)
+                            session.log.extend(results)
                         else:
                             if ab.cost_type in ("mana", "energy", "rage") and eff_cost:
                                 player.current_res = max(0, player.current_res - eff_cost)
