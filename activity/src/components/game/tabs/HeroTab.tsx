@@ -118,8 +118,6 @@ export function HeroTab() {
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [listItemId, setListItemId] = useState<string | null>(null);
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [status, setStatus] = useState("");
 
   const char = inventory?.character;
   const items = inventory?.items || [];
@@ -130,22 +128,15 @@ export function HeroTab() {
     return m;
   }, [items]);
 
-  const hp = Number(char?.current_hp ?? 0);
-  const maxHp = Number(char?.max_hp ?? 0);
-  const hpPct = maxHp > 0 ? Math.min(100, (hp / maxHp) * 100) : 100;
-
   const runAction = useCallback(
     async (endpoint: string, body: Record<string, unknown>, msg: string) => {
       try {
-        setStatus("…");
         const res = await itemPost(endpoint, body);
         const j = (await res.json()) as { ok?: boolean; message?: string };
-        setStatus(j.message || (j.ok ? msg : "Failed"));
         toast(j.message || msg);
         await refreshInventory();
         if (res.ok && j.ok !== false) setPinnedKey(null);
       } catch (e) {
-        setStatus(String(e));
         toast.error(String(e));
       }
     },
@@ -216,31 +207,6 @@ export function HeroTab() {
     ...Array.from({ length: Math.max(0, EMPTY_SLOTS - bag.length) }, (_, i) => ({ id: `empty-${i}`, name: null as string | null, icon: null as string | null, rarity: null as string | null, item: null as InvRow | null })),
   ];
 
-  const selectedItem = useMemo(() => {
-    if (!selectedItemId) return null;
-    return items.find((i) => i.id === selectedItemId) || null;
-  }, [items, selectedItemId]);
-
-  const selectedSlot = selectedItem ? gearSlot(selectedItem) : null;
-  const equippedInSelectedSlot = selectedSlot ? equipped[selectedSlot] || null : null;
-
-  const comparison = useMemo(() => {
-    if (!selectedItem || !selectedSlot) return null;
-    const type = (selectedItem.item_type || "").toLowerCase();
-    if (type === "consumable") return null;
-    if (!equippedInSelectedSlot) return { slot: selectedSlot, sel: selectedItem, eq: null as InvRow | null, deltas: null as Record<string, number> | null };
-
-    const a = itemEffectiveStats(selectedItem);
-    const b = itemEffectiveStats(equippedInSelectedSlot);
-    const keys = new Set<StatKey>([...(Object.keys(a) as StatKey[]), ...(Object.keys(b) as StatKey[])]);
-    const deltas: Record<string, number> = {};
-    for (const k of keys) {
-      const dv = (a[k] || 0) - (b[k] || 0);
-      if (dv) deltas[k] = dv;
-    }
-    return { slot: selectedSlot, sel: selectedItem, eq: equippedInSelectedSlot, deltas };
-  }, [selectedItem, selectedSlot, equippedInSelectedSlot]);
-
   const compareForItem = useCallback(
     (it: InvRow) => {
       const slot = gearSlot(it);
@@ -305,7 +271,6 @@ export function HeroTab() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!it) return;
-                    setSelectedItemId(it.id);
                     setPinnedKey((p) => (p === slot.id ? null : slot.id));
                   }}
                 >
@@ -402,7 +367,6 @@ export function HeroTab() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!it) return;
-                    setSelectedItemId(it.id);
                     setPinnedKey((p) => (p === invKey ? null : invKey));
                   }}
                 >
@@ -505,83 +469,6 @@ export function HeroTab() {
               );
             })}
           </div>
-        </div>
-      </div>
-
-      {/* Status + comparison */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="game-panel">
-          <div className="game-panel-header">Status</div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">HP</p>
-              <p className="text-sm font-cinzel font-semibold text-foreground tabular-nums">
-                {hp}/{maxHp}
-              </p>
-              <div className="hp-bar-track mt-2">
-                <div className="hp-bar-fill" style={{ width: `${hpPct}%` }} />
-              </div>
-            </div>
-            <div className="text-right min-w-[140px]">
-              <p className="text-xs text-muted-foreground">Last action</p>
-              <p className="text-xs text-foreground/90">{status || "—"}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="game-panel">
-          <div className="game-panel-header">Compare</div>
-          {!comparison ? (
-            <p className="text-xs text-muted-foreground">
-              Click a piece of gear in your inventory to compare it to what you have equipped.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider">
-                Slot: <span className="text-foreground">{SLOT_LABELS[comparison.slot] || comparison.slot}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-sm p-2" style={{ border: "1px solid hsl(228 16% 20% / 0.6)", background: "hsl(228 20% 10% / 0.6)" }}>
-                  <div className="flex items-center gap-2">
-                    <ItemIcon item={comparison.sel} size={22} />
-                    <div className="min-w-0">
-                      <div className="text-xs font-cinzel font-semibold text-foreground truncate">{comparison.sel.name}</div>
-                      <div className="text-[10px] text-muted-foreground">Selected</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-sm p-2" style={{ border: "1px solid hsl(228 16% 20% / 0.6)", background: "hsl(228 20% 10% / 0.6)" }}>
-                  {comparison.eq ? (
-                    <div className="flex items-center gap-2">
-                      <ItemIcon item={comparison.eq} size={22} />
-                      <div className="min-w-0">
-                        <div className="text-xs font-cinzel font-semibold text-foreground truncate">{comparison.eq.name}</div>
-                        <div className="text-[10px] text-muted-foreground">Equipped</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">Nothing equipped</div>
-                  )}
-                </div>
-              </div>
-
-              {comparison.deltas && Object.keys(comparison.deltas).length > 0 ? (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  {Object.entries(comparison.deltas).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{k === "DamageMin" ? "Damage (min)" : k === "DamageMax" ? "Damage (max)" : k}</span>
-                      <span className={v > 0 ? "text-emerald-400 tabular-nums" : "text-destructive tabular-nums"}>
-                        {v > 0 ? `+${v}` : String(v)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No stat differences.</p>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
