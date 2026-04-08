@@ -166,6 +166,11 @@ class AdminCog(commands.Cog, name="Admin"):
     async def cog_load(self): self.svc = CharacterService(self.bot.db)
 
     admin = app_commands.Group(name="admin", description="Game master tools (admin only)")
+    lore = app_commands.Group(
+        name="lore",
+        description="Lore deeds, boss gates & Obsidian Silence tracker",
+        parent=admin,
+    )
 
     async def _check_admin(self, interaction: discord.Interaction) -> bool:
         """Respond immediately then verify admin permissions. Returns True if admin."""
@@ -365,6 +370,97 @@ class AdminCog(commands.Cog, name="Admin"):
         embed.add_field(name="Admin Role",       value=f"<@&{cfg['admin_role_id']}>" if (cfg and cfg["admin_role_id"]) else "Not set", inline=True)
         await interaction.followup.send(embed=embed)
 
+    @lore.command(name="flags", description="List deed flags for a player's character")
+    @app_commands.describe(member="Target player")
+    async def lore_flags(self, interaction: discord.Interaction, member: discord.Member):
+        if not await self._check_admin(interaction):
+            return
+        char = await self.svc.get_character(member.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.")
+        from services.lore.lore_gate_service import LoreGateService
+
+        lg = LoreGateService(self.bot.db)
+        flags = await lg.get_flags(char["id"])
+        if not flags:
+            return await interaction.followup.send(
+                f"📜 **{char['name']}** — no deed flags stored yet.\n"
+                f"`character_id`: `{char['id']}`",
+                ephemeral=True,
+            )
+        body = "\n".join(f"• `{f}`" for f in flags[:50])
+        extra = f"\n… +{len(flags) - 50} more" if len(flags) > 50 else ""
+        await interaction.followup.send(
+            f"📜 **{char['name']}** — **{len(flags)}** deed flag(s)\n{body}{extra}\n\n"
+            f"`character_id`: `{char['id']}`",
+            ephemeral=True,
+        )
+
+    @lore.command(name="grant_flag", description="Grant a deed flag to a player's character")
+    @app_commands.describe(member="Target player", flag_key="Flag key (e.g. marcus_recommendation)")
+    async def lore_grant_flag(
+        self, interaction: discord.Interaction, member: discord.Member, flag_key: str
+    ):
+        if not await self._check_admin(interaction):
+            return
+        char = await self.svc.get_character(member.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.")
+        fk = (flag_key or "").strip()
+        if not fk or len(fk) > 128:
+            return await interaction.followup.send("❌ Invalid flag_key.")
+        from services.lore.lore_gate_service import LoreGateService
+
+        lg = LoreGateService(self.bot.db)
+        await lg.grant_flag(char["id"], fk)
+        await interaction.followup.send(
+            f"✅ Granted flag `{fk}` to **{char['name']}**.",
+            ephemeral=True,
+        )
+
+    @lore.command(name="revoke_flag", description="Remove a deed flag from a player's character")
+    @app_commands.describe(member="Target player", flag_key="Flag key to remove")
+    async def lore_revoke_flag(
+        self, interaction: discord.Interaction, member: discord.Member, flag_key: str
+    ):
+        if not await self._check_admin(interaction):
+            return
+        char = await self.svc.get_character(member.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.")
+        fk = (flag_key or "").strip()
+        from services.lore.lore_gate_service import LoreGateService
+
+        lg = LoreGateService(self.bot.db)
+        await lg.revoke_flag(char["id"], fk)
+        await interaction.followup.send(
+            f"✅ Revoked flag `{fk}` from **{char['name']}** (if it existed).",
+            ephemeral=True,
+        )
+
+    @lore.command(name="gates", description="Show configured lore boss gates (enemy_key → flags/items)")
+    async def lore_gates_cmd(self, interaction: discord.Interaction):
+        if not await self._check_admin(interaction):
+            return
+        from config.lore_gates import LORE_BOSS_GATES
+
+        if not LORE_BOSS_GATES:
+            return await interaction.followup.send(
+                "📖 **LORE_BOSS_GATES** is empty — no story immunities active.\n"
+                "Edit `config/lore_gates.py` to add `enemy_key` rules.",
+                ephemeral=True,
+            )
+        lines = []
+        for ek, cfg in LORE_BOSS_GATES.items():
+            rf = ", ".join(cfg.get("required_flags") or []) or "—"
+            ri = ", ".join(cfg.get("required_items") or []) or "—"
+            hint = (cfg.get("hint") or "")[:200]
+            lines.append(f"**{ek}**\nflags: `{rf}` | items: `{ri}`\n_{hint}_\n")
+        await interaction.followup.send(
+            "🪞 **Lore boss gates**\n\n" + "\n".join(lines)[:3900],
+            ephemeral=True,
+        )
+
     @admin.command(name="spawn_event", description="Manually trigger a world event")
     @app_commands.describe(event_key="Event key to spawn")
     @app_commands.choices(event_key=[
@@ -493,6 +589,11 @@ class AdminCog(commands.Cog, name="Admin"):
         embed.add_field(name="/admin stats",         value="View server game statistics", inline=False)
         embed.add_field(name="/admin sync_commands",  value="Force re-sync commands (fixes duplicates)", inline=False)
         embed.add_field(name="/admin version",       value="Show deployed version info", inline=False)
+        embed.add_field(
+            name="/admin lore …",
+            value="`flags`, `grant_flag`, `revoke_flag`, `gates` — deed flags & boss gate tracker",
+            inline=False,
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @admin.command(name="version", description="Show deployed version info")

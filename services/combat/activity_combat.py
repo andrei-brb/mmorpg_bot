@@ -557,6 +557,7 @@ async def start_activity_combat(
         is_boss=is_boss,
         enemy_key=enemy_key,
         zone_key=char["current_zone"],
+        apply_lore_gates=False,
     )
 
     engine = CombatEngine()
@@ -697,6 +698,7 @@ async def start_party_dungeon_combat(
         is_boss=is_boss,
         enemy_key=enemy_key,
         zone_key=leader_char["current_zone"],
+        apply_lore_gates=False,
     )
     session.turn = 1
     engine = CombatEngine()

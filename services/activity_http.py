@@ -49,6 +49,7 @@ from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
+from services.lore.lore_gate_service import LoreGateService
 from services.quest.npc_quest_service import NPCQuestService, NPC_TEMPLATES, FACTIONS, get_dynamic_intro, get_rep_level
 from config.settings import ZONES, Settings, ENEMIES, SPECIALIZATIONS, CLASSES
 
@@ -2359,6 +2360,9 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         if rewards.get("reputation"):
             for faction_id, amount in rewards["reputation"].items():
                 await quest_svc.add_reputation(char_id, faction_id, int(amount))
+
+        if rewards.get("deed_flags"):
+            await LoreGateService(db).grant_deed_flags_from_rewards(char_id, rewards)
 
         completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
         next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)

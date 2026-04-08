@@ -222,6 +222,20 @@ class Database:
                 );
             """)
 
+            # Lore / Obsidian Silence deed flags (per character)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS character_deed_flags (
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    flag_key        VARCHAR(128) NOT NULL,
+                    granted_at      TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (character_id, flag_key)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_deed_flags_char
+                ON character_deed_flags(character_id);
+            """)
+
             await c.execute("""
                 CREATE TABLE IF NOT EXISTS quest_progress (
                     character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
@@ -909,11 +923,63 @@ VALUES
     ('protection_safety_charm','Safety Charm','Guarantees success for enhancements +1 through +5.','consumable','rare',NULL,1,
      0,0,0,0,0,0,0,0, NULL,0,0, 5000,2500,'✨'),
     ('protection_enhancement_fragment','Enhancement Fragment','Increases success chance by 10%. Can stack up to 3 times (+30%).','consumable','uncommon',NULL,1,
-     0,0,0,0,0,0,0,0, NULL,0,0, 2000,1000,'💎')
+     0,0,0,0,0,0,0,0, NULL,0,0, 2000,1000,'💎'),
+    -- Obsidian Silence quest items & rewards
+    ('shatter_tone_tuning_fork','Shatter-Tone Tuning Fork','Resonates against glass-stillness.','quest','uncommon',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🎵'),
+    ('the_dull_shard','The Dull Shard','Glass that refuses to shine.','material','rare',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🪨'),
+    ('gray_border_charm','Gray Border Charm','Ash line where the forest still argues.','accessory','uncommon','trinket',3,
+     0,0,0,2,4,0,0,0, NULL,0,0, 150,75,'🔲'),
+    ('seismic_trigger_kit','Seismic Trigger Kit','One punch through honest bedrock.','quest','rare',NULL,8,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'📳'),
+    ('deep_rock_token','Deep Rock Token','Proof of a counted rescue.','quest','uncommon',NULL,6,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🪙'),
+    ('glacial_fang','Glacial Fang','Ice that still remembers motion.','weapon','rare','main_hand',8,
+     9,4,0,0,3,0,18,28, NULL,0,0, 120,50,'🗡️'),
+    ('sun_scorched_scimitar','Sun-Scorched Scimitar','Barrens heat folded into a curve.','weapon','rare','main_hand',14,
+     11,6,0,0,4,0,22,34, NULL,0,0, 200,85,'🌅'),
+    ('salt_true_compass','Salt-True Compass','Points where the tide remembers truth.','accessory','rare','trinket',28,
+     0,0,0,3,0,0,0,0, NULL,0,0, 220,95,'🧭'),
+    ('tribal_seal_charm','Tribal Seal Charm','Memory of the sea in carved bone.','accessory','uncommon','trinket',30,
+     0,0,0,2,5,0,0,0, NULL,0,0, 180,75,'🪶'),
+    ('cipher_scroll','Cipher Scroll','Stranglethorn grammar for Blackrock doors.','quest','rare',NULL,38,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'📜'),
+    ('tide_cutter','Tide-Cutter','Salt edge that refuses to rot.','weapon','rare','main_hand',38,
+     14,9,0,0,5,0,28,38, NULL,0,0, 280,115,'⚔️'),
+    ('ember_thread','Ember Thread','Heat braided into memory.','material','epic',NULL,50,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🧵'),
+    ('blessed_oil_vial','Blessed Oil Vial','Mercy that moves.','consumable','uncommon',NULL,5,
+     0,0,0,0,0,0,0,0, 'boost_resistance',15,30, 40,18,'🕯️'),
+    ('rune_rubbing_kit','Rune Rubbing Kit','Impressions for arguing with stone.','quest','epic',NULL,54,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🖇️'),
+    ('obsidian_breaker','Obsidian Breaker','Hit Vaelkor where grammar fails.','weapon','legendary','main_hand',55,
+     26,14,10,6,14,0,58,92, NULL,0,0, 520,210,'🔨'),
+    ('trisect_key','Trisect Key','Three proofs of motion.','quest','legendary',NULL,50,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🗝️'),
+    ('the_eternal_frequency','The Eternal Frequency','A standing wave against silence.','weapon','artifact','main_hand',58,
+     32,18,14,8,16,0,62,98, NULL,0,0, 2000,800,'〰️')
 ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    item_type = EXCLUDED.item_type,
+    rarity = EXCLUDED.rarity,
+    equip_slot = EXCLUDED.equip_slot,
+    level_req = EXCLUDED.level_req,
+    s_str = EXCLUDED.s_str,
+    s_agi = EXCLUDED.s_agi,
+    s_int = EXCLUDED.s_int,
+    s_spi = EXCLUDED.s_spi,
+    s_sta = EXCLUDED.s_sta,
+    s_armor = EXCLUDED.s_armor,
+    s_dmg_min = EXCLUDED.s_dmg_min,
+    s_dmg_max = EXCLUDED.s_dmg_max,
     effect_type = EXCLUDED.effect_type,
     effect_value = EXCLUDED.effect_value,
-    effect_duration = EXCLUDED.effect_duration;
+    effect_duration = EXCLUDED.effect_duration,
+    vendor_buy = EXCLUDED.vendor_buy,
+    vendor_sell = EXCLUDED.vendor_sell,
+    icon = EXCLUDED.icon;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ACHIEVEMENT TEMPLATES

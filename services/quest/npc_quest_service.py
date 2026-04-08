@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from uuid import UUID
 
+from services.quest.obsidian_silence_quests import apply_obsidian_content
+
 log = logging.getLogger("npc_quest")
 
 
@@ -267,6 +269,7 @@ NPC_TEMPLATES: Dict[str, dict] = {
                     "gold": 500,
                     "items": ["leather_cap"],
                     "reputation": {"stormwind_guard": 500},
+                    "deed_flags": ["marcus_recommendation", "bandit_captain_toppled"],
                 },
                 "dialogue": {
                     "accept": "\"This one's dangerous—a former guard who sold us out. Watch your back.\n⏰ You have **48 hours** to complete this mission!\"",
@@ -3264,6 +3267,8 @@ NPC_TEMPLATES: Dict[str, dict] = {
         ],
     },
 }
+
+apply_obsidian_content(NPC_TEMPLATES)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

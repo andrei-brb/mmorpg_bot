@@ -494,6 +494,9 @@ class DungeonCog(commands.Cog, name="Dungeon"):
             players=player_combatants,
             enemies=[enemy_c],
             is_boss=is_boss,
+            enemy_key=enemy_key,
+            zone_key=dungeon_config.key,
+            apply_lore_gates=False,
         )
         
         self.active_runs[run_id] = session

@@ -37,6 +37,8 @@ class Settings:
     XP_RESTED_MULTIPLIER    = 1.5          # Bonus XP while rested
 
     # Combat
+    # If False, Discord combat victory does not award XP (use deeds/quests/admin only). Activity/dungeon unchanged only if they also check this flag — see combat_cog / dungeon_cog.
+    COMBAT_AWARD_XP_ON_VICTORY = True
     COMBAT_TIMEOUT_SECONDS  = 120
     MAX_PARTY_SIZE          = 5
     MAX_RAID_SIZE           = 20
@@ -375,7 +377,7 @@ ZONES: Dict[str, ZoneConfig] = {
         level_range=(1, 10),
         description="A peaceful woodland surrounding the human capital. Ideal for new adventurers finding their footing.",
         enemies=("forest_wolf", "kobold", "defias_bandit", "young_boar", "goldshire_guard", "spider", "murloc_scout", "gnoll_raider"),
-        bosses=("hogger", "defias_ringleader", "spider_queen", "murloc_warlord"),
+        bosses=("hogger", "defias_ringleader", "spider_queen", "murloc_warlord", "gorgoth_petrified"),
         loot_pool=("iron_sword", "leather_cap", "health_potion", "linen_cloth"),
         ambients=(
             "Sunlight filters through the ancient canopy above.",
@@ -390,7 +392,7 @@ ZONES: Dict[str, ZoneConfig] = {
         level_range=(1, 10),
         description="Frozen dwarven peaks. Bitter cold and hardy enemies await.",
         enemies=("ice_claw_bear", "trogg", "frostmane_troll", "snow_leopard", "frozen_wraith", "ice_elemental", "winter_wolf", "cave_bat", "frostmane_shaman"),
-        bosses=("frostmane_headhunter", "ice_lord", "trogg_overlord", "ancient_frost_giant"),
+        bosses=("frostmane_headhunter", "ice_lord", "trogg_overlord", "ancient_frost_giant", "kaelen_tor_stabilizer"),
         loot_pool=("dwarven_axe", "chain_coif", "frost_resist_potion", "wool_cloth"),
         ambients=(
             "Biting wind cuts through even the heaviest armor.",
@@ -435,7 +437,7 @@ ZONES: Dict[str, ZoneConfig] = {
         level_range=(50, 60),
         description="A labyrinthine dungeon-city inside an active volcano. The ultimate endgame challenge.",
         enemies=("dark_iron_dwarf", "molten_giant", "firelord_servant", "lava_elemental", "dark_iron_guard", "fire_imp", "shadowforge_sentinel", "magma_lord", "dark_iron_sorcerer", "flame_wraith"),
-        bosses=("emperor_dagran_thaurissan", "lord_incendius", "magmadar", "golem_lord"),
+        bosses=("emperor_dagran_thaurissan", "lord_incendius", "magmadar", "golem_lord", "vaelkor_architect"),
         loot_pool=("sulfuron_blade", "shadowforge_plate", "flask_of_the_titans", "runecloth"),
         ambients=(
             "Waves of heat make the air itself seem to ripple.",
@@ -483,6 +485,7 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "defias_ringleader":    EnemyTemplate("Defias Ringleader",  "👑", 420, 16, 30, 25,  60, 11.0, 260, 40, 85, True, ("backstab", "poison")),
     "spider_queen":         EnemyTemplate("Spider Queen",        "🕸️", 480, 20, 35, 20,  70, 13.0, 300, 50, 95, True, ("web", "poison")),
     "murloc_warlord":       EnemyTemplate("Murloc Warlord",      "👹", 400, 15, 28, 22,  55, 10.0, 240, 35, 75, True, ("summon", "frenzy")),
+    "gorgoth_petrified":    EnemyTemplate("Gorgoth the Petrified", "🗿", 680, 13, 24, 32,  52, 11.0, 300, 42, 85, True, ("stone_skin", "petrify")),
     
     # ── Dun Morogh (1-10) ──────────────────────────────────────────────────────
     "ice_claw_bear":        EnemyTemplate("Ice Claw Bear",       "🐻", 110, 10, 18, 12,  32, 6.0,  38,  2, 9),
@@ -499,6 +502,7 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "ice_lord":             EnemyTemplate("Ice Lord",            "🧊", 440, 18, 32, 26,  65, 12.0, 270, 45, 90, True, ("frost_nova", "freeze")),
     "trogg_overlord":       EnemyTemplate("Trogg Overlord",      "👑", 410, 17, 30, 24,  62, 11.0, 250, 42, 85, True, ("stomp", "enrage")),
     "ancient_frost_giant":  EnemyTemplate("Ancient Frost Giant", "⛄", 500, 20, 35, 30,  75, 13.0, 320, 55, 100, True, ("ice_slam", "blizzard")),
+    "kaelen_tor_stabilizer": EnemyTemplate("Kaelen-Tor Stabilizer", "⚙️", 880, 26, 44, 42, 105, 12.0, 380, 60, 125, True, ("drill_pulse", "stone_grasp")),
     # ── Barrens (10-25) ───────────────────────────────────────────────────────
     "razormane_warrior":    EnemyTemplate("Razormane Warrior",   "🐗", 180, 16, 28, 22,  55, 9.0,  90,  8,20),
     "plainstrider":         EnemyTemplate("Plainstrider",        "🦢", 150, 14, 24, 15,  45, 7.0,  75,  6,15),
@@ -546,6 +550,7 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "lord_incendius":       EnemyTemplate("Lord Incendius",      "🌋",4000, 95,160,160, 400, 14.0, 3000,500,1000, True, ("flame_nova", "inferno")),
     "magmadar":             EnemyTemplate("Magmadar",             "🔥",4500,105,175,170, 425, 15.0, 3250,550,1100, True, ("lava_breath", "molten_armor")),
     "golem_lord":           EnemyTemplate("Golem Lord",          "🤖",4200,100,170,165, 410, 14.0, 3100,520,1050, True, ("crush", "stomp")),
+    "vaelkor_architect":    EnemyTemplate("Vaelkor the Architect", "🜁",5200,112,182,178, 445, 15.5, 3600,590,1180, True, ("frequency_lance", "obsidian_aegis", "enrage")),
 }
 
 

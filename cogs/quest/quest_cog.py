@@ -22,6 +22,7 @@ from discord.ext import commands
 
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
+from services.lore.lore_gate_service import LoreGateService
 from services.quest.npc_quest_service import (
     NPCQuestService, NPC_TEMPLATES, FACTIONS,
     get_rep_level, get_dynamic_intro,
@@ -102,11 +103,13 @@ class QuestCog(commands.Cog, name="Quests"):
         self.char_svc: CharacterService = None
         self.inv_svc: InventoryService = None
         self.quest_svc: NPCQuestService = None
+        self.lore_gate: LoreGateService = None
 
     async def cog_load(self):
         self.char_svc = CharacterService(self.bot.db)
         self.inv_svc = InventoryService(self.bot.db)
         self.quest_svc = NPCQuestService(self.bot.db)
+        self.lore_gate = LoreGateService(self.bot.db)
 
     # ── /interact <npc> ─────────────────────────────────────────────────────
 
@@ -801,6 +804,8 @@ class QuestCog(commands.Cog, name="Quests"):
                 )
                 rarity = tmpl["rarity"] if tmpl else "common"
                 await self.inv_svc.add_item(char_id, template_id, rarity=rarity)
+        if rewards.get("deed_flags") and self.lore_gate:
+            await self.lore_gate.grant_deed_flags_from_rewards(char_id, rewards)
 
     def _get_progress_dialogue(self, quest_data, step_idx):
         dialogue = quest_data.get("dialogue", {}) if isinstance(quest_data, dict) else {}

@@ -376,6 +376,10 @@ class CombatSession:
     boss_phase:   int = 1
     zone_key:     str = ""
     enemy_key:    str = ""   # key from ENEMIES used for display / rewards
+    # Story lore gates (Discord /fight only). Activity & dungeons set apply_lore_gates=False.
+    apply_lore_gates: bool = True
+    lore_gate_by_char: Dict[str, bool] = field(default_factory=dict)
+    lore_gate_hint: Optional[str] = None
 
     @property
     def alive_players(self): return [p for p in self.players if not p.is_dead]
@@ -582,6 +586,27 @@ class CombatEngine:
                     if attacker.specialization == "arms" and ability.key in {"strike", "mortal_strike", "whirlwind", "colossus_smash"}:
                         target.add_status(StatusEffect.BLEED, 8, 3, attacker.name)
                         r.effects_added.append("deep_wounds")
+
+                # Lore boss gate: story bosses immune until deed flags / key items (Discord path only)
+                if (
+                    session
+                    and session.is_boss
+                    and getattr(session, "apply_lore_gates", True)
+                    and ability.dmg_mult > 0
+                    and attacker.is_player
+                    and not target.is_player
+                ):
+                    cid = str(attacker.char_id) if attacker.char_id else ""
+                    ok = session.lore_gate_by_char.get(cid, True)
+                    if ok is False:
+                        r.damage = 0
+                        hint = getattr(session, "lore_gate_hint", None) or ""
+                        r.narrative = (
+                            f"🪞 **{target.name}** is **immune** — your strikes won't bite until the story allows it.\n"
+                            + (f"_{hint}_" if hint else "_Talk to the relevant NPC and complete the deed or obtain the key item._")
+                        )
+                        results.append(r)
+                        continue
 
                 r.damage = max(1, raw)
                 target.current_hp = max(0, target.current_hp - r.damage)

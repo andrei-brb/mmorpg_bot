@@ -17,6 +17,7 @@ from discord.ext import commands
 from config.settings import CLASSES, ENEMIES, ZONES, RARITIES, Settings, ABILITY_UNLOCK_LEVELS
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
+from services.lore.lore_gate_service import LoreGateService
 from services.combat.combat_engine import (
     ABILITIES, CombatEngine, CombatResult, CombatSession, Combatant
 )
@@ -371,10 +372,12 @@ class CombatCog(commands.Cog, name="Combat"):
         self.engine = CombatEngine()
         self.char_svc: CharacterService = None
         self.inv_svc:  InventoryService = None
+        self.lore_gate: LoreGateService = None
 
     async def cog_load(self):
         self.char_svc = CharacterService(self.bot.db)
         self.inv_svc  = InventoryService(self.bot.db)
+        self.lore_gate = LoreGateService(self.bot.db)
 
     # ── /fight ────────────────────────────────────────────────────────────────
 
@@ -484,6 +487,13 @@ class CombatCog(commands.Cog, name="Combat"):
             is_boss=is_boss,
             enemy_key=enemy_key,
             zone_key=char["current_zone"],
+            apply_lore_gates=True,
+        )
+        from services.lore.lore_gate_service import LoreGateService
+
+        lg = LoreGateService(self.bot.db)
+        session.lore_gate_by_char, session.lore_gate_hint = await lg.evaluate_characters(
+            [char["id"]], enemy_key, apply_lore_gates=True
         )
         ACTIVE[interaction.channel_id] = session
 
@@ -752,7 +762,15 @@ class CombatCog(commands.Cog, name="Combat"):
 
         rewards = self.engine.calculate_rewards(session, xp_mult, gold_mult)
 
-        xp_result = await self.char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
+        if getattr(Settings, "COMBAT_AWARD_XP_ON_VICTORY", True):
+            xp_result = await self.char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
+        else:
+            xp_result = {
+                "leveled_up": False,
+                "old_level": char.get("level", 1),
+                "new_level": char.get("level", 1),
+                "levels_gained": 0,
+            }
         await self.char_svc.add_gold(char["id"], rewards["gold"], "combat drop")
         await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
         # Class mastery progression (victory-based; boss fights grant more).
@@ -867,6 +885,9 @@ class CombatCog(commands.Cog, name="Combat"):
                             if rep_info.get("leveled_up"):
                                 rep_text += f" — 🎊 **{rep_info['level']['name']}** reached!"
                             rep_lines.append(rep_text)
+
+                    if rewards.get("deed_flags") and self.lore_gate:
+                        await self.lore_gate.grant_deed_flags_from_rewards(char["id"], rewards)
 
                     embed = discord.Embed(
                         title=f"🎉 Quest Complete: {qd.get('name', qid or 'Quest')}",

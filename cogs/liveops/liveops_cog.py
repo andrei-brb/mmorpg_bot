@@ -60,6 +60,66 @@ def _parse_iso(s: str) -> datetime:
     return dt
 
 
+def _live_event_start_embed(ev) -> discord.Embed:
+    """Rich announcement so players see what the event actually does."""
+    cfg = ev["config"] if isinstance(ev.get("config"), dict) else {}
+    xp = float(cfg.get("xp_multiplier") or 1.0)
+    gd = float(cfg.get("gold_multiplier") or 1.0)
+    bc = float(cfg.get("explore_boss_chance_add") or 0.0)
+
+    bonus_lines = (
+        f"⚡ **XP:** ×{xp:.2f} — combat & quests\n"
+        f"🪙 **Gold:** ×{gd:.2f} — coin drops & rewards\n"
+        f"💀 **Explore:** +{bc:.0%} extra boss encounter chance in exploration"
+    )
+
+    user_desc = (ev.get("description") or "").strip()
+    if user_desc:
+        body = f"{user_desc}\n\n**What is boosted:**\n{bonus_lines}"
+    else:
+        body = f"**What is boosted:**\n{bonus_lines}"
+
+    embed = discord.Embed(
+        title=f"🎉 Live event: {ev['title']}",
+        description=body,
+        color=0xFF8C00,
+    )
+
+    st = ev.get("starts_at")
+    en = ev.get("ends_at")
+    if st is not None:
+        ts = int(st.timestamp())
+        embed.add_field(name="Started", value=f"<t:{ts}:F> · <t:{ts}:R>", inline=False)
+    if en is not None:
+        ts = int(en.timestamp())
+        embed.add_field(name="Runs until", value=f"<t:{ts}:F> · <t:{ts}:R>", inline=False)
+
+    embed.set_footer(
+        text="Bonuses apply automatically in this server while the event is active. "
+        "Use the game channels (/combat, /explore, quests, etc.) as usual."
+    )
+    return embed
+
+
+def _live_event_end_embed(ev) -> discord.Embed:
+    cfg = ev["config"] if isinstance(ev.get("config"), dict) else {}
+    xp = float(cfg.get("xp_multiplier") or 1.0)
+    gd = float(cfg.get("gold_multiplier") or 1.0)
+    bc = float(cfg.get("explore_boss_chance_add") or 0.0)
+    summary = f"XP ×{xp:.2f} · Gold ×{gd:.2f}"
+    if bc > 0:
+        summary += f" · Explore +{bc:.0%}"
+
+    return discord.Embed(
+        title=f"🏁 Event ended: {ev['title']}",
+        description=(
+            f"**{summary}** is no longer active.\n"
+            "Thanks for playing — stay tuned for the next event!"
+        ),
+        color=0x95A5A6,
+    )
+
+
 class LiveopsCog(commands.Cog, name="Liveops"):
     """Configurable server events (XP/gold multipliers, boss hunt, schedules)."""
 
@@ -112,24 +172,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
                 for ev in rows:
                     ch = await self._announce_channel(gid, ev["announce_channel_id"])
                     if ch:
-                        cfg = ev["config"] if isinstance(ev["config"], dict) else {}
-                        embed = discord.Embed(
-                            title=f"🎉 Live Event: {ev['title']}",
-                            description=ev["description"] or "",
-                            color=0xFF8C00,
-                        )
-                        ts = int(ev["ends_at"].timestamp()) if ev.get("ends_at") else 0
-                        if ts:
-                            embed.add_field(name="Ends", value=f"<t:{ts}:R>", inline=True)
-                        xp = float(cfg.get("xp_multiplier") or 1.0)
-                        gd = float(cfg.get("gold_multiplier") or 1.0)
-                        bc = float(cfg.get("explore_boss_chance_add") or 0.0)
-                        if xp != 1.0:
-                            embed.add_field(name="⚡ XP", value=f"×{xp:.2f}", inline=True)
-                        if gd != 1.0:
-                            embed.add_field(name="🪙 Gold", value=f"×{gd:.2f}", inline=True)
-                        if bc > 0:
-                            embed.add_field(name="💀 Explore", value=f"+{bc:.0%} boss chance", inline=True)
+                        embed = _live_event_start_embed(ev)
                         try:
                             await ch.send(embed=embed)
                         except Exception as e:
@@ -150,11 +193,7 @@ class LiveopsCog(commands.Cog, name="Liveops"):
                 for ev in end_rows:
                     ch = await self._announce_channel(gid, ev["announce_channel_id"])
                     if ch:
-                        embed = discord.Embed(
-                            title=f"🏁 Event ended: {ev['title']}",
-                            description="Thanks for playing!",
-                            color=0x95A5A6,
-                        )
+                        embed = _live_event_end_embed(ev)
                         try:
                             await ch.send(embed=embed)
                         except Exception as e:
