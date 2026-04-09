@@ -290,6 +290,8 @@ export type QuestLogRow = {
   state?: string;
   quest_name?: string;
   quest_desc?: string;
+  /** Obsidian / main story — cannot abandon */
+  lore_main?: boolean;
   npc_id?: string;
   npc_name?: string;
   npc_title?: string;
@@ -311,6 +313,7 @@ export type QuestOfferPayload = {
   quest_id?: string;
   quest_name?: string;
   quest_desc?: string;
+  lore_main?: boolean;
   level_req?: number;
   time_limit_hours?: number | null;
   rewards?: {
@@ -333,12 +336,14 @@ export type NpcInteractPayload = {
   quest_step_updated?: boolean;
   quest_offered?: boolean;
   offer?: QuestOfferPayload;
+  lore_main?: boolean;
 };
 
 export type QuestCompletionPayload = {
   npc_id?: string;
   quest_completed?: boolean;
   message?: string;
+  lore_main?: boolean;
   rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
 };
 

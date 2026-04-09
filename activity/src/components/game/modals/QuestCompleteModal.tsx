@@ -26,10 +26,14 @@ export function QuestCompleteModal({
       }}
     >
       <div
-        className="game-panel my-4 flex w-full max-w-[540px] max-h-[min(92dvh,640px)] flex-col"
+        className={`game-panel my-4 flex w-full max-w-[540px] max-h-[min(92dvh,640px)] flex-col${
+          completion.lore_main ? " ring-2 ring-violet-500/45 shadow-[0_0_24px_hsl(270_50%_40%/0.25)]" : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="game-panel-header shrink-0">✅ Quest Completed</div>
+        <div className="game-panel-header shrink-0">
+          {completion.lore_main ? "✅ Main story — Completed" : "✅ Quest Completed"}
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 [-webkit-overflow-scrolling:touch]">
           <div className="p-4 space-y-3">
             <div className="text-sm text-foreground font-crimson">{completion.message || "Rewards granted."}</div>

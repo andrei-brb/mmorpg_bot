@@ -21,6 +21,9 @@ export function QuestsTab() {
         <div className="game-panel-header">Quest Log</div>
         <p className="text-xs text-muted-foreground">
           Complete objectives, then <span className="text-primary font-semibold">Turn in</span> to the quest NPC or <span className="text-primary font-semibold">Talk</span> to advance.
+          <span className="block mt-1 text-[10px]">
+            <span className="text-violet-300/90 font-semibold">Main story</span> quests have a violet frame and cannot be abandoned.
+          </span>
         </p>
       </div>
 
@@ -29,9 +32,13 @@ export function QuestsTab() {
       {rows.map((q, idx) => {
         const stateLower = (q.state || "active").toLowerCase();
         const isCompleted = stateLower === "completed";
-        const canAbandon = !isCompleted && (stateLower === "active" || stateLower === "offered");
+        const loreMain = Boolean(q.lore_main);
+        const canAbandon = !loreMain && !isCompleted && (stateLower === "active" || stateLower === "offered");
         return (
-          <div key={`${q.quest_id ?? idx}`} className="quest-card">
+          <div
+            key={`${q.quest_id ?? idx}`}
+            className={`quest-card${loreMain ? " quest-card--main-story" : ""}`}
+          >
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <h3 className="font-cinzel font-semibold text-foreground text-sm">{q.quest_name ?? "Quest"}</h3>
@@ -41,6 +48,18 @@ export function QuestsTab() {
                   }`}>
                     {q.state ?? "active"}
                   </span>
+                  {loreMain && (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-sm font-semibold tracking-wide uppercase border"
+                      style={{
+                        color: "hsl(270 65% 82%)",
+                        borderColor: "hsl(270 45% 45% / 0.5)",
+                        background: "hsl(270 35% 20% / 0.35)",
+                      }}
+                    >
+                      Main story
+                    </span>
+                  )}
                   {q.expires_at && (
                     <span className="text-[10px] px-2 py-0.5 rounded-sm bg-destructive/15 text-destructive border border-destructive/25">
                       ⏱ expires

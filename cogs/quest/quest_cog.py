@@ -26,6 +26,7 @@ from services.lore.lore_gate_service import LoreGateService
 from services.quest.npc_quest_service import (
     NPCQuestService, NPC_TEMPLATES, FACTIONS,
     get_rep_level, get_dynamic_intro,
+    is_main_story_quest,
 )
 
 log = logging.getLogger("cog.quest")
@@ -585,13 +586,16 @@ class QuestCog(commands.Cog, name="Quests"):
                 ts = int(expires_at.timestamp())
                 value += f"\n⏰ Expires <t:{ts}:R>"
 
+            q_label = q["quest_name"]
+            if is_main_story_quest(q.get("quest_id")):
+                q_label = f"{q_label} · Main story"
             embed.add_field(
-                name=f"📜 {q['quest_name']}",
+                name=f"📜 {q_label}",
                 value=value,
                 inline=False,
             )
 
-        embed.set_footer(text="Use /interact <npc> to advance talk-to-NPC steps | /quest abandon <name> to drop a quest")
+        embed.set_footer(text="Use /interact <npc> to advance talk-to-NPC steps | /quest abandon <name> to drop side quests (main story is locked)")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @quest_group.command(name="completed", description="View completed quests")
@@ -700,6 +704,12 @@ class QuestCog(commands.Cog, name="Quests"):
             quest_list = "\n".join(f"• {q['quest_name']}" for q in active) if active else "None"
             return await interaction.followup.send(
                 f"❌ No active quest matching **{quest_name}**.\n\nActive quests:\n{quest_list}",
+                ephemeral=True,
+            )
+
+        if is_main_story_quest(target.get("quest_id")):
+            return await interaction.followup.send(
+                "📜 **Main story** quests cannot be abandoned. Finish the questline or ask an admin if you are stuck.",
                 ephemeral=True,
             )
 

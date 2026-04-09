@@ -458,6 +458,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
             quest_completed: true,
             message: j.message,
             rewards: j.rewards,
+            lore_main: j.lore_main,
           });
           if (j.offer) setQueuedOfferAfterCompletion(j.offer);
         } else if (j.offer) {

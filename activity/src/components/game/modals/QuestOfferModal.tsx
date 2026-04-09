@@ -31,10 +31,17 @@ export function QuestOfferModal({
       onClick={onClose}
     >
       <div
-        className="game-panel my-4 flex w-full max-w-[620px] max-h-[min(92dvh,720px)] flex-col"
+        className={`game-panel my-4 flex w-full max-w-[620px] max-h-[min(92dvh,720px)] flex-col${
+          offer.lore_main ? " ring-2 ring-violet-500/45 shadow-[0_0_24px_hsl(270_50%_40%/0.25)]" : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="game-panel-header shrink-0">📜 Quest Offer</div>
+        <div className="game-panel-header shrink-0 flex items-center justify-between gap-2 flex-wrap">
+          <span>{offer.lore_main ? "📜 Main story — Quest Offer" : "📜 Quest Offer"}</span>
+          {offer.lore_main && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-violet-200/90">Cannot abandon</span>
+          )}
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 [-webkit-overflow-scrolling:touch]">
           <div className="p-4 space-y-3">
             <div>

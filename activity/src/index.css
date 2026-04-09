@@ -420,6 +420,17 @@
     border-left: none;
   }
 
+  /* Main story / Obsidian — stronger frame (quest log) */
+  .quest-card.quest-card--main-story {
+    border-left: 3px solid hsl(270 55% 58% / 0.9);
+    box-shadow:
+      0 0 0 1px hsl(270 45% 40% / 0.45),
+      inset 0 0 24px hsl(270 40% 35% / 0.12),
+      inset 3px 0 6px hsl(270 50% 50% / 0.08),
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.5),
+      0 2px 10px hsl(0 0% 0% / 0.45);
+  }
+
   /* ═══════════════════════════════════════
      STAT CARD
      ═══════════════════════════════════════ */

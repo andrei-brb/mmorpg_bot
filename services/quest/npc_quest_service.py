@@ -21,6 +21,13 @@ from services.quest.obsidian_silence_quests import apply_obsidian_content
 
 log = logging.getLogger("npc_quest")
 
+# Main story / Obsidian Silence quests — cannot be abandoned (Discord + Activity).
+LORE_MAIN_STORY_QUEST_PREFIX = "obsidian_"
+
+
+def is_main_story_quest(quest_id: Optional[str]) -> bool:
+    return bool(quest_id and str(quest_id).startswith(LORE_MAIN_STORY_QUEST_PREFIX))
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  FACTION / REPUTATION CONFIG
@@ -3500,6 +3507,8 @@ class NPCQuestService:
         return quest_data["rewards"]
 
     async def abandon_quest(self, char_id: UUID, quest_id: str) -> bool:
+        if is_main_story_quest(quest_id):
+            return False
         result = await self.db.execute(
             "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state IN ('active', 'offered')",
             char_id, quest_id,

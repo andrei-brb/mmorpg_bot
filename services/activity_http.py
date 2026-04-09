@@ -51,7 +51,14 @@ from services.combat import activity_pvp as activity_pvp_api
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.lore.lore_gate_service import LoreGateService
-from services.quest.npc_quest_service import NPCQuestService, NPC_TEMPLATES, FACTIONS, get_dynamic_intro, get_rep_level
+from services.quest.npc_quest_service import (
+    NPCQuestService,
+    NPC_TEMPLATES,
+    FACTIONS,
+    get_dynamic_intro,
+    get_rep_level,
+    is_main_story_quest,
+)
 from config.settings import ZONES, Settings, ENEMIES, SPECIALIZATIONS, CLASSES
 
 log = logging.getLogger("activity_http")
@@ -2033,6 +2040,7 @@ async def handle_quests(request: web.Request) -> web.Response:
                 "completion_check": chk,
                 "progress": progress,
                 "expires_at": q.get("expires_at"),
+                "lore_main": is_main_story_quest(quest_id),
                 **(npc_info or {}),
             }
         )
@@ -2058,6 +2066,18 @@ async def handle_quest_abandon(request: web.Request) -> web.Response:
         return web.json_response(
             _json_safe({"ok": False, "error": "missing_quest_id", "message": "Missing quest_id."}),
             status=400,
+        )
+
+    if is_main_story_quest(quest_id):
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": False,
+                    "error": "main_story_locked",
+                    "message": "Main story quests cannot be abandoned. Complete them or use an admin if you are truly stuck.",
+                }
+            ),
+            status=403,
         )
 
     qs = NPCQuestService(db)
@@ -2404,6 +2424,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             "quest_completed": True,
             "rewards": reward_summary,
             "message": "Quest completed and rewards granted.",
+            "lore_main": is_main_story_quest(talk_result.get("quest_id")),
         }
         char_row = await char_svc.get_by_id(char_id)
         if char_row:
@@ -2485,7 +2506,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
                         {
                             "ok": False,
                             "error": "quest_already_active",
-                            "message": "You already have this quest active. Finish it (or abandon) before taking a new offer.",
+                            "message": "You already have this quest active. Finish it (or abandon side quests) before taking a new offer.",
                         }
                     )
                 ),
@@ -2544,6 +2565,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             "quest_desc": next_quest.get("description"),
             "level_req": int(next_quest.get("level_req") or 1),
             "time_limit_hours": next_quest.get("time_limit_hours"),
+            "lore_main": is_main_story_quest(next_quest.get("id")),
             "rewards": reward_summary,
             "objectives": objectives,
             "dialogue": {
