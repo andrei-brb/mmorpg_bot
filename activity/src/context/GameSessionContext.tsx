@@ -44,6 +44,8 @@ type GameSessionValue = {
   quests: QuestLogPayload | null;
   liveEvents: LiveEventRow[];
   refreshLiveEvents: () => Promise<void>;
+  /** Story / lore deed flags (Obsidian Silence); refreshed with inventory. */
+  deedFlags: string[];
   /** UI-only: when true, shell switches to combat focus layout (hide tabs, fit in viewport). */
   combatFocusActive: boolean;
   setCombatFocusActive: (active: boolean) => void;
@@ -133,6 +135,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [queuedOfferAfterCompletion, setQueuedOfferAfterCompletion] = useState<QuestOfferPayload | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [marketListings, setMarketListings] = useState<MarketListingRow[]>([]);
+  const [deedFlags, setDeedFlags] = useState<string[]>([]);
   const [combatFocusActive, setCombatFocusActive] = useState(false);
   const [arenaFocusActive, setArenaFocusActive] = useState(false);
   const [specModal, setSpecModal] = useState<{
@@ -149,8 +152,12 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const refreshInventory = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const inv = await api.getInventory(accessToken, guildId);
+      const [inv, deeds] = await Promise.all([
+        api.getInventory(accessToken, guildId),
+        api.getDeeds(accessToken, guildId).catch(() => ({ ok: false, flags: [] as string[] })),
+      ]);
       setInventory(inv);
+      if (Array.isArray(deeds.flags)) setDeedFlags(deeds.flags);
     } catch (e) {
       console.warn("refreshInventory", e);
     }
@@ -649,6 +656,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       quests,
       liveEvents,
       refreshLiveEvents,
+      deedFlags,
       combatFocusActive,
       setCombatFocusActive,
       arenaFocusActive,
@@ -699,6 +707,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       quests,
       liveEvents,
       refreshLiveEvents,
+      deedFlags,
       combatFocusActive,
       setCombatFocusActive,
       arenaFocusActive,

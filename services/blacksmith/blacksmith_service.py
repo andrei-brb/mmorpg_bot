@@ -99,6 +99,10 @@ class BlacksmithService:
         
         if not item:
             return {"success": False, "message": "Item not found."}
+
+        item_type = (item.get("item_type") or "").lower()
+        if item_type in ("quest", "material", "cosmetic"):
+            return {"success": False, "message": "This item cannot be enhanced."}
         
         # Allow enhancing equipped items - no need to unequip first
         current_level = item.get("enhancement_level", 0)

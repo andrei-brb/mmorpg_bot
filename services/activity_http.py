@@ -20,6 +20,7 @@ Endpoints:
   POST /api/game/pvp/action     — JSON { action, skill_key? }
   GET  /api/game/pvp/history    — ?page=
   GET  /api/game/quests         — Bearer token → active quest log
+  GET  /api/game/deeds          — Bearer token → story deed flags (Obsidian / lore progression)
   POST /api/game/quest/abandon  — JSON { quest_id } → abandon active/offered quest
   GET  /api/game/character/class-options — Public list of playable classes (for create UI)
   POST /api/game/character/create — Bearer JSON { name, class_key, guild_id? } → same shape as GET inventory
@@ -1531,6 +1532,33 @@ async def handle_progress(request: web.Request) -> web.Response:
         "history": history,
     }
     return web.json_response(_json_safe(payload))
+
+
+async def handle_deeds(request: web.Request) -> web.Response:
+    """GET — character deed flags for Activity (lore / Obsidian Silence)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response(_json_safe({"ok": True, "flags": []}))
+
+    lg = LoreGateService(db)
+    flags = await lg.get_flags(_uuid_from_any(char["id"]))
+    return web.json_response(_json_safe({"ok": True, "flags": flags}))
 
 
 async def handle_specializations(request: web.Request) -> web.Response:
@@ -3376,6 +3404,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/character/specialization", handle_specialization_choose)
     app.router.add_get("/api/game/map", handle_map)
     app.router.add_get("/api/game/quests", handle_quests)
+    app.router.add_get("/api/game/deeds", handle_deeds)
     app.router.add_post("/api/game/quest/abandon", handle_quest_abandon)
     app.router.add_post("/api/game/quest/accept", handle_quest_accept)
     app.router.add_post("/api/game/quest/decline", handle_quest_decline)

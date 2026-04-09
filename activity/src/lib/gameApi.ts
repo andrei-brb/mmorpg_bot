@@ -14,6 +14,7 @@ import type {
   InvRow,
   LiveEventRow,
   ProgressPayload,
+  DeedsPayload,
   QuestLogPayload,
   SpecGatePayload,
 } from "./apiTypes";
@@ -345,6 +346,12 @@ export async function getProgress(token: string, guildId?: string): Promise<Prog
   const res = await fetch(apiUrl("/api/game/progress"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`progress ${res.status}`);
   return res.json() as Promise<ProgressPayload>;
+}
+
+export async function getDeeds(token: string, guildId?: string): Promise<DeedsPayload> {
+  const res = await fetch(apiUrl("/api/game/deeds"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`deeds ${res.status}`);
+  return res.json() as Promise<DeedsPayload>;
 }
 
 export async function getQuests(token: string, guildId?: string): Promise<QuestLogPayload> {

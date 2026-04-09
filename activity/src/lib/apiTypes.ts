@@ -278,6 +278,13 @@ export type ProgressPayload = {
   }[];
 };
 
+/** GET /api/game/deeds — lore / Obsidian deed flags */
+export type DeedsPayload = {
+  ok?: boolean;
+  flags?: string[];
+  error?: string;
+};
+
 export type QuestLogRow = {
   quest_id?: string;
   state?: string;
