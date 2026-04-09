@@ -378,7 +378,7 @@ ZONES: Dict[str, ZoneConfig] = {
         description="A peaceful woodland surrounding the human capital. Ideal for new adventurers finding their footing.",
         enemies=("forest_wolf", "kobold", "defias_bandit", "young_boar", "goldshire_guard", "spider", "murloc_scout", "gnoll_raider"),
         bosses=("hogger", "defias_ringleader", "spider_queen", "murloc_warlord", "gorgoth_petrified"),
-        loot_pool=("iron_sword", "leather_cap", "health_potion", "linen_cloth"),
+        loot_pool=("iron_sword", "leather_cap", "health_potion", "linen_cloth", "bracelet_t1", "ring_t1", "necklace_t1", "trinket_t1"),
         ambients=(
             "Sunlight filters through the ancient canopy above.",
             "You hear wolves howling somewhere in the distance.",
@@ -393,7 +393,7 @@ ZONES: Dict[str, ZoneConfig] = {
         description="Frozen dwarven peaks. Bitter cold and hardy enemies await.",
         enemies=("ice_claw_bear", "trogg", "frostmane_troll", "snow_leopard", "frozen_wraith", "ice_elemental", "winter_wolf", "cave_bat", "frostmane_shaman"),
         bosses=("frostmane_headhunter", "ice_lord", "trogg_overlord", "ancient_frost_giant", "kaelen_tor_stabilizer"),
-        loot_pool=("dwarven_axe", "chain_coif", "frost_resist_potion", "wool_cloth"),
+        loot_pool=("dwarven_axe", "chain_coif", "frost_resist_potion", "wool_cloth", "bracelet_t1", "ring_t1", "necklace_t1", "trinket_t1"),
         ambients=(
             "Biting wind cuts through even the heaviest armor.",
             "Snow crunches under your boots with each step.",
@@ -408,7 +408,7 @@ ZONES: Dict[str, ZoneConfig] = {
         description="A vast sun-scorched wasteland where only the ruthless survive.",
         enemies=("razormane_warrior", "plainstrider", "sunscale_raptor", "barrens_scorpion", "zhevra", "thunder_lizard", "quillboar", "wind_sweeper", "barrens_vulture"),
         bosses=("kolkar_centaur_lord", "razormane_chieftain", "thunderhawk_alpha", "barrens_overlord"),
-        loot_pool=("bone_club", "raptor_hide_vest", "stamina_draught", "silk_cloth"),
+        loot_pool=("bone_club", "raptor_hide_vest", "stamina_draught", "silk_cloth", "bracelet_t2", "ring_t2", "necklace_t2", "trinket_t2"),
         ambients=(
             "Heat shimmers off the cracked, sun-baked earth.",
             "A raptor watches you carefully from behind a thornbush.",
@@ -423,7 +423,7 @@ ZONES: Dict[str, ZoneConfig] = {
         description="A lush but deadly jungle where pirates, predators, and rival factions clash.",
         enemies=("bloodsail_pirate", "jungle_stalker", "venture_co_enforcer", "panther", "tiger", "basilisk", "jungle_troll", "crocodile", "stranglethorn_ape", "bloodsail_corsair"),
         bosses=("kurzen_the_mad", "black_blood_vance", "bhag_thera", "bloodsail_admiral", "jungle_lord"),
-        loot_pool=("corsair_blade", "jungle_leather_chest", "elixir_of_fortitude", "mageweave_cloth"),
+        loot_pool=("corsair_blade", "jungle_leather_chest", "elixir_of_fortitude", "mageweave_cloth", "bracelet_t3", "ring_t3", "necklace_t3", "trinket_t3"),
         ambients=(
             "Parrots screech loudly overhead in the dense canopy.",
             "You spot fresh pirate boot-prints in the mud.",
@@ -438,7 +438,7 @@ ZONES: Dict[str, ZoneConfig] = {
         description="A labyrinthine dungeon-city inside an active volcano. The ultimate endgame challenge.",
         enemies=("dark_iron_dwarf", "molten_giant", "firelord_servant", "lava_elemental", "dark_iron_guard", "fire_imp", "shadowforge_sentinel", "magma_lord", "dark_iron_sorcerer", "flame_wraith"),
         bosses=("emperor_dagran_thaurissan", "lord_incendius", "magmadar", "golem_lord", "vaelkor_architect"),
-        loot_pool=("sulfuron_blade", "shadowforge_plate", "flask_of_the_titans", "runecloth"),
+        loot_pool=("sulfuron_blade", "shadowforge_plate", "flask_of_the_titans", "runecloth", "bracelet_t5", "ring_t5", "necklace_t5", "trinket_t5"),
         ambients=(
             "Waves of heat make the air itself seem to ripple.",
             "The endless clanging of hammers echoes through every corridor.",

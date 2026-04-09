@@ -9,7 +9,7 @@ import random
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from config.settings import RARITIES, Settings, zone_tier_for_loot
+from config.settings import RARITIES, Settings, zone_tier_for_loot, ZONES, DUNGEONS
 
 log = logging.getLogger("inventory")
 
@@ -140,16 +140,44 @@ class InventoryService:
 
         rarity = self.roll_rarity(luck)
 
-        rows = await self.db.fetch(
-            """SELECT * FROM item_templates
-               WHERE level_req <= $1 AND item_type NOT IN ('quest')
-               ORDER BY RANDOM() LIMIT 1""",
-            char_level,
-        )
-        if not rows:
-            return None
+        # Prefer zone/dungeon loot pools so low-tier zones can't drop endgame templates
+        # just because the character level is high.
+        pool: Tuple[str, ...] = ()
+        try:
+            if zone_key in DUNGEONS:
+                pool = tuple(DUNGEONS[zone_key].loot_pool or ())
+            elif zone_key in ZONES:
+                pool = tuple(ZONES[zone_key].loot_pool or ())
+        except Exception:
+            pool = ()
 
-        tmpl = dict(rows[0])
+        tmpl: Optional[dict] = None
+        if pool:
+            # Re-roll within pool a few times to avoid missing templates or invalid types.
+            for _ in range(min(12, len(pool) * 2)):
+                tid = random.choice(pool)
+                row = await self.db.fetchrow(
+                    """SELECT * FROM item_templates
+                       WHERE id=$1 AND level_req <= $2 AND item_type NOT IN ('quest')""",
+                    tid,
+                    char_level,
+                )
+                if row:
+                    tmpl = dict(row)
+                    break
+
+        # Fallback (legacy): if pool missing/empty, pick any template up to char level.
+        if tmpl is None:
+            row = await self.db.fetchrow(
+                """SELECT * FROM item_templates
+                   WHERE level_req <= $1 AND item_type NOT IN ('quest')
+                   ORDER BY RANDOM() LIMIT 1""",
+                char_level,
+            )
+            if not row:
+                return None
+            tmpl = dict(row)
+
         tier = zone_tier_for_loot(zone_key)
         bonus = self.roll_bonus_stats(tmpl, rarity, zone_tier=tier)
         return {"template": tmpl, "rarity": rarity, "bonus": bonus}
