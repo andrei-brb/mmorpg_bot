@@ -10,7 +10,7 @@ const STATE_STYLES: Record<string, string> = {
 };
 
 export function QuestsTab() {
-  const { refreshQuests, quests, npcInteract, abandonQuest, startCombat, accessToken, guildId } = useGameSession();
+  const { refreshQuests, quests, npcInteract, abandonQuest, startCombat, accessToken, guildId, setQuickFightIntent } = useGameSession();
   const [rows, setRows] = useState<QuestLogRow[]>([]);
   /** Discord Activity WebViews often block or no-op `window.confirm` — use inline confirm instead. */
   const [pendingAbandonId, setPendingAbandonId] = useState<string | null>(null);
@@ -93,12 +93,14 @@ export function QuestsTab() {
                         // 1) Direct enemy quest: start that exact enemy.
                         if (canFightDirect) {
                           const enemyKey = String(ck?.value || "").trim();
+                          setQuickFightIntent({ kind: "enemy", enemyKey });
                           const r = await startCombat({ kind: "zone", enemyKey });
                           return r;
                         }
 
                         // 2) Zone-any / boss-zone: pick an enemy from zone list.
                         if (!accessToken) return { ok: false, message: "No session token." };
+                        setQuickFightIntent(canFightZoneBoss ? { kind: "zone_boss" } : { kind: "zone_any" });
                         const res = await api.getCombatEnemies(accessToken, guildId);
                         const j = (await res.json()) as { enemies?: { key?: string; kind?: string }[] };
                         const list = Array.isArray(j.enemies) ? j.enemies : [];

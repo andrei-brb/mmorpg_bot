@@ -74,6 +74,9 @@ type GameSessionValue = {
   startCombat: (
     params: StartCombatParams,
   ) => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
+  /** "Quick fight" intent used by Quest tab + Combat "Fight again". */
+  setQuickFightIntent: (intent: { kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null) => void;
+  quickFightAgain: () => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
   combatAction: (body: Record<string, unknown>) => Promise<api.CombatActionJson>;
   rest: () => Promise<{ ok: boolean; message?: string; cooldown_s?: number }>;
   itemPost: (endpoint: string, body: Record<string, unknown>) => Promise<Response>;
@@ -145,6 +148,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   }>({ open: false, options: [], unlockLevel: 10 });
 
   const pendingCombatEnemyKey = useRef<string | null>(null);
+  const quickFightIntentRef = useRef<{ kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null>(null);
   const sdkRef = useRef<DiscordSDK | null>(null);
 
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
@@ -345,6 +349,34 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     },
     [accessToken, guildId],
   );
+
+  const setQuickFightIntent = useCallback(
+    (intent: { kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null) => {
+      quickFightIntentRef.current = intent;
+    },
+    [],
+  );
+
+  const quickFightAgain = useCallback(async () => {
+    const intent = quickFightIntentRef.current;
+    if (!intent) return { ok: false, message: "No quest fight to repeat." };
+    if (!accessToken) return { ok: false, message: "No session token." };
+
+    if (intent.kind === "enemy") {
+      const enemyKey = String(intent.enemyKey || "").trim();
+      if (!enemyKey) return { ok: false, message: "Missing enemy key." };
+      return await startCombat({ kind: "zone", enemyKey });
+    }
+
+    const res = await api.getCombatEnemies(accessToken, guildId);
+    const j = (await res.json()) as { enemies?: { key?: string; kind?: string }[] };
+    const list = Array.isArray(j.enemies) ? j.enemies : [];
+    const wantBoss = intent.kind === "zone_boss";
+    const pick = list.find((e) => (wantBoss ? e.kind === "boss" : e.kind !== "boss") && e.key);
+    const enemyKey = String(pick?.key || "").trim();
+    if (!enemyKey) return { ok: false, message: "No suitable enemy found for this zone." };
+    return await startCombat({ kind: "zone", enemyKey });
+  }, [accessToken, guildId, startCombat]);
 
   const combatAction = useCallback(
     async (body: Record<string, unknown>) => {
@@ -678,6 +710,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       pendingCombatEnemyKey,
       loadCombatSnapshot,
       startCombat,
+      setQuickFightIntent,
+      quickFightAgain,
       combatAction,
       rest,
       itemPost,
@@ -728,6 +762,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       explore,
       loadCombatSnapshot,
       startCombat,
+      setQuickFightIntent,
+      quickFightAgain,
       combatAction,
       rest,
       itemPost,

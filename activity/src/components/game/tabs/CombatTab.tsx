@@ -19,6 +19,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     loadCombatSnapshot, startCombat, combatAction, rest,
     pendingCombatEnemyKey, refreshInventory, refreshProgress, map,
     inventory, combatFocusActive, setCombatFocusActive,
+    quickFightAgain,
   } = useGameSession();
 
   const [mode, setMode] = useState<"pick" | "fight" | "outcome">("pick");
@@ -242,7 +243,25 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           {(outcome.lines || []).map((l, i) => <li key={i}>{stripMd(l)}</li>)}
         </ul>
         <div className="flex gap-3 justify-center mt-5">
-          <button type="button" onClick={() => void refresh()} className="game-btn-primary">Fight Again</button>
+          <button
+            type="button"
+            onClick={() => {
+              void quickFightAgain().then((r) => {
+                if (r.state) {
+                  setState(r.state);
+                  setMode("fight");
+                  setOutcome(null);
+                  return;
+                }
+                // Fallback: refresh combat list if there isn't a quest fight intent.
+                void refresh();
+                if (r.message) toast.error(r.message);
+              });
+            }}
+            className="game-btn-primary"
+          >
+            Fight Again
+          </button>
           <button type="button" onClick={() => void onRest()} className="game-btn-secondary">Rest</button>
         </div>
         </div>
