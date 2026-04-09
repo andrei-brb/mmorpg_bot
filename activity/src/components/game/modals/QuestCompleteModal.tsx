@@ -13,6 +13,12 @@ export function QuestCompleteModal({
   const rep = rewards.reputation || {};
   const hasAny =
     Boolean(rewards.xp) || Boolean(rewards.gold) || Boolean(rewards.items?.length) || Boolean(Object.keys(rep).length);
+  const items = (rewards.items || []).filter(Boolean);
+
+  const prettyId = (s: string) =>
+    String(s)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <div
@@ -50,12 +56,30 @@ export function QuestCompleteModal({
                   </div>
                 )}
                 {Boolean(rewards.gold) && <div className="text-gold font-semibold">🪙 +{Number(rewards.gold || 0).toLocaleString()} Gold</div>}
-                {Boolean(rewards.items?.length) && <div className="text-foreground font-crimson">🎁 Item reward</div>}
+                {Boolean(items.length) && (
+                  <div className="text-foreground font-crimson">
+                    <div>🎁 Item reward</div>
+                    <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                      {items.map((tid) => (
+                        <li key={tid}>- {prettyId(tid)}</li>
+                      ))}
+                    </ul>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      Tip: check <span className="font-semibold">Hero → Inventory → Consumables & Upgrades</span> for quest items.
+                    </div>
+                  </div>
+                )}
                 {Object.keys(rep).map((k) => (
                   <div key={k} className="text-foreground font-crimson">
                     ⭐ +{Number((rep as any)[k] || 0)} {String(k).replace(/_/g, " ")} Rep
                   </div>
                 ))}
+              </div>
+            )}
+
+            {completion.next_quest_available && completion.next_quest_blocked === "level_too_low" && (
+              <div className="text-xs text-muted-foreground font-crimson">
+                Next quest is available but your level is too low. Level up (Explore/Combat), then press <span className="font-semibold">Talk</span> to the same NPC again.
               </div>
             )}
           </div>

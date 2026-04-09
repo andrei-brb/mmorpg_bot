@@ -345,6 +345,10 @@ export type QuestCompletionPayload = {
   message?: string;
   lore_main?: boolean;
   rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
+  /** Present when an NPC has another quest after turning in. */
+  next_quest_available?: boolean;
+  /** When next quest is available but blocked (e.g. level too low). */
+  next_quest_blocked?: string;
 };
 
 export type SpecOption = {
