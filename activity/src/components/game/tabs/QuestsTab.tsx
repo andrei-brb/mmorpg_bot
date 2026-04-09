@@ -9,7 +9,7 @@ const STATE_STYLES: Record<string, string> = {
 };
 
 export function QuestsTab() {
-  const { refreshQuests, quests, npcInteract, abandonQuest } = useGameSession();
+  const { refreshQuests, quests, npcInteract, abandonQuest, startCombat } = useGameSession();
   const [rows, setRows] = useState<QuestLogRow[]>([]);
   /** Discord Activity WebViews often block or no-op `window.confirm` — use inline confirm instead. */
   const [pendingAbandonId, setPendingAbandonId] = useState<string | null>(null);
@@ -43,6 +43,11 @@ export function QuestsTab() {
         const isCompleted = stateLower === "completed";
         const loreMain = Boolean(q.lore_main);
         const questIdTrimmed = String(q.quest_id ?? "").trim();
+        const canFight =
+          !isCompleted &&
+          q.completion_check?.type === "kill_enemy" &&
+          typeof q.completion_check?.value === "string" &&
+          q.completion_check.value.length > 0;
         const canAbandon =
           !loreMain && !isCompleted && (stateLower === "active" || stateLower === "offered") && questIdTrimmed.length > 0;
         return (
@@ -79,6 +84,26 @@ export function QuestsTab() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 justify-end shrink-0">
+                {canFight && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const enemyKey = String(q.completion_check?.value || "").trim();
+                      if (!enemyKey) return;
+                      void startCombat({ kind: "zone", enemyKey }).then((r) => {
+                        if (r.ok) {
+                          window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Combat" }));
+                          toast.success("Combat started.", { description: "Switched to Combat tab." });
+                        } else {
+                          toast.error(r.message || "Could not start combat.");
+                        }
+                      });
+                    }}
+                    className="game-btn-primary text-xs px-3 py-1.5"
+                  >
+                    Fight
+                  </button>
+                )}
                 {isCompleted && q.npc_id && (
                   <button
                     type="button"

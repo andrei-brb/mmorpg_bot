@@ -61,6 +61,17 @@ export function GameShell() {
   /** Hide main shell chrome (header + tab bar) during overworld combat focus or active Arena match. */
   const shellChromeHidden = combatFocusActive || arenaFocusActive;
 
+  // Allow child tabs (quests, etc.) to request a tab switch without threading `setActiveTab` through context.
+  useEffect(() => {
+    const onSetTab = (ev: Event) => {
+      const tab = (ev as CustomEvent).detail;
+      if (typeof tab !== "string") return;
+      if ((TABS as readonly string[]).includes(tab)) setActiveTab(tab as TabName);
+    };
+    window.addEventListener("game:setActiveTab", onSetTab);
+    return () => window.removeEventListener("game:setActiveTab", onSetTab);
+  }, []);
+
   // Refetch derived stats when equipped gear changes (so profile updates immediately after equip/unequip).
   const derivedStatsKey = useMemo(() => {
     const items = inventory?.items || [];
