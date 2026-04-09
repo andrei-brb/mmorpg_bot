@@ -204,8 +204,13 @@ class InventoryService:
             if (player and player["is_premium"])
             else Settings.FREE_INVENTORY_SLOTS
         )
+        # Inventory slot limits should apply to BAG items (unequipped),
+        # not to equipped gear rows.
         current_slots = int(
-            await self.db.fetchval("SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id)
+            await self.db.fetchval(
+                "SELECT COUNT(*) FROM inventory WHERE character_id=$1 AND COALESCE(is_equipped,FALSE)=FALSE",
+                char_id,
+            )
             or 0
         )
         needed_new_slots = 0
@@ -233,6 +238,7 @@ class InventoryService:
                           AND i.template_id=$2
                           AND COALESCE(i.rarity::text, 'common') = COALESCE($3::text, 'common')
                           AND i.quantity < $4
+                          AND COALESCE(i.is_equipped,FALSE)=FALSE
                         """,
                         char_id,
                         tid,
@@ -301,7 +307,7 @@ class InventoryService:
                     remaining -= add
                     continue
                 count = await self.db.fetchval(
-                    "SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id
+                    "SELECT COUNT(*) FROM inventory WHERE character_id=$1 AND COALESCE(is_equipped,FALSE)=FALSE", char_id
                 )
                 if count >= max_slots:
                     return False, f"Inventory full ({count}/{max_slots})."
@@ -328,7 +334,7 @@ class InventoryService:
 
         # Non-stackable (gear, etc.): one row per item.
         count = await self.db.fetchval(
-            "SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id
+            "SELECT COUNT(*) FROM inventory WHERE character_id=$1 AND COALESCE(is_equipped,FALSE)=FALSE", char_id
         )
         if count >= max_slots:
             return False, f"Inventory full ({count}/{max_slots})."
