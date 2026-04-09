@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { QuestLogRow } from "@/lib/apiTypes";
+import * as api from "@/lib/gameApi";
 
 const STATE_STYLES: Record<string, string> = {
   active: "bg-accent/60 text-accent-foreground border border-accent",
@@ -9,7 +10,7 @@ const STATE_STYLES: Record<string, string> = {
 };
 
 export function QuestsTab() {
-  const { refreshQuests, quests, npcInteract, abandonQuest, startCombat } = useGameSession();
+  const { refreshQuests, quests, npcInteract, abandonQuest, startCombat, accessToken, guildId } = useGameSession();
   const [rows, setRows] = useState<QuestLogRow[]>([]);
   /** Discord Activity WebViews often block or no-op `window.confirm` — use inline confirm instead. */
   const [pendingAbandonId, setPendingAbandonId] = useState<string | null>(null);
@@ -43,11 +44,11 @@ export function QuestsTab() {
         const isCompleted = stateLower === "completed";
         const loreMain = Boolean(q.lore_main);
         const questIdTrimmed = String(q.quest_id ?? "").trim();
-        const canFight =
-          !isCompleted &&
-          q.completion_check?.type === "kill_enemy" &&
-          typeof q.completion_check?.value === "string" &&
-          q.completion_check.value.length > 0;
+        const ck = q.completion_check || null;
+        const canFightDirect =
+          !isCompleted && ck?.type === "kill_enemy" && typeof ck?.value === "string" && ck.value.length > 0;
+        const canFightZoneAny = !isCompleted && ck?.type === "kill_any_zone";
+        const canFightZoneBoss = !isCompleted && ck?.type === "kill_boss_zone";
         const canAbandon =
           !loreMain && !isCompleted && (stateLower === "active" || stateLower === "offered") && questIdTrimmed.length > 0;
         return (
@@ -84,13 +85,32 @@ export function QuestsTab() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 justify-end shrink-0">
-                {canFight && (
+                {(canFightDirect || canFightZoneAny || canFightZoneBoss) && (
                   <button
                     type="button"
                     onClick={() => {
-                      const enemyKey = String(q.completion_check?.value || "").trim();
-                      if (!enemyKey) return;
-                      void startCombat({ kind: "zone", enemyKey }).then((r) => {
+                      const run = async () => {
+                        // 1) Direct enemy quest: start that exact enemy.
+                        if (canFightDirect) {
+                          const enemyKey = String(ck?.value || "").trim();
+                          const r = await startCombat({ kind: "zone", enemyKey });
+                          return r;
+                        }
+
+                        // 2) Zone-any / boss-zone: pick an enemy from zone list.
+                        if (!accessToken) return { ok: false, message: "No session token." };
+                        const res = await api.getCombatEnemies(accessToken, guildId);
+                        const j = (await res.json()) as { enemies?: { key?: string; kind?: string }[] };
+                        const list = Array.isArray(j.enemies) ? j.enemies : [];
+
+                        const wantBoss = canFightZoneBoss;
+                        const pick = list.find((e) => (wantBoss ? e.kind === "boss" : e.kind !== "boss") && e.key);
+                        const enemyKey = String(pick?.key || "").trim();
+                        if (!enemyKey) return { ok: false, message: "No suitable enemy found for this zone." };
+                        return await startCombat({ kind: "zone", enemyKey });
+                      };
+
+                      void run().then((r) => {
                         if (r.ok) {
                           window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Combat" }));
                           toast.success("Combat started.", { description: "Switched to Combat tab." });
