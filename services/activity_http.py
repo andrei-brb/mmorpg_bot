@@ -2413,11 +2413,13 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             for faction_id, amount in rewards["reputation"].items():
                 await quest_svc.add_reputation(char_id, faction_id, int(amount))
 
+        lore_gate = LoreGateService(db)
         if rewards.get("deed_flags"):
-            await LoreGateService(db).grant_deed_flags_from_rewards(char_id, rewards)
+            await lore_gate.grant_deed_flags_from_rewards(char_id, rewards)
 
         completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
-        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+        deed_set = set(await lore_gate.get_flags(char_id))
+        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids, deed_set)
         reward_summary = {
             "xp": int(rewards.get("xp") or 0),
             "gold": int(rewards.get("gold") or 0),
@@ -2476,7 +2478,8 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
     else:
         # No talk turn-in on this click — offer the next available quest for this NPC.
         completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char_id)]
-        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+        deed_set = set(await LoreGateService(db).get_flags(char_id))
+        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids, deed_set)
         if not next_quest:
             return web.json_response(_json_safe({"ok": True, "message": "No quests available.", "npc_id": npc_id}))
 

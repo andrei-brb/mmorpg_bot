@@ -958,7 +958,9 @@ VALUES
     ('trisect_key','Trisect Key','Three proofs of motion.','quest','legendary',NULL,50,
      0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🗝️'),
     ('the_eternal_frequency','The Eternal Frequency','A standing wave against silence.','weapon','artifact','main_hand',58,
-     32,18,14,8,16,0,62,98, NULL,0,0, 2000,800,'〰️')
+     32,18,14,8,16,0,62,98, NULL,0,0, 2000,800,'〰️'),
+    ('vance_blood_token','Vance Blood Token','Proof the blood-debt was answered in steel.','quest','rare',NULL,30,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🩸')
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,

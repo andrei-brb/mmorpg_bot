@@ -14,7 +14,7 @@ Features:
 import logging
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Set
 from uuid import UUID
 
 from services.quest.obsidian_silence_quests import apply_obsidian_content
@@ -3874,13 +3874,24 @@ class NPCQuestService:
                     }
         return None
 
-    def get_next_quest_for_npc(self, npc_id: str, completed_quests: List[str]) -> Optional[Dict]:
+    def get_next_quest_for_npc(
+        self,
+        npc_id: str,
+        completed_quests: List[str],
+        deed_flags: Optional[Set[str]] = None,
+    ) -> Optional[Dict]:
+        """Next uncompleted quest for this NPC. Skips entries whose `requires_deed_flags` are not all present."""
         npc = NPC_TEMPLATES.get(npc_id)
         if not npc:
             return None
+        flags: Set[str] = deed_flags if deed_flags is not None else set()
         for quest in npc["quests"]:
-            if quest["id"] not in completed_quests:
-                return quest
+            if quest["id"] in completed_quests:
+                continue
+            req = quest.get("requires_deed_flags") or []
+            if req and not all(f in flags for f in req):
+                continue
+            return quest
         return None
 
     # ── Reputation ───────────────────────────────────────────────────────────

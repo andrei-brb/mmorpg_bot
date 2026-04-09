@@ -910,7 +910,8 @@ class CombatCog(commands.Cog, name="Combat"):
                     # Next quest prompt (if this NPC has more).
                     if npc_id:
                         completed_quest_ids = [q["quest_id"] for q in await quest_svc.get_completed_quests(char["id"])]
-                        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+                        deed_set = set(await self.lore_gate.get_flags(char["id"]))
+                        next_quest = quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids, deed_set)
                         if next_quest:
                             npc_short = (npc_data.get("name") or npc_id).split(" ")[0].lower()
                             embed.add_field(

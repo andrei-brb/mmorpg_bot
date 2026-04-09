@@ -45,6 +45,11 @@ LORE_BOSS_GATES: Dict[str, LoreBossGateDict] = {
         "required_items": [],
         "hint": "Forge the **Trisect Key** with **Eldric** in Blackrock—three proofs of motion, one honest approach.",
     },
+    "black_blood_vance": {
+        "required_flags": ["voodoo_curse_lifted", "bait_placed"],
+        "required_items": [],
+        "hint": "Pay **Bloodfang**'s blood-price in the Barrens, then sever the **Salt-Knot** with the **Shaman** in Stranglethorn—only then is Vance *whole* enough to duel.",
+    },
 }
 
 

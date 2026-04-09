@@ -422,7 +422,7 @@ ZONES: Dict[str, ZoneConfig] = {
         level_range=(25, 45),
         description="A lush but deadly jungle where pirates, predators, and rival factions clash.",
         enemies=("bloodsail_pirate", "jungle_stalker", "venture_co_enforcer", "panther", "tiger", "basilisk", "jungle_troll", "crocodile", "stranglethorn_ape", "bloodsail_corsair"),
-        bosses=("kurzen_the_mad", "bhag_thera", "bloodsail_admiral", "jungle_lord"),
+        bosses=("kurzen_the_mad", "black_blood_vance", "bhag_thera", "bloodsail_admiral", "jungle_lord"),
         loot_pool=("corsair_blade", "jungle_leather_chest", "elixir_of_fortitude", "mageweave_cloth"),
         ambients=(
             "Parrots screech loudly overhead in the dense canopy.",
@@ -531,6 +531,7 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "bloodsail_corsair":    EnemyTemplate("Bloodsail Corsair",   "⚔️", 325, 29, 46, 31,  91, 11.0, 182, 20,51),
     # ── Stranglethorn Bosses ─────────────────────────────────────────────────
     "kurzen_the_mad":       EnemyTemplate("Kurzen the Mad",      "🤯",1600, 55, 90, 80, 200, 14.0,1200,200,400, True, ("madness_wave", "blood_frenzy")),
+    "black_blood_vance":    EnemyTemplate("Black-Blood Vance",   "🩸",1680, 57, 94, 82, 208, 14.5,1280,205,410, True, ("madness_wave", "blood_frenzy", "enrage")),
     "bhag_thera":           EnemyTemplate("Bhag'thera",          "🐆",1800, 60,100, 85, 220, 16.0,1400,220,450, True),
     "bloodsail_admiral":    EnemyTemplate("Bloodsail Admiral",   "⚓",1700, 58, 95, 82, 210, 15.0,1300,210,430, True, ("cannon_blast", "boarding")),
     "jungle_lord":          EnemyTemplate("Jungle Lord",         "👑",1750, 59, 98, 84, 215, 15.0,1350,215,440, True, ("beast_call", "frenzy")),

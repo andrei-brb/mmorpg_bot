@@ -229,7 +229,8 @@ class QuestCog(commands.Cog, name="Quests"):
             completed_quest_ids = [
                 q["quest_id"] for q in await self.quest_svc.get_completed_quests(char["id"])
             ]
-            next_quest = self.quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids)
+            deed_set = set(await self.lore_gate.get_flags(char["id"]))
+            next_quest = self.quest_svc.get_next_quest_for_npc(npc_id, completed_quest_ids, deed_set)
             if next_quest:
                 embed.add_field(
                     name="💬 More Work Available",
@@ -316,7 +317,8 @@ class QuestCog(commands.Cog, name="Quests"):
                 return
 
         # Find next available quest
-        next_quest = self.quest_svc.get_next_quest_for_npc(npc_id, completed_ids)
+        deed_set = set(await self.lore_gate.get_flags(char["id"]))
+        next_quest = self.quest_svc.get_next_quest_for_npc(npc_id, completed_ids, deed_set)
 
         if not next_quest:
             # Show which quests were completed from this NPC
