@@ -56,6 +56,14 @@ class Settings:
     FREE_INVENTORY_SLOTS    = 20
     PREMIUM_INVENTORY_SLOTS = 60
 
+    # Loot: template level_req band (rarity unchanged). High-level chars in low zones
+    # cannot roll endgame item rows; preview drops may be a few levels above the player.
+    LOOT_PREVIEW_LEVELS       = 5   # max level_req above char_level (capped by zone ceiling)
+    LOOT_ZONE_MAX_SLACK       = 5   # added to zone/dungeon level ceiling for band_hi cap
+    LOOT_ZONE_MIN_SLACK       = 0   # subtracted from zone floor for band_lo
+    LOOT_DUNGEON_LEVEL_SPAN   = 15  # dungeon level_req .. level_req+span for level band
+    LOOT_DROP_CHANCE_NORMAL   = 0.50  # non-boss gear drop attempt (boss stays 1.0)
+
     # Economy
     CURRENCY_SYMBOL         = "🪙"
     MARKET_FEE_PERCENT      = 5
@@ -643,6 +651,41 @@ def zone_tier_for_loot(zone_key: str) -> int:
     if lv <= 55:
         return 4
     return 5
+
+
+def loot_level_req_bounds(zone_key: str, char_level: int) -> Tuple[int, int]:
+    """
+    Inclusive level_req range for dropped item templates.
+
+    Rarity is rolled separately; this only picks which template row (e.g. bracelet Lv5 vs Lv55).
+    band_hi = min(zone_ceiling + slack, char_level + LOOT_PREVIEW_LEVELS).
+    Unknown zone_key: 1 .. char_level + preview (no endgame floor from map).
+    """
+    cl = max(1, min(int(char_level), Settings.MAX_LEVEL))
+    preview = int(getattr(Settings, "LOOT_PREVIEW_LEVELS", 5))
+    max_slack = int(getattr(Settings, "LOOT_ZONE_MAX_SLACK", 5))
+    min_slack = int(getattr(Settings, "LOOT_ZONE_MIN_SLACK", 0))
+    d_span = int(getattr(Settings, "LOOT_DUNGEON_LEVEL_SPAN", 15))
+
+    if zone_key in ZONES:
+        z = ZONES[zone_key]
+        zone_lo, zone_hi = int(z.level_range[0]), int(z.level_range[1])
+    elif zone_key in DUNGEONS:
+        d = DUNGEONS[zone_key]
+        req = max(1, int(d.level_req))
+        zone_lo = req
+        zone_hi = min(Settings.MAX_LEVEL, req + d_span)
+    else:
+        zone_lo, zone_hi = 1, cl
+
+    zone_ceiling = min(Settings.MAX_LEVEL, zone_hi + max_slack)
+    band_hi = min(zone_ceiling, cl + preview)
+    band_lo = max(1, zone_lo - min_slack)
+    if band_lo > band_hi:
+        band_lo = max(1, band_hi - 5)
+    if band_lo > band_hi:
+        band_lo = 1
+    return band_lo, band_hi
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

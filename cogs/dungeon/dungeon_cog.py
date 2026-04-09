@@ -657,7 +657,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         xp_mult = server_cfg["xp_multiplier"] if server_cfg else 1.0
         gold_mult = server_cfg["gold_multiplier"] if server_cfg else 1.0
         
-        xp_result = await self.char_svc.award_xp(char["id"], int(base_xp * xp_mult), xp_mult)
+        xp_result = await self.char_svc.award_xp(char["id"], int(base_xp), xp_mult)
         await self.char_svc.add_gold(char["id"], int(base_gold * gold_mult), "dungeon_reward")
         await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
         # Class mastery progression (victory-based; boss fights grant more).

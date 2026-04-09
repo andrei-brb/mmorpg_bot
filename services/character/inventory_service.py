@@ -9,7 +9,7 @@ import random
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from config.settings import RARITIES, Settings, zone_tier_for_loot, ZONES, DUNGEONS
+from config.settings import RARITIES, Settings, zone_tier_for_loot, loot_level_req_bounds, ZONES, DUNGEONS
 
 log = logging.getLogger("inventory")
 
@@ -134,14 +134,15 @@ class InventoryService:
     async def generate_loot(
         self, zone_key: str, char_level: int, is_boss: bool = False, luck: float = 0.0
     ) -> Optional[Dict]:
-        drop_chance = 1.0 if is_boss else 0.42
+        drop_chance = 1.0 if is_boss else float(getattr(Settings, "LOOT_DROP_CHANCE_NORMAL", 0.5))
         if random.random() > drop_chance:
             return None
 
         rarity = self.roll_rarity(luck)
 
-        # Prefer zone/dungeon loot pools so low-tier zones can't drop endgame templates
-        # just because the character level is high.
+        band_lo, band_hi = loot_level_req_bounds(zone_key, char_level)
+
+        # Prefer zone/dungeon loot pools; constrain level_req to zone/player band (not char_level alone).
         pool: Tuple[str, ...] = ()
         try:
             if zone_key in DUNGEONS:
@@ -153,27 +154,36 @@ class InventoryService:
 
         tmpl: Optional[dict] = None
         if pool:
-            # Re-roll within pool a few times to avoid missing templates or invalid types.
             for _ in range(min(12, len(pool) * 2)):
                 tid = random.choice(pool)
                 row = await self.db.fetchrow(
                     """SELECT * FROM item_templates
-                       WHERE id=$1 AND level_req <= $2 AND item_type NOT IN ('quest')""",
+                       WHERE id=$1 AND level_req >= $2 AND level_req <= $3
+                         AND item_type NOT IN ('quest')""",
                     tid,
-                    char_level,
+                    band_lo,
+                    band_hi,
                 )
                 if row:
                     tmpl = dict(row)
                     break
 
-        # Fallback (legacy): if pool missing/empty, pick any template up to char level.
         if tmpl is None:
             row = await self.db.fetchrow(
                 """SELECT * FROM item_templates
-                   WHERE level_req <= $1 AND item_type NOT IN ('quest')
+                   WHERE level_req >= $1 AND level_req <= $2 AND item_type NOT IN ('quest')
                    ORDER BY RANDOM() LIMIT 1""",
-                char_level,
+                band_lo,
+                band_hi,
             )
+            if row is None and band_lo > 1:
+                row = await self.db.fetchrow(
+                    """SELECT * FROM item_templates
+                       WHERE level_req >= $1 AND level_req <= $2 AND item_type NOT IN ('quest')
+                       ORDER BY RANDOM() LIMIT 1""",
+                    1,
+                    band_hi,
+                )
             if not row:
                 return None
             tmpl = dict(row)

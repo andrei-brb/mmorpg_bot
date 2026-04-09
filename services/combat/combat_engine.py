@@ -799,12 +799,8 @@ class CombatEngine:
 
     # ── Rewards ───────────────────────────────────────────────────────────────
 
-    def calculate_rewards(
-        self,
-        session: "CombatSession",
-        xp_mult: float = 1.0,
-        gold_mult: float = 1.0,
-    ) -> Dict:
+    def calculate_rewards(self, session: "CombatSession") -> Dict:
+        """Base XP/gold before guild/event multipliers (apply once in victory handlers)."""
         from config.settings import ENEMIES
         base_xp = gold = 0
         loot_rolls = 0
@@ -828,8 +824,8 @@ class CombatEngine:
             loot_rolls += 3
 
         return {
-            "xp":         int(base_xp * xp_mult),
-            "gold":       int(gold * gold_mult),
+            "xp":         int(base_xp),
+            "gold":       int(gold),
             "loot_rolls": loot_rolls,
         }
 

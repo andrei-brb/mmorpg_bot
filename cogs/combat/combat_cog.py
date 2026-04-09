@@ -760,7 +760,7 @@ class CombatCog(commands.Cog, name="Combat"):
             self.bot.db, interaction.guild_id
         )
 
-        rewards = self.engine.calculate_rewards(session, xp_mult, gold_mult)
+        rewards = self.engine.calculate_rewards(session)
 
         if getattr(Settings, "COMBAT_AWARD_XP_ON_VICTORY", True):
             xp_result = await self.char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
@@ -770,8 +770,10 @@ class CombatCog(commands.Cog, name="Combat"):
                 "old_level": char.get("level", 1),
                 "new_level": char.get("level", 1),
                 "levels_gained": 0,
+                "xp_gained": 0,
             }
-        await self.char_svc.add_gold(char["id"], rewards["gold"], "combat drop")
+        gold_earned = int(rewards["gold"] * gold_mult)
+        await self.char_svc.add_gold(char["id"], gold_earned, "combat drop")
         await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
         # Class mastery progression (victory-based; boss fights grant more).
         try:
@@ -934,7 +936,12 @@ class CombatCog(commands.Cog, name="Combat"):
             description=f"You defeated **{session.enemies[0].name}**!",
             color=0x00FF7F,
         )
-        embed.add_field(name="⚡ Rewards", value=f"+**{rewards['xp']:,}** XP  |  +**{rewards['gold']:,}**🪙", inline=False)
+        xp_show = int(xp_result.get("xp_gained", rewards["xp"]))
+        embed.add_field(
+            name="⚡ Rewards",
+            value=f"+**{xp_show:,}** XP  |  +**{gold_earned:,}**🪙",
+            inline=False,
+        )
 
         if xp_result["leveled_up"]:
             embed.add_field(
@@ -994,12 +1001,12 @@ class CombatCog(commands.Cog, name="Combat"):
                             actor_id=interaction.user.id,
                         )
                     )
-                if rewards.get("gold", 0) > 0:
+                if gold_earned > 0:
                     completed.extend(
                         await ms.increment(
                             interaction.guild_id,
                             "gold_earned",
-                            int(rewards["gold"]),
+                            gold_earned,
                             source="combat_gold",
                             actor_id=interaction.user.id,
                         )

@@ -1604,9 +1604,10 @@ async def _finish_victory(
 
     xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id)
 
-    rewards = engine.calculate_rewards(session, xp_mult, gold_mult)
+    rewards = engine.calculate_rewards(session)
     xp_result = await char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
-    await char_svc.add_gold(char["id"], rewards["gold"], "combat drop")
+    gold_earned = int(rewards["gold"] * gold_mult)
+    await char_svc.add_gold(char["id"], gold_earned, "combat drop")
     await char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
 
     # Class mastery progression (victory-based; boss fights grant more).
@@ -1657,8 +1658,8 @@ async def _finish_victory(
     _clear_activity_session(discord_id)
 
     summary = [
-        f"+{rewards['xp']:,} XP",
-        f"+{rewards['gold']:,} 🪙",
+        f"+{int(xp_result.get('xp_gained', rewards['xp'])):,} XP",
+        f"+{gold_earned:,} 🪙",
     ]
     if xp_result.get("leveled_up"):
         summary.append(f"LEVEL UP: {xp_result['old_level']} → {xp_result['new_level']}")
@@ -1695,12 +1696,12 @@ async def _finish_victory(
                         actor_id=discord_id,
                     )
                 )
-            if rewards.get("gold", 0) > 0:
+            if gold_earned > 0:
                 completed.extend(
                     await ms.increment(
                         guild_id,
                         "gold_earned",
-                        int(rewards["gold"]),
+                        gold_earned,
                         source="combat_gold",
                         actor_id=discord_id,
                     )
