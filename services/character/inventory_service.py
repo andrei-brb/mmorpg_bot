@@ -182,6 +182,75 @@ class InventoryService:
         bonus = self.roll_bonus_stats(tmpl, rarity, zone_tier=tier)
         return {"template": tmpl, "rarity": rarity, "bonus": bonus}
 
+    async def can_add_reward_items(
+        self,
+        char_id: UUID,
+        template_ids: List[str],
+    ) -> Tuple[bool, str]:
+        """
+        Preflight check for quest reward delivery.
+        Returns False if any template is missing or inventory lacks slots/stack room.
+        """
+        if not template_ids:
+            return True, "ok"
+
+        player = await self.db.fetchrow(
+            """SELECT p.is_premium FROM players p
+               JOIN characters c ON c.player_id=p.id WHERE c.id=$1""",
+            char_id,
+        )
+        max_slots = (
+            Settings.PREMIUM_INVENTORY_SLOTS
+            if (player and player["is_premium"])
+            else Settings.FREE_INVENTORY_SLOTS
+        )
+        current_slots = int(
+            await self.db.fetchval("SELECT COUNT(*) FROM inventory WHERE character_id=$1", char_id)
+            or 0
+        )
+        needed_new_slots = 0
+        stack_free_cache: Dict[Tuple[str, str], int] = {}
+
+        for tid in template_ids:
+            tmpl = await self.db.fetchrow(
+                "SELECT id, name, rarity, max_stack FROM item_templates WHERE id=$1",
+                tid,
+            )
+            if not tmpl:
+                return False, f"Reward item template missing: {tid}"
+
+            rarity = str(tmpl.get("rarity") or "common")
+            max_stack = int(tmpl.get("max_stack") or 1)
+            key = (str(tid), rarity)
+
+            if max_stack > 1:
+                if key not in stack_free_cache:
+                    free = await self.db.fetchval(
+                        """
+                        SELECT COALESCE(SUM($4 - i.quantity), 0)
+                        FROM inventory i
+                        WHERE i.character_id=$1
+                          AND i.template_id=$2
+                          AND COALESCE(i.rarity::text, 'common') = COALESCE($3::text, 'common')
+                          AND i.quantity < $4
+                        """,
+                        char_id,
+                        tid,
+                        rarity,
+                        max_stack,
+                    )
+                    stack_free_cache[key] = int(free or 0)
+                if stack_free_cache[key] > 0:
+                    stack_free_cache[key] -= 1
+                    continue
+
+            needed_new_slots += 1
+
+        if current_slots + needed_new_slots > max_slots:
+            missing = current_slots + needed_new_slots - max_slots
+            return False, f"Not enough inventory space for quest rewards (need {missing} more slot(s))."
+        return True, "ok"
+
     # ── Add / remove items ────────────────────────────────────────────────────
 
     async def add_item(

@@ -2384,6 +2384,25 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
     # First: if player is turning in / talking for an active quest step, process that.
     talk_result = await quest_svc.check_talk_to_npc(char_id, npc_id)
     if talk_result and talk_result.get("complete"):
+        inv_svc = InventoryService(db)
+        # Preflight inventory capacity before marking quest completed, so rewards are never silently lost.
+        qid = str(talk_result.get("quest_id") or "")
+        qtmpl = quest_svc._find_quest_template(qid) if qid else None
+        reward_items = list(((qtmpl or {}).get("rewards") or {}).get("items") or [])
+        if reward_items:
+            can_add, add_msg = await inv_svc.can_add_reward_items(char_id, reward_items)
+            if not can_add:
+                return web.json_response(
+                    _json_safe(
+                        {
+                            "ok": False,
+                            "error": "reward_delivery_blocked",
+                            "message": f"Cannot complete quest yet: {add_msg}",
+                        }
+                    ),
+                    status=400,
+                )
+
         rewards = await quest_svc.complete_quest(char_id, talk_result["quest_id"])
         if not rewards:
             return web.json_response(
@@ -2398,7 +2417,8 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             )
 
         char_svc = CharacterService(db)
-        inv_svc = InventoryService(db)
+        granted_items: List[str] = []
+        failed_items: List[Dict[str, str]] = []
         # Grant rewards (same semantics as /interact flow).
         if rewards.get("xp"):
             await char_svc.award_xp(char_id, int(rewards["xp"]))
@@ -2408,7 +2428,16 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             for template_id in rewards["items"]:
                 tmpl = await db.fetchrow("SELECT rarity FROM item_templates WHERE id = $1", template_id)
                 rarity = tmpl["rarity"] if tmpl else "common"
-                await inv_svc.add_item(char_id, template_id, rarity=rarity)
+                ok_add, msg_add = await inv_svc.add_item(char_id, template_id, rarity=rarity)
+                if ok_add:
+                    granted_items.append(str(template_id))
+                else:
+                    failed_items.append(
+                        {
+                            "template_id": str(template_id),
+                            "reason": str(msg_add or "could_not_add"),
+                        }
+                    )
         if rewards.get("reputation"):
             for faction_id, amount in rewards["reputation"].items():
                 await quest_svc.add_reputation(char_id, faction_id, int(amount))
@@ -2423,13 +2452,20 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         reward_summary = {
             "xp": int(rewards.get("xp") or 0),
             "gold": int(rewards.get("gold") or 0),
-            "items": list(rewards.get("items") or []),
+            "items": granted_items,
+            "item_failures": failed_items,
             "reputation": {k: int(v) for k, v in (rewards.get("reputation") or {}).items()},
         }
+        completion_msg = (
+            f"Quest complete. Some items could not be delivered ({len(failed_items)}): "
+            + ", ".join(f.get("template_id", "?") for f in failed_items[:4])
+            if failed_items
+            else "Quest completed and rewards granted."
+        )
         pending_completion = {
             "quest_completed": True,
             "rewards": reward_summary,
-            "message": "Quest completed and rewards granted.",
+            "message": completion_msg,
             "lore_main": is_main_story_quest(talk_result.get("quest_id")),
         }
         char_row = await char_svc.get_by_id(char_id)

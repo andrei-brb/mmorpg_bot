@@ -153,6 +153,14 @@ class QuestCog(commands.Cog, name="Quests"):
         if talk_result and talk_result["complete"]:
             # Quest is fully complete! Grant rewards
             quest_data = talk_result["quest_data"]
+            reward_items = list(((quest_data or {}).get("rewards") or {}).get("items") or [])
+            if reward_items:
+                can_add, add_msg = await self.inv_svc.can_add_reward_items(char["id"], reward_items)
+                if not can_add:
+                    return await interaction.followup.send(
+                        f"❌ Cannot complete quest yet: {add_msg}",
+                        ephemeral=True,
+                    )
             rewards = await self.quest_svc.complete_quest(char["id"], talk_result["quest_id"])
             if rewards:
                 await self._grant_rewards(char["id"], rewards)

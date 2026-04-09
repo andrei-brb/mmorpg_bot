@@ -11,8 +11,13 @@ export function QuestCompleteModal({
 }) {
   const rewards = completion.rewards || {};
   const rep = rewards.reputation || {};
+  const itemFailures = (rewards.item_failures || []).filter((x) => x?.template_id);
   const hasAny =
-    Boolean(rewards.xp) || Boolean(rewards.gold) || Boolean(rewards.items?.length) || Boolean(Object.keys(rep).length);
+    Boolean(rewards.xp) ||
+    Boolean(rewards.gold) ||
+    Boolean(rewards.items?.length) ||
+    Boolean(itemFailures.length) ||
+    Boolean(Object.keys(rep).length);
   const items = (rewards.items || []).filter(Boolean);
 
   const prettyId = (s: string) =>
@@ -66,6 +71,21 @@ export function QuestCompleteModal({
                     </ul>
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       Tip: check <span className="font-semibold">Hero → Inventory → Consumables & Upgrades</span> for quest items.
+                    </div>
+                  </div>
+                )}
+                {Boolean(itemFailures.length) && (
+                  <div className="text-destructive font-crimson">
+                    <div>⚠ Could not deliver</div>
+                    <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                      {itemFailures.map((it, i) => (
+                        <li key={`${it.template_id}-${i}`}>
+                          - {prettyId(String(it.template_id || ""))}: {it.reason || "could not add"}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      Most common cause: inventory full. Free slots, then talk to the NPC again if needed.
                     </div>
                   </div>
                 )}

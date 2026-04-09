@@ -332,7 +332,13 @@ export type NpcInteractPayload = {
   message?: string;
   npc_id?: string;
   quest_completed?: boolean;
-  rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
+  rewards?: {
+    xp?: number;
+    gold?: number;
+    items?: string[];
+    item_failures?: { template_id?: string; reason?: string }[];
+    reputation?: Record<string, number>;
+  };
   quest_step_updated?: boolean;
   quest_offered?: boolean;
   offer?: QuestOfferPayload;
@@ -344,7 +350,13 @@ export type QuestCompletionPayload = {
   quest_completed?: boolean;
   message?: string;
   lore_main?: boolean;
-  rewards?: { xp?: number; gold?: number; items?: string[]; reputation?: Record<string, number> };
+  rewards?: {
+    xp?: number;
+    gold?: number;
+    items?: string[];
+    item_failures?: { template_id?: string; reason?: string }[];
+    reputation?: Record<string, number>;
+  };
   /** Present when an NPC has another quest after turning in. */
   next_quest_available?: boolean;
   /** When next quest is available but blocked (e.g. level too low). */
