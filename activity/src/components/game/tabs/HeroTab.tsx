@@ -124,10 +124,21 @@ export function HeroTab() {
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [listItemId, setListItemId] = useState<string | null>(null);
+  const [inventoryView, setInventoryView] = useState<"gear" | "consumables">("gear");
 
   const char = inventory?.character;
   const items = inventory?.items || [];
   const bag = useMemo(() => items.filter((i) => !i.is_equipped), [items]);
+  const bagConsumables = useMemo(() => {
+    return bag.filter((it) => {
+      const t = (it.item_type || "").toLowerCase();
+      return t === "consumable" || t === "material" || isProtectionTemplate(it);
+    });
+  }, [bag]);
+  const bagGear = useMemo(() => {
+    return bag.filter((it) => !bagConsumables.includes(it));
+  }, [bag, bagConsumables]);
+  const bagShown = inventoryView === "consumables" ? bagConsumables : bagGear;
   const equipped = useMemo(() => {
     const m: Record<string, InvRow> = {};
     for (const it of items) if (it.is_equipped && it.equip_slot) m[it.equip_slot] = it;
@@ -209,8 +220,8 @@ export function HeroTab() {
 
   const EMPTY_SLOTS = 20;
   const invSlots = [
-    ...bag.map((it) => ({ id: it.id, name: it.name, icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦", rarity: rarityKey(it.rarity), item: it })),
-    ...Array.from({ length: Math.max(0, EMPTY_SLOTS - bag.length) }, (_, i) => ({ id: `empty-${i}`, name: null as string | null, icon: null as string | null, rarity: null as string | null, item: null as InvRow | null })),
+    ...bagShown.map((it) => ({ id: it.id, name: it.name, icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦", rarity: rarityKey(it.rarity), item: it })),
+    ...Array.from({ length: Math.max(0, EMPTY_SLOTS - bagShown.length) }, (_, i) => ({ id: `empty-${inventoryView}-${i}`, name: null as string | null, icon: null as string | null, rarity: null as string | null, item: null as InvRow | null })),
   ];
 
   const compareForItem = useCallback(
@@ -373,7 +384,29 @@ export function HeroTab() {
         {/* Inventory */}
         <div className="game-panel">
           <div className="game-panel-header flex items-center justify-between">
-            <span>Inventory</span>
+            <div className="flex items-center gap-2">
+              <span>Inventory</span>
+              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10">
+                <button
+                  type="button"
+                  onClick={() => setInventoryView("gear")}
+                  className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold ${
+                    inventoryView === "gear" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Gear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInventoryView("consumables")}
+                  className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold ${
+                    inventoryView === "consumables" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Consumables & Upgrades
+                </button>
+              </div>
+            </div>
             <span className="text-xs font-semibold font-cinzel text-primary tabular-nums" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}>
               {Number(char?.gold ?? 0).toLocaleString()} 🪙
             </span>
