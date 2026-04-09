@@ -132,7 +132,9 @@ export function HeroTab() {
   const bagConsumables = useMemo(() => {
     return bag.filter((it) => {
       const t = (it.item_type || "").toLowerCase();
-      return t === "consumable" || t === "material" || isProtectionTemplate(it);
+      // Keep “consumables” tab as a general “non-gear bag items” bin:
+      // consumables, materials, quest items, and enhancement protection.
+      return t === "consumable" || t === "material" || t === "quest" || isProtectionTemplate(it);
     });
   }, [bag]);
   const bagGear = useMemo(() => {
