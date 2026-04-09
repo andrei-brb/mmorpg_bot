@@ -183,6 +183,41 @@ OBSIDIAN_QUEST_PATCHES: Dict[str, List[Dict[str, Any]]] = {
             },
         },
     ],
+    "old_guard_marcus": [
+        {
+            "id": "obsidian_marcus_recommendation",
+            "name": "Marcus's Recommendation",
+            "description": "**Main arc — Act 2 bridge:** Marcus hears of your deeds through Grimbeard and officially endorses your mountain approach.",
+            "level_req": 8,
+            "steps": [
+                {
+                    "step": 1,
+                    "objective": "Defeat 8 enemies in Elwynn Forest (recon work)",
+                    "hint": "Marcus needs proof of your reliability.",
+                    "completion_check": {"type": "kill_any_zone", "value": "elwynn_forest", "count": 8},
+                },
+                {
+                    "step": 2,
+                    "objective": "Return to Marcus",
+                    "hint": "/interact marcus",
+                    "completion_check": {"type": "talk_to_npc", "value": "old_guard_marcus"},
+                },
+            ],
+            "rewards": {
+                "xp": 1500,
+                "gold": 500,
+                "items": [],
+                "reputation": {"stormwind_guard": 300},
+                "deed_flags": ["marcus_recommendation"],
+            },
+            "dialogue": {
+                "accept": "\"Grimbeard says you're *honest*. That's rare. Earn my word.\"",
+                "decline": "\"Fine. I'll guard this alone.\"",
+                "progress_1": "\"Keep proving yourself.\"",
+                "completion": "\"You've got it. Tell Steelhammer the **Old Guard endorses you**—the mountain trusts what you're building.\"",
+            },
+        },
+    ],
     "guard_thomas": [
         {
             "id": "obsidian_scout_gray_border",
@@ -679,9 +714,9 @@ OBSIDIAN_QUEST_PATCHES: Dict[str, List[Dict[str, Any]]] = {
         {
             "id": "obsidian_architects_burden",
             "name": "The Architect's Burden",
-            "description": "**Main arc — Act 3 context:** After the forge trial—read what Vaelkor carved into Blackrock before you face him.",
+            "description": "**Main arc — Act 3 context:** After translating the cipher—read what Vaelkor carved into Blackrock before you face him.",
             "level_req": 52,
-            "requires_deed_flags": ["flame_infused_done"],
+            "requires_deed_flags": ["cipher_translated"],
             "steps": [
                 {
                     "step": 1,
@@ -761,6 +796,7 @@ OBSIDIAN_QUEST_PATCHES: Dict[str, List[Dict[str, Any]]] = {
             "name": "The Trisect Key",
             "description": "**Main arc — climax key:** Prove motion in Blackrock Depths; Eldric forges the Trisect Key from your three proofs (Glacial Fang, Sun-Scorched Scimitar, Tide-Cutter).",
             "level_req": 50,
+            "required_items": ["glacial_fang", "sun_scorched_scimitar", "tide_cutter"],
             "steps": [
                 {
                     "step": 1,
