@@ -162,8 +162,9 @@ class QuestCog(commands.Cog, name="Quests"):
                         ephemeral=True,
                     )
             rewards = await self.quest_svc.complete_quest(char["id"], talk_result["quest_id"])
+            grant_report = {"granted_items": [], "failed_items": []}
             if rewards:
-                await self._grant_rewards(char["id"], rewards)
+                grant_report = await self._grant_rewards(char["id"], rewards)
 
             dialogue = quest_data["dialogue"].get("completion", "Quest complete!")
             embed = discord.Embed(
@@ -177,9 +178,17 @@ class QuestCog(commands.Cog, name="Quests"):
                 reward_text.append(f"⭐ **{rewards['xp']:,}** XP")
             if rewards.get("gold"):
                 reward_text.append(f"🪙 **{rewards['gold']:,}** Gold")
-            if rewards.get("items"):
-                item_names = [i.replace("_", " ").title() for i in rewards["items"]]
+            if grant_report.get("granted_items"):
+                item_names = [str(i).replace("_", " ").title() for i in grant_report["granted_items"]]
                 reward_text.append(f"🎁 {', '.join(item_names)}")
+            if grant_report.get("failed_items"):
+                failed = grant_report["failed_items"]
+                first = failed[0] if failed else {}
+                reward_text.append(
+                    "⚠ Reward delivery issue: "
+                    + str(first.get("template_id", "item")).replace("_", " ").title()
+                    + f" ({first.get('reason', 'could not add')})"
+                )
 
             # Show reputation gain
             rep_results = []
@@ -812,7 +821,9 @@ class QuestCog(commands.Cog, name="Quests"):
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     async def _grant_rewards(self, char_id, rewards: dict):
-        """Grant XP, gold, and items from quest rewards."""
+        """Grant XP, gold, and items from quest rewards; return delivery report."""
+        granted_items = []
+        failed_items = []
         if rewards.get("xp"):
             await self.char_svc.award_xp(char_id, rewards["xp"])
         if rewards.get("gold"):
@@ -823,9 +834,14 @@ class QuestCog(commands.Cog, name="Quests"):
                     "SELECT rarity FROM item_templates WHERE id = $1", template_id
                 )
                 rarity = tmpl["rarity"] if tmpl else "common"
-                await self.inv_svc.add_item(char_id, template_id, rarity=rarity)
+                ok_add, msg_add = await self.inv_svc.add_item(char_id, template_id, rarity=rarity)
+                if ok_add:
+                    granted_items.append(str(template_id))
+                else:
+                    failed_items.append({"template_id": str(template_id), "reason": str(msg_add or "could_not_add")})
         if rewards.get("deed_flags") and self.lore_gate:
             await self.lore_gate.grant_deed_flags_from_rewards(char_id, rewards)
+        return {"granted_items": granted_items, "failed_items": failed_items}
 
     def _get_progress_dialogue(self, quest_data, step_idx):
         dialogue = quest_data.get("dialogue", {}) if isinstance(quest_data, dict) else {}

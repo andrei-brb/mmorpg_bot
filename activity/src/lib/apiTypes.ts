@@ -343,6 +343,7 @@ export type NpcInteractPayload = {
   quest_offered?: boolean;
   offer?: QuestOfferPayload;
   lore_main?: boolean;
+  next_step_hint?: string;
 };
 
 export type QuestCompletionPayload = {
@@ -361,6 +362,8 @@ export type QuestCompletionPayload = {
   next_quest_available?: boolean;
   /** When next quest is available but blocked (e.g. level too low). */
   next_quest_blocked?: string;
+  /** Human-readable guidance on what to do after completion. */
+  next_step_hint?: string;
 };
 
 export type SpecOption = {

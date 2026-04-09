@@ -102,6 +102,11 @@ export function QuestCompleteModal({
                 Next quest is available but your level is too low. Level up (Explore/Combat), then press <span className="font-semibold">Talk</span> to the same NPC again.
               </div>
             )}
+            {completion.next_step_hint && (
+              <div className="text-xs text-muted-foreground font-crimson">
+                {completion.next_step_hint}
+              </div>
+            )}
           </div>
         </div>
         <div className="shrink-0 border-t border-border p-3 flex justify-end">

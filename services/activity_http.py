@@ -2462,11 +2462,13 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             if failed_items
             else "Quest completed and rewards granted."
         )
+        next_step_hint = "Continue exploring and talk to discovered NPCs for the next chain."
         pending_completion = {
             "quest_completed": True,
             "rewards": reward_summary,
             "message": completion_msg,
             "lore_main": is_main_story_quest(talk_result.get("quest_id")),
+            "next_step_hint": next_step_hint,
         }
         char_row = await char_svc.get_by_id(char_id)
         if char_row:
@@ -2480,6 +2482,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
                             "ok": True,
                             "npc_id": npc_id,
                             "next_quest_available": False,
+                            "next_step_hint": "No further quest from this NPC right now. Explore to discover more NPCs.",
                         }
                     )
                 )
@@ -2494,6 +2497,7 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
                             "next_quest_available": True,
                             "next_quest_blocked": "level_too_low",
                             "message": f"Quest complete. Next quest needs level {next_quest['level_req']}.",
+                            "next_step_hint": "Level up via Explore/Combat, then press Talk on this same NPC.",
                         }
                     )
                 )

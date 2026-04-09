@@ -493,6 +493,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
             lore_main: j.lore_main,
             next_quest_available: (j as any).next_quest_available,
             next_quest_blocked: (j as any).next_quest_blocked,
+            next_step_hint: (j as any).next_step_hint,
           });
           if (j.offer) setQueuedOfferAfterCompletion(j.offer);
         } else if (j.offer) {
