@@ -11,9 +11,18 @@ const STATE_STYLES: Record<string, string> = {
 export function QuestsTab() {
   const { refreshQuests, quests, npcInteract, abandonQuest } = useGameSession();
   const [rows, setRows] = useState<QuestLogRow[]>([]);
+  /** Discord Activity WebViews often block or no-op `window.confirm` — use inline confirm instead. */
+  const [pendingAbandonId, setPendingAbandonId] = useState<string | null>(null);
 
   useEffect(() => { void refreshQuests(); }, [refreshQuests]);
   useEffect(() => { setRows(quests?.quests || []); }, [quests]);
+  useEffect(() => {
+    if (!pendingAbandonId) return;
+    const stillHere = (quests?.quests || []).some(
+      (x) => String(x.quest_id ?? "").trim() === pendingAbandonId,
+    );
+    if (!stillHere) setPendingAbandonId(null);
+  }, [quests, pendingAbandonId]);
 
   return (
     <div className="space-y-4">
@@ -30,7 +39,7 @@ export function QuestsTab() {
       {rows.length === 0 && <p className="text-xs text-muted-foreground">No quests in your log.</p>}
 
       {rows.map((q, idx) => {
-        const stateLower = (q.state || "active").toLowerCase();
+        const stateLower = String(q.state || "active").toLowerCase().trim();
         const isCompleted = stateLower === "completed";
         const loreMain = Boolean(q.lore_main);
         const questIdTrimmed = String(q.quest_id ?? "").trim();
@@ -110,30 +119,49 @@ export function QuestsTab() {
                     Talk
                   </button>
                 )}
-                {canAbandon && (
+                {canAbandon && pendingAbandonId !== questIdTrimmed && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const name = q.quest_name || "this quest";
-                      if (!window.confirm(`Abandon "${name}"? You can pick it up again later from the NPC if it’s still available.`)) return;
-                      void abandonQuest(questIdTrimmed)
-                        .then((r) => {
-                          if (r.ok) {
-                            toast.success(r.message || "Quest abandoned.");
-                          } else {
-                            toast.error(r.message || r.error || "Could not abandon quest.");
-                          }
-                          void refreshQuests();
-                        })
-                        .catch((e) => {
-                          toast.error(e instanceof Error ? e.message : "Could not abandon quest.");
-                          void refreshQuests();
-                        });
-                    }}
+                    onClick={() => setPendingAbandonId(questIdTrimmed)}
                     className="text-xs px-3 py-1.5 rounded-sm border border-destructive/40 text-destructive hover:bg-destructive/10"
                   >
                     Abandon
                   </button>
+                )}
+                {canAbandon && pendingAbandonId === questIdTrimmed && (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground max-w-[140px]">Abandon this side quest?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void abandonQuest(questIdTrimmed)
+                          .then((r) => {
+                            setPendingAbandonId(null);
+                            if (r.ok) {
+                              toast.success(r.message || "Quest abandoned.");
+                            } else {
+                              toast.error(r.message || r.error || "Could not abandon quest.");
+                            }
+                            void refreshQuests();
+                          })
+                          .catch((e) => {
+                            setPendingAbandonId(null);
+                            toast.error(e instanceof Error ? e.message : "Could not abandon quest.");
+                            void refreshQuests();
+                          });
+                      }}
+                      className="text-xs px-2 py-1 rounded-sm bg-destructive/90 text-destructive-foreground hover:bg-destructive"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingAbandonId(null)}
+                      className="text-xs px-2 py-1 rounded-sm border border-border text-foreground hover:bg-muted/30"
+                    >
+                      No
+                    </button>
+                  </span>
                 )}
               </div>
             </div>

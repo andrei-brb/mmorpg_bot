@@ -2030,10 +2030,12 @@ async def handle_quests(request: web.Request) -> web.Response:
             "value": check.get("value"),
             "count": check.get("count"),
         }
+        raw_state = q.get("state")
+        state_norm = str(raw_state).strip().lower() if raw_state is not None else "active"
         out.append(
             {
                 "quest_id": quest_id,
-                "state": q.get("state"),
+                "state": state_norm,
                 "quest_name": q.get("quest_name"),
                 "quest_desc": q.get("quest_desc"),
                 "current_step": cur_step,

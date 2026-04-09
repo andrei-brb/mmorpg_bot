@@ -3415,7 +3415,7 @@ class NPCQuestService:
         """Get all active quests, auto-failing expired timed quests."""
         rows = await self.db.fetch(
             """SELECT * FROM quest_progress
-               WHERE character_id = $1 AND state IN ('active', 'offered')
+               WHERE character_id = $1 AND LOWER(TRIM(state)) IN ('active', 'offered')
                ORDER BY started_at""",
             char_id,
         )
@@ -3513,7 +3513,8 @@ class NPCQuestService:
         row = await self.db.fetchrow(
             """
             DELETE FROM quest_progress
-            WHERE character_id = $1 AND quest_id = $2 AND state IN ('active', 'offered')
+            WHERE character_id = $1 AND quest_id = $2
+              AND LOWER(TRIM(state)) IN ('active', 'offered')
             RETURNING quest_id
             """,
             char_id,
@@ -3528,14 +3529,15 @@ class NPCQuestService:
     ) -> List[str]:
         # FIX: Include both 'active' and 'offered' quests (offered quests should still track progress)
         active = await self.db.fetch(
-            "SELECT * FROM quest_progress WHERE character_id = $1 AND state IN ('active', 'offered')",
+            """SELECT * FROM quest_progress
+               WHERE character_id = $1 AND LOWER(TRIM(state)) IN ('active', 'offered')""",
             char_id,
         )
         notifications = []
 
         for row in active:
             # Auto-activate offered quests when progress starts
-            if row["state"] == "offered":
+            if str(row.get("state") or "").strip().lower() == "offered":
                 await self.db.execute(
                     "UPDATE quest_progress SET state = 'active', started_at = NOW() WHERE character_id = $1 AND quest_id = $2",
                     char_id, row["quest_id"],
@@ -3679,7 +3681,8 @@ class NPCQuestService:
         """
         # Include both 'active' and 'offered' so offered quests can progress.
         active = await self.db.fetch(
-            "SELECT * FROM quest_progress WHERE character_id = $1 AND state IN ('active', 'offered')",
+            """SELECT * FROM quest_progress
+               WHERE character_id = $1 AND LOWER(TRIM(state)) IN ('active', 'offered')""",
             char_id,
         )
 
@@ -3691,7 +3694,7 @@ class NPCQuestService:
 
         for row in active:
             # Auto-activate offered quests when progress starts
-            if row["state"] == "offered":
+            if str(row.get("state") or "").strip().lower() == "offered":
                 await self.db.execute(
                     "UPDATE quest_progress SET state = 'active', started_at = NOW() WHERE character_id = $1 AND quest_id = $2",
                     char_id, row["quest_id"],

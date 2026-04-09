@@ -522,11 +522,14 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     async (questId: string) => {
       if (!accessToken) return { ok: false, error: "no_token" };
       const res = await api.postQuestAbandon(accessToken, questId, guildId);
+      const text = await res.text();
       let j: { ok?: boolean; message?: string; error?: string } = {};
-      try {
-        j = (await res.json()) as typeof j;
-      } catch {
-        /* ignore */
+      if (text) {
+        try {
+          j = JSON.parse(text) as typeof j;
+        } catch {
+          j = { message: text.length > 220 ? `${text.slice(0, 220)}…` : text };
+        }
       }
       await refreshQuests();
       const ok = res.ok && j.ok !== false;
