@@ -3390,12 +3390,12 @@ class NPCQuestService:
 
     async def cancel_quest_offer(self, char_id: UUID, quest_id: str) -> bool:
         """Remove a pending 'offered' quest row (decline / timeout before accept)."""
-        result = await self.db.execute(
-            "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state = 'offered'",
+        row = await self.db.fetchrow(
+            "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state = 'offered' RETURNING quest_id",
             char_id,
             quest_id,
         )
-        return "DELETE 1" in result
+        return row is not None
 
     async def accept_quest(self, char_id: UUID, quest_id: str):
         await self.db.execute(
@@ -3509,11 +3509,17 @@ class NPCQuestService:
     async def abandon_quest(self, char_id: UUID, quest_id: str) -> bool:
         if is_main_story_quest(quest_id):
             return False
-        result = await self.db.execute(
-            "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND state IN ('active', 'offered')",
-            char_id, quest_id,
+        # Use RETURNING — do not rely on asyncpg execute status strings ("DELETE 1" varies by driver/version).
+        row = await self.db.fetchrow(
+            """
+            DELETE FROM quest_progress
+            WHERE character_id = $1 AND quest_id = $2 AND state IN ('active', 'offered')
+            RETURNING quest_id
+            """,
+            char_id,
+            quest_id,
         )
-        return "DELETE 1" in result
+        return row is not None
 
     # ── Kill Progress Check ──────────────────────────────────────────────────
 

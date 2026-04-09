@@ -2000,6 +2000,8 @@ async def handle_quests(request: web.Request) -> web.Response:
     out = []
     for q in active:
         quest_id = q.get("quest_id")
+        if quest_id is not None:
+            quest_id = str(quest_id).strip()
         steps = q.get("steps") or []
         cur_step = int(q.get("current_step") or 1)
         idx = max(0, cur_step - 1)

@@ -33,7 +33,9 @@ export function QuestsTab() {
         const stateLower = (q.state || "active").toLowerCase();
         const isCompleted = stateLower === "completed";
         const loreMain = Boolean(q.lore_main);
-        const canAbandon = !loreMain && !isCompleted && (stateLower === "active" || stateLower === "offered");
+        const questIdTrimmed = String(q.quest_id ?? "").trim();
+        const canAbandon =
+          !loreMain && !isCompleted && (stateLower === "active" || stateLower === "offered") && questIdTrimmed.length > 0;
         return (
           <div
             key={`${q.quest_id ?? idx}`}
@@ -108,20 +110,25 @@ export function QuestsTab() {
                     Talk
                   </button>
                 )}
-                {canAbandon && q.quest_id && (
+                {canAbandon && (
                   <button
                     type="button"
                     onClick={() => {
                       const name = q.quest_name || "this quest";
                       if (!window.confirm(`Abandon "${name}"? You can pick it up again later from the NPC if it’s still available.`)) return;
-                      void abandonQuest(q.quest_id!).then((r) => {
-                        if (r.ok) {
-                          toast.success(r.message || "Quest abandoned.");
-                        } else {
-                          toast.error(r.message || r.error || "Could not abandon quest.");
-                        }
-                        void refreshQuests();
-                      });
+                      void abandonQuest(questIdTrimmed)
+                        .then((r) => {
+                          if (r.ok) {
+                            toast.success(r.message || "Quest abandoned.");
+                          } else {
+                            toast.error(r.message || r.error || "Could not abandon quest.");
+                          }
+                          void refreshQuests();
+                        })
+                        .catch((e) => {
+                          toast.error(e instanceof Error ? e.message : "Could not abandon quest.");
+                          void refreshQuests();
+                        });
                     }}
                     className="text-xs px-3 py-1.5 rounded-sm border border-destructive/40 text-destructive hover:bg-destructive/10"
                   >
