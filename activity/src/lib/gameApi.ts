@@ -79,8 +79,28 @@ export async function exchangeToken(code: string, redirectUri?: string): Promise
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     }),
   });
-  if (!res.ok) throw new Error(`token ${res.status}`);
-  const j = (await res.json()) as { access_token?: string };
+  const text = await res.text();
+  let j: {
+    access_token?: string;
+    error?: string;
+    detail?: string;
+    hint?: string;
+    discord_error?: string;
+    discord_error_description?: string;
+  } = {};
+  try {
+    j = JSON.parse(text) as typeof j;
+  } catch {
+    /* not json */
+  }
+  if (!res.ok) {
+    const parts = [`token ${res.status}`];
+    if (j.discord_error_description) parts.push(j.discord_error_description);
+    else if (j.detail) parts.push(j.detail);
+    else if (text) parts.push(text.length > 280 ? `${text.slice(0, 280)}…` : text);
+    if (j.hint) parts.push(j.hint);
+    throw new Error(parts.join(" — "));
+  }
   if (!j.access_token) throw new Error("no access_token");
   return j.access_token;
 }

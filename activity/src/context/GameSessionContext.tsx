@@ -649,9 +649,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setPhase("error");
         const detail =
           e instanceof Error ? api.describeFetchError(e, api.apiUrl("/api/token")) : String(e);
-        setErrorHtml(
-          `Sign-in failed: ${detail} If you see HTTP status errors, confirm DISCORD_CLIENT_SECRET on Railway and OAuth redirect URLs in the Developer Portal.`,
-        );
+        setErrorHtml(`Sign-in failed: ${detail}`);
       }
     }
     void boot();

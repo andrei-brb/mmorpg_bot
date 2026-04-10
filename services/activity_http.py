@@ -249,18 +249,43 @@ async def _exchange_oauth_code(
                 break
 
     log.warning("OAuth token exchange failed: %s %s", last_status, last_body[:500])
+
+    discord_err = ""
+    discord_desc = ""
+    try:
+        errj = json.loads(last_body)
+        if isinstance(errj, dict):
+            discord_err = str(errj.get("error") or "")
+            discord_desc = str(errj.get("error_description") or "")
+    except Exception:
+        pass
+
+    hint_parts = [
+        "Token exchange redirect_uri must match Developer Portal → OAuth2 → Redirects "
+        "for the URL where the Activity runs (e.g. https://<APP_ID>.discordsays.com/). "
+        "List both with and without a trailing slash if unsure.",
+        "Railway: DISCORD_APPLICATION_ID must match the same Application ID as VITE_DISCORD_CLIENT_ID in your built Activity.",
+        "Use the OAuth2 Client Secret from the same app (Developer Portal → OAuth2), not the bot token.",
+    ]
+    if "invalid_client" in (discord_err + last_body).lower():
+        hint_parts.insert(
+            0,
+            "invalid_client usually means wrong OAuth2 client secret or wrong client_id.",
+        )
+    if discord_err == "invalid_grant" or "invalid_grant" in last_body.lower():
+        hint_parts.append(
+            "invalid_grant often means redirect_uri mismatch, expired code, or the code was already used "
+            "(e.g. React Strict Mode double-mount in dev). Try a production build or a single page load.",
+        )
+
     raise web.HTTPBadRequest(
         text=json.dumps(
             {
                 "error": "token_exchange_failed",
                 "detail": last_body[:400],
-                "hint": (
-                    "Token exchange redirect_uri must match Developer Portal → OAuth2 → Redirects "
-                    "for the URL where the Activity runs (e.g. https://<APP_ID>.discordsays.com/). "
-                    "The Activity client now sends redirect_uri from the page; ensure that exact URL "
-                    "(with or without trailing slash) is listed. For Vercel-only dev, set "
-                    "DISCORD_OAUTH_REDIRECT_URI on the API server to your Vercel URL."
-                ),
+                "discord_error": discord_err or None,
+                "discord_error_description": discord_desc or None,
+                "hint": " ".join(hint_parts),
             }
         ),
         content_type="application/json",
