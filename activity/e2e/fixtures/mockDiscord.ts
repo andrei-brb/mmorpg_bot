@@ -10,27 +10,9 @@ const MOCK_GUILD_ID = 'test_guild_456';
 const MOCK_ACCESS_TOKEN = 'test_access_token_789';
 
 export async function setupMocks(page: Page) {
-  // 1. Inject fake DiscordSDK into window before React loads
-  await page.addInitScript(() => {
-    // @ts-ignore
-    window.DiscordSDK = {
-      ready: async () => ({ user: { id: 'test_user_123' } }),
-      commands: {
-        authorize: async () => ({
-          code: 'fake_auth_code',
-          state: '',
-        }),
-      },
-      guildId: 'test_guild_456',
-    };
-  });
+  // 1. FIRST: Mock all network routes before any navigation
 
-  // 2. Mock Discord OAuth token endpoint
-  await page.route('**/api/token', async (route) => {
-    await route.abort();
-  });
-
-  // 3. Mock Discord user identity endpoint
+  // Mock Discord user identity endpoint
   await page.route('https://discord.com/api/v10/users/@me', async (route) => {
     await route.fulfill({
       status: 200,
@@ -44,7 +26,7 @@ export async function setupMocks(page: Page) {
     });
   });
 
-  // 4. Mock Discord OAuth token exchange
+  // Mock Discord OAuth token exchange
   await page.route('https://discord.com/api/oauth2/token', async (route) => {
     await route.fulfill({
       status: 200,
@@ -57,6 +39,63 @@ export async function setupMocks(page: Page) {
         scope: 'identify applications.commands',
       }),
     });
+  });
+
+  // Mock local API token endpoint
+  await page.route('**/api/token', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        access_token: MOCK_ACCESS_TOKEN,
+        ok: true,
+      }),
+    });
+  });
+
+  // 2. SECOND: Inject fake DiscordSDK BEFORE page loads
+  await page.addInitScript(() => {
+    // @ts-ignore
+    window.DiscordSDK = {
+      ready: async () => {
+        return Promise.resolve({
+          user: { id: 'test_user_123', username: 'TestPlayer' },
+        });
+      },
+      commands: {
+        authorize: async () => {
+          return Promise.resolve({
+            code: 'fake_auth_code',
+            state: '',
+          });
+        },
+      },
+      guildId: 'test_guild_456',
+      subscribe: () => {},
+      unsubscribe: () => {},
+    };
+
+    // Also mock fetch if needed
+    const originalFetch = window.fetch;
+    // @ts-ignore
+    window.fetch = async (url: string, options?: any) => {
+      if (url.includes('/api/token')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ access_token: 'test_access_token_789' }),
+        } as Response);
+      }
+      if (url.includes('discord.com/api/v10/users/@me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'test_user_123',
+            username: 'TestPlayer',
+          }),
+        } as Response);
+      }
+      return originalFetch(url, options);
+    };
   });
 }
 

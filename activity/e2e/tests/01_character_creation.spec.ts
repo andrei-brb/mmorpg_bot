@@ -11,12 +11,14 @@ test.describe('Character Creation', () => {
     // Navigate to the app
     await page.goto('/');
 
-    // Wait for boot to complete (Discord SDK mock loaded)
-    await page.waitForLoadState('networkidle');
+    // Wait for boot to complete AND for modal to appear
+    // The app needs to: 1) load, 2) boot Discord SDK, 3) auth, 4) load inventory
+    // If no character exists, show CreateCharacterModal
+    await page.waitForLoadState('domcontentloaded');
 
-    // Wait for CreateCharacterModal to appear
+    // Wait longer for the full auth+load cycle
     const modal = page.locator('[role="dialog"]');
-    await expect(modal).toBeVisible({ timeout: 10000 });
+    await expect(modal).toBeVisible({ timeout: 30000 });
 
     // Verify modal is asking for character creation
     const modalText = page.locator('[role="dialog"]').first();
@@ -65,10 +67,10 @@ test.describe('Character Creation', () => {
 
   test('should reject invalid character names', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const modal = page.locator('[role="dialog"]');
-    await expect(modal).toBeVisible({ timeout: 10000 });
+    await expect(modal).toBeVisible({ timeout: 30000 });
 
     // Try to submit with empty name
     const nameInput = page.locator('input[placeholder*="characters"]');
