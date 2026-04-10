@@ -171,13 +171,16 @@ def _redirect_uri_variants(url: str) -> list[str]:
 
 def _oauth_redirect_attempts(explicit: Optional[str] = None) -> list[Optional[str]]:
     """
-    Discord requires token exchange redirect_uri to match OAuth2 → Redirects exactly.
+    Discord token exchange: redirect_uri must match OAuth2 → Redirects when sent.
 
-    Order:
-    1) Optional `explicit` from the Activity client (e.g. window.location.origin for
-       https://<app_id>.discordsays.com) — must match the URL registered in the portal.
-    2) DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL (e.g. Vercel) if set.
-    3) Omit redirect_uri (some embedded flows; usually fails if (1)/(2) wrong).
+    Order (important for Embedded App SDK):
+    1) **Omit redirect_uri** first — matches Discord's own examples (`{ code }` only) and the
+       previous server behavior when no env URL was set. Some deployments rely on this.
+    2) Optional `explicit` from the Activity client (`window.location.origin` on discordsays.com).
+    3) DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL (e.g. Vercel) if set.
+
+    We try "omit" before arbitrary redirect URIs so a bad first guess cannot burn the auth code
+    if Discord invalidates it on repeated failures (varies by provider).
     """
     seen: set[str | None] = set()
     out: list[Optional[str]] = []
@@ -188,12 +191,12 @@ def _oauth_redirect_attempts(explicit: Optional[str] = None) -> list[Optional[st
         seen.add(x)
         out.append(x)
 
+    add(None)
     for c in _redirect_uri_variants(explicit or ""):
         add(c)
     raw = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or os.getenv("ACTIVITY_PUBLIC_URL") or "").strip()
     for c in _redirect_uri_variants(raw):
         add(c)
-    add(None)
     return out
 
 
