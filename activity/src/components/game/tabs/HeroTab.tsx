@@ -53,12 +53,6 @@ function isEnhanceableGear(it: InvRow): boolean {
   return true;
 }
 
-function formatDeedLabel(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 type StatKey =
   | "STR"
   | "AGI"
@@ -112,7 +106,7 @@ function statLabel(k: string): string {
 
 export function HeroTab() {
   const {
-    inventory, deedFlags, refreshInventory, itemPost,
+    inventory, refreshInventory, itemPost,
     getEnhanceInfo, postEnhance, buyProtection, requestSpecChoice,
   } = useGameSession();
 
@@ -373,28 +367,6 @@ export function HeroTab() {
 
   return (
     <div className="space-y-4">
-      <div className="game-panel">
-        <div className="game-panel-header">Story deeds</div>
-        <p className="text-[10px] text-muted-foreground mb-2">
-          Lore milestones from quests (Discord or Activity). Affects some boss fights when using <code className="text-[9px]">/fight</code>.
-        </p>
-        {deedFlags.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No deeds recorded yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {deedFlags.map((f) => (
-              <span
-                key={f}
-                className="rounded border border-primary/25 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-foreground/90"
-                title={f}
-              >
-                {formatDeedLabel(f)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Two columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Equipment */}
