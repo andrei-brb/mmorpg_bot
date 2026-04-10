@@ -65,11 +65,19 @@ export function authHeaders(accessToken: string, guildId?: string): HeadersInit 
   return h;
 }
 
-export async function exchangeToken(code: string): Promise<string> {
+/**
+ * Exchange OAuth code from Discord Embedded App SDK.
+ * `redirectUri` should be the Activity page origin (e.g. https://123....discordsays.com)
+ * so the API can match Developer Portal → OAuth2 → Redirects exactly.
+ */
+export async function exchangeToken(code: string, redirectUri?: string): Promise<string> {
   const res = await fetch(apiUrl("/api/token"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({
+      code,
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+    }),
   });
   if (!res.ok) throw new Error(`token ${res.status}`);
   const j = (await res.json()) as { access_token?: string };

@@ -156,24 +156,53 @@ def _discord_avatar_url(user: Dict[str, Any], discord_id: int) -> str:
     return f"https://cdn.discordapp.com/embed/avatars/{idx}.png"
 
 
-def _oauth_redirect_attempts() -> list[Optional[str]]:
+def _redirect_uri_variants(url: str) -> list[str]:
+    """Discord matches redirect_uri exactly; try with and without trailing slash."""
+    u = (url or "").strip()
+    if not u:
+        return []
+    base = u.rstrip("/")
+    out: list[str] = []
+    for c in (base + "/", base):
+        if c not in out:
+            out.append(c)
+    return out
+
+
+def _oauth_redirect_attempts(explicit: Optional[str] = None) -> list[Optional[str]]:
     """
     Discord requires token exchange redirect_uri to match OAuth2 → Redirects exactly.
-    Try: (1) URL with trailing slash, (2) without, (3) omit redirect_uri (embedded-app pattern).
+
+    Order:
+    1) Optional `explicit` from the Activity client (e.g. window.location.origin for
+       https://<app_id>.discordsays.com) — must match the URL registered in the portal.
+    2) DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL (e.g. Vercel) if set.
+    3) Omit redirect_uri (some embedded flows; usually fails if (1)/(2) wrong).
     """
-    raw = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or os.getenv("ACTIVITY_PUBLIC_URL") or "").strip()
+    seen: set[str | None] = set()
     out: list[Optional[str]] = []
-    if raw:
-        base = raw.rstrip().rstrip("/")
-        for c in (base + "/", base):
-            if c not in out:
-                out.append(c)
-    if None not in out:
-        out.append(None)
-    return out if out else [None]
+
+    def add(x: Optional[str]) -> None:
+        if x in seen:
+            return
+        seen.add(x)
+        out.append(x)
+
+    for c in _redirect_uri_variants(explicit or ""):
+        add(c)
+    raw = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or os.getenv("ACTIVITY_PUBLIC_URL") or "").strip()
+    for c in _redirect_uri_variants(raw):
+        add(c)
+    add(None)
+    return out
 
 
-async def _exchange_oauth_code(code: str, client_id: str, client_secret: str) -> Dict[str, Any]:
+async def _exchange_oauth_code(
+    code: str,
+    client_id: str,
+    client_secret: str,
+    redirect_uri_hint: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Exchange authorization code for tokens. Discord may require redirect_uri to match
     Developer Portal → OAuth2 → Redirects (same string as Activity public URL).
@@ -182,7 +211,7 @@ async def _exchange_oauth_code(code: str, client_id: str, client_secret: str) ->
     last_body = ""
     last_status = 0
 
-    for redirect_uri in _oauth_redirect_attempts():
+    for redirect_uri in _oauth_redirect_attempts(redirect_uri_hint):
         form: Dict[str, str] = {
             "client_id": client_id,
             "client_secret": client_secret,
@@ -226,9 +255,11 @@ async def _exchange_oauth_code(code: str, client_id: str, client_secret: str) ->
                 "error": "token_exchange_failed",
                 "detail": last_body[:400],
                 "hint": (
-                    "Add your Activity HTTPS URL under Developer Portal → OAuth2 → Redirects "
-                    "(exact match), then set DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL "
-                    "on the server to that same string."
+                    "Token exchange redirect_uri must match Developer Portal → OAuth2 → Redirects "
+                    "for the URL where the Activity runs (e.g. https://<APP_ID>.discordsays.com/). "
+                    "The Activity client now sends redirect_uri from the page; ensure that exact URL "
+                    "(with or without trailing slash) is listed. For Vercel-only dev, set "
+                    "DISCORD_OAUTH_REDIRECT_URI on the API server to your Vercel URL."
                 ),
             }
         ),
@@ -263,7 +294,13 @@ async def handle_token(request: web.Request) -> web.Response:
     if not code or not isinstance(code, str):
         raise web.HTTPBadRequest(text=json.dumps({"error": "missing_code"}), content_type="application/json")
 
-    token_payload = await _exchange_oauth_code(code, client_id, secret)
+    redirect_hint = (body or {}).get("redirect_uri")
+    if redirect_hint is not None and not isinstance(redirect_hint, str):
+        redirect_hint = None
+    if isinstance(redirect_hint, str):
+        redirect_hint = redirect_hint.strip() or None
+
+    token_payload = await _exchange_oauth_code(code, client_id, secret, redirect_hint)
     access_token = token_payload.get("access_token")
     if not access_token:
         raise web.HTTPBadRequest(

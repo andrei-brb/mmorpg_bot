@@ -629,7 +629,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const token = await api.exchangeToken(code);
+        // Must match OAuth2 redirect in Developer Portal — Activity iframe origin (discordsays.com).
+        const token = await api.exchangeToken(code, window.location.origin);
         if (cancelled) return;
         try {
           await sdk.commands.authenticate({ access_token: token });
