@@ -292,34 +292,46 @@ export function GameShell() {
 
             {!shellChromeHidden && (
               <>
-                <div className="flex items-center justify-between mb-5 pt-1">
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setProfileOpen(true)} className="relative shrink-0 group cursor-pointer">
-                      <div
-                        className="absolute -inset-[3px] rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
-                        style={{
-                          background: 'conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))',
-                        }}
-                      />
-                      <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
-                        <Avatar className="w-full h-full">
-                          {inventory?.discord?.avatar_url ? (
-                            <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
-                          ) : (
-                            <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
-                          )}
-                        </Avatar>
-                      </div>
-                    </button>
+                <div className="flex items-center justify-between mb-5 pt-1 gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex flex-col items-center shrink-0 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setProfileOpen(true)}
+                        className="relative group cursor-pointer"
+                        aria-label="Open profile"
+                      >
+                        <div
+                          className="absolute -inset-[3px] rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
+                          style={{
+                            background:
+                              "conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))",
+                          }}
+                        />
+                        <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
+                          <Avatar className="w-full h-full">
+                            {inventory?.discord?.avatar_url ? (
+                              <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
+                            ) : (
+                              <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
+                            )}
+                          </Avatar>
+                        </div>
+                      </button>
+                      <span className="shell-avatar-level whitespace-nowrap">Lv {playerStats.level}</span>
+                    </div>
 
-                    <div>
-                      <h1 className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
-                        style={{ textShadow: '0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)' }}>
+                    <div className="min-w-0">
+                      <h1
+                        className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
+                        style={{
+                          textShadow: "0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)",
+                        }}
+                      >
                         World of Discord
                       </h1>
-                      <p className="text-sm text-muted-foreground font-crimson mt-0.5">
-                        Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>{" "}
-                        <span className="text-primary/80 font-pixel text-[10px] align-middle">Lv {playerStats.level}</span>
+                      <p className="text-sm text-muted-foreground font-crimson mt-0.5 truncate">
+                        Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>
                       </p>
                     </div>
                   </div>

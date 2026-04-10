@@ -392,6 +392,7 @@ export function HeroTab() {
         {/* Equipment */}
         <div className="game-panel game-panel-hero">
           <div className="game-panel-header game-panel-header-hero">Equipment</div>
+          <p className="hero-panel-subtitle">Worn gear and weapons</p>
           <div className="hero-equip-grid">
             {equipmentSlots.map((slot) => {
               const it = slot.item;
@@ -412,7 +413,7 @@ export function HeroTab() {
                   }}
                 >
                   {it ? (
-                    <div className="absolute inset-0 flex items-center justify-center p-0.5">
+                    <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
                       <ItemIcon item={it} size={46} />
                       {Number(it.enhancement_level ?? 0) > 0 && (
                         <span
@@ -424,7 +425,9 @@ export function HeroTab() {
                       )}
                     </div>
                   ) : (
-                    <span className="text-[8px] leading-tight text-center opacity-50 font-cinzel">{slot.label}</span>
+                    <span className="relative z-[1] text-[8px] leading-tight text-center opacity-50 font-cinzel">
+                      {slot.label}
+                    </span>
                   )}
                   {showHoverTip && (
                     <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
@@ -486,19 +489,17 @@ export function HeroTab() {
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
               <span className="hero-inventory-title shrink-0">Inventory</span>
               <div className="text-right shrink-0 min-w-0">
-                <div
-                  className="text-xs font-semibold font-cinzel text-primary tabular-nums whitespace-nowrap"
-                  style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}
-                >
+                <div className="hero-stat-gold tabular-nums whitespace-nowrap">
                   {Number(char?.gold ?? 0).toLocaleString()} 🪙
                 </div>
                 {bagSlotsMax > 0 && (
-                  <div className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                  <div className="hero-stat-muted tabular-nums whitespace-nowrap">
                     Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
                   </div>
                 )}
               </div>
             </div>
+            <p className="hero-panel-subtitle w-full max-w-full">Stashed gear, consumables, and crafting goods</p>
             {/* Row 2: filters + batch sell — ornate chrome */}
             <div className="hero-inventory-chrome min-w-0">
               <div className="flex flex-wrap items-center gap-1 shrink-0">
@@ -578,7 +579,7 @@ export function HeroTab() {
                     </button>
                   )}
                   {it ? (
-                    <div className="absolute inset-0 flex items-center justify-center p-0.5">
+                    <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
                       <ItemIcon item={it} size={46} />
                       {Number(it.enhancement_level ?? 0) > 0 && (
                         <span
@@ -590,7 +591,7 @@ export function HeroTab() {
                       )}
                     </div>
                   ) : (
-                    <span className="text-[7px] leading-tight text-center opacity-30">Empty</span>
+                    <span className="relative z-[1] text-[7px] leading-tight text-center opacity-30">Empty</span>
                   )}
                   {it && Number(it.quantity ?? 1) > 1 && (
                     <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-foreground"
