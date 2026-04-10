@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 from config.settings import ABILITY_UNLOCK_LEVELS, CLASSES, Settings, SPECIALIZATIONS
 from services.combat.activity_combat import ACTIVE_ACTIVITY, _make_player
-from services.combat.combat_engine import ABILITIES, CombatEngine, CombatSession, Combatant, StatusEffect
+from services.combat.combat_engine import ABILITIES, CombatEngine, CombatSession, Combatant, ability_tooltip_payload, StatusEffect
 
 log = logging.getLogger("activity_pvp")
 
@@ -105,11 +105,13 @@ def _ability_options(char: dict, combatant: Combatant) -> List[Dict[str, Any]]:
             {
                 "key": key,
                 "name": ab.name,
+                "emoji": ab.emoji,
                 "cooldown": cd,
                 "max_cooldown": ab.cooldown,
-                "description": (ab.description or "")[:160],
-                "cost": int(ab.cost * cost_mult) if ab.cost else 0,
+                "description": (ab.description or "")[:200],
+                "cost": eff_cost,
                 "cost_type": getattr(ab, "cost_type", None),
+                **ability_tooltip_payload(combatant, ab),
             }
         )
     return out[:12]

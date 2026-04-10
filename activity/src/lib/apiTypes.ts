@@ -98,6 +98,15 @@ export type CombatAbility = {
   cost_type: string;
   cooldown: number;
   disabled?: string | null;
+  /** Server-authored; may be absent on older payloads. */
+  description?: string | null;
+  /** Pre-mitigation damage range from current combat stats. */
+  dmg_min?: number | null;
+  dmg_max?: number | null;
+  /** Typical heal from spell power (actual may be capped by missing HP). */
+  heal_estimate?: number | null;
+  crit_pct?: number | null;
+  is_aoe?: boolean;
 };
 
 export type PartyCombatRow = {

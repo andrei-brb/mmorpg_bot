@@ -24,7 +24,7 @@ from config.settings import (
     ZONES,
     _boss_hp_scale_for_zone,
 )
-from services.combat.combat_engine import ABILITIES, CombatEngine, CombatSession, Combatant
+from services.combat.combat_engine import ABILITIES, CombatEngine, CombatSession, Combatant, ability_tooltip_payload
 
 log = logging.getLogger("activity_combat")
 
@@ -243,18 +243,18 @@ def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
             disabled = f"Cooldown: {cd}"
         elif ab.cost_type in ("mana", "energy", "rage") and eff_cost and player.current_res < eff_cost:
             disabled = f"Not enough {ab.cost_type}"
-        out.append(
-            {
-                "key": key,
-                "name": ab.name,
-                "emoji": ab.emoji,
-                "description": ab.description[:120],
-                "cost_type": ab.cost_type,
-                "cost": eff_cost,
-                "cooldown": cd,
-                "disabled": disabled,
-            }
-        )
+        row = {
+            "key": key,
+            "name": ab.name,
+            "emoji": ab.emoji,
+            "description": ab.description[:200],
+            "cost_type": ab.cost_type,
+            "cost": eff_cost,
+            "cooldown": cd,
+            "disabled": disabled,
+            **ability_tooltip_payload(player, ab),
+        }
+        out.append(row)
     return out[:30]
 
 

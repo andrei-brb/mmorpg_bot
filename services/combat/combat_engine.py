@@ -8,7 +8,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 log = logging.getLogger("combat")
@@ -133,6 +133,26 @@ class Ability:
     ignores_armor:   bool = False
     from_stealth:    bool = False   # Must be in stealth
     execute_threshold: Optional[float] = None  # Only usable when target HP% <= this (e.g. 0.20)
+
+
+def ability_tooltip_payload(attacker: Combatant, ab: Ability) -> Dict[str, Any]:
+    """Rough pre-mitigation numbers for Activity / PvP tooltips (matches core damage/heal formulas)."""
+    out: Dict[str, Any] = {
+        "crit_pct": round(float(attacker.crit_chance), 1),
+        "dmg_min": None,
+        "dmg_max": None,
+        "heal_estimate": None,
+        "is_aoe": bool(ab.is_aoe),
+    }
+    if ab.dmg_mult > 0:
+        power = attacker.spell_power if ab.ignores_armor else attacker.attack_power
+        raw_min = int((attacker.dmg_min + power * 0.12) * ab.dmg_mult)
+        raw_max = int((attacker.dmg_max + power * 0.12) * ab.dmg_mult)
+        out["dmg_min"] = max(1, raw_min)
+        out["dmg_max"] = max(1, raw_max)
+    if ab.heal_mult > 0:
+        out["heal_estimate"] = max(1, int(attacker.spell_power * ab.heal_mult + 25))
+    return out
 
 
 ABILITIES: Dict[str, Ability] = {

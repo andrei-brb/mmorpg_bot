@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
-import { skillIconUrl } from "@/lib/skillIconUrl";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { BattleBackground } from "@/components/game/combat/BattleBackground";
+import { CombatSkillButton } from "@/components/game/combat/CombatSkillButton";
 import { BattleFighter } from "@/components/game/combat/BattleFighter";
 import { DamageNumbers, type DamageEvent } from "@/components/game/combat/DamageNumber";
 import { TurnOrder } from "@/components/game/combat/TurnOrder";
@@ -361,24 +361,17 @@ export function CombatEncounterView({
         </div>
       ) : null}
 
-      <div className="game-panel">
+      <div className="game-panel overflow-visible">
         <div className="game-panel-header">Skills</div>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 overflow-visible">
           {(state.abilities || []).map((a) => (
-            <button
+            <CombatSkillButton
               key={a.key}
-              type="button"
-              disabled={Boolean(a.disabled) || loading || !canAct}
-              title={a.disabled || undefined}
-              className="skill-btn"
-              onClick={() => void onAbility(a.key)}
-            >
-              <CombatSkillIcon abilityKey={a.key} emoji={a.emoji} />
-              <span className="text-foreground font-semibold text-[10px]">{a.name}</span>
-              <span className="text-muted-foreground text-[9px]">
-                {a.cost} {a.cost_type}
-              </span>
-            </button>
+              ability={a}
+              loading={loading}
+              canAct={canAct}
+              onUse={(key) => void onAbility(key)}
+            />
           ))}
         </div>
       </div>
@@ -462,27 +455,5 @@ export function CombatEncounterView({
         </div>
       )}
     </div>
-  );
-}
-
-function CombatSkillIcon({ abilityKey, emoji }: { abilityKey: string; emoji: string }) {
-  const [useEmoji, setUseEmoji] = useState(false);
-  if (useEmoji) {
-    return (
-      <span className="text-2xl leading-none" style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.4))" }}>
-        {emoji}
-      </span>
-    );
-  }
-  return (
-    <img
-      src={skillIconUrl(abilityKey)}
-      alt=""
-      width={32}
-      height={32}
-      className="w-8 h-8 object-contain shrink-0"
-      style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.4))" }}
-      onError={() => setUseEmoji(true)}
-    />
   );
 }
