@@ -465,6 +465,15 @@ class InventoryService:
         ):
             return False, "This consumable can't be used directly.", None
 
+        if item["effect_type"] == "heal_hp":
+            crow = await self.db.fetchrow(
+                "SELECT current_hp, max_hp, combat_status FROM characters WHERE id=$1", char_id
+            )
+            if crow and crow["combat_status"] != "in_combat":
+                cur, mx = int(crow["current_hp"] or 0), int(crow["max_hp"] or 0)
+                if mx > 0 and cur >= mx:
+                    return False, "You are already at full health.", None
+
         if item["quantity"] > 1:
             await self.db.execute("UPDATE inventory SET quantity=quantity-1 WHERE id=$1", item_id)
         else:

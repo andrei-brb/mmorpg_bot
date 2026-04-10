@@ -2747,6 +2747,16 @@ async def handle_item_use(request: web.Request) -> web.Response:
     if not char:
         return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
 
+    if char.get("combat_status") == "in_combat":
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "in_combat",
+                "message": "You can't use items from inventory during a fight. Use the potion button in the combat UI.",
+            },
+            status=400,
+        )
+
     try:
         uid = UUID(item_id)
     except ValueError:

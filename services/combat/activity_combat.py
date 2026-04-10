@@ -865,17 +865,20 @@ async def _process_activity_action_impl(
             log_lines.append("❌ You don't have any healing potions!")
         elif ac.potion_used:
             log_lines.append("❌ You already used a potion this fight.")
+        elif player.current_hp >= player.max_hp:
+            log_lines.append("❌ You are already at full health.")
         else:
-            from uuid import UUID as _UUID
-
             potion_id = has_potion_row["id"]
             ok, msg_text, effect = await inv_svc.use_consumable(char_id, potion_id)
             healed = 0
             if ok and effect and effect.get("type") == "heal_hp":
-                base_val = effect.get("value", 80)
+                base_val = int(effect.get("value") or 80)
                 heal_val = max(base_val, player.max_hp // 4)
-                healed = await char_svc.heal(char_id, heal_val)
-                player.current_hp = min(player.max_hp, player.current_hp + healed)
+                room = max(0, player.max_hp - player.current_hp)
+                healed = min(heal_val, room)
+                player.current_hp += healed
+                if healed > 0:
+                    await char_svc.set_current_hp_res(char_id, player.current_hp, player.current_res)
                 log_lines.append(f"🧪 {msg_text} Restored **{healed}** HP.")
             else:
                 log_lines.append(f"🧪 {msg_text}")
@@ -1115,15 +1118,20 @@ async def _process_party_activity_action_impl(
             log_lines.append("❌ You don't have any healing potions!")
         elif ac.potion_by_discord.get(discord_id, False):
             log_lines.append("❌ You already used a potion this fight.")
+        elif player.current_hp >= player.max_hp:
+            log_lines.append("❌ You are already at full health.")
         else:
             potion_id = has_potion_row["id"]
             ok, msg_text, effect = await inv_svc.use_consumable(char_id, potion_id)
             healed = 0
             if ok and effect and effect.get("type") == "heal_hp":
-                base_val = effect.get("value", 80)
+                base_val = int(effect.get("value") or 80)
                 heal_val = max(base_val, player.max_hp // 4)
-                healed = await char_svc.heal(char_id, heal_val)
-                player.current_hp = min(player.max_hp, player.current_hp + healed)
+                room = max(0, player.max_hp - player.current_hp)
+                healed = min(heal_val, room)
+                player.current_hp += healed
+                if healed > 0:
+                    await char_svc.set_current_hp_res(char_id, player.current_hp, player.current_res)
                 log_lines.append(f"🧪 {msg_text} Restored **{healed}** HP.")
             else:
                 log_lines.append(f"🧪 {msg_text}")

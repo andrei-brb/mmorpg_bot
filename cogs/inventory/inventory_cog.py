@@ -2549,6 +2549,10 @@ class InventoryCog(commands.Cog, name="Inventory"):
             await interaction.response.defer()
         char = await self.char_svc.get_character(interaction.user.id)
         if not char: return await interaction.followup.send("❌ No character.")
+        if char.get("combat_status") == "in_combat":
+            return await interaction.followup.send(
+                "❌ You can't use items from inventory during combat. Use the potion button in your fight."
+            )
         try: uid = UUID(item_id)
         except ValueError: return await interaction.followup.send("❌ Invalid item ID.")
         ok, msg, effect = await self.inv_svc.use_consumable(char["id"], uid)

@@ -624,17 +624,22 @@ class CombatCog(commands.Cog, name="Combat"):
                         if view.chosen == "__potion__":
                             if not has_potion_row:
                                 log_lines.append("❌ You don't have any healing potions!")
+                            elif player.current_hp >= player.max_hp:
+                                log_lines.append("❌ You are already at full health.")
                             else:
-                                from uuid import UUID as _UUID
                                 potion_id = has_potion_row["id"]
                                 ok, msg_text, effect = await self.inv_svc.use_consumable(char_id, potion_id)
                                 healed = 0
                                 if ok and effect and effect.get("type") == "heal_hp":
-                                    base_val = effect.get("value", 80)
+                                    base_val = int(effect.get("value") or 80)
                                     heal_val = max(base_val, player.max_hp // 4)  # 25% of max, min 80
-                                    healed = await self.char_svc.heal(char_id, heal_val)
-                                    # Sync combatant HP with DB state
-                                    player.current_hp = min(player.max_hp, player.current_hp + healed)
+                                    room = max(0, player.max_hp - player.current_hp)
+                                    healed = min(heal_val, room)
+                                    player.current_hp += healed
+                                    if healed > 0:
+                                        await self.char_svc.set_current_hp_res(
+                                            char_id, player.current_hp, player.current_res
+                                        )
                                     log_lines.append(f"🧪 {msg_text} Restored **{healed}** HP.")
                                 else:
                                     log_lines.append(f"🧪 {msg_text}")

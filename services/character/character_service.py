@@ -562,12 +562,22 @@ class CharacterService:
 
     async def heal(self, char_id: UUID, amount: int) -> int:
         char = await self.get_by_id(char_id)
-        actual = min(amount, char["max_hp"] - char["current_hp"])
+        room = max(0, int(char["max_hp"]) - int(char["current_hp"]))
+        actual = min(amount, room)
         if actual > 0:
             await self.db.execute(
                 "UPDATE characters SET current_hp=current_hp+$2 WHERE id=$1", char_id, actual
             )
         return actual
+
+    async def set_current_hp_res(self, char_id: UUID, hp: int, res: int) -> None:
+        """Persist HP/res without changing combat_status (e.g. mid-combat potion)."""
+        await self.db.execute(
+            "UPDATE characters SET current_hp=$2, current_res=$3 WHERE id=$1",
+            char_id,
+            max(0, int(hp)),
+            max(0, int(res)),
+        )
 
     async def boost_stat(self, char_id: UUID, stat: str, amount: int, duration_minutes: int = 0) -> Tuple[bool, str]:
         """Boost a character stat temporarily or permanently.
