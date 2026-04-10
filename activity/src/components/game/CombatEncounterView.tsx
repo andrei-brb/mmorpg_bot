@@ -1,3 +1,4 @@
+import { Swords } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
@@ -39,6 +40,43 @@ function firstTokenEmoji(name: string): string {
   return t && /[^\w\s]/.test(t) ? t : "👾";
 }
 
+function displayClassTitle(slug: string): string {
+  if (!slug) return "Adventurer";
+  return slug
+    .replace(/_/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.slice(0, 1).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function ArenaDuelResourceBar({ current, max, kind }: { current: number; max: number; kind: "hp" | "mana" }) {
+  const pct = max <= 0 ? 0 : Math.max(0, (current / max) * 100);
+  const isLow = kind === "hp" && pct < 30;
+  return (
+    <div className="hp-bar-track">
+      <div
+        className={`h-full rounded-sm transition-all duration-500 ${kind === "mana" ? "shadow-[inset_0_1px_0_hsl(210_65%_60%/0.35)]" : "hp-bar-fill"}`}
+        style={
+          kind === "mana"
+            ? {
+                width: `${pct}%`,
+                background: "linear-gradient(180deg, hsl(210 65% 48%) 0%, hsl(210 55% 32%) 100%)",
+                boxShadow: "inset 0 1px 0 hsl(210 65% 60% / 0.35), 0 0 6px hsl(210 65% 40% / 0.25)",
+              }
+            : isLow
+              ? {
+                  width: `${pct}%`,
+                  background: "linear-gradient(180deg, hsl(0 55% 42%) 0%, hsl(0 50% 28%) 100%)",
+                  boxShadow: "inset 0 1px 0 hsl(0 60% 50% / 0.35), 0 0 6px hsl(0 60% 35% / 0.3)",
+                }
+              : { width: `${pct}%` }
+        }
+      />
+    </div>
+  );
+}
+
 export type CombatEncounterViewProps = {
   focusMode?: boolean;
   zoneLabel?: ExploreZone;
@@ -69,6 +107,16 @@ export type CombatEncounterViewProps = {
   turnBannerSeconds?: number | null;
   /** Shown when you cannot act (default ally message). */
   opponentTurnLabel?: string;
+  /**
+   * `arena-duel` — Discord Arena style: twin stat panels, crossed swords, Actions + primary row, inline log.
+   */
+  presentation?: "battlefield" | "arena-duel";
+  /** Panel title above abilities (default `Skills`; Arena uses `Actions`). */
+  skillsPanelTitle?: string;
+  /** Rendered full-width above the skill grid (e.g. PvP `__pvp_attack`). */
+  primaryAbilityKey?: string;
+  /** Opponent class label on the right card (e.g. API `Mage`). */
+  enemyClassDisplayName?: string;
 };
 
 export function CombatEncounterView({
@@ -92,6 +140,10 @@ export function CombatEncounterView({
   showPotionButton = true,
   turnBannerSeconds,
   opponentTurnLabel = "⏳ Ally's Turn",
+  presentation = "battlefield",
+  skillsPanelTitle = "Skills",
+  primaryAbilityKey,
+  enemyClassDisplayName,
 }: CombatEncounterViewProps) {
   const [showLogModal, setShowLogModal] = useState(false);
   const classKey = state.player.class || inventory?.character?.class || "";
@@ -228,6 +280,24 @@ export function CombatEncounterView({
   // Detect if combat is in progress
   const combatInProgress = state.enemy.current_hp > 0;
 
+  const isArenaDuel = presentation === "arena-duel";
+  const abilitiesList = state.abilities || [];
+  const primaryAbility =
+    isArenaDuel && primaryAbilityKey ? abilitiesList.find((a) => a.key === primaryAbilityKey) : undefined;
+  const gridAbilities =
+    isArenaDuel && primaryAbilityKey
+      ? abilitiesList.filter((a) => a.key !== primaryAbilityKey)
+      : abilitiesList;
+
+  const resLabel =
+    state.player.res_type === "mana"
+      ? "Mana"
+      : state.player.res_type === "energy"
+        ? "Energy"
+        : state.player.res_type === "rage"
+          ? "Rage"
+          : displayClassTitle(state.player.res_type || "mana");
+
   return (
     <div className={focusMode ? "flex flex-col gap-2 sm:gap-3 h-full min-h-0" : "space-y-4"}>
       {topBar != null ? (
@@ -273,68 +343,176 @@ export function CombatEncounterView({
         </div>
       )}
 
-      <BattleBackground zone={battleZone}>
-        <div className="p-2 space-y-2">
-          <div className="flex justify-center">
-            <TurnOrder fighters={turnFighters} />
+      {isArenaDuel ? (
+        <div className="relative">
+          <DamageNumbers events={damageEvents} />
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
+          <div className="game-panel order-1 sm:order-none">
+            <div className="p-3 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-sm border border-border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
+                  {classKey ? (
+                    <img src={classIconUrl(classKey)} alt="" className="w-10 h-10 object-contain" />
+                  ) : (
+                    <span className="text-xl text-muted-foreground" aria-hidden>
+                      🛡️
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-cinzel text-xs font-bold text-foreground tracking-wide truncate">{state.player.name}</p>
+                  <p className="text-[10px] text-muted-foreground font-crimson">
+                    Lv.{playerLevel} {displayClassTitle(classKey)}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex items-center justify-between text-[10px] font-crimson mb-1">
+                    <span className="text-muted-foreground uppercase tracking-wider">Hit Points</span>
+                    <span className="text-foreground tabular-nums">
+                      {state.player.current_hp} / {state.player.max_hp}
+                    </span>
+                  </div>
+                  <ArenaDuelResourceBar current={state.player.current_hp} max={state.player.max_hp} kind="hp" />
+                </div>
+                {state.player.max_res > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-crimson mb-1">
+                      <span className="text-muted-foreground uppercase tracking-wider">{resLabel}</span>
+                      <span className="text-foreground tabular-nums">
+                        {state.player.current_res} / {state.player.max_res}
+                      </span>
+                    </div>
+                    <ArenaDuelResourceBar current={state.player.current_res} max={state.player.max_res} kind="mana" />
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
-          <div className="relative flex items-end justify-between gap-2 px-2 sm:px-4 pb-2 pt-1 min-h-[200px]">
-            <DamageNumbers events={damageEvents} />
-            <BattleFighter
-              name={state.player.name}
-              icon={classEmoji(classKey)}
-              iconSrc={classKey ? classIconUrl(classKey) : null}
-              hp={state.player.current_hp}
-              maxHp={state.player.max_hp}
-              mp={state.player.max_res > 0 ? state.player.current_res : undefined}
-              maxMp={state.player.max_res > 0 ? state.player.max_res : undefined}
-              resourceLabel={state.player.res_type || "MP"}
-              level={playerLevel}
-              isPlayer
-              isHit={playerHit}
-              isAttacking={playerAttacking}
-            />
-            <BattleFighter
-              name={state.enemy.name}
-              icon={enemyIcon}
-              iconSrc={enemyIconSrc}
-              hp={state.enemy.current_hp}
-              maxHp={state.enemy.max_hp}
-              level={enemyLevel}
-              isPlayer={false}
-              isHit={enemyHit}
-              isAttacking={enemyAttacking}
-            />
+          <div className="flex items-center justify-center py-2 sm:py-8 order-2 sm:order-none">
+            <Swords className="w-7 h-7 text-primary shrink-0" style={{ filter: "drop-shadow(0 0 8px hsl(43 78% 50% / 0.35))" }} />
           </div>
-          {specKey && specIconUrl(specKey) && (
-            <div className="flex justify-center -mt-1 pb-1">
-              <img
-                src={specIconUrl(specKey)}
-                alt=""
-                width={18}
-                height={18}
-                className="w-[18px] h-[18px] object-contain rounded-[2px] opacity-90"
+          <div className="game-panel order-3 sm:order-none">
+            <div className="p-3 space-y-3">
+              <div className="flex items-center gap-3 flex-row-reverse text-right">
+                <div className="w-12 h-12 rounded-sm border border-border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
+                  {enemyIconSrc ? (
+                    <img src={enemyIconSrc} alt="" className="w-10 h-10 object-contain scale-x-[-1]" />
+                  ) : (
+                    <span className="text-xl text-muted-foreground" aria-hidden>
+                      ⚔️
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-cinzel text-xs font-bold text-foreground tracking-wide truncate">{state.enemy.name}</p>
+                  <p className="text-[10px] text-muted-foreground font-crimson">
+                    Lv.{enemyLevel}{" "}
+                    {enemyClassDisplayName?.trim() || displayClassTitle(enemyClassKey || "")}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <div className="flex items-center justify-between text-[10px] font-crimson mb-1">
+                    <span className="text-muted-foreground uppercase tracking-wider">Hit Points</span>
+                    <span className="text-foreground tabular-nums">
+                      {state.enemy.current_hp} / {state.enemy.max_hp}
+                    </span>
+                  </div>
+                  <ArenaDuelResourceBar current={state.enemy.current_hp} max={state.enemy.max_hp} kind="hp" />
+                </div>
+                {state.enemy.max_res != null &&
+                state.enemy.max_res > 0 &&
+                state.enemy.current_res != null ? (
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-crimson mb-1">
+                      <span className="text-muted-foreground uppercase tracking-wider">
+                        {state.enemy.res_type === "energy"
+                          ? "Energy"
+                          : state.enemy.res_type === "rage"
+                            ? "Rage"
+                            : "Mana"}
+                      </span>
+                      <span className="text-foreground tabular-nums">
+                        {state.enemy.current_res} / {state.enemy.max_res}
+                      </span>
+                    </div>
+                    <ArenaDuelResourceBar current={state.enemy.current_res} max={state.enemy.max_res} kind="mana" />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+      ) : (
+        <BattleBackground zone={battleZone}>
+          <div className="p-2 space-y-2">
+            <div className="flex justify-center">
+              <TurnOrder fighters={turnFighters} />
+            </div>
+            <div className="relative flex items-end justify-between gap-2 px-2 sm:px-4 pb-2 pt-1 min-h-[200px]">
+              <DamageNumbers events={damageEvents} />
+              <BattleFighter
+                name={state.player.name}
+                icon={classEmoji(classKey)}
+                iconSrc={classKey ? classIconUrl(classKey) : null}
+                hp={state.player.current_hp}
+                maxHp={state.player.max_hp}
+                mp={state.player.max_res > 0 ? state.player.current_res : undefined}
+                maxMp={state.player.max_res > 0 ? state.player.max_res : undefined}
+                resourceLabel={state.player.res_type || "MP"}
+                level={playerLevel}
+                isPlayer
+                isHit={playerHit}
+                isAttacking={playerAttacking}
+              />
+              <BattleFighter
+                name={state.enemy.name}
+                icon={enemyIcon}
+                iconSrc={enemyIconSrc}
+                hp={state.enemy.current_hp}
+                maxHp={state.enemy.max_hp}
+                level={enemyLevel}
+                isPlayer={false}
+                isHit={enemyHit}
+                isAttacking={enemyAttacking}
               />
             </div>
-          )}
-        </div>
-      </BattleBackground>
+            {specKey && specIconUrl(specKey) && (
+              <div className="flex justify-center -mt-1 pb-1">
+                <img
+                  src={specIconUrl(specKey)}
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="w-[18px] h-[18px] object-contain rounded-[2px] opacity-90"
+                />
+              </div>
+            )}
+          </div>
+        </BattleBackground>
+      )}
 
-      <div className="text-center">
-        <span
-          className="inline-block px-5 py-1.5 font-cinzel font-semibold text-sm text-primary rounded-sm"
-          style={{
-            background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
-            border: "1px solid hsl(43 50% 35% / 0.5)",
-            boxShadow: "0 0 12px hsl(43 78% 50% / 0.1), inset 0 1px 0 hsl(228 14% 22% / 0.4)",
-            textShadow: "0 0 6px hsl(43 78% 50% / 0.3)",
-          }}
-        >
-          {canAct
-            ? `⚔️ Your Turn${turnBannerSeconds != null ? ` — ${turnBannerSeconds}s` : ""}`
-            : opponentTurnLabel}
-        </span>
-      </div>
+      {!isArenaDuel && (
+        <div className="text-center">
+          <span
+            className="inline-block px-5 py-1.5 font-cinzel font-semibold text-sm text-primary rounded-sm"
+            style={{
+              background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
+              border: "1px solid hsl(43 50% 35% / 0.5)",
+              boxShadow: "0 0 12px hsl(43 78% 50% / 0.1), inset 0 1px 0 hsl(228 14% 22% / 0.4)",
+              textShadow: "0 0 6px hsl(43 78% 50% / 0.3)",
+            }}
+          >
+            {canAct
+              ? `⚔️ Your Turn${turnBannerSeconds != null ? ` — ${turnBannerSeconds}s` : ""}`
+              : opponentTurnLabel}
+          </span>
+        </div>
+      )}
 
       {partyMode ? (
         <div className="game-panel py-2">
@@ -397,21 +575,60 @@ export function CombatEncounterView({
       ) : null}
 
       <div className="game-panel overflow-visible">
-        <div className="game-panel-header">Skills</div>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 overflow-visible">
-          {(state.abilities || []).map((a) => (
-            <CombatSkillButton
-              key={a.key}
-              ability={a}
-              loading={loading}
-              canAct={canAct}
-              onUse={(key) => void onAbility(key)}
-            />
-          ))}
+        <div className="game-panel-header">{skillsPanelTitle}</div>
+        <div className={isArenaDuel || primaryAbility ? "px-3 pb-3" : ""}>
+          {primaryAbility ? (
+            <div className="mb-2 overflow-visible">
+              {(() => {
+                const pd = primaryAbility;
+                const primaryDisabled = Boolean(pd.disabled) || loading || !canAct;
+                return (
+                  <button
+                    type="button"
+                    aria-disabled={primaryDisabled}
+                    tabIndex={primaryDisabled ? -1 : undefined}
+                    className="game-btn-primary w-full py-2.5 text-sm font-cinzel font-semibold flex items-center justify-center gap-2"
+                    title={pd.description || pd.name}
+                    onClick={() => {
+                      if (primaryDisabled) return;
+                      void onAbility(pd.key);
+                    }}
+                  >
+                    <span aria-hidden>{pd.emoji || "⚔️"}</span>
+                    {pd.name}
+                  </button>
+                );
+              })()}
+            </div>
+          ) : null}
+          <div
+            className={`grid gap-2 overflow-visible ${isArenaDuel ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}
+          >
+            {gridAbilities.map((a) => (
+              <CombatSkillButton
+                key={a.key}
+                ability={a}
+                loading={loading}
+                canAct={canAct}
+                onUse={(key) => void onAbility(key)}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {combatInProgress ? (
+      {isArenaDuel ? (
+        <div className="game-panel">
+          <div className="game-panel-header">Combat Log</div>
+          <div className="h-40 overflow-y-auto p-3 space-y-0.5 font-mono text-[11px]">
+            {(state.log || []).map((line, i) => (
+              <p key={i} className="text-muted-foreground">
+                {stripMd(line)}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : combatInProgress ? (
         <button
           type="button"
           onClick={() => setShowLogModal(true)}

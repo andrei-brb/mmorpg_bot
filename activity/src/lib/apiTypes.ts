@@ -134,7 +134,15 @@ export type CombatStatePayload = {
     class?: string | null;
     specialization?: string | null;
   };
-  enemy: { name: string; current_hp: number; max_hp: number };
+  enemy: {
+    name: string;
+    current_hp: number;
+    max_hp: number;
+    /** Optional (e.g. Arena PvP) — shows resource bar on duel layout. */
+    current_res?: number;
+    max_res?: number;
+    res_type?: string;
+  };
   log: string[];
   abilities: CombatAbility[];
   can_potion: boolean;
