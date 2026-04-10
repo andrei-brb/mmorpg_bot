@@ -8,6 +8,10 @@ test.describe('Character Creation', () => {
   });
 
   test('should create a character and enter the game', async ({ page }) => {
+    // Log console messages for debugging
+    page.on('console', msg => console.log('PAGE LOG:', msg.type(), msg.text()));
+    page.on('pageerror', err => console.log('PAGE ERROR:', err));
+
     // Navigate to the app
     await page.goto('/');
 
@@ -29,18 +33,15 @@ test.describe('Character Creation', () => {
     const characterName = `TestHero_${Date.now()}`;
     await nameInput.fill(characterName);
 
-    // Select a class (click any class button)
+    // Class may be selected automatically or not visible; try to click a class selector if present
     const classButtons = page.locator('[role="dialog"] button').filter({
       hasText: /warrior|mage|rogue|paladin/i,
     });
 
     if (await classButtons.count() > 0) {
       await classButtons.first().click();
-    } else {
-      // If no text-based class buttons, click any button that's not "Create"
-      const buttons = page.locator('[role="dialog"] button');
-      await buttons.nth(1).click(); // Skip potential close/cancel button
     }
+    // If no class buttons, the form defaults or doesn't require selection
 
     // Click "Begin adventure" or similar
     const submitBtn = page
