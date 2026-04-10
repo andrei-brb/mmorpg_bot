@@ -21,6 +21,9 @@ __pycache__/
 activity/node_modules/
 activity/dist/
 activity/.env
+activity/.env.local
+activity/test-results/
+activity/playwright-report/
 *.tsbuildinfo
 
 # Local UI export (generated; large)

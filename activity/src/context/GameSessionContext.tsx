@@ -142,43 +142,56 @@ async function runDiscordOAuthOnce(
   if (oauthFlight?.clientId === clientId) {
     return oauthFlight.promise;
   }
-  const promise = (async (): Promise<DiscordOAuthResult> => {
-    const sdk = new DiscordSDK(clientId);
-    sdkRef.current = sdk;
-    const raced = await runWithTimeout(sdk.ready(), 12000);
-    if (raced === "timeout") {
-      throw new Error("sdk_ready_timeout");
-    }
-    let auth: Awaited<ReturnType<DiscordSDK["commands"]["authorize"]>>;
-    try {
-      auth = await sdk.commands.authorize({
-        client_id: clientId,
-        response_type: "code",
-        state: "",
-        prompt: "none",
-        scope: ["identify", "applications.commands"],
-      });
-    } catch (e) {
-      console.error(e);
-      throw new Error("authorization_cancelled");
-    }
-    const token = await api.exchangeToken(auth.code, window.location.origin);
-    try {
-      await sdk.commands.authenticate({ access_token: token });
-    } catch (e) {
-      console.warn("authenticate", e);
-    }
-    return {
-      token,
-      guildId: sdk.guildId ?? undefined,
-      channelId: sdk.channelId ?? undefined,
-    };
-  })();
 
+  // Reserve synchronously before any await — React Strict Mode can invoke this twice
+  // in the same tick; a second call must see oauthFlight and await the same promise.
+  let resolve!: (v: DiscordOAuthResult) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<DiscordOAuthResult>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
   oauthFlight = { clientId, promise };
   promise.catch(() => {
     oauthFlight = null;
   });
+
+  void (async () => {
+    try {
+      const sdk = new DiscordSDK(clientId);
+      sdkRef.current = sdk;
+      const raced = await runWithTimeout(sdk.ready(), 12000);
+      if (raced === "timeout") {
+        throw new Error("sdk_ready_timeout");
+      }
+      let auth: Awaited<ReturnType<DiscordSDK["commands"]["authorize"]>>;
+      try {
+        auth = await sdk.commands.authorize({
+          client_id: clientId,
+          response_type: "code",
+          state: "",
+          prompt: "none",
+          scope: ["identify", "applications.commands"],
+        });
+      } catch (e) {
+        console.error(e);
+        throw new Error("authorization_cancelled");
+      }
+      const token = await api.exchangeToken(auth.code, window.location.origin);
+      try {
+        await sdk.commands.authenticate({ access_token: token });
+      } catch (e) {
+        console.warn("authenticate", e);
+      }
+      resolve({
+        token,
+        guildId: sdk.guildId ?? undefined,
+        channelId: sdk.channelId ?? undefined,
+      });
+    } catch (e) {
+      reject(e);
+    }
+  })();
 
   return promise;
 }

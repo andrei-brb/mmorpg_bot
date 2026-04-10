@@ -173,14 +173,14 @@ def _oauth_redirect_attempts(explicit: Optional[str] = None) -> list[Optional[st
     """
     Discord token exchange: redirect_uri must match OAuth2 → Redirects when sent.
 
-    Order (important for Embedded App SDK):
-    1) **Omit redirect_uri** first — matches Discord's own examples (`{ code }` only) and the
-       previous server behavior when no env URL was set. Some deployments rely on this.
-    2) Optional `explicit` from the Activity client (`window.location.origin` on discordsays.com).
-    3) DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL (e.g. Vercel) if set.
+    Order:
+    1) Variants of `explicit` from the Activity (`window.location.origin` on discordsays.com)
+       — usually the correct string for Embedded Activities.
+    2) Omit `redirect_uri` — some Embedded flows match Discord examples (`code` only).
+    3) DISCORD_OAUTH_REDIRECT_URI or ACTIVITY_PUBLIC_URL if set.
 
-    We try "omit" before arbitrary redirect URIs so a bad first guess cannot burn the auth code
-    if Discord invalidates it on repeated failures (varies by provider).
+    Callers cap how many attempts run; repeating failed exchanges with the same code can yield
+    invalid_grant if the code is single-use.
     """
     seen: set[str | None] = set()
     out: list[Optional[str]] = []
@@ -191,13 +191,17 @@ def _oauth_redirect_attempts(explicit: Optional[str] = None) -> list[Optional[st
         seen.add(x)
         out.append(x)
 
-    add(None)
-    for c in _redirect_uri_variants(explicit or ""):
+    for c in _redirect_uri_variants((explicit or "").strip()):
         add(c)
+    add(None)
     raw = (os.getenv("DISCORD_OAUTH_REDIRECT_URI") or os.getenv("ACTIVITY_PUBLIC_URL") or "").strip()
     for c in _redirect_uri_variants(raw):
         add(c)
     return out
+
+
+# Max POSTs per code exchange — Discord may invalidate the code after a failed attempt.
+_OAUTH_REDIRECT_MAX_ATTEMPTS = 3
 
 
 async def _exchange_oauth_code(
@@ -214,7 +218,8 @@ async def _exchange_oauth_code(
     last_body = ""
     last_status = 0
 
-    for redirect_uri in _oauth_redirect_attempts(redirect_uri_hint):
+    attempts = _oauth_redirect_attempts(redirect_uri_hint)[:_OAUTH_REDIRECT_MAX_ATTEMPTS]
+    for attempt_idx, redirect_uri in enumerate(attempts):
         form: Dict[str, str] = {
             "client_id": client_id,
             "client_secret": client_secret,
@@ -239,9 +244,11 @@ async def _exchange_oauth_code(
                 if resp.status == 200:
                     return json.loads(text)
 
-                # Retry next variant if Discord complains about redirect
                 err_lower = text.lower()
-                if "redirect" in err_lower or "invalid_grant" in err_lower:
+                can_retry = attempt_idx < len(attempts) - 1 and (
+                    "redirect" in err_lower or "invalid_grant" in err_lower
+                )
+                if can_retry:
                     log.warning(
                         "OAuth token exchange failed (%s) with redirect_uri=%r: %s",
                         resp.status,
