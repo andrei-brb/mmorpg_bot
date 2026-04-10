@@ -538,6 +538,13 @@ async def handle_combat_enemies(request: web.Request) -> web.Response:
     if not char:
         return web.json_response(_json_safe({"enemies": [], "error": "no_character"}))
 
+    zone_key = (request.query.get("zone_key") or "").strip()
+    if zone_key:
+        # Allow the client to request enemies for a specific zone (e.g. quest objectives),
+        # without mutating the character's actual location.
+        char = dict(char)
+        char["current_zone"] = zone_key
+
     enemies = await activity_combat_api.list_zone_enemies(char)
     return web.json_response(_json_safe({"enemies": enemies}))
 

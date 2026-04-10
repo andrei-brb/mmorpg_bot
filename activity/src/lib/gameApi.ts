@@ -154,8 +154,9 @@ export async function postCombatStateAck(token: string, guildId?: string) {
   });
 }
 
-export async function getCombatEnemies(token: string, guildId?: string) {
-  const res = await fetch(apiUrl("/api/game/combat/enemies"), { headers: authHeaders(token, guildId) });
+export async function getCombatEnemies(token: string, guildId?: string, zoneKey?: string) {
+  const qs = zoneKey ? `?zone_key=${encodeURIComponent(zoneKey)}` : "";
+  const res = await fetch(apiUrl(`/api/game/combat/enemies${qs}`), { headers: authHeaders(token, guildId) });
   return res;
 }
 

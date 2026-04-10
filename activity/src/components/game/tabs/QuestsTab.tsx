@@ -165,7 +165,8 @@ export function QuestsTab() {
                         // 2) Zone-any / boss-zone: pick an enemy from zone list.
                         if (!accessToken) return { ok: false, message: "No session token." };
                         setQuickFightIntent(canFightZoneBoss ? { kind: "zone_boss" } : { kind: "zone_any" });
-                        const res = await api.getCombatEnemies(accessToken, guildId);
+                        const zoneKey = typeof ck?.value === "string" ? ck.value : undefined;
+                        const res = await api.getCombatEnemies(accessToken, guildId, zoneKey);
                         const j = (await res.json()) as { enemies?: { key?: string; kind?: string }[] };
                         const list = Array.isArray(j.enemies) ? j.enemies : [];
 
