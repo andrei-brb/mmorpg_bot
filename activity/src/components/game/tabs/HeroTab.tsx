@@ -125,6 +125,9 @@ export function HeroTab() {
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [listItemId, setListItemId] = useState<string | null>(null);
   const [inventoryView, setInventoryView] = useState<"gear" | "consumables">("gear");
+  const [batchSellMode, setBatchSellMode] = useState(false);
+  const [batchSellIds, setBatchSellIds] = useState<Set<string>>(() => new Set());
+  const [batchSelling, setBatchSelling] = useState(false);
 
   const char = inventory?.character;
   const items = inventory?.items || [];
@@ -161,6 +164,86 @@ export function HeroTab() {
     },
     [itemPost, refreshInventory],
   );
+
+  // Keep batch selection in sync with inventory refreshes.
+  useEffect(() => {
+    if (!batchSellMode || batchSellIds.size === 0) return;
+    const bagIdSet = new Set(bag.map((x) => x.id));
+    setBatchSellIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) if (bagIdSet.has(id)) next.add(id);
+      return next;
+    });
+  }, [batchSellMode, batchSellIds.size, bag]);
+
+  const toggleBatchSellId = useCallback((id: string) => {
+    setBatchSellIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectShownBy = useCallback(
+    (pred: (it: InvRow) => boolean) => {
+      setBatchSellIds((prev) => {
+        const next = new Set(prev);
+        for (const it of bagShown) if (pred(it)) next.add(it.id);
+        return next;
+      });
+    },
+    [bagShown],
+  );
+
+  const clearBatchSell = useCallback(() => setBatchSellIds(new Set()), []);
+
+  const sellBatchSelected = useCallback(async () => {
+    if (batchSelling) return;
+    const ids = Array.from(batchSellIds);
+    if (ids.length === 0) return;
+
+    setBatchSelling(true);
+    try {
+      let okCount = 0;
+      let failCount = 0;
+      let goldTotal = 0;
+      const failMsgs: string[] = [];
+
+      for (const id of ids) {
+        const res = await itemPost("/api/game/item/sell", { item_id: id });
+        const j = (await res.json()) as { ok?: boolean; message?: string; gold?: number };
+        const ok = res.ok && j.ok !== false;
+        if (ok) {
+          okCount += 1;
+          goldTotal += Number(j.gold ?? 0) || 0;
+        } else {
+          failCount += 1;
+          if (j.message && failMsgs.length < 3) failMsgs.push(j.message);
+        }
+      }
+
+      await refreshInventory();
+      setBatchSellIds(new Set());
+
+      if (okCount > 0 && failCount === 0) {
+        toast.success(`Sold ${okCount} item${okCount === 1 ? "" : "s"} for ${goldTotal}🪙.`);
+      } else if (okCount > 0) {
+        toast.warning(
+          `Sold ${okCount} item${okCount === 1 ? "" : "s"} for ${goldTotal}🪙. ${failCount} failed.`,
+          { description: failMsgs.length ? failMsgs.join(" · ") : undefined },
+        );
+      } else {
+        toast.error("Could not sell selected items.", {
+          description: failMsgs.length ? failMsgs.join(" · ") : undefined,
+        });
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setBatchSelling(false);
+    }
+  }, [batchSellIds, batchSelling, itemPost, refreshInventory]);
 
   useEffect(() => {
     if (!pinnedKey) return;
@@ -408,6 +491,20 @@ export function HeroTab() {
                   Consumables & Upgrades
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPinnedKey(null);
+                  setBatchSellMode((v) => !v);
+                  setBatchSellIds(new Set());
+                }}
+                className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold border border-border/60 bg-muted/10 hover:bg-muted/20 ${
+                  batchSellMode ? "text-primary ring-1 ring-primary/30" : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Select multiple items and sell them together"
+              >
+                Batch sell
+              </button>
             </div>
             <span className="text-xs font-semibold font-cinzel text-primary tabular-nums" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}>
               {Number(char?.gold ?? 0).toLocaleString()} 🪙
@@ -420,6 +517,7 @@ export function HeroTab() {
               const it = inv.item;
               const showHoverTip = it && hoveredKey === invKey && pinnedKey !== invKey;
               const showPinned = it && pinnedKey === invKey;
+              const isSelected = it ? batchSellIds.has(it.id) : false;
               return (
                 <div
                   key={inv.id}
@@ -430,9 +528,28 @@ export function HeroTab() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!it) return;
+                    if (batchSellMode) {
+                      toggleBatchSellId(it.id);
+                      return;
+                    }
                     setPinnedKey((p) => (p === invKey ? null : invKey));
                   }}
                 >
+                  {batchSellMode && it && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleBatchSellId(it.id);
+                      }}
+                      className={`absolute top-1 left-1 z-20 h-4 w-4 rounded-sm border text-[10px] leading-none ${
+                        isSelected ? "bg-primary/90 border-primary text-primary-foreground" : "bg-background/70 border-border text-foreground"
+                      }`}
+                      title={isSelected ? "Unselect" : "Select for batch sell"}
+                    >
+                      {isSelected ? "✓" : ""}
+                    </button>
+                  )}
                   {it ? (
                     <div className="absolute inset-0 flex items-center justify-center p-0.5">
                       <ItemIcon item={it} size={46} />
@@ -532,6 +649,61 @@ export function HeroTab() {
               );
             })}
           </div>
+
+          {batchSellMode && (
+            <div className="mt-3 rounded border border-border/60 bg-muted/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-foreground">
+                  Selected: <span className="font-semibold tabular-nums">{batchSellIds.size}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => selectShownBy(() => true)}
+                    className="game-btn-secondary px-2 py-1 text-[10px]"
+                    disabled={batchSelling}
+                  >
+                    Select shown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectShownBy((it) => rarityKey(it.rarity) === "common")}
+                    className="game-btn-secondary px-2 py-1 text-[10px]"
+                    disabled={batchSelling}
+                  >
+                    Common
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectShownBy((it) => rarityKey(it.rarity) === "uncommon")}
+                    className="game-btn-secondary px-2 py-1 text-[10px]"
+                    disabled={batchSelling}
+                  >
+                    Uncommon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearBatchSell}
+                    className="game-btn-secondary px-2 py-1 text-[10px]"
+                    disabled={batchSelling || batchSellIds.size === 0}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void sellBatchSelected()}
+                    className="game-btn-primary px-2 py-1 text-[10px]"
+                    disabled={batchSelling || batchSellIds.size === 0}
+                  >
+                    {batchSelling ? "Selling…" : "Sell selected"}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 text-[10px] text-muted-foreground">
+                Tip: locked / equipped / soulbound items will fail and remain in your bag.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
