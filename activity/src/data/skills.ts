@@ -88,6 +88,11 @@ export const SKILLS: Skill[] = [
 export const getSkillsByClass = (cls: SkillClass): Skill[] =>
   SKILLS.filter(s => s.class === cls || s.class === 'shared');
 
+/** Client-side fallback for combat tooltips when the API omits `description`. */
+export function getSkillByKey(key: string): Skill | undefined {
+  return SKILLS.find((s) => s.key === key);
+}
+
 export const CLASS_LIST: { key: SkillClass; name: string; color: string }[] = [
   { key: 'warrior', name: 'Warrior', color: 'hsl(30 80% 55%)' },
   { key: 'paladin', name: 'Paladin', color: 'hsl(43 90% 55%)' },

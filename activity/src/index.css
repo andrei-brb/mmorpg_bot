@@ -922,6 +922,22 @@
   .skill-btn:active {
     box-shadow: inset 0 2px 6px hsl(0 0% 0% / 0.5);
   }
+  .skill-btn[aria-disabled='true'] {
+    opacity: 0.52;
+    cursor: not-allowed;
+    filter: grayscale(0.25);
+  }
+  .skill-btn[aria-disabled='true']:hover {
+    background-image:
+      linear-gradient(180deg, hsl(260 20% 16% / 0.74) 0%, hsl(260 18% 11% / 0.76) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 170px 170px;
+    border-color: hsl(var(--frame-mid));
+    box-shadow:
+      inset 0 1px 0 hsl(260 20% 24% / 0.5),
+      inset 0 -1px 0 hsl(260 20% 8%),
+      0 2px 4px hsl(0 0% 0% / 0.3);
+  }
 
   /* ═══════════════════════════════════════
      TOOLTIP — parchment style

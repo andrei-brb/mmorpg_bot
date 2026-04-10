@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CombatAbility } from "@/lib/apiTypes";
+import { getSkillByKey } from "@/data/skills";
 import { skillIconUrl } from "@/lib/skillIconUrl";
 
 function formatResourceLine(cost: number, costType: string): string {
@@ -38,16 +39,21 @@ export function CombatSkillButton({
 }) {
   const disabled = Boolean(a.disabled) || loading || !canAct;
   const meta = abilityMetaLine(a);
-  const desc = (a.description || "").trim();
+  const desc =
+    (a.description || "").trim() || (getSkillByKey(a.key)?.description ?? "").trim();
   const cd = a.cooldown > 0 ? a.cooldown : 0;
 
   return (
     <div className="combat-skill-slot relative min-w-0">
       <button
         type="button"
-        disabled={disabled}
+        aria-disabled={disabled}
+        tabIndex={disabled ? -1 : undefined}
         className="skill-btn w-full min-h-[4.5rem] border border-[hsl(43_50%_35%_/_0.45)]"
-        onClick={() => void onUse(a.key)}
+        onClick={() => {
+          if (disabled) return;
+          void onUse(a.key);
+        }}
       >
         <CombatSkillIcon abilityKey={a.key} emoji={a.emoji} />
         <span className="text-foreground font-semibold text-[10px] leading-tight line-clamp-2">{a.name}</span>
