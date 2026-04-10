@@ -128,6 +128,7 @@ export function HeroTab() {
   const [batchSellMode, setBatchSellMode] = useState(false);
   const [batchSellIds, setBatchSellIds] = useState<Set<string>>(() => new Set());
   const [batchSelling, setBatchSelling] = useState(false);
+  const [inventoryPage, setInventoryPage] = useState(0);
 
   const char = inventory?.character;
   const items = inventory?.items || [];
@@ -147,6 +148,15 @@ export function HeroTab() {
     return bag.filter((it) => !bagConsumables.includes(it));
   }, [bag, bagConsumables]);
   const bagShown = inventoryView === "consumables" ? bagConsumables : bagGear;
+
+  const SLOTS_PER_PAGE = 20; // 4 rows x 5 columns
+  const maxInvPage = Math.max(0, Math.ceil(bagShown.length / SLOTS_PER_PAGE) - 1);
+  const invPage = Math.max(0, Math.min(inventoryPage, maxInvPage));
+  const invPageStart = invPage * SLOTS_PER_PAGE;
+  const bagShownPage = useMemo(
+    () => bagShown.slice(invPageStart, invPageStart + SLOTS_PER_PAGE),
+    [bagShown, invPageStart],
+  );
   const equipped = useMemo(() => {
     const m: Record<string, InvRow> = {};
     for (const it of items) if (it.is_equipped && it.equip_slot) m[it.equip_slot] = it;
@@ -306,15 +316,19 @@ export function HeroTab() {
     return out;
   }, [items]);
 
-  // NOTE: We do not pad “Empty” slots per sub-tab (gear vs consumables). That was misleading:
-  // you can have “empty” in one filtered view while the overall bag is full.
-  const invSlots = bagShown.map((it) => ({
+  // Note: paging is applied per filtered view (gear vs consumables).
+  const invSlots = bagShownPage.map((it) => ({
     id: it.id,
     name: it.name,
     icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦",
     rarity: rarityKey(it.rarity),
     item: it,
   }));
+
+  // When switching filters or the list shrinks, keep the page in range.
+  useEffect(() => {
+    setInventoryPage((p) => Math.max(0, Math.min(p, maxInvPage)));
+  }, [maxInvPage, inventoryView]);
 
   const compareForItem = useCallback(
     (it: InvRow) => {
@@ -496,6 +510,29 @@ export function HeroTab() {
                   }`}
                 >
                   Consumables & Upgrades
+                </button>
+              </div>
+              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10">
+                <button
+                  type="button"
+                  onClick={() => setInventoryPage((p) => Math.max(0, p - 1))}
+                  className="text-[10px] px-2 py-0.5 rounded-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  disabled={invPage <= 0}
+                  title="Previous page"
+                >
+                  ↑
+                </button>
+                <span className="text-[10px] tabular-nums text-muted-foreground px-1">
+                  {invPage + 1}/{maxInvPage + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInventoryPage((p) => Math.min(maxInvPage, p + 1))}
+                  className="text-[10px] px-2 py-0.5 rounded-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  disabled={invPage >= maxInvPage}
+                  title="Next page"
+                >
+                  ↓
                 </button>
               </div>
               <button
