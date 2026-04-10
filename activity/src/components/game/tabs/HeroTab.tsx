@@ -488,11 +488,28 @@ export function HeroTab() {
         </div>
 
         {/* Inventory */}
-        <div className="game-panel">
-          <div className="game-panel-header flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span>Inventory</span>
-              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10">
+        <div className="game-panel min-w-0">
+          <div className="game-panel-header flex flex-col gap-2 min-w-0">
+            {/* Row 1: title + gold/bag — keeps currency inside the panel */}
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
+              <span className="font-cinzel font-semibold shrink-0">Inventory</span>
+              <div className="text-right shrink-0 min-w-0">
+                <div
+                  className="text-xs font-semibold font-cinzel text-primary tabular-nums whitespace-nowrap"
+                  style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}
+                >
+                  {Number(char?.gold ?? 0).toLocaleString()} 🪙
+                </div>
+                {bagSlotsMax > 0 && (
+                  <div className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                    Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Row 2: filters + pager + batch sell — wraps instead of overflowing */}
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10 shrink-0">
                 <button
                   type="button"
                   onClick={() => setInventoryView("gear")}
@@ -512,7 +529,7 @@ export function HeroTab() {
                   Consumables & Upgrades
                 </button>
               </div>
-              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10">
+              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10 shrink-0">
                 <button
                   type="button"
                   onClick={() => setInventoryPage((p) => Math.max(0, p - 1))}
@@ -522,7 +539,7 @@ export function HeroTab() {
                 >
                   ↑
                 </button>
-                <span className="text-[10px] tabular-nums text-muted-foreground px-1">
+                <span className="text-[10px] tabular-nums text-muted-foreground px-1 min-w-[2.25rem] text-center">
                   {invPage + 1}/{maxInvPage + 1}
                 </span>
                 <button
@@ -542,23 +559,13 @@ export function HeroTab() {
                   setBatchSellMode((v) => !v);
                   setBatchSellIds(new Set());
                 }}
-                className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold border border-border/60 bg-muted/10 hover:bg-muted/20 ${
+                className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold border border-border/60 bg-muted/10 hover:bg-muted/20 shrink-0 ${
                   batchSellMode ? "text-primary ring-1 ring-primary/30" : "text-muted-foreground hover:text-foreground"
                 }`}
                 title="Select multiple items and sell them together"
               >
                 Batch sell
               </button>
-            </div>
-            <div className="text-right">
-              <div className="text-xs font-semibold font-cinzel text-primary tabular-nums" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}>
-                {Number(char?.gold ?? 0).toLocaleString()} 🪙
-              </div>
-              {bagSlotsMax > 0 && (
-                <div className="text-[10px] text-muted-foreground tabular-nums">
-                  Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
-                </div>
-              )}
             </div>
           </div>
           <div className="grid grid-cols-5 gap-2">
