@@ -390,9 +390,9 @@ export function HeroTab() {
       {/* Two columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Equipment */}
-        <div className="game-panel">
-          <div className="game-panel-header">Equipment</div>
-          <div className="grid grid-cols-5 gap-2">
+        <div className="game-panel game-panel-hero">
+          <div className="game-panel-header game-panel-header-hero">Equipment</div>
+          <div className="hero-equip-grid">
             {equipmentSlots.map((slot) => {
               const it = slot.item;
               const rc = it ? RARITY_COLORS[rarityKey(it.rarity)] || "" : "";
@@ -402,7 +402,7 @@ export function HeroTab() {
                 <div
                   key={slot.id}
                   data-item-slot={slot.id}
-                  className={`relative aspect-square ${it ? `slot-filled ${rc} cursor-pointer` : "slot-empty"}`}
+                  className={`relative aspect-square ${it ? `slot-filled slot-hero-filled ${rc} cursor-pointer` : "slot-empty slot-hero-empty"}`}
                   onMouseEnter={() => it && setHoveredKey(slot.id)}
                   onMouseLeave={() => setHoveredKey(null)}
                   onClick={(e) => {
@@ -473,18 +473,18 @@ export function HeroTab() {
               else if (list.length === 1) setEnhanceItemId(list[0].id);
               else setBlacksmithPickerOpen(true);
             }}
-            className="game-btn-primary text-xs w-full"
+            className="game-btn-primary hero-btn-jewel text-xs w-full"
           >
             🔨 Open Blacksmith
           </button>
         </div>
 
         {/* Inventory */}
-        <div className="game-panel min-w-0">
-          <div className="game-panel-header flex flex-col gap-2 min-w-0">
+        <div className="game-panel game-panel-hero min-w-0">
+          <div className="game-panel-header game-panel-header-hero flex flex-col gap-2 min-w-0">
             {/* Row 1: title + gold/bag — keeps currency inside the panel */}
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
-              <span className="font-cinzel font-semibold shrink-0">Inventory</span>
+              <span className="hero-inventory-title shrink-0">Inventory</span>
               <div className="text-right shrink-0 min-w-0">
                 <div
                   className="text-xs font-semibold font-cinzel text-primary tabular-nums whitespace-nowrap"
@@ -499,23 +499,21 @@ export function HeroTab() {
                 )}
               </div>
             </div>
-            {/* Row 2: filters + pager + batch sell — wraps instead of overflowing */}
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10 shrink-0">
+            {/* Row 2: filters + batch sell — ornate chrome */}
+            <div className="hero-inventory-chrome min-w-0">
+              <div className="flex flex-wrap items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => setInventoryView("gear")}
-                  className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold ${
-                    inventoryView === "gear" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`hero-inventory-segment ${inventoryView === "gear" ? "hero-inventory-segment-active" : ""}`}
                 >
                   Gear
                 </button>
                 <button
                   type="button"
                   onClick={() => setInventoryView("consumables")}
-                  className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold ${
-                    inventoryView === "consumables" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+                  className={`hero-inventory-segment ${
+                    inventoryView === "consumables" ? "hero-inventory-segment-active" : ""
                   }`}
                 >
                   Consumables & Upgrades
@@ -528,16 +526,14 @@ export function HeroTab() {
                   setBatchSellMode((v) => !v);
                   setBatchSellIds(new Set());
                 }}
-                className={`text-[10px] px-2 py-0.5 rounded-sm font-semibold border border-border/60 bg-muted/10 hover:bg-muted/20 shrink-0 ${
-                  batchSellMode ? "text-primary ring-1 ring-primary/30" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`hero-batch-toggle shrink-0 ${batchSellMode ? "hero-batch-toggle-active" : ""}`}
                 title="Select multiple items and sell them together"
               >
                 Batch sell
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="hero-equip-grid">
             {invSlots.map((inv) => {
               const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
               const invKey = `inv-${inv.id}`;
@@ -549,7 +545,11 @@ export function HeroTab() {
                 <div
                   key={inv.id}
                   data-item-slot={invKey}
-                  className={`relative aspect-square ${inv.name ? `slot-filled ${rc} ${it ? "cursor-pointer" : ""}` : "slot-empty"}`}
+                  className={`relative aspect-square ${
+                    inv.name
+                      ? `slot-filled slot-hero-filled ${rc} ${it ? "cursor-pointer" : ""}`
+                      : "slot-empty slot-hero-empty"
+                  }`}
                   onMouseEnter={() => inv.name && setHoveredKey(invKey)}
                   onMouseLeave={() => setHoveredKey(null)}
                   onClick={(e) => {
@@ -678,7 +678,7 @@ export function HeroTab() {
           </div>
 
           {maxInvPage > 0 && (
-            <div className="mt-2 flex justify-end items-center gap-2">
+            <div className="hero-pager-bar mt-2 flex justify-end items-center gap-2">
               <span className="text-[10px] tabular-nums text-muted-foreground">
                 Page {invPage + 1} / {maxInvPage + 1}
               </span>
@@ -704,7 +704,7 @@ export function HeroTab() {
           )}
 
           {batchSellMode && (
-            <div className="mt-3 rounded border border-border/60 bg-muted/10 p-3">
+            <div className="hero-batch-panel mt-3 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-foreground">
                   Selected: <span className="font-semibold tabular-nums">{batchSellIds.size}</span>

@@ -387,6 +387,260 @@
   }
 
   /* ═══════════════════════════════════════
+     HERO TAB — ornate panel + slot pass (Discord iframe)
+     ═══════════════════════════════════════ */
+  .game-panel.game-panel-hero {
+    border-width: 2px;
+    border-color: hsl(var(--frame-rim));
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.55),
+      inset 0 -1px 0 hsl(var(--stone-dark)),
+      inset 1px 0 0 hsl(var(--frame-inner) / 0.35),
+      inset -1px 0 0 hsl(var(--frame-inner) / 0.35),
+      0 2px 14px hsl(0 0% 0% / 0.55),
+      0 10px 32px hsl(0 0% 0% / 0.3),
+      0 0 0 1px hsl(var(--gold-dim) / 0.45),
+      0 0 48px hsl(var(--gold) / 0.14);
+  }
+
+  .game-panel.game-panel-hero::before {
+    inset: 3px;
+    border: 1px solid hsl(var(--gold-dim) / 0.38);
+  }
+
+  .game-panel-header.game-panel-header-hero {
+    padding-left: 14px;
+    letter-spacing: 0.26em;
+    font-size: 0.7rem;
+    text-shadow:
+      0 0 14px hsl(var(--gold) / 0.38),
+      0 1px 4px hsl(0 0% 0% / 0.65);
+  }
+
+  .game-panel-header.game-panel-header-hero::before {
+    content: '◆';
+    position: absolute;
+    left: 0;
+    bottom: 2px;
+    font-size: 7px;
+    line-height: 1;
+    color: hsl(var(--gold-dim) / 0.85);
+    text-shadow: 0 0 6px hsl(var(--gold) / 0.35);
+    letter-spacing: 0;
+  }
+
+  .game-panel-header.game-panel-header-hero::after {
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--gold-dim) / 0.55) 10%,
+      hsl(var(--gold) / 0.88) 50%,
+      hsl(var(--gold-dim) / 0.55) 90%,
+      transparent 100%
+    );
+    box-shadow: 0 0 10px hsl(var(--gold) / 0.22);
+  }
+
+  .hero-inventory-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: hsl(var(--gold));
+    text-shadow:
+      0 0 12px hsl(var(--gold) / 0.35),
+      0 1px 3px hsl(0 0% 0% / 0.55);
+  }
+
+  .hero-inventory-chrome {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid hsl(var(--frame-mid));
+    border-radius: 2px;
+    background-image:
+      linear-gradient(180deg, hsl(228 18% 13% / 0.88) 0%, hsl(228 22% 9% / 0.94) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 160px 160px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.28),
+      inset 0 -2px 4px hsl(0 0% 0% / 0.35);
+  }
+
+  .hero-inventory-segment {
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 1px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.06em;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    border: 1px solid transparent;
+    transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+
+  .hero-inventory-segment:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.35);
+  }
+
+  .hero-inventory-segment-active {
+    color: hsl(var(--gold));
+    text-shadow: 0 0 8px hsl(var(--gold) / 0.35);
+    background: linear-gradient(180deg, hsl(228 18% 17% / 0.95) 0%, hsl(228 20% 12% / 0.98) 100%);
+    border-color: hsl(var(--gold-dim) / 0.55);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--gold) / 0.35),
+      inset 0 -1px 0 hsl(var(--stone-dark));
+  }
+
+  .hero-batch-toggle {
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 1px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.06em;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--stone-dark) / 0.5);
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow: inset 0 1px 0 hsl(var(--frame-inner) / 0.15);
+    transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+
+  .hero-batch-toggle:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.3);
+  }
+
+  .hero-batch-toggle-active {
+    color: hsl(var(--gold));
+    border-color: hsl(var(--gold-dim) / 0.6);
+    box-shadow:
+      0 0 0 1px hsl(var(--gold) / 0.2),
+      inset 0 1px 0 hsl(var(--gold) / 0.2);
+  }
+
+  .hero-pager-bar {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    border: 1px solid hsl(var(--frame-mid) / 0.85);
+    border-radius: 2px;
+    background-image:
+      linear-gradient(180deg, hsl(228 18% 11% / 0.92) 0%, hsl(228 22% 8% / 0.96) 100%),
+      url('/textures/metal-panel.jpg');
+    background-size: 100% 100%, 160px 160px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.22),
+      inset 0 -1px 0 hsl(0 0% 0% / 0.25);
+  }
+
+  .hero-batch-panel {
+    border: 1px solid hsl(var(--frame-mid));
+    border-radius: 2px;
+    background-image:
+      linear-gradient(180deg, hsl(228 20% 10% / 0.92) 0%, hsl(228 22% 8% / 0.96) 100%),
+      url('/textures/parchment-dark.jpg');
+    background-size: 100% 100%, 200px 200px;
+    background-repeat: no-repeat, repeat;
+    background-blend-mode: normal, soft-light;
+    box-shadow:
+      inset 0 1px 0 hsl(var(--frame-inner) / 0.2),
+      0 4px 14px hsl(0 0% 0% / 0.35);
+  }
+
+  .hero-equip-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .slot-hero-empty.slot-empty {
+    border-width: 2px;
+    border-style: solid;
+    border-color: hsl(var(--stone-light) / 0.32);
+    box-shadow:
+      inset 0 2px 8px hsl(0 0% 0% / 0.48),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.06),
+      0 0 0 1px hsl(0 0% 0% / 0.4);
+  }
+
+  .slot-hero-filled.slot-filled {
+    border-width: 2px;
+    box-shadow:
+      inset 0 2px 8px hsl(0 0% 0% / 0.48),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.18),
+      0 1px 4px hsl(0 0% 0% / 0.38),
+      0 0 16px hsl(var(--gold) / 0.1);
+  }
+
+  .slot-hero-filled.border-rarity-rare\/40 {
+    box-shadow:
+      inset 0 2px 8px hsl(0 0% 0% / 0.48),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.18),
+      0 1px 4px hsl(0 0% 0% / 0.38),
+      0 0 14px hsl(var(--rarity-rare) / 0.28);
+  }
+
+  .slot-hero-filled.border-rarity-epic\/40 {
+    box-shadow:
+      inset 0 2px 8px hsl(0 0% 0% / 0.48),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.18),
+      0 1px 4px hsl(0 0% 0% / 0.38),
+      0 0 18px hsl(var(--rarity-epic) / 0.32);
+  }
+
+  .slot-hero-filled.border-rarity-legendary\/40 {
+    box-shadow:
+      inset 0 2px 8px hsl(0 0% 0% / 0.48),
+      inset 0 -1px 0 hsl(var(--stone-light) / 0.18),
+      0 1px 4px hsl(0 0% 0% / 0.38),
+      0 0 22px hsl(var(--rarity-legendary) / 0.38);
+  }
+
+  .hero-btn-jewel {
+    position: relative;
+    box-shadow:
+      inset 0 1px 0 hsl(43 80% 65% / 0.55),
+      inset 0 -1px 0 hsl(38 60% 25%),
+      0 2px 6px hsl(0 0% 0% / 0.45),
+      0 0 24px hsl(var(--gold) / 0.28);
+  }
+
+  .hero-btn-jewel::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 2px;
+    border: 1px solid hsl(var(--gold-dim) / 0.5);
+    pointer-events: none;
+    box-shadow: 0 0 12px hsl(var(--gold) / 0.15);
+  }
+
+  @media (max-width: 520px) {
+    .hero-equip-grid {
+      gap: 0.3rem;
+    }
+
+    .game-panel.game-panel-hero {
+      padding: 0.75rem;
+    }
+  }
+
+  /* ═══════════════════════════════════════
      HP BAR — tactile / beveled
      ═══════════════════════════════════════ */
   .hp-bar-track {
