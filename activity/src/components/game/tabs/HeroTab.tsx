@@ -310,14 +310,34 @@ export function HeroTab() {
     return out;
   }, [items]);
 
-  // Note: paging is applied per filtered view (gear vs consumables).
-  const invSlots = bagShownPage.map((it) => ({
-    id: it.id,
-    name: it.name,
-    icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦",
-    rarity: rarityKey(it.rarity),
-    item: it,
-  }));
+  // Fixed 4×5 slot grid per page (same “box” UI whether slots are full or empty).
+  const invSlots = useMemo(() => {
+    const slots: Array<{
+      id: string;
+      name: string | null;
+      rarity: string;
+      item: InvRow | null;
+    }> = [];
+    for (let i = 0; i < SLOTS_PER_PAGE; i++) {
+      const it = bagShownPage[i];
+      if (it) {
+        slots.push({
+          id: it.id,
+          name: it.name,
+          rarity: rarityKey(it.rarity),
+          item: it,
+        });
+      } else {
+        slots.push({
+          id: `bag-slot-${inventoryView}-${invPage}-${i}`,
+          name: null,
+          rarity: "",
+          item: null,
+        });
+      }
+    }
+    return slots;
+  }, [bagShownPage, inventoryView, invPage]);
 
   // When switching filters or the list shrinks, keep the page in range.
   useEffect(() => {
@@ -501,29 +521,6 @@ export function HeroTab() {
                   Consumables & Upgrades
                 </button>
               </div>
-              <div className="flex items-center gap-1 rounded-sm border border-border/60 p-0.5 bg-muted/10 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setInventoryPage((p) => Math.max(0, p - 1))}
-                  className="text-[10px] px-2 py-0.5 rounded-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-40"
-                  disabled={invPage <= 0}
-                  title="Previous page"
-                >
-                  ↑
-                </button>
-                <span className="text-[10px] tabular-nums text-muted-foreground px-1 min-w-[2.25rem] text-center">
-                  {invPage + 1}/{maxInvPage + 1}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setInventoryPage((p) => Math.min(maxInvPage, p + 1))}
-                  className="text-[10px] px-2 py-0.5 rounded-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-40"
-                  disabled={invPage >= maxInvPage}
-                  title="Next page"
-                >
-                  ↓
-                </button>
-              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -679,6 +676,32 @@ export function HeroTab() {
               );
             })}
           </div>
+
+          {maxInvPage > 0 && (
+            <div className="mt-2 flex justify-end items-center gap-2">
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                Page {invPage + 1} / {maxInvPage + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => setInventoryPage((p) => Math.max(0, p - 1))}
+                className="game-btn-secondary text-[10px] px-2 py-1"
+                disabled={invPage <= 0}
+                title="Previous page"
+              >
+                ← Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setInventoryPage((p) => Math.min(maxInvPage, p + 1))}
+                className="game-btn-primary text-[10px] px-2 py-1"
+                disabled={invPage >= maxInvPage}
+                title="Next page"
+              >
+                Next →
+              </button>
+            </div>
+          )}
 
           {batchSellMode && (
             <div className="mt-3 rounded border border-border/60 bg-muted/10 p-3">
