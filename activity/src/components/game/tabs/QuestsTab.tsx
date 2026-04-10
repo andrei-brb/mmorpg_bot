@@ -1,13 +1,73 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { QuestLogRow } from "@/lib/apiTypes";
+import type { MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 
 const STATE_STYLES: Record<string, string> = {
   active: "bg-accent/60 text-accent-foreground border border-accent",
   completed: "bg-primary/15 text-primary border border-primary/30",
 };
+
+function StoryBeacon({ ptr }: { ptr: MainQuestPointerPayload }) {
+  const kind = ptr.kind ?? "none";
+  if (kind === "none") return null;
+  const title =
+    kind === "complete"
+      ? "Main story — complete"
+      : kind === "active"
+        ? "Main story — in progress"
+        : kind === "seek_npc"
+          ? "Main story — next step"
+          : kind === "blocked_level"
+            ? "Main story — level gate"
+            : "Main story — waiting on deeds";
+  const regions = ptr.regions?.length
+    ? ptr.regions.map((r) => `${r.emoji || ""} ${r.name || r.key}`.trim()).join(" · ")
+    : null;
+  return (
+    <div
+      className="game-panel quest-card--main-story"
+      style={{
+        borderColor: "hsl(270 45% 45% / 0.55)",
+        background: "linear-gradient(180deg, hsl(270 28% 14% / 0.5) 0%, hsl(228 20% 10% / 0.4) 100%)",
+      }}
+    >
+      <div className="game-panel-header flex items-center justify-between gap-2">
+        <span>{title}</span>
+        {ptr.in_current_region && kind !== "complete" && (
+          <span
+            className="text-[9px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-sm"
+            style={{
+              color: "hsl(140 55% 70%)",
+              border: "1px solid hsl(140 45% 35% / 0.5)",
+              background: "hsl(140 30% 12% / 0.5)",
+            }}
+          >
+            In this region
+          </span>
+        )}
+      </div>
+      {ptr.hint_base && <p className="text-xs text-foreground/90 leading-relaxed mt-2">{ptr.hint_base}</p>}
+      {ptr.hint_region ? (
+        <p className="text-xs text-emerald-300/90 leading-relaxed mt-2 font-medium">{ptr.hint_region}</p>
+      ) : null}
+      {regions && kind !== "complete" && (
+        <p className="text-[10px] text-muted-foreground mt-2">
+          <span className="font-cinzel uppercase tracking-wider">Regions:</span> {regions}
+        </p>
+      )}
+      {ptr.discovery_hint && (kind === "seek_npc" || kind === "active") && (
+        <p className="text-[10px] text-violet-200/80 italic mt-2 leading-relaxed border-t border-violet-500/20 pt-2">
+          {ptr.discovery_hint}
+        </p>
+      )}
+      {kind === "blocked_level" && ptr.level_required != null && (
+        <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">Required level: {ptr.level_required}</p>
+      )}
+    </div>
+  );
+}
 
 export function QuestsTab() {
   const { refreshQuests, quests, npcInteract, abandonQuest, startCombat, accessToken, guildId, setQuickFightIntent } = useGameSession();
@@ -25,8 +85,12 @@ export function QuestsTab() {
     if (!stillHere) setPendingAbandonId(null);
   }, [quests, pendingAbandonId]);
 
+  const mainPtr = quests?.main_quest_pointer;
+
   return (
     <div className="space-y-4">
+      {mainPtr ? <StoryBeacon ptr={mainPtr} /> : null}
+
       <div className="game-panel">
         <div className="game-panel-header">Quest Log</div>
         <p className="text-xs text-muted-foreground">

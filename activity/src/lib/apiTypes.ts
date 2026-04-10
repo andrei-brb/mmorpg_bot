@@ -303,7 +303,34 @@ export type QuestLogRow = {
   expires_at?: string | null;
 };
 
-export type QuestLogPayload = { ok?: boolean; error?: string; quests?: QuestLogRow[] };
+/** Server-driven Obsidian / main-story compass (deeds + completion aware). */
+export type MainQuestPointerPayload = {
+  kind?: "active" | "seek_npc" | "blocked_level" | "blocked_deeds" | "complete" | "none";
+  quest_id?: string | null;
+  quest_name?: string | null;
+  quest_desc?: string | null;
+  objective?: string | null;
+  state?: string | null;
+  level_required?: number;
+  npc_id?: string | null;
+  npc_name?: string | null;
+  npc_title?: string | null;
+  discovery_hint?: string | null;
+  region_zones?: string[];
+  regions?: { key?: string; name?: string; emoji?: string }[];
+  in_current_region?: boolean;
+  hint_base?: string;
+  hint_region?: string;
+  blocked_detail?: string;
+  missing_deed_flags?: string[];
+};
+
+export type QuestLogPayload = {
+  ok?: boolean;
+  error?: string;
+  quests?: QuestLogRow[];
+  main_quest_pointer?: MainQuestPointerPayload | null;
+};
 
 export type QuestOfferPayload = {
   npc_id?: string;

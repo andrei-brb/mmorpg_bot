@@ -14,10 +14,10 @@ Features:
 import logging
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List, Set
+from typing import Optional, Dict, List, Set, Any
 from uuid import UUID
 
-from services.quest.obsidian_silence_quests import apply_obsidian_content
+from services.quest.obsidian_silence_quests import apply_obsidian_content, OBSIDIAN_STORY_POINTER_ORDER
 
 log = logging.getLogger("npc_quest")
 
@@ -3893,6 +3893,185 @@ class NPCQuestService:
                 continue
             return quest
         return None
+
+    def find_npc_id_for_quest(self, quest_id: str) -> Optional[str]:
+        for npc_id, npc in NPC_TEMPLATES.items():
+            for q in npc.get("quests", []):
+                if q.get("id") == quest_id:
+                    return npc_id
+        return None
+
+    async def get_completed_quest_ids(self, char_id: UUID) -> Set[str]:
+        rows = await self.db.fetch(
+            """SELECT quest_id FROM quest_progress
+               WHERE character_id = $1 AND LOWER(TRIM(state)) = 'completed'""",
+            char_id,
+        )
+        return {str(r["quest_id"]) for r in rows}
+
+    async def compute_main_story_pointer(
+        self,
+        char_id: UUID,
+        char_level: int,
+        current_zone: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Activity story beacon: active main quest, or next arc step from deeds + completion,
+        with region hints (uses character current_zone when provided).
+        """
+        from services.lore.lore_gate_service import LoreGateService
+        from config.settings import ZONES
+
+        def _region_labels(zone_keys: List[str]) -> List[Dict[str, str]]:
+            out: List[Dict[str, str]] = []
+            for k in zone_keys:
+                z = ZONES.get(k)
+                if z:
+                    out.append({"key": k, "name": z.name, "emoji": z.emoji or ""})
+            return out
+
+        def _zone_name_list(labels: List[Dict[str, str]]) -> str:
+            if not labels:
+                return "the wild"
+            return ", ".join(x["name"] for x in labels)
+
+        active_list = await self.get_active_quests(char_id)
+        for row in active_list:
+            qid = str(row.get("quest_id") or "").strip()
+            if not is_main_story_quest(qid):
+                continue
+            steps = row.get("steps") or []
+            cur_step = int(row.get("current_step") or 1)
+            idx = max(0, cur_step - 1)
+            step = steps[idx] if idx < len(steps) else None
+            objective = (step or {}).get("objective") or row.get("quest_desc") or ""
+            npc_id = str(row.get("npc_id") or "").strip() or self.find_npc_id_for_quest(qid) or ""
+            npc = NPC_TEMPLATES.get(npc_id, {})
+            zone_keys = list(npc.get("zones") or [])
+            labels = _region_labels(zone_keys)
+            cz = (current_zone or "").strip()
+            in_region = bool(cz and cz in set(zone_keys))
+            discovery_hint = str(npc.get("discovery_hint") or "")
+            hint_base = (
+                f"**{row.get('quest_name') or 'Main story'}** — {objective} "
+                f"Speak with **{npc.get('name') or 'your contact'}** "
+                f"({_zone_name_list(labels)}). Use **Explore**, then **Talk**."
+            )
+            hint_region = (
+                " You are in the right region — keep exploring until they appear."
+                if in_region
+                else ""
+            )
+            return {
+                "kind": "active",
+                "quest_id": qid,
+                "quest_name": row.get("quest_name"),
+                "objective": objective,
+                "state": str(row.get("state") or "active").lower().strip(),
+                "npc_id": npc_id or None,
+                "npc_name": npc.get("name"),
+                "npc_title": npc.get("title"),
+                "discovery_hint": discovery_hint or None,
+                "region_zones": zone_keys,
+                "regions": labels,
+                "in_current_region": in_region,
+                "hint_base": hint_base,
+                "hint_region": hint_region.strip(),
+            }
+
+        lg = LoreGateService(self.db)
+        flags = set(await lg.get_flags(char_id))
+        completed = await self.get_completed_quest_ids(char_id)
+
+        if all(qid in completed for qid in OBSIDIAN_STORY_POINTER_ORDER):
+            return {
+                "kind": "complete",
+                "hint_base": "You have finished the **Obsidian Silence** main arc. Further tales may arrive in future updates.",
+                "in_current_region": False,
+                "region_zones": [],
+                "regions": [],
+            }
+
+        for qid in OBSIDIAN_STORY_POINTER_ORDER:
+            if qid in completed:
+                continue
+            tmpl = self._find_quest_template(qid)
+            if not tmpl:
+                continue
+            req_flags = list(tmpl.get("requires_deed_flags") or [])
+            if req_flags and not all(f in flags for f in req_flags):
+                missing = [f for f in req_flags if f not in flags]
+                return {
+                    "kind": "blocked_deeds",
+                    "quest_id": qid,
+                    "quest_name": tmpl.get("name"),
+                    "blocked_detail": "Earlier story deeds must be fulfilled first.",
+                    "missing_deed_flags": missing[:8],
+                    "hint_base": (
+                        f"The next chapter **{tmpl.get('name') or qid}** is not yet available — "
+                        "complete prior main objectives or explore until story flags unlock."
+                    ),
+                    "in_current_region": False,
+                    "region_zones": [],
+                    "regions": [],
+                }
+            lvl_req = int(tmpl.get("level_req") or 1)
+            if char_level < lvl_req:
+                return {
+                    "kind": "blocked_level",
+                    "quest_id": qid,
+                    "quest_name": tmpl.get("name"),
+                    "level_required": lvl_req,
+                    "hint_base": (
+                        f"**{tmpl.get('name') or qid}** opens at level **{lvl_req}**. "
+                        f"You are level **{char_level}** — grow stronger, then seek the story in the world."
+                    ),
+                    "in_current_region": False,
+                    "region_zones": [],
+                    "regions": [],
+                }
+
+            npc_id = self.find_npc_id_for_quest(qid) or ""
+            npc = NPC_TEMPLATES.get(npc_id, {})
+            zone_keys = list(npc.get("zones") or [])
+            labels = _region_labels(zone_keys)
+            cz = (current_zone or "").strip()
+            in_region = bool(cz and cz in set(zone_keys))
+            discovery_hint = str(npc.get("discovery_hint") or "")
+            hint_base = (
+                f"The **Obsidian Silence** story continues: **{tmpl.get('name') or qid}** "
+                f"(level {lvl_req}+). Find **{npc.get('name') or 'the story contact'}** "
+                f"in {_zone_name_list(labels)} via **Explore → Talk**."
+            )
+            hint_region = (
+                " You are in the right region — keep exploring until you meet them."
+                if in_region
+                else ""
+            )
+            return {
+                "kind": "seek_npc",
+                "quest_id": qid,
+                "quest_name": tmpl.get("name"),
+                "quest_desc": tmpl.get("description"),
+                "level_required": lvl_req,
+                "npc_id": npc_id or None,
+                "npc_name": npc.get("name"),
+                "npc_title": npc.get("title"),
+                "discovery_hint": discovery_hint or None,
+                "region_zones": zone_keys,
+                "regions": labels,
+                "in_current_region": in_region,
+                "hint_base": hint_base,
+                "hint_region": hint_region.strip(),
+            }
+
+        return {
+            "kind": "none",
+            "hint_base": "",
+            "in_current_region": False,
+            "region_zones": [],
+            "regions": [],
+        }
 
     # ── Reputation ───────────────────────────────────────────────────────────
 

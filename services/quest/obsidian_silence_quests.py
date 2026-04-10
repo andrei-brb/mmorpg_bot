@@ -946,3 +946,23 @@ OBSIDIAN_QUEST_PATCHES: Dict[str, List[Dict[str, Any]]] = {
         },
     ],
 }
+
+
+# Main Obsidian arc order for Activity “story beacon” (skips optional **Optional:** side quests).
+OBSIDIAN_STORY_POINTER_ORDER: List[str] = [
+    "obsidian_shatter_tone",
+    "obsidian_gorgoth_slayer",
+    "obsidian_marcus_recommendation",
+    "obsidian_khaz_dispatch",
+    "obsidian_seismic_trigger",
+    "obsidian_manifest_destiny",
+    "obsidian_bloodfang_duel",
+    "obsidian_curse_lifted",
+    "obsidian_cipher_translated",
+    "obsidian_architects_burden",
+    "obsidian_flame_infused",
+    "obsidian_trisect_key",
+    "obsidian_ancient_runes_read",
+    "obsidian_eternal_frequency",
+    "obsidian_graying_end",
+]

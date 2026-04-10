@@ -2049,7 +2049,13 @@ async def handle_quests(request: web.Request) -> web.Response:
             }
         )
 
-    return web.json_response(_json_safe({"ok": True, "quests": out}))
+    pointer = await qs.compute_main_story_pointer(
+        char_id,
+        int(char.get("level") or 1),
+        str(char.get("current_zone") or "").strip() or None,
+    )
+
+    return web.json_response(_json_safe({"ok": True, "quests": out, "main_quest_pointer": pointer}))
 
 
 async def handle_quest_abandon(request: web.Request) -> web.Response:
