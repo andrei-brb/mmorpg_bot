@@ -265,7 +265,7 @@ async def _exchange_oauth_code(
 
     hint_parts = [
         "Token exchange redirect_uri must match Developer Portal → OAuth2 → Redirects "
-        "for the URL where the Activity runs (e.g. https://<APP_ID>.discordsays.com/). "
+        "for the URL where the Activity runs (e.g. https://YOUR_APPLICATION_ID.discordsays.com/). "
         "List both with and without a trailing slash if unsure.",
         "Railway: DISCORD_APPLICATION_ID must match the same Application ID as VITE_DISCORD_CLIENT_ID in your built Activity.",
         "Use the OAuth2 Client Secret from the same app (Developer Portal → OAuth2), not the bot token.",

@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
@@ -120,6 +121,66 @@ function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
       },
     );
   });
+}
+
+type DiscordOAuthResult = {
+  token: string;
+  guildId?: string;
+  channelId?: string;
+};
+
+/**
+ * Single-flight OAuth: React 18 Strict Mode (dev) mounts twice; without this we can
+ * `authorize()` + exchange the code twice — the second call gets invalid_grant / Invalid code.
+ */
+let oauthFlight: { clientId: string; promise: Promise<DiscordOAuthResult> } | null = null;
+
+async function runDiscordOAuthOnce(
+  clientId: string,
+  sdkRef: MutableRefObject<DiscordSDK | null>,
+): Promise<DiscordOAuthResult> {
+  if (oauthFlight?.clientId === clientId) {
+    return oauthFlight.promise;
+  }
+  const promise = (async (): Promise<DiscordOAuthResult> => {
+    const sdk = new DiscordSDK(clientId);
+    sdkRef.current = sdk;
+    const raced = await runWithTimeout(sdk.ready(), 12000);
+    if (raced === "timeout") {
+      throw new Error("sdk_ready_timeout");
+    }
+    let auth: Awaited<ReturnType<DiscordSDK["commands"]["authorize"]>>;
+    try {
+      auth = await sdk.commands.authorize({
+        client_id: clientId,
+        response_type: "code",
+        state: "",
+        prompt: "none",
+        scope: ["identify", "applications.commands"],
+      });
+    } catch (e) {
+      console.error(e);
+      throw new Error("authorization_cancelled");
+    }
+    const token = await api.exchangeToken(auth.code, window.location.origin);
+    try {
+      await sdk.commands.authenticate({ access_token: token });
+    } catch (e) {
+      console.warn("authenticate", e);
+    }
+    return {
+      token,
+      guildId: sdk.guildId ?? undefined,
+      channelId: sdk.channelId ?? undefined,
+    };
+  })();
+
+  oauthFlight = { clientId, promise };
+  promise.catch(() => {
+    oauthFlight = null;
+  });
+
+  return promise;
 }
 
 export function GameSessionProvider({ children }: { children: ReactNode }) {
@@ -598,54 +659,32 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
       setPhase("loading");
-      const sdk = new DiscordSDK(clientId);
-      sdkRef.current = sdk;
-
-      const raced = await runWithTimeout(sdk.ready(), 12000);
-      if (cancelled) return;
-      if (raced === "timeout") {
-        setPhase("error");
-        setErrorHtml(
-          "Could not connect to Discord. Open this app <strong>inside Discord</strong> as an Activity, or use dev proxy + ngrok.",
-        );
-        return;
-      }
-
-      let code: string;
       try {
-        const auth = await sdk.commands.authorize({
-          client_id: clientId,
-          response_type: "code",
-          state: "",
-          prompt: "none",
-          scope: ["identify", "applications.commands"],
-        });
-        code = auth.code;
-      } catch (e) {
-        console.error(e);
-        setPhase("error");
-        setErrorHtml("Authorization was cancelled or failed.");
-        return;
-      }
-
-      try {
-        // Must match OAuth2 redirect in Developer Portal — Activity iframe origin (discordsays.com).
-        const token = await api.exchangeToken(code, window.location.origin);
+        const { token, guildId: gid, channelId: cid } = await runDiscordOAuthOnce(clientId, sdkRef);
         if (cancelled) return;
-        try {
-          await sdk.commands.authenticate({ access_token: token });
-        } catch (e) {
-          console.warn("authenticate", e);
-        }
         setAccessToken(token);
-        setGuildId(sdk.guildId ?? undefined);
-        setChannelId(sdk.channelId ?? undefined);
+        setGuildId(gid);
+        setChannelId(cid);
 
-        const inv = await api.getInventory(token, sdk.guildId ?? undefined);
+        const inv = await api.getInventory(token, gid);
         if (cancelled) return;
         setInventory(inv);
         setPhase("ready");
       } catch (e) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg === "sdk_ready_timeout") {
+          setPhase("error");
+          setErrorHtml(
+            "Could not connect to Discord. Open this app <strong>inside Discord</strong> as an Activity, or use dev proxy + ngrok.",
+          );
+          return;
+        }
+        if (msg === "authorization_cancelled") {
+          setPhase("error");
+          setErrorHtml("Authorization was cancelled or failed.");
+          return;
+        }
         setPhase("error");
         const detail =
           e instanceof Error ? api.describeFetchError(e, api.apiUrl("/api/token")) : String(e);
