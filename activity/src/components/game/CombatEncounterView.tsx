@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { BattleBackground } from "@/components/game/combat/BattleBackground";
@@ -52,6 +52,23 @@ export type CombatEncounterViewProps = {
   showDiscordDungeonBanner?: boolean;
   /** Activity Dungeon tab — custom header (zone bar replaced) */
   dungeonHeader?: { emoji: string; name: string; floor: number; totalFloors: number };
+  /** Replaces the zone/dungeon top bar when set (e.g. Arena header). */
+  topBar?: ReactNode;
+  /** Overrides BattleBackground zone when `zoneLabel` is missing (e.g. `"dungeon"`). */
+  battleZoneOverride?: string;
+  /** Class key for opponent portrait in 1v1 (e.g. PvP). */
+  enemyClassKey?: string | null;
+  /** Stabilizes damage-float reset across encounters (match id, dungeon floor, …). */
+  combatSessionId?: string;
+  /** Override level chips when inventory/zone are wrong (PvP). */
+  playerLevelOverride?: number;
+  enemyLevelOverride?: number;
+  showFleeButton?: boolean;
+  showPotionButton?: boolean;
+  /** Shown after "Your Turn" when it is your turn (e.g. countdown seconds). */
+  turnBannerSeconds?: number | null;
+  /** Shown when you cannot act (default ally message). */
+  opponentTurnLabel?: string;
 };
 
 export function CombatEncounterView({
@@ -65,6 +82,16 @@ export function CombatEncounterView({
   onPotion,
   showDiscordDungeonBanner,
   dungeonHeader,
+  topBar,
+  battleZoneOverride,
+  enemyClassKey,
+  combatSessionId,
+  playerLevelOverride,
+  enemyLevelOverride,
+  showFleeButton = true,
+  showPotionButton = true,
+  turnBannerSeconds,
+  opponentTurnLabel = "⏳ Ally's Turn",
 }: CombatEncounterViewProps) {
   const [showLogModal, setShowLogModal] = useState(false);
   const classKey = state.player.class || inventory?.character?.class || "";
@@ -72,7 +99,13 @@ export function CombatEncounterView({
   const partyMode = Boolean(state.party_mode && state.party_players && state.party_players.length > 0);
   const canAct = !state.party_mode || state.your_turn === true;
 
-  const encounterKey = `${state.enemy.name}-${state.enemy.max_hp}-${state.player.max_hp}`;
+  const playerLevel = playerLevelOverride ?? inventory?.character?.level ?? 1;
+  const enemyLevel = enemyLevelOverride ?? zoneLabel?.level_min ?? zoneLabel?.level_max ?? 1;
+  const enemyIcon = enemyClassKey ? classEmoji(enemyClassKey) : firstTokenEmoji(state.enemy.name);
+  const enemyIconSrc = enemyClassKey ? classIconUrl(enemyClassKey) : null;
+  const battleZone = battleZoneOverride ?? battleBackgroundZone(zoneLabel?.key);
+
+  const encounterKey = `${combatSessionId ?? "default"}|${state.enemy.name}|${state.enemy.max_hp}|${state.player.max_hp}`;
   const prevKeyRef = useRef<string | null>(null);
   const prevHpRef = useRef({ p: state.player.current_hp, e: state.enemy.current_hp });
   const damageIdRef = useRef(0);
@@ -167,8 +200,8 @@ export function CombatEncounterView({
         })),
         {
           name: state.enemy.name,
-          icon: firstTokenEmoji(state.enemy.name),
-          iconSrc: null,
+          icon: enemyIcon,
+          iconSrc: enemyIconSrc,
           isPlayer: false,
           isCurrent: enemyTurn,
         },
@@ -184,23 +217,22 @@ export function CombatEncounterView({
       },
       {
         name: state.enemy.name,
-        icon: firstTokenEmoji(state.enemy.name),
-        iconSrc: null,
+        icon: enemyIcon,
+        iconSrc: enemyIconSrc,
         isPlayer: false,
         isCurrent: !canAct,
       },
     ];
-  }, [partyMode, state.party_players, state.enemy, state.player.name, classKey, canAct]);
-
-  const playerLevel = inventory?.character?.level ?? 1;
-  const enemyLevel = zoneLabel?.level_min ?? zoneLabel?.level_max ?? 1;
+  }, [partyMode, state.party_players, state.enemy, state.player.name, classKey, canAct, enemyIcon, enemyIconSrc]);
 
   // Detect if combat is in progress
   const combatInProgress = state.enemy.current_hp > 0;
 
   return (
     <div className={focusMode ? "flex flex-col gap-2 sm:gap-3 h-full min-h-0" : "space-y-4"}>
-      {dungeonHeader ? (
+      {topBar != null ? (
+        topBar
+      ) : dungeonHeader ? (
         <div className="game-panel py-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
             {dungeonHeader.emoji} {dungeonHeader.name}
@@ -241,7 +273,7 @@ export function CombatEncounterView({
         </div>
       )}
 
-      <BattleBackground zone={battleBackgroundZone(zoneLabel?.key)}>
+      <BattleBackground zone={battleZone}>
         <div className="p-2 space-y-2">
           <div className="flex justify-center">
             <TurnOrder fighters={turnFighters} />
@@ -264,7 +296,8 @@ export function CombatEncounterView({
             />
             <BattleFighter
               name={state.enemy.name}
-              icon={firstTokenEmoji(state.enemy.name)}
+              icon={enemyIcon}
+              iconSrc={enemyIconSrc}
               hp={state.enemy.current_hp}
               maxHp={state.enemy.max_hp}
               level={enemyLevel}
@@ -297,7 +330,9 @@ export function CombatEncounterView({
             textShadow: "0 0 6px hsl(43 78% 50% / 0.3)",
           }}
         >
-          {canAct ? "⚔️ Your Turn" : "⏳ Ally's Turn"}
+          {canAct
+            ? `⚔️ Your Turn${turnBannerSeconds != null ? ` — ${turnBannerSeconds}s` : ""}`
+            : opponentTurnLabel}
         </span>
       </div>
 
@@ -397,26 +432,30 @@ export function CombatEncounterView({
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => void onFlee()}
-          disabled={loading || !canAct}
-          className="game-btn-secondary text-xs px-3 py-1.5"
-        >
-          🏃 Flee
-        </button>
-        {state.can_potion && (
-          <button
-            type="button"
-            onClick={() => void onPotion()}
-            disabled={loading || !canAct}
-            className="game-btn-secondary text-xs px-3 py-1.5"
-          >
-            🧪 Potion
-          </button>
-        )}
-      </div>
+      {(showFleeButton || (showPotionButton && state.can_potion)) && (
+        <div className="flex gap-2">
+          {showFleeButton && (
+            <button
+              type="button"
+              onClick={() => void onFlee()}
+              disabled={loading || !canAct}
+              className="game-btn-secondary text-xs px-3 py-1.5"
+            >
+              🏃 Flee
+            </button>
+          )}
+          {showPotionButton && state.can_potion && (
+            <button
+              type="button"
+              onClick={() => void onPotion()}
+              disabled={loading || !canAct}
+              className="game-btn-secondary text-xs px-3 py-1.5"
+            >
+              🧪 Potion
+            </button>
+          )}
+        </div>
+      )}
 
       {showLogModal && (
         <div

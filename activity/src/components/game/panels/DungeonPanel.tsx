@@ -550,6 +550,12 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
           floor: run.floor,
           totalFloors: run.dungeon.floors,
         }}
+        battleZoneOverride="dungeon"
+        combatSessionId={
+          combatState.dungeon_key && combatState.dungeon_floor != null
+            ? `dungeon-${combatState.dungeon_key}-f${combatState.dungeon_floor}`
+            : undefined
+        }
         state={combatState}
         inventory={inventory}
         loading={loading}

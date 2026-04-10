@@ -69,6 +69,9 @@ const mockMatch: PvpMatchState = {
     {
       key: "whirlwind",
       name: "Whirlwind",
+      emoji: "🌀",
+      cost: 25,
+      cost_type: "mana",
       cooldown: 0,
       max_cooldown: 3,
       description: "Spin attack.",

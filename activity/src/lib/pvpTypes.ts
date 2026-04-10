@@ -44,6 +44,8 @@ export interface SkillSlot {
   key: string;
   name: string;
   icon?: string;
+  /** Shown on skill tile / tooltip when set (falls back to ✨). */
+  emoji?: string;
   cooldown: number;
   max_cooldown: number;
   description: string;
@@ -51,6 +53,12 @@ export interface SkillSlot {
   cost?: number;
   /** Resource type: 'mana'|'energy'|'rage' or undefined for no cost */
   cost_type?: string | null;
+  /** Optional tooltip stats when the API includes them (same as Activity combat). */
+  dmg_min?: number | null;
+  dmg_max?: number | null;
+  heal_estimate?: number | null;
+  crit_pct?: number | null;
+  is_aoe?: boolean;
 }
 
 export interface IncomingChallenge {
