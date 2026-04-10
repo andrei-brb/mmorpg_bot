@@ -311,6 +311,18 @@ async def handle_inventory(request: web.Request) -> web.Response:
         )
 
     items = await inv_svc.get_all(char["id"])
+    # Inventory capacity metadata (bag only: unequipped rows).
+    player = await db.fetchrow(
+        """SELECT p.is_premium FROM players p
+           JOIN characters c ON c.player_id=p.id WHERE c.id=$1""",
+        char["id"],
+    )
+    bag_slots_max = (
+        Settings.PREMIUM_INVENTORY_SLOTS
+        if (player and player.get("is_premium"))
+        else Settings.FREE_INVENTORY_SLOTS
+    )
+    bag_slots_used = sum(1 for it in (items or []) if not bool((it or {}).get("is_equipped")))
     char_dict = dict(char)
     sk = char_dict.get("specialization")
     if sk:
@@ -328,6 +340,8 @@ async def handle_inventory(request: web.Request) -> web.Response:
                     "avatar_url": _discord_avatar_url(user, discord_id),
                 },
                 "character": char_dict,
+                "bag_slots_used": bag_slots_used,
+                "bag_slots_max": int(bag_slots_max),
                 "items": items,
             }
         )

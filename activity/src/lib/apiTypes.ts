@@ -63,6 +63,9 @@ export type InventoryPayload = {
     current_hp?: number;
     max_hp?: number;
   } | null;
+  /** Bag capacity counts unequipped inventory rows (equipped gear doesn't count). */
+  bag_slots_used?: number;
+  bag_slots_max?: number;
   items: InvRow[];
 };
 

@@ -132,6 +132,9 @@ export function HeroTab() {
   const char = inventory?.character;
   const items = inventory?.items || [];
   const bag = useMemo(() => items.filter((i) => !i.is_equipped), [items]);
+  const bagSlotsMax = Number(inventory?.bag_slots_max ?? 0) || 0;
+  const bagSlotsUsed = Number(inventory?.bag_slots_used ?? bag.length) || 0;
+  const bagSlotsFree = Math.max(0, (bagSlotsMax || 0) - (bagSlotsUsed || 0));
   const bagConsumables = useMemo(() => {
     return bag.filter((it) => {
       const t = (it.item_type || "").toLowerCase();
@@ -303,11 +306,15 @@ export function HeroTab() {
     return out;
   }, [items]);
 
-  const EMPTY_SLOTS = 20;
-  const invSlots = [
-    ...bagShown.map((it) => ({ id: it.id, name: it.name, icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦", rarity: rarityKey(it.rarity), item: it })),
-    ...Array.from({ length: Math.max(0, EMPTY_SLOTS - bagShown.length) }, (_, i) => ({ id: `empty-${inventoryView}-${i}`, name: null as string | null, icon: null as string | null, rarity: null as string | null, item: null as InvRow | null })),
-  ];
+  // NOTE: We do not pad “Empty” slots per sub-tab (gear vs consumables). That was misleading:
+  // you can have “empty” in one filtered view while the overall bag is full.
+  const invSlots = bagShown.map((it) => ({
+    id: it.id,
+    name: it.name,
+    icon: it.icon || SLOT_ICONS[gearSlot(it) || ""] || "📦",
+    rarity: rarityKey(it.rarity),
+    item: it,
+  }));
 
   const compareForItem = useCallback(
     (it: InvRow) => {
@@ -506,9 +513,16 @@ export function HeroTab() {
                 Batch sell
               </button>
             </div>
-            <span className="text-xs font-semibold font-cinzel text-primary tabular-nums" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}>
-              {Number(char?.gold ?? 0).toLocaleString()} 🪙
-            </span>
+            <div className="text-right">
+              <div className="text-xs font-semibold font-cinzel text-primary tabular-nums" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.2)" }}>
+                {Number(char?.gold ?? 0).toLocaleString()} 🪙
+              </div>
+              {bagSlotsMax > 0 && (
+                <div className="text-[10px] text-muted-foreground tabular-nums">
+                  Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
+                </div>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-5 gap-2">
             {invSlots.map((inv) => {
