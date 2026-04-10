@@ -1054,9 +1054,11 @@
     border: 1px solid hsl(var(--frame-inner) / 0.15);
     pointer-events: none;
   }
-  .combat-skill-slot:hover .combat-skill-tooltip,
-  .combat-skill-slot:focus-within .combat-skill-tooltip {
-    opacity: 1;
-    visibility: visible;
+  /* Hover only — :focus-within would keep the tip open after click while the button stays focused */
+  @media (hover: hover) {
+    .combat-skill-slot:hover .combat-skill-tooltip {
+      opacity: 1;
+      visibility: visible;
+    }
   }
 }
