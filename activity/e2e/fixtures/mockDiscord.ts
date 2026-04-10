@@ -10,6 +10,9 @@ const MOCK_ACCESS_TOKEN = 'test_token_' + Date.now();
 const MOCK_GUILD_ID = 'test_guild_456';
 
 export async function setupMocks(page: Page) {
+  // Track combat state for this test page
+  let combatTurns = 0;
+  let enemyHp = 20; // Enemy dies in 2 hits (20 damage per action)
   // Mock the /api/token endpoint — exchanges fake auth code for test token
   await page.route('**/api/token', async (route) => {
     await route.fulfill({
@@ -108,14 +111,52 @@ export async function setupMocks(page: Page) {
     }
     // GET /api/game/combat/snapshot
     else if (url.includes('/api/game/combat/snapshot')) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          active: false,
-          enemies: [],
-        }),
-      });
+      if (enemyHp <= 0) {
+        // Combat ended with victory
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            active: false,
+            enemies: [],
+            ended_outcome: {
+              outcome: {
+                title: 'Victory!',
+                lines: ['You defeated the Defias Bandit!', 'Gained 50 XP and 25 gold.'],
+              },
+            },
+          }),
+        });
+      } else {
+        // Combat still active
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            active: true,
+            enemies: [],
+            state: {
+              turn: combatTurns,
+              player: {
+                name: 'Player',
+                current_hp: 95,
+                max_hp: 100,
+                current_res: 75,
+                max_res: 100,
+                res_type: 'Rage',
+                class: 'warrior',
+              },
+              enemy: { name: 'Defias Bandit', current_hp: enemyHp, max_hp: 30 },
+              log: [],
+              abilities: [
+                { key: 'sword_slash', name: 'Sword Slash', emoji: '⚔️', cost: 0, cost_type: 'Rage', cooldown: 0 },
+                { key: 'shield_bash', name: 'Shield Bash', emoji: '🛡️', cost: 25, cost_type: 'Rage', cooldown: 0 },
+              ],
+              can_potion: true,
+            },
+          }),
+        });
+      }
     }
     // GET /api/game/deeds
     else if (url.includes('/api/game/deeds')) {
@@ -230,39 +271,88 @@ export async function setupMocks(page: Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           ok: true,
-          active: true,
-          round: 1,
-          player_hp: 100,
-          player_max_hp: 100,
-          enemies: [{ key: 'defias_bandit', name: 'Defias Bandit', hp: 30, max_hp: 30 }],
-          available_actions: [
-            { action: 'ability', key: 'sword_slash', name: 'Sword Slash' },
-          ],
+          state: {
+            turn: 1,
+            player: {
+              name: 'Player',
+              current_hp: 100,
+              max_hp: 100,
+              current_res: 100,
+              max_res: 100,
+              res_type: 'Rage',
+              class: 'warrior',
+            },
+            enemy: { name: 'Defias Bandit', current_hp: 20, max_hp: 20 },
+            log: ['Combat started!'],
+            abilities: [
+              { key: 'sword_slash', name: 'Sword Slash', emoji: '⚔️', cost: 0, cost_type: 'Rage', cooldown: 0 },
+              { key: 'shield_bash', name: 'Shield Bash', emoji: '🛡️', cost: 25, cost_type: 'Rage', cooldown: 1 },
+            ],
+            can_potion: true,
+          },
         }),
       });
     }
     // POST /api/game/combat/action
     else if (url.includes('/api/game/combat/action') && method === 'POST') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          action: 'ability',
-          round: 2,
-          player_hp: 95,
-          player_max_hp: 100,
-          enemies: [{ key: 'defias_bandit', name: 'Defias Bandit', hp: 20, max_hp: 30 }],
-          outcome: null,
-        }),
-      });
+      combatTurns++;
+      enemyHp = Math.max(0, enemyHp - 20); // Damage enemy by 20 each turn (dies in 1 hit)
+
+      if (enemyHp <= 0) {
+        // Return outcome after defeating enemy
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            outcome: {
+              title: 'Victory!',
+              lines: ['You defeated the Defias Bandit!', 'Gained 50 XP and 25 gold.'],
+            },
+          }),
+        });
+      } else {
+        // Continue fighting
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            state: {
+              turn: combatTurns + 1,
+              player: {
+                name: 'Player',
+                current_hp: 95,
+                max_hp: 100,
+                current_res: 75,
+                max_res: 100,
+                res_type: 'Rage',
+                class: 'warrior',
+              },
+              enemy: { name: 'Defias Bandit', current_hp: enemyHp, max_hp: 30 },
+              log: ['Combat started!', 'You used Sword Slash for 10 damage!'],
+              abilities: [
+                { key: 'sword_slash', name: 'Sword Slash', emoji: '⚔️', cost: 0, cost_type: 'Rage', cooldown: 0 },
+                { key: 'shield_bash', name: 'Shield Bash', emoji: '🛡️', cost: 25, cost_type: 'Rage', cooldown: 0 },
+              ],
+              can_potion: true,
+            },
+          }),
+        });
+      }
     }
     // POST /api/game/combat/flee
     else if (url.includes('/api/game/combat/flee') && method === 'POST') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ok: true, fled: true }),
+        body: JSON.stringify({
+          ok: true,
+          outcome: {
+            title: 'Fled from Combat',
+            lines: ['You successfully escaped from the Defias Bandit!'],
+          },
+        }),
       });
     }
     // GET /api/game/dungeons

@@ -137,9 +137,9 @@ test.describe('Combat - Overworld', () => {
       if (!disabled) {
         await potionBtn.click();
 
-        // Combat should continue
-        const fightScreen = page.locator('text=/Your Turn|Turn/');
-        await expect(fightScreen).toBeVisible({ timeout: 5000 });
+        // Combat should continue (look for skill buttons still visible)
+        const skillBtn = page.locator('.skill-btn').first();
+        await expect(skillBtn).toBeVisible({ timeout: 5000 });
       }
     }
 
