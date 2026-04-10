@@ -1,10 +1,42 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
 import { skillIconUrl } from "@/lib/skillIconUrl";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
+import { BattleBackground } from "@/components/game/combat/BattleBackground";
+import { BattleFighter } from "@/components/game/combat/BattleFighter";
+import { DamageNumbers, type DamageEvent } from "@/components/game/combat/DamageNumber";
+import { TurnOrder } from "@/components/game/combat/TurnOrder";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
+}
+
+function battleBackgroundZone(zoneKey?: string): string {
+  if (!zoneKey) return "volcano";
+  const k = zoneKey.toLowerCase();
+  if (k.includes("forest") || k.includes("wood")) return "forest";
+  if (k.includes("grave") || k.includes("crypt")) return "graveyard";
+  if (k.includes("dungeon") || k.includes("depth") || k.includes("shadow")) return "dungeon";
+  return "volcano";
+}
+
+function classEmoji(classKey: string): string {
+  const m: Record<string, string> = {
+    warrior: "🛡️",
+    paladin: "⚔️",
+    mage: "🧙",
+    rogue: "🗡️",
+    priest: "✨",
+    hunter: "🏹",
+    shared: "🧝",
+  };
+  return m[classKey] || "🧝";
+}
+
+function firstTokenEmoji(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const t = parts[0] || "";
+  return t && /[^\w\s]/.test(t) ? t : "👾";
 }
 
 export type CombatEncounterViewProps = {
@@ -35,12 +67,133 @@ export function CombatEncounterView({
   dungeonHeader,
 }: CombatEncounterViewProps) {
   const [showLogModal, setShowLogModal] = useState(false);
-  const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
-  const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
   const classKey = state.player.class || inventory?.character?.class || "";
   const specKey = state.player.specialization || inventory?.character?.specialization || "";
   const partyMode = Boolean(state.party_mode && state.party_players && state.party_players.length > 0);
   const canAct = !state.party_mode || state.your_turn === true;
+
+  const encounterKey = `${state.enemy.name}-${state.enemy.max_hp}-${state.player.max_hp}`;
+  const prevKeyRef = useRef<string | null>(null);
+  const prevHpRef = useRef({ p: state.player.current_hp, e: state.enemy.current_hp });
+  const damageIdRef = useRef(0);
+  const [damageEvents, setDamageEvents] = useState<DamageEvent[]>([]);
+  const [playerHit, setPlayerHit] = useState(false);
+  const [enemyHit, setEnemyHit] = useState(false);
+  const [playerAttacking, setPlayerAttacking] = useState(false);
+  const [enemyAttacking, setEnemyAttacking] = useState(false);
+
+  useEffect(() => {
+    if (prevKeyRef.current !== encounterKey) {
+      prevKeyRef.current = encounterKey;
+      prevHpRef.current = { p: state.player.current_hp, e: state.enemy.current_hp };
+      setDamageEvents([]);
+      return;
+    }
+    const prev = prevHpRef.current;
+    const p = state.player.current_hp;
+    const e = state.enemy.current_hp;
+    const logs = (state.log || []).filter(Boolean);
+    const lastLog = logs[logs.length - 1] || "";
+    const isCrit = /\bcrit/i.test(lastLog);
+
+    const next: DamageEvent[] = [];
+    if (e < prev.e) {
+      next.push({
+        id: ++damageIdRef.current,
+        value: prev.e - e,
+        isCrit,
+        isHeal: false,
+        side: "enemy",
+      });
+    } else if (e > prev.e) {
+      next.push({
+        id: ++damageIdRef.current,
+        value: e - prev.e,
+        isCrit: false,
+        isHeal: true,
+        side: "enemy",
+      });
+    }
+    if (p < prev.p) {
+      next.push({
+        id: ++damageIdRef.current,
+        value: prev.p - p,
+        isCrit,
+        isHeal: false,
+        side: "player",
+      });
+    } else if (p > prev.p) {
+      next.push({
+        id: ++damageIdRef.current,
+        value: p - prev.p,
+        isCrit: false,
+        isHeal: true,
+        side: "player",
+      });
+    }
+
+    prevHpRef.current = { p, e };
+    if (next.length === 0) return;
+
+    setDamageEvents((ev) => [...ev, ...next].slice(-14));
+
+    const timers: number[] = [];
+    if (e < prev.e) {
+      setPlayerAttacking(true);
+      setEnemyHit(true);
+      timers.push(window.setTimeout(() => setPlayerAttacking(false), 480));
+      timers.push(window.setTimeout(() => setEnemyHit(false), 420));
+    }
+    if (p < prev.p) {
+      setEnemyAttacking(true);
+      setPlayerHit(true);
+      timers.push(window.setTimeout(() => setEnemyAttacking(false), 480));
+      timers.push(window.setTimeout(() => setPlayerHit(false), 420));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [encounterKey, state.player.current_hp, state.enemy.current_hp, state.log]);
+
+  const turnFighters = useMemo(() => {
+    if (partyMode && state.party_players?.length) {
+      const rows = state.party_players as PartyCombatRow[];
+      const enemyTurn = rows.every((r) => !r.your_turn) && state.enemy.current_hp > 0;
+      return [
+        ...rows.map((row) => ({
+          name: row.name,
+          icon: classEmoji(row.class || ""),
+          iconSrc: row.class ? classIconUrl(row.class) : null,
+          isPlayer: true,
+          isCurrent: Boolean(row.your_turn),
+        })),
+        {
+          name: state.enemy.name,
+          icon: firstTokenEmoji(state.enemy.name),
+          iconSrc: null,
+          isPlayer: false,
+          isCurrent: enemyTurn,
+        },
+      ];
+    }
+    return [
+      {
+        name: state.player.name,
+        icon: classEmoji(classKey),
+        iconSrc: classKey ? classIconUrl(classKey) : null,
+        isPlayer: true,
+        isCurrent: canAct,
+      },
+      {
+        name: state.enemy.name,
+        icon: firstTokenEmoji(state.enemy.name),
+        iconSrc: null,
+        isPlayer: false,
+        isCurrent: !canAct,
+      },
+    ];
+  }, [partyMode, state.party_players, state.enemy, state.player.name, classKey, canAct]);
+
+  const playerLevel = inventory?.character?.level ?? 1;
+  const enemyLevel = zoneLabel?.level_min ?? zoneLabel?.level_max ?? 1;
 
   // Detect if combat is in progress
   const combatInProgress = state.enemy.current_hp > 0;
@@ -88,68 +241,51 @@ export function CombatEncounterView({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="game-panel text-center">
-          <div className="mb-2 flex items-center justify-center" style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}>
-            {classKey ? (
-              <img
-                src={classIconUrl(classKey)}
-                alt=""
-                width={48}
-                height={48}
-                className="w-12 h-12 object-contain rounded-sm"
-              />
-            ) : (
-              <span className="text-3xl">🧝</span>
-            )}
+      <BattleBackground zone={battleBackgroundZone(zoneLabel?.key)}>
+        <div className="p-2 space-y-2">
+          <div className="flex justify-center">
+            <TurnOrder fighters={turnFighters} />
           </div>
-          <p className="text-sm font-cinzel font-semibold text-foreground">{state.player.name}</p>
+          <div className="relative flex items-end justify-between gap-2 px-2 sm:px-4 pb-2 pt-1 min-h-[200px]">
+            <DamageNumbers events={damageEvents} />
+            <BattleFighter
+              name={state.player.name}
+              icon={classEmoji(classKey)}
+              iconSrc={classKey ? classIconUrl(classKey) : null}
+              hp={state.player.current_hp}
+              maxHp={state.player.max_hp}
+              mp={state.player.max_res > 0 ? state.player.current_res : undefined}
+              maxMp={state.player.max_res > 0 ? state.player.max_res : undefined}
+              resourceLabel={state.player.res_type || "MP"}
+              level={playerLevel}
+              isPlayer
+              isHit={playerHit}
+              isAttacking={playerAttacking}
+            />
+            <BattleFighter
+              name={state.enemy.name}
+              icon={firstTokenEmoji(state.enemy.name)}
+              hp={state.enemy.current_hp}
+              maxHp={state.enemy.max_hp}
+              level={enemyLevel}
+              isPlayer={false}
+              isHit={enemyHit}
+              isAttacking={enemyAttacking}
+            />
+          </div>
           {specKey && specIconUrl(specKey) && (
-            <div className="mt-1 flex items-center justify-center">
+            <div className="flex justify-center -mt-1 pb-1">
               <img
                 src={specIconUrl(specKey)}
                 alt=""
                 width={18}
                 height={18}
-                className="w-[18px] h-[18px] object-contain rounded-[2px]"
+                className="w-[18px] h-[18px] object-contain rounded-[2px] opacity-90"
               />
             </div>
           )}
-          <div className="mt-3">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground text-[10px] font-cinzel uppercase tracking-wider">HP</span>
-              <span className="text-foreground tabular-nums">
-                {state.player.current_hp}/{state.player.max_hp}
-              </span>
-            </div>
-            <div className="hp-bar-track">
-              <div className="hp-bar-fill" style={{ width: `${php}%` }} />
-            </div>
-            {state.player.max_res > 0 && (
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {state.player.res_type} {state.player.current_res}/{state.player.max_res}
-              </p>
-            )}
-          </div>
         </div>
-        <div className="game-panel text-center">
-          <div className="text-3xl mb-2" style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}>
-            <EnemyFace name={state.enemy.name} />
-          </div>
-          <p className="text-sm font-cinzel font-semibold text-foreground">{state.enemy.name}</p>
-          <div className="mt-3">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground text-[10px] font-cinzel uppercase tracking-wider">HP</span>
-              <span className="text-foreground tabular-nums">
-                {state.enemy.current_hp}/{state.enemy.max_hp}
-              </span>
-            </div>
-            <div className="hp-bar-track">
-              <div className="hp-bar-fill" style={{ width: `${ehp}%` }} />
-            </div>
-          </div>
-        </div>
-      </div>
+      </BattleBackground>
 
       <div className="text-center">
         <span
@@ -327,12 +463,6 @@ export function CombatEncounterView({
       )}
     </div>
   );
-}
-
-function EnemyFace({ name }: { name: string }) {
-  const parts = name.trim().split(/\s+/);
-  const emoji = parts[0] && /[^\w\s]/.test(parts[0]) ? parts[0] : "👾";
-  return <>{emoji}</>;
 }
 
 function CombatSkillIcon({ abilityKey, emoji }: { abilityKey: string; emoji: string }) {
