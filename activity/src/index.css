@@ -947,4 +947,70 @@
     border: 1px solid hsl(var(--frame-inner) / 0.15);
     pointer-events: none;
   }
+
+  /* ═══════════════════════════════════════
+     COMBAT ANIMATIONS
+     ═══════════════════════════════════════ */
+  @keyframes fighter-hit {
+    0%, 100% { transform: translateX(0); filter: brightness(1); }
+    15% { transform: translateX(-6px); filter: brightness(1.8); }
+    30% { transform: translateX(4px); filter: brightness(1.3); }
+    50% { transform: translateX(-2px); filter: brightness(1); }
+  }
+  .animate-fighter-hit {
+    animation: fighter-hit 0.4s ease-out;
+  }
+
+  @keyframes fighter-attack-right {
+    0%, 100% { transform: translateX(0); }
+    40% { transform: translateX(24px); }
+    60% { transform: translateX(24px); }
+  }
+  .animate-fighter-attack-right {
+    animation: fighter-attack-right 0.5s ease-in-out;
+  }
+
+  @keyframes fighter-attack-left {
+    0%, 100% { transform: translateX(0); }
+    40% { transform: translateX(-24px); }
+    60% { transform: translateX(-24px); }
+  }
+  .animate-fighter-attack-left {
+    animation: fighter-attack-left 0.5s ease-in-out;
+  }
+
+  @keyframes damage-float {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    50% { opacity: 1; transform: translateY(-30px) scale(1.15); }
+    100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
+  }
+  .animate-damage-float {
+    animation: damage-float 1.2s ease-out forwards;
+  }
+
+  @keyframes hit-flash {
+    0% { opacity: 0.8; }
+    100% { opacity: 0; }
+  }
+  .animate-hit-flash {
+    animation: hit-flash 0.3s ease-out forwards;
+  }
+
+  @keyframes float-particle {
+    0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+    20% { opacity: 0.3; }
+    80% { opacity: 0.15; }
+    100% { opacity: 0; transform: translateY(-200px) rotate(180deg); }
+  }
+  .animate-float-particle {
+    animation: float-particle 4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 4px hsl(var(--gold) / 0.2); }
+    50% { box-shadow: 0 0 12px hsl(var(--gold) / 0.4); }
+  }
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
 }
