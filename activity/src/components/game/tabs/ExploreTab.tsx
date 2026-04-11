@@ -7,7 +7,6 @@ import {
   ChevronUp,
   Clock,
   Navigation,
-  Info,
   Swords,
   Sword,
   Crown,
@@ -488,38 +487,33 @@ export function ExploreTab() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-        <div className={cn("rounded border panel-inset transition-all duration-500", isTravelling ? "border-gold/60 bg-gold/5 opacity-60" : "border-panel-border bg-panel-bg")}>
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
-            <span className="font-serif text-[10px] tracking-[0.2em] uppercase text-gold/60 flex items-center gap-1.5">
-              <MapPin className="h-3 w-3" />
-              Current Zone
-            </span>
-            {isTravelling ? (
-              <span className="text-[10px] text-gold/80 font-sans italic flex items-center gap-1">
-                <Navigation className="h-3 w-3 animate-bounce" />
-                Travelling...
-              </span>
-            ) : null}
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="font-serif text-[10px] tracking-[0.2em] uppercase text-gold/60 flex items-center gap-1.5"><MapPin className="h-3 w-3" />Zone Map</span>
+            <div className="flex-1 h-px bg-panel-border/50" />
           </div>
-          <div className="px-3 py-2.5 flex items-start gap-3">
-            <span className="text-3xl leading-none animate-float">{currentZone.emoji}</span>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-serif text-base font-bold text-gold tracking-wide leading-tight">{currentZone.name}</h3>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
-                <span>Levels {currentZone.levelRange[0]}-{currentZone.levelRange[1]}</span>
-                <span className="text-panel-border">◆</span>
-                <span className="capitalize">{currentZone.faction}</span>
-                <span className="text-panel-border">◆</span>
-                <span>{currentZone.playersNearby} player{currentZone.playersNearby !== 1 ? "s" : ""} nearby</span>
-              </div>
-              {currentZone.regionHint ? (
-                <div className="flex items-start gap-1.5 mt-2 text-[11px] text-gold/60 italic bg-gold/5 border border-gold/15 rounded px-2 py-1.5 leading-relaxed">
-                  <Info className="h-3 w-3 flex-shrink-0 mt-0.5 text-gold/50" />
-                  <span>{currentZone.regionHint}</span>
-                </div>
-              ) : null}
-            </div>
-          </div>
+          <ZoneMap
+            zones={ZONES}
+            currentZone={currentZone}
+            onSelectZone={setTravelTarget}
+            latestResult={latestResult}
+            exploring={exploring}
+            onGoToCombat={() => setTab("combat")}
+            onInteractNPC={() => setTab("quests")}
+            cooldownActive={cooldownActive}
+            onTabChange={setTab}
+          />
+          {travelTarget.id !== currentZone.id ? (
+            <button
+              onClick={handleTravel}
+              disabled={isTravelling}
+              className="mt-3 w-full flex items-center justify-center gap-2 rounded border border-gold/50 bg-gold/10 hover:bg-gold/20 text-gold font-serif text-xs font-bold tracking-[0.15em] uppercase py-2.5 transition-all duration-150 disabled:opacity-50"
+            >
+              <Navigation className="h-3.5 w-3.5" />
+              {isTravelling ? "Travelling..." : `Travel to ${travelTarget.name}`}
+            </button>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3 bg-panel-bg border border-gold/40 rounded px-4 py-3.5 panel-inset shadow-[0_0_16px_oklch(0.74_0.13_80/0.2)]">
@@ -551,34 +545,6 @@ export function ExploreTab() {
           <div className="text-xs text-muted-foreground/70 leading-relaxed">
             {cooldownActive ? "Catching your breath before the next foray..." : exploring ? "Venturing into the unknown..." : <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-gold/40" />~30s cooldown between explorations</span>}
           </div>
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="font-serif text-[10px] tracking-[0.2em] uppercase text-gold/60 flex items-center gap-1.5"><MapPin className="h-3 w-3" />Zone Map</span>
-            <div className="flex-1 h-px bg-panel-border/50" />
-          </div>
-          <ZoneMap
-            zones={ZONES}
-            currentZone={currentZone}
-            onSelectZone={setTravelTarget}
-            latestResult={latestResult}
-            exploring={exploring}
-            onGoToCombat={() => setTab("combat")}
-            onInteractNPC={() => setTab("quests")}
-            cooldownActive={cooldownActive}
-            onTabChange={setTab}
-          />
-          {travelTarget.id !== currentZone.id ? (
-            <button
-              onClick={handleTravel}
-              disabled={isTravelling}
-              className="mt-3 w-full flex items-center justify-center gap-2 rounded border border-gold/50 bg-gold/10 hover:bg-gold/20 text-gold font-serif text-xs font-bold tracking-[0.15em] uppercase py-2.5 transition-all duration-150 disabled:opacity-50"
-            >
-              <Navigation className="h-3.5 w-3.5" />
-              {isTravelling ? "Travelling..." : `Travel to ${travelTarget.name}`}
-            </button>
-          ) : null}
         </div>
 
         {timelineResults.length > 0 ? (
