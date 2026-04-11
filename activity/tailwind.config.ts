@@ -17,6 +17,7 @@ export default {
         cinzel: ["Cinzel", "serif"],
         crimson: ["Crimson Text", "serif"],
         pixel: ["Press Start 2P", "cursive"],
+        serif: ["Cinzel", "Times New Roman", "serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -56,6 +57,15 @@ export default {
           DEFAULT: "hsl(var(--gold))",
           dim: "hsl(var(--gold-dim))",
         },
+        panel: {
+          bg: "oklch(0.155 0.01 260 / <alpha-value>)",
+          border: "oklch(0.32 0.04 75 / <alpha-value>)",
+        },
+        "enemy-red": "oklch(0.52 0.22 25 / <alpha-value>)",
+        "boss-purple": "oklch(0.52 0.18 300 / <alpha-value>)",
+        "safe-green": "oklch(0.55 0.14 150 / <alpha-value>)",
+        "xp-blue": "oklch(0.58 0.18 240 / <alpha-value>)",
+        "npc-teal": "oklch(0.58 0.12 195 / <alpha-value>)",
         connected: "hsl(var(--connected))",
         stone: {
           DEFAULT: "hsl(var(--stone))",
