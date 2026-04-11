@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { ZONES as DATA_ZONES } from "@/data/zones";
 import { zoneMapImageUrl } from "@/data/zoneMapArt";
+import type { ExploreResultPayload } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
 import {
   Compass,
@@ -112,19 +114,6 @@ const EXPLORE_ZONES: Zone[] = DATA_ZONES.map((z) => {
   };
 });
 
-const SAMPLE_RESULTS: ExploreResult[] = [
-  { id: "r1", type: "enemy", message: "A Bloodsail Corsair springs from the undergrowth, cutlass drawn!", enemyName: "Bloodsail Corsair", enemyLevel: 38, isBoss: false, timestamp: new Date(Date.now() - 90_000) },
-  { id: "r2", type: "safe", message: "You follow an overgrown path to a crumbling stone vista. A pleasant silence settles over you.", reward: { xp: 120 }, timestamp: new Date(Date.now() - 210_000) },
-  {
-    id: "r3",
-    type: "npc",
-    message: "A weathered figure crouches by a fire, studying a frayed map.",
-    npc: { id: "npc_grol", name: "Grol the Wanderer", title: "Disgraced Scout", silhouette: "🧙", discoveryQuote: "\"These routes have not been safe for months.\"", alreadyMet: false },
-    reward: { xp: 80 },
-    timestamp: new Date(Date.now() - 360_000),
-  },
-];
-
 const ZONE_THEMES: Record<string, { bg: string; glow: string; accent: string; dangerLabel: string; dangerColor: string; biomeLabel: string; stars: number }> = {
   "Elwynn Forest": { bg: "linear-gradient(160deg, oklch(0.20 0.07 145) 0%, oklch(0.14 0.05 155) 55%, oklch(0.10 0.03 165) 100%)", glow: "oklch(0.50 0.14 148)", accent: "oklch(0.55 0.14 150)", dangerLabel: "Beginner", dangerColor: "oklch(0.62 0.16 145)", biomeLabel: "Temperate Forest", stars: 1 },
   "Dun Morogh": { bg: "linear-gradient(160deg, oklch(0.22 0.06 230) 0%, oklch(0.16 0.05 235) 55%, oklch(0.11 0.03 240) 100%)", glow: "oklch(0.55 0.10 230)", accent: "oklch(0.62 0.12 225)", dangerLabel: "Beginner", dangerColor: "oklch(0.58 0.12 230)", biomeLabel: "Frozen Peaks", stars: 1 },
@@ -134,15 +123,71 @@ const ZONE_THEMES: Record<string, { bg: string; glow: string; accent: string; da
 };
 const FALLBACK_THEME = ZONE_THEMES["Stranglethorn Vale"];
 
-function generateResult(): ExploreResult {
-  const roll = Math.random();
-  const id = Math.random().toString(36).slice(2);
+function explorePayloadToExploreResult(json: ExploreResultPayload): ExploreResult | null {
+  if (!json.ok || !json.outcome) return null;
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const ts = new Date();
-  if (roll < 0.2) return { id, type: "boss", message: "The earth trembles. A colossal silhouette blocks the sun.", enemyName: "Gorgothar the Unburied", enemyLevel: 45, isBoss: true, timestamp: ts };
-  if (roll < 0.45) return { id, type: "enemy", message: "Three Bloodsail Raiders drop from the canopy, weapons drawn.", enemyName: "Bloodsail Raider", enemyLevel: 36, isBoss: false, timestamp: ts };
-  if (roll < 0.6) return { id, type: "npc", message: "You nearly trip over a crouched figure in worn leather armour.", npc: { id: "npc_mira", name: "Mira Flinthand", title: "Tracker & Scout", silhouette: "🏹", discoveryQuote: "\"There's a cave half a league north.\"", alreadyMet: Math.random() > 0.7 }, reward: { xp: 95 }, timestamp: ts };
-  if (roll < 0.75) return { id, type: "loot", message: "Beneath a moss-draped stone you find a leather satchel.", reward: { xp: 60, gold: 12 }, timestamp: ts };
-  return { id, type: "safe", message: "The path winds along a ridge overlooking the whole vale.", reward: { xp: 40 }, timestamp: ts };
+  const out = json.outcome;
+  const reward =
+    json.reward && (json.reward.xp != null || json.reward.gold != null)
+      ? { xp: json.reward.xp, gold: json.reward.gold }
+      : undefined;
+
+  if (out.type === "enemy" || out.type === "boss") {
+    const em = out.emoji ? `${out.emoji} ` : "";
+    return {
+      id,
+      type: out.type,
+      message:
+        (json.message && json.message.trim()) ||
+        (out.type === "boss" ? `A terrible foe reveals itself: ${out.name}!` : `${em}${out.name} bars your path!`.trim()),
+      enemyName: out.name,
+      isBoss: out.type === "boss",
+      timestamp: ts,
+      reward,
+    };
+  }
+
+  if (json.npc?.npc_id) {
+    const n = json.npc;
+    return {
+      id,
+      type: "npc",
+      message: (json.message && json.message.trim()) || "You cross paths with someone on the road.",
+      npc: {
+        id: String(n.npc_id),
+        name: n.name || "Traveler",
+        title: n.title || "",
+        silhouette: "💬",
+        discoveryQuote: n.discovery_hint,
+        alreadyMet: Boolean(n.already_met),
+      },
+      reward,
+      timestamp: ts,
+    };
+  }
+
+  if (out.type === "loot") {
+    return {
+      id,
+      type: "loot",
+      message: (json.message && json.message.trim()) || "You uncover something worth taking with you.",
+      reward,
+      timestamp: ts,
+    };
+  }
+
+  if (out.type === "safe") {
+    return {
+      id,
+      type: "safe",
+      message: (json.message && json.message.trim()) || "The surroundings settle; you move on without incident.",
+      reward,
+      timestamp: ts,
+    };
+  }
+
+  return null;
 }
 
 function resolveTab(tab: string): AppTab | null {
@@ -247,10 +292,13 @@ function ResultPanel({
         <span className="text-[10px] text-muted-foreground/60 tabular-nums"><RelativeTime date={result.timestamp} /></span>
       </div>
       <p className={cn("text-foreground/85 leading-relaxed", isTimeline ? "text-xs" : "text-sm")}>{result.message}</p>
-      {(result.type === "enemy" || result.type === "boss") && (
+      {(result.type === "enemy" || result.type === "boss") && result.enemyName && (
         <div className="rounded px-2.5 py-2 mt-2 border border-white/15">
           <p className="font-serif font-semibold text-sm text-foreground">{result.enemyName}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Level {result.enemyLevel} · {result.isBoss ? "World Boss" : "Enemy"}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {result.enemyLevel != null ? <>Level {result.enemyLevel} · </> : null}
+            {result.isBoss ? "World Boss" : "Enemy"}
+          </p>
         </div>
       )}
       {result.type === "npc" && result.npc && (
@@ -428,7 +476,10 @@ function ZoneMap({
               {(latestResult.type === "enemy" || latestResult.type === "boss") && latestResult.enemyName && (
                 <div className="animate-text-reveal">
                   <div className="font-serif text-base font-bold text-foreground">{latestResult.enemyName}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">Level {latestResult.enemyLevel}{latestResult.type === "boss" ? " - World Boss" : ""}</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    {latestResult.enemyLevel != null ? `Level ${latestResult.enemyLevel} · ` : null}
+                    {latestResult.type === "boss" ? "World Boss" : "Enemy"}
+                  </div>
                 </div>
               )}
               {latestResult.type === "npc" && latestResult.npc && (
@@ -490,13 +541,15 @@ function ZoneMap({
 }
 
 export function ExploreTab() {
-  const { map } = useGameSession();
+  const { map, explore, travel, npcInteract, accessToken } = useGameSession();
   const [currentZoneId, setCurrentZoneId] = useState(EXPLORE_ZONES[0].id);
   const [travelTargetId, setTravelTargetId] = useState(EXPLORE_ZONES[0].id);
   const [isTravelling, setIsTravelling] = useState(false);
   const [exploring, setExploring] = useState(false);
   const [cooldownActive, setCooldownActive] = useState(false);
-  const [results, setResults] = useState<ExploreResult[]>(SAMPLE_RESULTS);
+  const [cooldownSeconds, setCooldownSeconds] = useState(30);
+  const [cooldownKey, setCooldownKey] = useState(0);
+  const [results, setResults] = useState<ExploreResult[]>([]);
   const [latestId, setLatestId] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
@@ -533,32 +586,72 @@ export function ExploreTab() {
     setTravelTargetId(key);
   }, [map?.current_zone]);
 
-  const setTab = (tab: string) => {
+  const setTab = useCallback((tab: string) => {
     const resolved = resolveTab(tab);
     if (!resolved) return;
     window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: resolved }));
-  };
+  }, []);
 
-  const handleTravel = useCallback(() => {
+  const handleTravel = useCallback(async () => {
     if (travelTargetId === currentZoneId) return;
+    if (!accessToken) {
+      toast.error("Connect with Discord to travel.");
+      return;
+    }
     setIsTravelling(true);
-    setTimeout(() => {
-      setCurrentZoneId(travelTargetId);
+    try {
+      const r = await travel(travelTargetId);
+      if (!r.ok) toast.error(r.message || "Travel failed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
       setIsTravelling(false);
-    }, 1200);
-  }, [travelTargetId, currentZoneId]);
+    }
+  }, [travelTargetId, currentZoneId, accessToken, travel]);
 
-  const handleExplore = useCallback(() => {
+  const handleNpcInteract = useCallback(
+    async (npcId: string) => {
+      const r = await npcInteract(npcId);
+      if (!r.ok) toast.error(r.error || r.message || "Could not interact");
+      else setTab("quests");
+    },
+    [npcInteract, setTab],
+  );
+
+  const handleExplore = useCallback(async () => {
     if (cooldownActive || exploring) return;
+    if (!accessToken) {
+      toast.error("Connect with Discord to explore.");
+      return;
+    }
     setExploring(true);
-    setTimeout(() => {
-      const r = generateResult();
-      setResults((prev) => [r, ...prev].slice(0, 20));
-      setLatestId(r.id);
-      setExploring(false);
+    try {
+      const json = await explore();
+      if (!json.ok) {
+        if (json.error === "cooldown" && json.cooldown_s != null) {
+          setCooldownSeconds(Math.max(1, Math.ceil(json.cooldown_s)));
+          setCooldownKey((k) => k + 1);
+          setCooldownActive(true);
+        } else {
+          toast.error(json.message || json.error || "Explore failed");
+        }
+        return;
+      }
+      const r = explorePayloadToExploreResult(json);
+      if (r) {
+        setResults((prev) => [r, ...prev].slice(0, 20));
+        setLatestId(r.id);
+      }
+      const cd = json.cooldown_s != null ? Math.max(1, Math.ceil(json.cooldown_s)) : 30;
+      setCooldownSeconds(cd);
+      setCooldownKey((k) => k + 1);
       setCooldownActive(true);
-    }, 900);
-  }, [cooldownActive, exploring]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExploring(false);
+    }
+  }, [accessToken, cooldownActive, exploring, explore]);
 
   const latestResult = results.find((r) => r.id === latestId) || null;
   const timelineResults = latestResult ? results.filter((r) => r.id !== latestResult.id) : results;
@@ -584,14 +677,14 @@ export function ExploreTab() {
             latestResult={latestResult}
             exploring={exploring}
             onGoToCombat={() => setTab("combat")}
-            onInteractNPC={() => setTab("quests")}
+            onInteractNPC={handleNpcInteract}
             cooldownActive={cooldownActive}
             onTabChange={setTab}
           />
           {travelTarget.id !== currentZone.id ? (
             <button
-              onClick={handleTravel}
-              disabled={isTravelling}
+              onClick={() => void handleTravel()}
+              disabled={isTravelling || !accessToken}
               className="mt-3 w-full flex items-center justify-center gap-2 rounded border border-gold/50 bg-gold/10 hover:bg-gold/20 text-gold font-serif text-xs font-bold tracking-[0.15em] uppercase py-2.5 transition-all duration-150 disabled:opacity-50"
             >
               <Navigation className="h-3.5 w-3.5" />
@@ -602,14 +695,18 @@ export function ExploreTab() {
 
         <div className="flex items-center gap-3 bg-panel-bg border border-gold/40 rounded px-4 py-3.5 panel-inset shadow-[0_0_16px_oklch(0.74_0.13_80/0.2)]">
           {cooldownActive ? (
-            <CooldownRing totalSeconds={30} onComplete={() => setCooldownActive(false)} />
+            <CooldownRing key={cooldownKey} totalSeconds={cooldownSeconds} onComplete={() => setCooldownActive(false)} />
           ) : (
             <button
-              onClick={handleExplore}
-              disabled={exploring}
+              type="button"
+              onClick={() => void handleExplore()}
+              disabled={exploring || !accessToken}
+              title={!accessToken ? "Open this Activity from Discord while logged in." : undefined}
               className={cn(
                 "relative flex-shrink-0 rounded border px-6 py-2.5 font-serif text-sm font-bold tracking-[0.15em] uppercase transition-all duration-200",
-                exploring ? "border-gold/30 bg-gold/5 text-gold/50 cursor-wait" : "border-gold bg-gold/20 text-gold hover:bg-gold/30 hover:shadow-[0_0_16px_oklch(0.74_0.13_80/0.4)] animate-pulse-gold",
+                exploring || !accessToken
+                  ? "border-gold/30 bg-gold/5 text-gold/50 cursor-not-allowed"
+                  : "border-gold bg-gold/20 text-gold hover:bg-gold/30 hover:shadow-[0_0_16px_oklch(0.74_0.13_80/0.4)] animate-pulse-gold",
               )}
             >
               {exploring ? (
@@ -627,7 +724,18 @@ export function ExploreTab() {
           )}
 
           <div className="text-xs text-muted-foreground/70 leading-relaxed">
-            {cooldownActive ? "Catching your breath before the next foray..." : exploring ? "Venturing into the unknown..." : <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-gold/40" />~30s cooldown between explorations</span>}
+            {cooldownActive ? (
+              "Catching your breath before the next foray…"
+            ) : exploring ? (
+              "Calling the server…"
+            ) : !accessToken ? (
+              "Sign in through Discord to explore and travel."
+            ) : (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-gold/40" />
+                Cooldown is set by the server (longer after enemies or bosses).
+              </span>
+            )}
           </div>
         </div>
 
@@ -647,7 +755,7 @@ export function ExploreTab() {
                 {timelineResults.map((r, i) => (
                   <div key={r.id} className="relative" style={{ animationDelay: `${i * 60}ms` }}>
                     <div className="absolute -left-2.5 top-3 h-2 w-2 rounded-full border border-panel-border bg-background" />
-                    <ResultPanel result={r} onGoToCombat={() => setTab("combat")} onInteractNPC={() => setTab("quests")} isTimeline />
+                    <ResultPanel result={r} onGoToCombat={() => setTab("combat")} onInteractNPC={handleNpcInteract} isTimeline />
                   </div>
                 ))}
               </div>
