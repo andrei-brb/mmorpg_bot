@@ -417,6 +417,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         state?: CombatStatePayload;
       };
       if ((startRes.status === 200 || startRes.status === 409) && startJson.state) {
+        // Consume explore / pending encounter so CombatTab refresh (e.g. after Rest) does not auto-restart the same foe.
+        pendingCombatEnemyKey.current = null;
         return { ok: true, state: startJson.state };
       }
       return { ok: false, message: startJson.message || startJson.error };
@@ -470,6 +472,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     }
     await refreshInventory();
     await refreshProgress();
+    if (json.ok) {
+      pendingCombatEnemyKey.current = null;
+    }
     return { ok: Boolean(json.ok), message: json.message };
   }, [accessToken, guildId, refreshInventory, refreshProgress]);
 

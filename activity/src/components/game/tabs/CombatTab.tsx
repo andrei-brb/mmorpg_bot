@@ -43,6 +43,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     try {
       const snap = await loadCombatSnapshot();
       if (snap.ended_outcome?.outcome) {
+        pendingCombatEnemyKey.current = null;
         toast.info(snap.ended_outcome.outcome.title || "Encounter ended", {
           description: (snap.ended_outcome.outcome.lines || []).slice(0, 3).map(stripMd).join(" "),
         });
@@ -60,7 +61,6 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       if (pend && snap.enemies.some((e) => e.key === pend)) {
         const r = await startCombat({ kind: "zone", enemyKey: pend });
         if (r.state) {
-          pendingCombatEnemyKey.current = null;
           setState(r.state);
           setMode("fight");
           return;
