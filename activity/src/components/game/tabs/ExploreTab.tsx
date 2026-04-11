@@ -172,6 +172,8 @@ function RelativeTime({ date }: { date: Date }) {
 function CooldownRing({ totalSeconds, onComplete, size = 52 }: { totalSeconds: number; onComplete: () => void; size?: number }) {
   const [remaining, setRemaining] = useState(totalSeconds);
   const calledRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
   const radius = (size - 8) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = remaining / totalSeconds;
@@ -186,7 +188,7 @@ function CooldownRing({ totalSeconds, onComplete, size = 52 }: { totalSeconds: n
           clearInterval(interval);
           if (!calledRef.current) {
             calledRef.current = true;
-            onComplete();
+            onCompleteRef.current();
           }
           return 0;
         }
@@ -194,7 +196,7 @@ function CooldownRing({ totalSeconds, onComplete, size = 52 }: { totalSeconds: n
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [totalSeconds, onComplete]);
+  }, [totalSeconds]);
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
