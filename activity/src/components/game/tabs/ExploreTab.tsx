@@ -47,6 +47,10 @@ export function ExploreTab() {
   const resultType: "enemy" | "boss" | "loot" | "safe" | "npc" | null = lastExplore?.npc
     ? "npc"
     : (outcomeEl?.type ?? null);
+  const encounterName =
+    outcomeEl && (outcomeEl.type === "enemy" || outcomeEl.type === "boss")
+      ? outcomeEl.name
+      : "Unknown foe";
 
   const jumpToTab = (tab: "Hero" | "Combat" | "Quests" | "Market" | "Arena" | "Progress") => {
     window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: tab }));
@@ -188,7 +192,7 @@ export function ExploreTab() {
                 </div>
                 {(resultType === "enemy" || resultType === "boss") && (
                   <div className="font-cinzel font-semibold text-foreground text-lg">
-                    {"name" in (outcomeEl || {}) ? outcomeEl.name : "Unknown foe"}
+                    {encounterName}
                   </div>
                 )}
                 {resultType === "npc" && (
