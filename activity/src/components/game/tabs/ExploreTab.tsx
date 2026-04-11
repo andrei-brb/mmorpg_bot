@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useGameSession } from "@/context/GameSessionContext";
+import { ZONES as DATA_ZONES } from "@/data/zones";
+import { zoneMapImageUrl } from "@/data/zoneMapArt";
 import { cn } from "@/lib/utils";
 import {
   Compass,
@@ -39,6 +42,8 @@ type Zone = {
   bossAlive: boolean;
   description: string;
   regionHint?: string;
+  /** Hand-painted zone map from `public/assets/items/generated/maps/`, when available. */
+  mapImageUrl?: string;
 };
 
 type Npc = {
@@ -62,14 +67,50 @@ type ExploreResult = {
   timestamp: Date;
 };
 
-const ZONES: Zone[] = [
-  { id: "elwynn", name: "Elwynn Forest", emoji: "🌲", levelRange: [1, 10], faction: "alliance", playersNearby: 4, bossAlive: false, description: "Rolling hills of ancient oak shelter both wanderers and wolves." },
-  { id: "stranglethorn", name: "Stranglethorn Vale", emoji: "🌴", levelRange: [25, 45], faction: "neutral", playersNearby: 1, bossAlive: true, description: "Thick jungle canopy hides ruins older than memory — and the gangs that claim them.", regionHint: "The Bloodsail Buccaneers grow bolder near Booty Bay." },
-  { id: "plaguelands", name: "Eastern Plaguelands", emoji: "💀", levelRange: [50, 60], faction: "hostile", playersNearby: 0, bossAlive: true, description: "The Scourge's blight bleeds from every cracked stone of this cursed land." },
-  { id: "barrens", name: "The Barrens", emoji: "🏜️", levelRange: [10, 25], faction: "horde", playersNearby: 7, bossAlive: false, description: "Vast sunburned plains where centaur outriders test the courage of every traveller." },
-  { id: "winterspring", name: "Winterspring", emoji: "❄️", levelRange: [55, 60], faction: "neutral", playersNearby: 2, bossAlive: false, description: "Frost-choked valleys whisper of lost knowledge." },
-  { id: "silithus", name: "Silithus", emoji: "🐛", levelRange: [55, 60], faction: "hostile", playersNearby: 0, bossAlive: true, description: "The Old God's dream festers beneath these sands." },
-];
+const ZONE_EMOJI: Record<string, string> = {
+  elwynn_forest: "🌲",
+  dun_morogh: "❄️",
+  barrens: "🌵",
+  stranglethorn: "🌴",
+  blackrock_depths: "🌋",
+};
+
+const ZONE_COPY: Record<string, { description: string; regionHint?: string }> = {
+  elwynn_forest: {
+    description: "A peaceful woodland surrounding the human capital. Ideal for new adventurers finding their footing.",
+  },
+  dun_morogh: { description: "Frozen dwarven peaks. Bitter cold and hardy enemies await." },
+  barrens: { description: "A vast sun-scorched wasteland where only the ruthless survive." },
+  stranglethorn: {
+    description: "A lush but deadly jungle where pirates, predators, and rival factions clash.",
+    regionHint: "The Bloodsail Buccaneers grow bolder near Booty Bay.",
+  },
+  blackrock_depths: {
+    description: "A labyrinthine dungeon-city inside an active volcano. The ultimate endgame challenge.",
+  },
+};
+
+function dataFactionToUi(f: "Alliance" | "Horde" | "Neutral"): Faction {
+  if (f === "Alliance") return "alliance";
+  if (f === "Horde") return "horde";
+  return "neutral";
+}
+
+const EXPLORE_ZONES: Zone[] = DATA_ZONES.map((z) => {
+  const copy = ZONE_COPY[z.key] ?? { description: "" };
+  return {
+    id: z.key,
+    name: z.name,
+    emoji: ZONE_EMOJI[z.key] ?? "🗺️",
+    levelRange: z.levelRange,
+    faction: dataFactionToUi(z.faction),
+    playersNearby: 0,
+    bossAlive: false,
+    description: copy.description,
+    regionHint: copy.regionHint,
+    mapImageUrl: zoneMapImageUrl(z.key),
+  };
+});
 
 const SAMPLE_RESULTS: ExploreResult[] = [
   { id: "r1", type: "enemy", message: "A Bloodsail Corsair springs from the undergrowth, cutlass drawn!", enemyName: "Bloodsail Corsair", enemyLevel: 38, isBoss: false, timestamp: new Date(Date.now() - 90_000) },
@@ -86,11 +127,10 @@ const SAMPLE_RESULTS: ExploreResult[] = [
 
 const ZONE_THEMES: Record<string, { bg: string; glow: string; accent: string; dangerLabel: string; dangerColor: string; biomeLabel: string; stars: number }> = {
   "Elwynn Forest": { bg: "linear-gradient(160deg, oklch(0.20 0.07 145) 0%, oklch(0.14 0.05 155) 55%, oklch(0.10 0.03 165) 100%)", glow: "oklch(0.50 0.14 148)", accent: "oklch(0.55 0.14 150)", dangerLabel: "Beginner", dangerColor: "oklch(0.62 0.16 145)", biomeLabel: "Temperate Forest", stars: 1 },
+  "Dun Morogh": { bg: "linear-gradient(160deg, oklch(0.22 0.06 230) 0%, oklch(0.16 0.05 235) 55%, oklch(0.11 0.03 240) 100%)", glow: "oklch(0.55 0.10 230)", accent: "oklch(0.62 0.12 225)", dangerLabel: "Beginner", dangerColor: "oklch(0.58 0.12 230)", biomeLabel: "Frozen Peaks", stars: 1 },
   "The Barrens": { bg: "linear-gradient(160deg, oklch(0.28 0.09 50) 0%, oklch(0.20 0.07 45) 55%, oklch(0.14 0.04 40) 100%)", glow: "oklch(0.62 0.14 55)", accent: "oklch(0.68 0.14 60)", dangerLabel: "Moderate", dangerColor: "oklch(0.72 0.16 75)", biomeLabel: "Arid Plains", stars: 2 },
   "Stranglethorn Vale": { bg: "linear-gradient(160deg, oklch(0.18 0.07 148) 0%, oklch(0.13 0.05 158) 55%, oklch(0.10 0.03 168) 100%)", glow: "oklch(0.48 0.14 152)", accent: "oklch(0.52 0.14 148)", dangerLabel: "Dangerous", dangerColor: "oklch(0.68 0.18 50)", biomeLabel: "Tropical Jungle", stars: 3 },
-  "Eastern Plaguelands": { bg: "linear-gradient(160deg, oklch(0.16 0.06 280) 0%, oklch(0.12 0.05 290) 55%, oklch(0.09 0.03 300) 100%)", glow: "oklch(0.45 0.15 290)", accent: "oklch(0.52 0.18 300)", dangerLabel: "Very Dangerous", dangerColor: "oklch(0.60 0.22 25)", biomeLabel: "Cursed Wasteland", stars: 4 },
-  Winterspring: { bg: "linear-gradient(160deg, oklch(0.20 0.04 225) 0%, oklch(0.15 0.03 230) 55%, oklch(0.10 0.02 240) 100%)", glow: "oklch(0.55 0.08 225)", accent: "oklch(0.60 0.10 220)", dangerLabel: "Deadly", dangerColor: "oklch(0.62 0.14 220)", biomeLabel: "Frozen Tundra", stars: 4 },
-  Silithus: { bg: "linear-gradient(160deg, oklch(0.22 0.08 75) 0%, oklch(0.16 0.07 65) 55%, oklch(0.11 0.04 60) 100%)", glow: "oklch(0.58 0.14 70)", accent: "oklch(0.62 0.15 72)", dangerLabel: "Lethal", dangerColor: "oklch(0.55 0.22 25)", biomeLabel: "Ancient Desert", stars: 5 },
+  "Blackrock Depths": { bg: "linear-gradient(160deg, oklch(0.22 0.12 35) 0%, oklch(0.14 0.10 30) 55%, oklch(0.09 0.06 25) 100%)", glow: "oklch(0.62 0.18 40)", accent: "oklch(0.70 0.20 45)", dangerLabel: "Lethal", dangerColor: "oklch(0.72 0.22 35)", biomeLabel: "Molten Depths", stars: 5 },
 };
 const FALLBACK_THEME = ZONE_THEMES["Stranglethorn Vale"];
 
@@ -331,6 +371,15 @@ function ZoneMap({
       </div>
 
       <div className="relative flex-1" style={{ background: theme.bg, minHeight: "220px" }}>
+        {currentZone.mapImageUrl ? (
+          <img
+            src={currentZone.mapImageUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-[0.42] pointer-events-none"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
         <div className="absolute inset-0 opacity-20 animate-parallax pointer-events-none" style={{ background: `radial-gradient(ellipse 60% 50% at 50% 40%, ${theme.glow}, transparent)` }} />
         <div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
         <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
@@ -439,8 +488,9 @@ function ZoneMap({
 }
 
 export function ExploreTab() {
-  const [currentZone, setCurrentZone] = useState<Zone>(ZONES[1]);
-  const [travelTarget, setTravelTarget] = useState<Zone>(ZONES[1]);
+  const { map } = useGameSession();
+  const [currentZoneId, setCurrentZoneId] = useState(EXPLORE_ZONES[0].id);
+  const [travelTargetId, setTravelTargetId] = useState(EXPLORE_ZONES[0].id);
   const [isTravelling, setIsTravelling] = useState(false);
   const [exploring, setExploring] = useState(false);
   const [cooldownActive, setCooldownActive] = useState(false);
@@ -449,6 +499,38 @@ export function ExploreTab() {
   const [timelineOpen, setTimelineOpen] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
+  const zones = useMemo(() => {
+    const apiZones = map?.zones;
+    if (!apiZones?.length) return EXPLORE_ZONES;
+    const byKey = new Map(apiZones.map((z) => [z.key, z]));
+    return EXPLORE_ZONES.map((z) => {
+      const s = byKey.get(z.id);
+      if (!s) return z;
+      return {
+        ...z,
+        playersNearby: typeof s.players === "number" ? s.players : z.playersNearby,
+        bossAlive: typeof s.boss_alive === "boolean" ? s.boss_alive : z.bossAlive,
+        description: (typeof s.description === "string" && s.description.trim()) || z.description,
+      };
+    });
+  }, [map?.zones]);
+
+  const currentZone = useMemo(
+    () => zones.find((z) => z.id === currentZoneId) ?? EXPLORE_ZONES[0],
+    [zones, currentZoneId],
+  );
+  const travelTarget = useMemo(
+    () => zones.find((z) => z.id === travelTargetId) ?? EXPLORE_ZONES[0],
+    [zones, travelTargetId],
+  );
+
+  useEffect(() => {
+    const key = map?.current_zone?.trim();
+    if (!key || !EXPLORE_ZONES.some((z) => z.id === key)) return;
+    setCurrentZoneId(key);
+    setTravelTargetId(key);
+  }, [map?.current_zone]);
+
   const setTab = (tab: string) => {
     const resolved = resolveTab(tab);
     if (!resolved) return;
@@ -456,13 +538,13 @@ export function ExploreTab() {
   };
 
   const handleTravel = useCallback(() => {
-    if (travelTarget.id === currentZone.id) return;
+    if (travelTargetId === currentZoneId) return;
     setIsTravelling(true);
     setTimeout(() => {
-      setCurrentZone(travelTarget);
+      setCurrentZoneId(travelTargetId);
       setIsTravelling(false);
     }, 1200);
-  }, [travelTarget, currentZone]);
+  }, [travelTargetId, currentZoneId]);
 
   const handleExplore = useCallback(() => {
     if (cooldownActive || exploring) return;
@@ -494,9 +576,9 @@ export function ExploreTab() {
             <div className="flex-1 h-px bg-panel-border/50" />
           </div>
           <ZoneMap
-            zones={ZONES}
+            zones={zones}
             currentZone={currentZone}
-            onSelectZone={setTravelTarget}
+            onSelectZone={(z) => setTravelTargetId(z.id)}
             latestResult={latestResult}
             exploring={exploring}
             onGoToCombat={() => setTab("combat")}
