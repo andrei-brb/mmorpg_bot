@@ -107,6 +107,9 @@ type GameSessionValue = {
   acceptQuestOffer: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   declineQuestOffer: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   ackQuestCompletion: () => void;
+  /** Quest rewards that failed to deliver (e.g. full inventory); drives mail badge until cleared. */
+  lostDeliveries: { template_id: string; reason?: string }[];
+  clearLostDeliveries: () => void;
   /** Opens API-driven spec modal when eligible, otherwise explains why (toast). */
   requestSpecChoice: () => Promise<void>;
   displayName: string;
@@ -217,6 +220,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [quests, setQuests] = useState<QuestLogPayload | null>(null);
   const [questOffer, setQuestOffer] = useState<QuestOfferPayload | null>(null);
   const [questCompletion, setQuestCompletion] = useState<QuestCompletionPayload | null>(null);
+  const [lostDeliveries, setLostDeliveries] = useState<{ template_id: string; reason?: string }[]>([]);
   const [queuedOfferAfterCompletion, setQueuedOfferAfterCompletion] = useState<QuestOfferPayload | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [marketListings, setMarketListings] = useState<MarketListingRow[]>([]);
@@ -228,6 +232,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     options: SpecOption[];
     unlockLevel: number;
   }>({ open: false, options: [], unlockLevel: 10 });
+
+  const questCompletionRef = useRef<QuestCompletionPayload | null>(null);
+  questCompletionRef.current = questCompletion;
 
   const pendingCombatEnemyKey = useRef<string | null>(null);
   const quickFightIntentRef = useRef<{ kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null>(null);
@@ -604,7 +611,19 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
   );
 
+  const clearLostDeliveries = useCallback(() => {
+    setLostDeliveries([]);
+  }, []);
+
   const ackQuestCompletion = useCallback(() => {
+    const prev = questCompletionRef.current;
+    const fails = prev?.rewards?.item_failures?.filter((x) => x?.template_id) ?? [];
+    if (fails.length) {
+      setLostDeliveries((p) => [
+        ...p,
+        ...fails.map((f) => ({ template_id: String(f.template_id), reason: f.reason })),
+      ]);
+    }
     setQuestCompletion(null);
     if (queuedOfferAfterCompletion) {
       setQuestOffer(queuedOfferAfterCompletion);
@@ -804,6 +823,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       acceptQuestOffer,
       declineQuestOffer,
       ackQuestCompletion,
+      lostDeliveries,
+      clearLostDeliveries,
       requestSpecChoice,
       displayName,
     }),
@@ -856,6 +877,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       acceptQuestOffer,
       declineQuestOffer,
       ackQuestCompletion,
+      lostDeliveries,
+      clearLostDeliveries,
       requestSpecChoice,
       displayName,
     ],

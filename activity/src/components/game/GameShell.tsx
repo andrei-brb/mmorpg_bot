@@ -13,6 +13,7 @@ import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
 import { QuestCompleteModal } from "./modals/QuestCompleteModal";
+import { MailModal } from "./modals/MailModal";
 import { CreateCharacterModal } from "./modals/CreateCharacterModal";
 import { toast } from "sonner";
 import { usePvpApi } from "@/hooks/usePvpApi";
@@ -54,6 +55,8 @@ export function GameShell() {
     ackQuestCompletion,
     inventory,
     createCharacter,
+    lostDeliveries,
+    clearLostDeliveries,
   } = useGameSession();
 
   const { status: pvpStatus } = usePvpApi();
@@ -142,6 +145,16 @@ export function GameShell() {
 
   const [specSel, setSpecSel] = useState("");
   const [questBusy, setQuestBusy] = useState(false);
+  const [mailOpen, setMailOpen] = useState(false);
+
+  const pendingMailFailures = useMemo(() => {
+    const raw = questCompletion?.rewards?.item_failures ?? [];
+    return raw
+      .filter((x) => x?.template_id)
+      .map((x) => ({ template_id: String(x.template_id), reason: x.reason }));
+  }, [questCompletion]);
+
+  const mailBadgeActive = lostDeliveries.length > 0 || pendingMailFailures.length > 0;
   useEffect(() => {
     if (specModal.options[0]?.key) setSpecSel(specModal.options[0].key);
   }, [specModal.open, specModal.options]);
@@ -167,6 +180,16 @@ export function GameShell() {
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">
+      <MailModal
+        open={mailOpen}
+        onOpenChange={setMailOpen}
+        lostDeliveries={lostDeliveries}
+        pendingFromActiveQuest={pendingMailFailures}
+        onDismissNotice={() => {
+          clearLostDeliveries();
+          setMailOpen(false);
+        }}
+      />
       {questCompletion?.quest_completed && (
         <QuestCompleteModal
           completion={questCompletion}
@@ -335,15 +358,42 @@ export function GameShell() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-medium"
-                    style={{
-                      background: 'linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)',
-                      border: '1px solid hsl(228 16% 20%)',
-                      boxShadow: 'inset 0 1px 0 hsl(228 14% 22% / 0.4), 0 2px 4px hsl(0 0% 0% / 0.3)',
-                    }}>
-                    <span className="w-2 h-2 rounded-full bg-connected animate-pulse-glow"
-                      style={{ boxShadow: '0 0 6px hsl(140 55% 42% / 0.5)' }} />
-                    <span className="text-foreground">Connected</span>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <div
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-medium"
+                      style={{
+                        background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
+                        border: "1px solid hsl(228 16% 20%)",
+                        boxShadow: "inset 0 1px 0 hsl(228 14% 22% / 0.4), 0 2px 4px hsl(0 0% 0% / 0.3)",
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full bg-connected animate-pulse-glow"
+                        style={{ boxShadow: "0 0 6px hsl(140 55% 42% / 0.5)" }}
+                      />
+                      <span className="text-foreground">Connected</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-[1.04] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      style={{
+                        background: "linear-gradient(180deg, hsl(228 18% 18%) 0%, hsl(228 22% 10%) 100%)",
+                        border: "1px solid hsl(228 16% 28%)",
+                        boxShadow: "0 4px 14px hsl(0 0% 0% / 0.45), inset 0 1px 0 hsl(228 14% 30% / 0.35)",
+                      }}
+                      aria-label={mailBadgeActive ? "Mailbox, undelivered rewards" : "Mailbox"}
+                      onClick={() => setMailOpen(true)}
+                    >
+                      <span className="text-[1.35rem] leading-none select-none" aria-hidden>
+                        ✉️
+                      </span>
+                      {mailBadgeActive ? (
+                        <span
+                          className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[hsl(228_22%_10%)]"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </button>
                   </div>
                 </div>
 
