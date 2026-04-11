@@ -92,7 +92,15 @@ type GameSessionValue = {
   marketListings: MarketListingRow[];
   refreshMarketListings: () => Promise<void>;
   listItemOnMarket: (itemId: string, price: number) => Promise<{ ok?: boolean; listing_id?: string; message?: string }>;
-  npcInteract: (npc?: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  npcInteract: (npc?: string) => Promise<{
+    ok: boolean;
+    message?: string;
+    error?: string;
+    /** True when the server attached a quest offer (GameShell shows QuestOfferModal). */
+    openedQuestOffer: boolean;
+    /** True when a quest was turned in / completion flow (QuestCompleteModal). */
+    openedCompletion: boolean;
+  }>;
   abandonQuest: (questId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
   questOffer: QuestOfferPayload | null;
   questCompletion: QuestCompletionPayload | null;
@@ -554,7 +562,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
 
   const npcInteract = useCallback(
     async (npc?: string) => {
-      if (!accessToken) return { ok: false, error: "no_token" };
+      if (!accessToken) {
+        return { ok: false, error: "no_token", openedQuestOffer: false, openedCompletion: false };
+      }
       const res = await api.postNpcInteract(accessToken, npc, guildId);
       let j: NpcInteractPayload = {};
       try {
@@ -583,7 +593,13 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       await refreshProgress();
       await refreshQuests();
       const ok = res.ok && j.ok !== false;
-      return { ok, message: j.message, error: j.error };
+      return {
+        ok,
+        message: j.message,
+        error: j.error,
+        openedQuestOffer: Boolean(j.offer),
+        openedCompletion: Boolean(j.quest_completed),
+      };
     },
     [accessToken, guildId, refreshInventory, refreshProgress, refreshQuests],
   );

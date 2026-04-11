@@ -652,8 +652,13 @@ export function ExploreTab() {
           toast.error(r.error || r.message || "Could not interact");
           return;
         }
-        toast.success(r.message || "NPC interaction sent.", {
-          description: "A quest offer popup will open if one is available.",
+        if (r.openedQuestOffer || r.openedCompletion) {
+          if (r.message) toast.success(r.message);
+          return;
+        }
+        toast.info(r.message || "Nothing new from this NPC right now.", {
+          description:
+            "Often you already finished their line, need a higher level, or must advance elsewhere. Check the Quests tab for your log.",
         });
       } finally {
         setNpcInteracting(false);

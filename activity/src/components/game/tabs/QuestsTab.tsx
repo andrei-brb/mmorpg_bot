@@ -216,12 +216,20 @@ export function QuestsTab() {
                     type="button"
                     onClick={() => {
                       void npcInteract(q.npc_id).then((r) => {
-                        if (r.ok) {
-                          toast.success(r.message || "NPC interaction sent.", {
-                            description: "A quest offer popup will open if available.",
-                          });
-                        } else {
+                        if (!r.ok) {
                           toast.error(r.message || r.error || "Could not talk to NPC.");
+                          void refreshQuests();
+                          return;
+                        }
+                        if (r.openedQuestOffer || r.openedCompletion) {
+                          if (r.message) {
+                            toast.success(r.message, { description: "A quest offer or completion window opened if applicable." });
+                          }
+                        } else {
+                          toast.info(r.message || "Nothing new from this NPC right now.", {
+                            description:
+                              "They may have no quest for your current progress, or requirements are not met yet. Your quest log may still update — check the list above.",
+                          });
                         }
                         void refreshQuests();
                       });
