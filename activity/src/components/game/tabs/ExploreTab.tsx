@@ -33,6 +33,7 @@ export function ExploreTab() {
   const [zonePick, setZonePick] = useState("");
   const [busy, setBusy] = useState(false);
   const [npcBusy, setNpcBusy] = useState(false);
+  const [showMapResult, setShowMapResult] = useState(true);
 
   useEffect(() => { void refreshMap(); }, [refreshMap]);
   useEffect(() => { if (map?.current_zone && !zonePick) setZonePick(map.current_zone); }, [map, zonePick]);
@@ -43,10 +44,17 @@ export function ExploreTab() {
   const activeQuestCount = (quests?.quests || []).filter((q) => String(q.state || "active").toLowerCase() !== "completed").length;
   const materialStacks = (inventory?.items || []).filter((it) => it.item_type === "material").length;
   const latestEncounter = outcomeEl && (outcomeEl.type === "enemy" || outcomeEl.type === "boss");
+  const resultType: "enemy" | "boss" | "loot" | "safe" | "npc" | null = lastExplore?.npc
+    ? "npc"
+    : (outcomeEl?.type ?? null);
 
   const jumpToTab = (tab: "Hero" | "Combat" | "Quests" | "Market" | "Arena" | "Progress") => {
     window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: tab }));
   };
+
+  useEffect(() => {
+    if (lastExplore) setShowMapResult(true);
+  }, [lastExplore]);
 
   const doTravel = async () => {
     if (!zonePick) return;
@@ -72,6 +80,18 @@ export function ExploreTab() {
         toast.success(`+${json.reward!.xp ?? 0} XP, +${json.reward!.gold ?? 0} gold`);
       }
     } finally { setBusy(false); }
+  };
+
+  const interactLastNpc = () => {
+    const id = lastExplore?.npc?.npc_id || lastExplore?.npc?.name;
+    if (!id) return;
+    setNpcBusy(true);
+    void npcInteract(id)
+      .then((r) => {
+        if (r.ok) toast.success(r.message || "NPC interaction");
+        else toast.error(r.message || r.error || "Could not interact.");
+      })
+      .finally(() => setNpcBusy(false));
   };
 
   return (
@@ -125,6 +145,11 @@ export function ExploreTab() {
 
         <div className="ornament-divider mb-4" />
 
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">Zone map</span>
+          <div className="h-px flex-1 bg-border/50" />
+        </div>
+
         <div
           className="relative rounded border border-border/70 mb-4 overflow-hidden"
           style={{
@@ -133,7 +158,7 @@ export function ExploreTab() {
           }}
         >
           <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/30 to-black/55" />
-          <div className="relative px-4 py-5 text-center">
+          <div className="relative px-4 py-5 text-center min-h-[180px] flex flex-col items-center justify-center">
             <div className="text-4xl mb-1">{cur?.emoji || "🗺️"}</div>
             <div className="font-cinzel text-sm text-foreground font-semibold">{cur?.name ?? "Unknown Zone"}</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">Zone threat</div>
@@ -150,6 +175,67 @@ export function ExploreTab() {
               </div>
             )}
           </div>
+
+          {showMapResult && resultType && (
+            <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center px-4">
+              <div className="w-full max-w-md rounded border border-border/80 bg-background/85 px-4 py-3 text-center shadow-xl">
+                <div className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground mb-1">
+                  {resultType === "enemy" && "Encounter"}
+                  {resultType === "boss" && "Boss encounter"}
+                  {resultType === "loot" && "Discovery"}
+                  {resultType === "safe" && "Quiet journey"}
+                  {resultType === "npc" && "NPC met"}
+                </div>
+                {(resultType === "enemy" || resultType === "boss") && (
+                  <div className="font-cinzel font-semibold text-foreground text-lg">
+                    {"name" in (outcomeEl || {}) ? outcomeEl.name : "Unknown foe"}
+                  </div>
+                )}
+                {resultType === "npc" && (
+                  <div className="font-cinzel font-semibold text-accent-foreground text-lg">
+                    {lastExplore?.npc?.name || "Wanderer"}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {lastExplore?.message || "You continue your journey."}
+                </p>
+                {exploreRewardHasValues(lastExplore?.reward) && (
+                  <div className="mt-2 text-xs">
+                    <span className="text-primary font-semibold mr-3">+{lastExplore?.reward?.xp ?? 0} XP</span>
+                    <span className="text-gold font-semibold">+{lastExplore?.reward?.gold ?? 0} 🪙</span>
+                  </div>
+                )}
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  {(resultType === "enemy" || resultType === "boss") && (
+                    <button
+                      type="button"
+                      onClick={() => jumpToTab("Combat")}
+                      className="game-btn-primary text-xs px-3 py-1.5"
+                    >
+                      Combat
+                    </button>
+                  )}
+                  {resultType === "npc" && (
+                    <button
+                      type="button"
+                      disabled={npcBusy}
+                      onClick={interactLastNpc}
+                      className="game-btn-secondary text-xs px-3 py-1.5"
+                    >
+                      {npcBusy ? "..." : (lastExplore?.npc?.already_met ? "Talk Again" : "Interact")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowMapResult(false)}
+                    className="text-xs px-3 py-1.5 rounded border border-border/70 hover:bg-background/60"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {zonePick && zonePick !== map?.current_zone && (
@@ -170,84 +256,11 @@ export function ExploreTab() {
         </div>
       </div>
 
-      {/* Last result */}
-      {outcomeEl && outcomeEl.type === "enemy" && (
-        <div className="game-panel">
-          <div className="game-panel-header">⚠️ Encounter!</div>
-          <p className="text-sm mb-1">
-            <span className="text-destructive font-semibold font-cinzel">{"name" in outcomeEl ? outcomeEl.name : "Enemy"}</span>
-          </p>
-          <div className="ornament-divider my-2" />
-          <p className="text-xs text-muted-foreground">Open the <span className="text-primary">Combat</span> tab to fight.</p>
-        </div>
-      )}
-      {outcomeEl && outcomeEl.type === "boss" && (
-        <div className="game-panel">
-          <div className="game-panel-header">⚠️ Boss Encounter!</div>
-          <p className="text-sm mb-1">
-            <span className="text-destructive font-semibold font-cinzel">{"name" in outcomeEl ? outcomeEl.name : "Boss"}</span>
-          </p>
-          <div className="ornament-divider my-2" />
-          <p className="text-xs text-muted-foreground">Open the <span className="text-primary">Combat</span> tab to fight.</p>
-        </div>
-      )}
-      {outcomeEl && (outcomeEl.type === "loot" || outcomeEl.type === "safe") && (
-        <div className="game-panel">
-          <div className="game-panel-header">{outcomeEl.type === "loot" ? "✨ Discovery!" : "🍃 Quiet Journey"}</div>
-          <p className="text-sm text-foreground">{lastExplore?.message || "You continue your journey."}</p>
-          {exploreRewardHasValues(lastExplore?.reward) && (
-            <>
-              <div className="ornament-divider my-2" />
-              <div className="flex gap-4 text-xs">
-                <span className="text-primary font-semibold" style={{ textShadow: '0 0 4px hsl(43 78% 50% / 0.2)' }}>
-                  +{lastExplore!.reward!.xp ?? 0} XP
-                </span>
-                <span className="text-gold font-semibold">+{lastExplore!.reward!.gold ?? 0} 🪙</span>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-      {lastExplore?.npc && (
-        <div className="game-panel">
-          <div className="game-panel-header">🧙 NPC Encounter</div>
-          <p className="text-sm mb-1">
-            <span className="text-accent-foreground font-semibold font-cinzel">{lastExplore.npc.name}</span>
-            {lastExplore.npc.title && <span className="text-muted-foreground text-xs"> — {lastExplore.npc.title}</span>}
-          </p>
-          {lastExplore.npc.discovery_hint && (
-            <p className="text-xs text-muted-foreground italic">"{lastExplore.npc.discovery_hint}"</p>
-          )}
-          {lastExplore.npc.already_met && (
-            <p className="text-[10px] text-muted-foreground mt-1">You’ve met this NPC before.</p>
-          )}
-          <div className="ornament-divider my-2" />
-          <p className="text-[10px] text-muted-foreground mb-2">
-            Opens a quest offer popup (same as <span className="text-foreground">Talk</span> on the Quests tab).
-          </p>
-          <button
-            type="button"
-            disabled={busy || npcBusy}
-            onClick={() => {
-              const id = lastExplore.npc?.npc_id || lastExplore.npc?.name;
-              if (!id) return;
-              setNpcBusy(true);
-              void npcInteract(id)
-                .then((r) => {
-                  if (r.ok) {
-                    toast.success(r.message || "NPC interaction");
-                  } else {
-                    toast.error(r.message || r.error || "Could not interact.");
-                  }
-                })
-                .finally(() => setNpcBusy(false));
-            }}
-            className="game-btn-primary text-xs px-3 py-1.5"
-          >
-            {npcBusy ? "…" : "Interact"}
-          </button>
-        </div>
-      )}
+      <div className="rounded border border-gold/20 bg-gold/5 px-3 py-2">
+        <p className="text-[11px] text-gold/70 italic">
+          Quests often start or advance after meeting NPCs while exploring. Check the <span className="text-gold font-semibold not-italic">Quests</span> tab after NPC encounters.
+        </p>
+      </div>
 
       <div className="game-panel">
         <div className="game-panel-header">World Activity</div>
