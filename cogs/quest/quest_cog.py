@@ -164,7 +164,12 @@ class QuestCog(commands.Cog, name="Quests"):
             rewards = await self.quest_svc.complete_quest(char["id"], talk_result["quest_id"])
             grant_report = {"granted_items": [], "failed_items": []}
             if rewards:
-                grant_report = await self._grant_rewards(char["id"], rewards)
+                grant_report = await self._grant_rewards(
+                    char["id"],
+                    rewards,
+                    quest_id=str(talk_result.get("quest_id") or ""),
+                    char=dict(char),
+                )
 
             dialogue = quest_data["dialogue"].get("completion", "Quest complete!")
             embed = discord.Embed(
@@ -820,12 +825,13 @@ class QuestCog(commands.Cog, name="Quests"):
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    async def _grant_rewards(self, char_id, rewards: dict):
+    async def _grant_rewards(self, char_id, rewards: dict, *, quest_id: str = "", char: Optional[dict] = None):
         """Grant XP, gold, and items from quest rewards; return delivery report."""
         granted_items = []
         failed_items = []
+        xp_result: dict = {}
         if rewards.get("xp"):
-            await self.char_svc.award_xp(char_id, rewards["xp"])
+            xp_result = await self.char_svc.award_xp(char_id, rewards["xp"])
         if rewards.get("gold"):
             await self.char_svc.add_gold(char_id, rewards["gold"], "quest_reward", "quest_reward")
         if rewards.get("items"):
@@ -839,6 +845,19 @@ class QuestCog(commands.Cog, name="Quests"):
                     granted_items.append(str(template_id))
                 else:
                     failed_items.append({"template_id": str(template_id), "reason": str(msg_add or "could_not_add")})
+        if char and quest_id:
+            ch = char
+            lvl = int((xp_result or {}).get("new_level") or ch.get("level") or 1)
+            zk = str(ch.get("current_zone") or "elwynn_forest")
+            bg, bf = await self.inv_svc.grant_main_story_quest_gear_bonus_if_needed(
+                char_id,
+                is_main_story=is_main_story_quest(quest_id),
+                template_item_reward_ids=list(rewards.get("items") or []),
+                zone_key=zk,
+                char_level=lvl,
+            )
+            granted_items.extend(bg)
+            failed_items.extend(bf)
         if rewards.get("deed_flags") and self.lore_gate:
             await self.lore_gate.grant_deed_flags_from_rewards(char_id, rewards)
         return {"granted_items": granted_items, "failed_items": failed_items}

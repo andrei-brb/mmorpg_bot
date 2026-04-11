@@ -839,7 +839,7 @@ class CombatCog(commands.Cog, name="Combat"):
         # ── Quest step update / completion DMs (best-effort) ─────────────
         if quest_step_updates or quest_completions:
             try:
-                from services.quest.npc_quest_service import NPC_TEMPLATES, FACTIONS
+                from services.quest.npc_quest_service import NPC_TEMPLATES, FACTIONS, is_main_story_quest
                 dm = await interaction.user.create_dm()
 
                 # Step updates: only DM when the objective changes (rare, not per-kill spam).
@@ -871,8 +871,9 @@ class CombatCog(commands.Cog, name="Combat"):
                     npc_data = NPC_TEMPLATES.get(npc_id, {}) if npc_id else {}
 
                     # Grant rewards (XP, gold, items) + reputation.
+                    q_xp_result: dict = {}
                     if rewards.get("xp"):
-                        await self.char_svc.award_xp(char["id"], int(rewards["xp"]))
+                        q_xp_result = await self.char_svc.award_xp(char["id"], int(rewards["xp"]))
                     if rewards.get("gold"):
                         await self.char_svc.add_gold(char["id"], int(rewards["gold"]), "quest_reward", "quest_reward")
                     if rewards.get("items"):
@@ -882,6 +883,21 @@ class CombatCog(commands.Cog, name="Combat"):
                             )
                             rarity = tmpl["rarity"] if tmpl else "common"
                             await self.inv_svc.add_item(char["id"], template_id, rarity=rarity)
+
+                    q_lvl = int(
+                        (q_xp_result or {}).get("new_level")
+                        or xp_result.get("new_level")
+                        or char.get("level")
+                        or 1
+                    )
+                    q_zone = str(char.get("current_zone") or "elwynn_forest")
+                    bonus_g, bonus_f = await self.inv_svc.grant_main_story_quest_gear_bonus_if_needed(
+                        char["id"],
+                        is_main_story=is_main_story_quest(str(qid or "")),
+                        template_item_reward_ids=list(rewards.get("items") or []),
+                        zone_key=q_zone,
+                        char_level=q_lvl,
+                    )
 
                     rep_lines = []
                     if rewards.get("reputation"):
@@ -907,9 +923,17 @@ class CombatCog(commands.Cog, name="Combat"):
                         reward_text.append(f"⭐ **{int(rewards['xp']):,}** XP")
                     if rewards.get("gold"):
                         reward_text.append(f"🪙 **{int(rewards['gold']):,}** Gold")
-                    if rewards.get("items"):
-                        item_names = [str(i).replace("_", " ").title() for i in rewards["items"]]
+                    item_ids_for_display = list(rewards.get("items") or []) + bonus_g
+                    if item_ids_for_display:
+                        item_names = [str(i).replace("_", " ").title() for i in item_ids_for_display]
                         reward_text.append(f"🎁 {', '.join(item_names)}")
+                    if bonus_f:
+                        bf0 = bonus_f[0]
+                        reward_text.append(
+                            "⚠ Story gear bonus could not be delivered: "
+                            + str(bf0.get("template_id", "item")).replace("_", " ").title()
+                            + f" ({bf0.get('reason', 'inventory full')})"
+                        )
                     reward_text.extend(rep_lines)
                     if reward_text:
                         embed.add_field(name="🏆 Rewards", value="\n".join(reward_text), inline=False)

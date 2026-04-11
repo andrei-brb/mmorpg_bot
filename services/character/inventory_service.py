@@ -192,6 +192,106 @@ class InventoryService:
         bonus = self.roll_bonus_stats(tmpl, rarity, zone_tier=tier)
         return {"template": tmpl, "rarity": rarity, "bonus": bonus}
 
+    _MAIN_STORY_GEAR_SQL = (
+        "equip_slot IS NOT NULL AND item_type IN ('weapon','armor','accessory')"
+    )
+
+    async def roll_main_story_quest_gear_drop(
+        self, zone_key: str, char_level: int
+    ) -> Optional[Dict]:
+        """
+        One guaranteed roll for lore-main quest completion when the template has no item rewards.
+        Rarity is 50/50 rare vs epic; template is level-banded like zone loot (equippable gear only).
+        """
+        rarity = random.choice(["rare", "epic"])
+        band_lo, band_hi = loot_level_req_bounds(zone_key, char_level)
+        gear = self._MAIN_STORY_GEAR_SQL
+
+        pool: Tuple[str, ...] = ()
+        try:
+            if zone_key in DUNGEONS:
+                pool = tuple(DUNGEONS[zone_key].loot_pool or ())
+            elif zone_key in ZONES:
+                pool = tuple(ZONES[zone_key].loot_pool or ())
+        except Exception:
+            pool = ()
+
+        tmpl: Optional[dict] = None
+        if pool:
+            for _ in range(min(16, max(8, len(pool) * 2))):
+                tid = random.choice(pool)
+                row = await self.db.fetchrow(
+                    f"""SELECT * FROM item_templates
+                       WHERE id=$1 AND level_req >= $2 AND level_req <= $3
+                         AND {gear}""",
+                    tid,
+                    band_lo,
+                    band_hi,
+                )
+                if row:
+                    tmpl = dict(row)
+                    break
+
+        if tmpl is None:
+            row = await self.db.fetchrow(
+                f"""SELECT * FROM item_templates
+                   WHERE level_req >= $1 AND level_req <= $2 AND {gear}
+                   ORDER BY RANDOM() LIMIT 1""",
+                band_lo,
+                band_hi,
+            )
+            if row is None and band_lo > 1:
+                row = await self.db.fetchrow(
+                    f"""SELECT * FROM item_templates
+                       WHERE level_req >= $1 AND level_req <= $2 AND {gear}
+                       ORDER BY RANDOM() LIMIT 1""",
+                    1,
+                    band_hi,
+                )
+            if not row:
+                return None
+            tmpl = dict(row)
+
+        tier = zone_tier_for_loot(zone_key)
+        bonus = self.roll_bonus_stats(tmpl, rarity, zone_tier=tier)
+        return {"template": tmpl, "rarity": rarity, "bonus": bonus}
+
+    async def grant_main_story_quest_gear_bonus_if_needed(
+        self,
+        char_id: UUID,
+        *,
+        is_main_story: bool,
+        template_item_reward_ids: List[str],
+        zone_key: str,
+        char_level: int,
+    ) -> Tuple[List[str], List[Dict[str, str]]]:
+        """
+        If this is a main-story quest and the template listed no item rewards, grant one
+        rare or epic piece of level-appropriate gear. Returns (granted_ids, failed_rows).
+        """
+        granted: List[str] = []
+        failed: List[Dict[str, str]] = []
+        if not is_main_story or template_item_reward_ids:
+            return granted, failed
+
+        loot = await self.roll_main_story_quest_gear_drop(zone_key, char_level)
+        if not loot:
+            return granted, failed
+
+        tid = str(loot["template"]["id"])
+        ok, msg = await self.add_item(
+            char_id,
+            tid,
+            rarity=str(loot["rarity"]),
+            bonus=loot["bonus"],
+            from_="quest_reward",
+        )
+        if ok:
+            granted.append(tid)
+        else:
+            failed.append({"template_id": tid, "reason": str(msg or "could_not_add")})
+        return granted, failed
+
     async def can_add_reward_items(
         self,
         char_id: UUID,

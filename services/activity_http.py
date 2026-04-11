@@ -2519,8 +2519,9 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
         granted_items: List[str] = []
         failed_items: List[Dict[str, str]] = []
         # Grant rewards (same semantics as /interact flow).
+        xp_result: Dict[str, Any] = {}
         if rewards.get("xp"):
-            await char_svc.award_xp(char_id, int(rewards["xp"]))
+            xp_result = await char_svc.award_xp(char_id, int(rewards["xp"]))
         if rewards.get("gold"):
             await char_svc.add_gold(char_id, int(rewards["gold"]), "quest_reward", "quest_reward")
         if rewards.get("items"):
@@ -2537,6 +2538,17 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
                             "reason": str(msg_add or "could_not_add"),
                         }
                     )
+        char_level_loot = int((xp_result or {}).get("new_level") or char.get("level") or 1)
+        zone_key_loot = str(char.get("current_zone") or "elwynn_forest")
+        bonus_g, bonus_f = await inv_svc.grant_main_story_quest_gear_bonus_if_needed(
+            char_id,
+            is_main_story=is_main_story_quest(qid),
+            template_item_reward_ids=reward_items,
+            zone_key=zone_key_loot,
+            char_level=char_level_loot,
+        )
+        granted_items.extend(bonus_g)
+        failed_items.extend(bonus_f)
         if rewards.get("reputation"):
             for faction_id, amount in rewards["reputation"].items():
                 await quest_svc.add_reputation(char_id, faction_id, int(amount))
