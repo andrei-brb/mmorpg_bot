@@ -108,6 +108,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     try {
       const json = await combatAction({ ability: key });
       if (json.ended && json.outcome) {
+        // Solo overworld wins do not surface `ended_outcome` on GET /combat/state — clear here so a later
+        // `refresh()` (tab focus, Rest, etc.) cannot auto-restart from a stale explore pending key.
+        pendingCombatEnemyKey.current = null;
         setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
         setMode("outcome");
         if (json.outcome.type === "victory" || json.outcome.type === "flee") {
@@ -128,6 +131,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     try {
       const json = await combatAction({ flee: true });
       if (json.ended && json.outcome) {
+        pendingCombatEnemyKey.current = null;
         setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
         setMode("outcome");
         await refreshInventory(); await refreshProgress();
