@@ -58,9 +58,13 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       setEnemies(snap.enemies);
       const pend = pendingCombatEnemyKey.current;
       if (pend && snap.enemies.some((e) => e.key === pend)) {
-        pendingCombatEnemyKey.current = null;
         const r = await startCombat({ kind: "zone", enemyKey: pend });
-        if (r.state) { setState(r.state); setMode("fight"); return; }
+        if (r.state) {
+          pendingCombatEnemyKey.current = null;
+          setState(r.state);
+          setMode("fight");
+          return;
+        }
         toast.error(r.message || "Could not start combat");
       }
       setState(null); setMode("pick"); setOutcome(null);

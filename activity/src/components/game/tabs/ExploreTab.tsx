@@ -64,6 +64,8 @@ type ExploreResult = {
   reward?: { xp?: number; gold?: number };
   npc?: Npc;
   enemyName?: string;
+  /** Server enemy template key — required to jump straight into combat. */
+  enemyKey?: string;
   enemyLevel?: number;
   isBoss?: boolean;
   timestamp: Date;
@@ -142,6 +144,7 @@ function explorePayloadToExploreResult(json: ExploreResultPayload): ExploreResul
         (json.message && json.message.trim()) ||
         (out.type === "boss" ? `A terrible foe reveals itself: ${out.name}!` : `${em}${out.name} bars your path!`.trim()),
       enemyName: out.name,
+      enemyKey: out.key,
       isBoss: out.type === "boss",
       timestamp: ts,
       reward,
@@ -353,6 +356,8 @@ function ZoneMap({
   onSelectZone,
   latestResult,
   exploring,
+  combatStarting,
+  npcInteracting,
   onGoToCombat,
   onInteractNPC,
   cooldownActive,
@@ -363,6 +368,8 @@ function ZoneMap({
   onSelectZone: (zone: Zone) => void;
   latestResult?: ExploreResult | null;
   exploring?: boolean;
+  combatStarting?: boolean;
+  npcInteracting?: boolean;
   onGoToCombat: () => void;
   onInteractNPC: (id: string) => void;
   cooldownActive?: boolean;
@@ -497,13 +504,35 @@ function ZoneMap({
               )}
               <div className="flex items-center gap-2 animate-text-reveal">
                 {(latestResult.type === "enemy" || latestResult.type === "boss") && (
-                  <button onClick={onGoToCombat} className="flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-serif font-bold tracking-wide uppercase text-white transition-all" style={{ background: currentCfg.color, boxShadow: `0 0 10px ${currentCfg.color}70` }}>
-                    <Sword className="w-3 h-3" />Combat<ChevronRight className="w-3 h-3" />
+                  <button
+                    type="button"
+                    disabled={combatStarting}
+                    onClick={onGoToCombat}
+                    className="flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-serif font-bold tracking-wide uppercase text-white transition-all disabled:opacity-50 disabled:cursor-wait"
+                    style={{ background: currentCfg.color, boxShadow: `0 0 10px ${currentCfg.color}70` }}
+                  >
+                    {combatStarting ? (
+                      <span className="inline-block h-3 w-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    ) : (
+                      <Sword className="w-3 h-3" />
+                    )}
+                    {combatStarting ? "Starting…" : "Combat"}
+                    {!combatStarting ? <ChevronRight className="w-3 h-3" /> : null}
                   </button>
                 )}
                 {latestResult.type === "npc" && latestResult.npc && (
-                  <button onClick={() => onInteractNPC(latestResult.npc!.id)} className="flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-serif font-bold tracking-wide uppercase text-teal-300 border border-teal-500/50 bg-teal-950/60">
-                    <MessageCircle className="w-3 h-3" />{latestResult.npc.alreadyMet ? "Talk Again" : "Interact"}
+                  <button
+                    type="button"
+                    disabled={npcInteracting}
+                    onClick={() => onInteractNPC(latestResult.npc!.id)}
+                    className="flex items-center gap-1.5 rounded px-3.5 py-1.5 text-xs font-serif font-bold tracking-wide uppercase text-teal-300 border border-teal-500/50 bg-teal-950/60 disabled:opacity-50 disabled:cursor-wait"
+                  >
+                    {npcInteracting ? (
+                      <span className="inline-block h-3 w-3 rounded-full border-2 border-teal-400/40 border-t-teal-200 animate-spin" />
+                    ) : (
+                      <MessageCircle className="w-3 h-3" />
+                    )}
+                    {npcInteracting ? "…" : latestResult.npc.alreadyMet ? "Talk Again" : "Interact"}
                   </button>
                 )}
                 <button onClick={() => setShowResult(false)} className="rounded px-3 py-1.5 text-xs text-muted-foreground border border-white/10 bg-black/50 hover:bg-black/70 transition-all">
@@ -541,7 +570,7 @@ function ZoneMap({
 }
 
 export function ExploreTab() {
-  const { map, explore, travel, npcInteract, accessToken } = useGameSession();
+  const { map, explore, travel, npcInteract, accessToken, startCombat, setQuickFightIntent, lastExplore } = useGameSession();
   const [currentZoneId, setCurrentZoneId] = useState(EXPLORE_ZONES[0].id);
   const [travelTargetId, setTravelTargetId] = useState(EXPLORE_ZONES[0].id);
   const [isTravelling, setIsTravelling] = useState(false);
@@ -552,7 +581,12 @@ export function ExploreTab() {
   const [results, setResults] = useState<ExploreResult[]>([]);
   const [latestId, setLatestId] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [combatStarting, setCombatStarting] = useState(false);
+  const [npcInteracting, setNpcInteracting] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
+
+  const latestResult = results.find((r) => r.id === latestId) || null;
+  const timelineResults = latestResult ? results.filter((r) => r.id !== latestResult.id) : results;
 
   const zones = useMemo(() => {
     const apiZones = map?.zones;
@@ -611,12 +645,57 @@ export function ExploreTab() {
 
   const handleNpcInteract = useCallback(
     async (npcId: string) => {
-      const r = await npcInteract(npcId);
-      if (!r.ok) toast.error(r.error || r.message || "Could not interact");
-      else setTab("quests");
+      setNpcInteracting(true);
+      try {
+        const r = await npcInteract(npcId);
+        if (!r.ok) {
+          toast.error(r.error || r.message || "Could not interact");
+          return;
+        }
+        toast.success(r.message || "NPC interaction sent.", {
+          description: "A quest offer popup will open if one is available.",
+        });
+      } finally {
+        setNpcInteracting(false);
+      }
     },
-    [npcInteract, setTab],
+    [npcInteract],
   );
+
+  const handleGoToCombat = useCallback(async () => {
+    let enemyKey: string | undefined =
+      latestResult && (latestResult.type === "enemy" || latestResult.type === "boss")
+        ? latestResult.enemyKey
+        : undefined;
+    const le = lastExplore?.outcome;
+    if (!enemyKey && le && (le.type === "enemy" || le.type === "boss") && "key" in le && typeof le.key === "string") {
+      enemyKey = le.key;
+    }
+    if (!enemyKey?.trim()) {
+      toast.error("No encounter to fight. Explore again to roll a foe.");
+      setTab("Combat");
+      return;
+    }
+    if (!accessToken) {
+      toast.error("Not connected.");
+      return;
+    }
+    setCombatStarting(true);
+    try {
+      setQuickFightIntent({ kind: "enemy", enemyKey: enemyKey.trim() });
+      const r = await startCombat({ kind: "zone", enemyKey: enemyKey.trim() });
+      if (r.ok && r.state) {
+        setTab("Combat");
+        toast.success("Combat started.", { description: "Switched to Combat tab." });
+        return;
+      }
+      toast.error(r.message || "Could not start combat.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCombatStarting(false);
+    }
+  }, [latestResult, lastExplore, accessToken, setQuickFightIntent, startCombat, setTab]);
 
   const handleExplore = useCallback(async () => {
     if (cooldownActive || exploring) return;
@@ -653,9 +732,6 @@ export function ExploreTab() {
     }
   }, [accessToken, cooldownActive, exploring, explore]);
 
-  const latestResult = results.find((r) => r.id === latestId) || null;
-  const timelineResults = latestResult ? results.filter((r) => r.id !== latestResult.id) : results;
-
   return (
     <div className="flex flex-col gap-0 h-full" ref={topRef}>
       <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-panel-border/50">
@@ -676,8 +752,10 @@ export function ExploreTab() {
             onSelectZone={(z) => setTravelTargetId(z.id)}
             latestResult={latestResult}
             exploring={exploring}
-            onGoToCombat={() => setTab("combat")}
-            onInteractNPC={handleNpcInteract}
+            combatStarting={combatStarting}
+            npcInteracting={npcInteracting}
+            onGoToCombat={() => void handleGoToCombat()}
+            onInteractNPC={(id) => void handleNpcInteract(id)}
             cooldownActive={cooldownActive}
             onTabChange={setTab}
           />
@@ -755,7 +833,12 @@ export function ExploreTab() {
                 {timelineResults.map((r, i) => (
                   <div key={r.id} className="relative" style={{ animationDelay: `${i * 60}ms` }}>
                     <div className="absolute -left-2.5 top-3 h-2 w-2 rounded-full border border-panel-border bg-background" />
-                    <ResultPanel result={r} onGoToCombat={() => setTab("combat")} onInteractNPC={handleNpcInteract} isTimeline />
+                    <ResultPanel
+                      result={r}
+                      onGoToCombat={() => void handleGoToCombat()}
+                      onInteractNPC={(id) => void handleNpcInteract(id)}
+                      isTimeline
+                    />
                   </div>
                 ))}
               </div>
