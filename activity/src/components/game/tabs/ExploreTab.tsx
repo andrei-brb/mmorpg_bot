@@ -103,7 +103,7 @@ export function ExploreTab() {
       <div className="game-panel">
         <div className="game-panel-header">Explore</div>
         <div className="mb-4 rounded border border-border/60 bg-background/25 px-2 py-2">
-          <div className="flex gap-1.5 overflow-x-auto">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             {zones.map((z) => {
               const isCurrent = z.key === map?.current_zone;
               const isSelected = z.key === zonePick;
@@ -116,7 +116,7 @@ export function ExploreTab() {
                     isSelected || isCurrent
                       ? "border-primary/60 bg-primary/10 text-foreground"
                       : "border-border/60 bg-background/20 text-muted-foreground hover:bg-background/40"
-                  }`}
+                  } hover:-translate-y-0.5`}
                   title={`${z.name} (${z.level_min ?? "?"}-${z.level_max ?? "?"})`}
                 >
                   <div className="text-sm leading-none">{z.emoji}</div>
@@ -163,7 +163,7 @@ export function ExploreTab() {
         >
           <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/30 to-black/55" />
           <div className="relative px-4 py-5 text-center min-h-[180px] flex flex-col items-center justify-center">
-            <div className="text-4xl mb-1">{cur?.emoji || "🗺️"}</div>
+            <div className="text-4xl mb-1 animate-float">{cur?.emoji || "🗺️"}</div>
             <div className="font-cinzel text-sm text-foreground font-semibold">{cur?.name ?? "Unknown Zone"}</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">Zone threat</div>
             <div className="mt-1.5 flex items-center justify-center gap-1.5">
@@ -181,9 +181,18 @@ export function ExploreTab() {
           </div>
 
           {showMapResult && resultType && (
-            <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center px-4">
-              <div className="w-full max-w-md rounded border border-border/80 bg-background/85 px-4 py-3 text-center shadow-xl">
-                <div className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground mb-1">
+            <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center px-4 animate-backdrop">
+              <div className="w-full max-w-md rounded border border-border/80 bg-background/85 px-4 py-3 text-center shadow-xl animate-result-in">
+                <div className="mb-1 flex justify-center">
+                  <div className="h-10 w-10 rounded-full border border-gold/35 bg-background/80 flex items-center justify-center text-lg animate-silhouette">
+                    {resultType === "enemy" && "⚔️"}
+                    {resultType === "boss" && "👑"}
+                    {resultType === "loot" && "✨"}
+                    {resultType === "safe" && "🍃"}
+                    {resultType === "npc" && "💬"}
+                  </div>
+                </div>
+                <div className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground mb-1 animate-result-line">
                   {resultType === "enemy" && "Encounter"}
                   {resultType === "boss" && "Boss encounter"}
                   {resultType === "loot" && "Discovery"}
@@ -191,25 +200,25 @@ export function ExploreTab() {
                   {resultType === "npc" && "NPC met"}
                 </div>
                 {(resultType === "enemy" || resultType === "boss") && (
-                  <div className="font-cinzel font-semibold text-foreground text-lg">
+                  <div className="font-cinzel font-semibold text-foreground text-lg animate-text-reveal">
                     {encounterName}
                   </div>
                 )}
                 {resultType === "npc" && (
-                  <div className="font-cinzel font-semibold text-accent-foreground text-lg">
+                  <div className="font-cinzel font-semibold text-accent-foreground text-lg animate-text-reveal">
                     {lastExplore?.npc?.name || "Wanderer"}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed animate-text-reveal">
                   {lastExplore?.message || "You continue your journey."}
                 </p>
                 {exploreRewardHasValues(lastExplore?.reward) && (
-                  <div className="mt-2 text-xs">
+                  <div className="mt-2 text-xs animate-text-reveal">
                     <span className="text-primary font-semibold mr-3">+{lastExplore?.reward?.xp ?? 0} XP</span>
                     <span className="text-gold font-semibold">+{lastExplore?.reward?.gold ?? 0} 🪙</span>
                   </div>
                 )}
-                <div className="mt-3 flex items-center justify-center gap-2">
+                <div className="mt-3 flex items-center justify-center gap-2 animate-text-reveal">
                   {(resultType === "enemy" || resultType === "boss") && (
                     <button
                       type="button"
@@ -253,7 +262,11 @@ export function ExploreTab() {
         <div className="ornament-divider mb-4" />
 
         <div className="flex items-center gap-3">
-          <button onClick={() => void doExplore()} disabled={busy} className="game-btn-secondary">
+          <button
+            onClick={() => void doExplore()}
+            disabled={busy}
+            className={`game-btn-secondary ${busy ? "" : "animate-pulse-gold"}`}
+          >
             Explore
           </button>
           <span className="text-xs text-muted-foreground">Cooldown: ~30s between explorations</span>
