@@ -287,13 +287,13 @@ export function GameShell() {
       )}
 
       <div
-        className={`mx-auto w-full max-w-[980px] px-5 flex-1 min-h-0 flex flex-col ${
-          shellChromeHidden ? "py-3 sm:py-4" : "py-6"
+        className={`mx-auto w-full max-w-[min(100%,1400px)] px-3 sm:px-4 flex-1 min-h-0 flex flex-col ${
+          shellChromeHidden ? "py-2 sm:py-3" : "py-3 sm:py-4"
         }`}
       >
         <div
           className={`game-frame rounded-sm flex flex-col flex-1 min-h-0 ${
-            shellChromeHidden ? "p-3 sm:p-4" : "p-4 sm:p-5"
+            shellChromeHidden ? "p-2 sm:p-3" : "p-3 sm:p-4"
           }`}
         >
           <div
@@ -313,97 +313,9 @@ export function GameShell() {
             <div className="rune-band-left hidden sm:block" />
             <div className="rune-band-right hidden sm:block" />
 
-            {!shellChromeHidden && (
-              <>
-                <div className="flex items-center justify-between mb-5 pt-1 gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex flex-col items-center shrink-0 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setProfileOpen(true)}
-                        className="relative group cursor-pointer"
-                        aria-label="Open profile"
-                      >
-                        <div
-                          className="absolute -inset-[3px] rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
-                          style={{
-                            background:
-                              "conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))",
-                          }}
-                        />
-                        <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border-2 border-background">
-                          <Avatar className="w-full h-full">
-                            {inventory?.discord?.avatar_url ? (
-                              <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
-                            ) : (
-                              <AvatarFallback>{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
-                            )}
-                          </Avatar>
-                        </div>
-                      </button>
-                      <span className="shell-avatar-level whitespace-nowrap">Lv {playerStats.level}</span>
-                    </div>
-
-                    <div className="min-w-0">
-                      <h1
-                        className="font-cinzel text-xl sm:text-2xl font-bold text-primary tracking-wide"
-                        style={{
-                          textShadow: "0 0 12px hsl(43 78% 50% / 0.3), 0 2px 4px hsl(0 0% 0% / 0.5)",
-                        }}
-                      >
-                        World of Discord
-                      </h1>
-                      <p className="text-sm text-muted-foreground font-crimson mt-0.5 truncate">
-                        Welcome, <span className="text-foreground font-semibold">{playerStats.name}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <div
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-sm text-xs font-medium"
-                      style={{
-                        background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
-                        border: "1px solid hsl(228 16% 20%)",
-                        boxShadow: "inset 0 1px 0 hsl(228 14% 22% / 0.4), 0 2px 4px hsl(0 0% 0% / 0.3)",
-                      }}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full bg-connected animate-pulse-glow"
-                        style={{ boxShadow: "0 0 6px hsl(140 55% 42% / 0.5)" }}
-                      />
-                      <span className="text-foreground">Connected</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-[1.04] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                      style={{
-                        background: "linear-gradient(180deg, hsl(228 18% 18%) 0%, hsl(228 22% 10%) 100%)",
-                        border: "1px solid hsl(228 16% 28%)",
-                        boxShadow: "0 4px 14px hsl(0 0% 0% / 0.45), inset 0 1px 0 hsl(228 14% 30% / 0.35)",
-                      }}
-                      aria-label={mailBadgeActive ? "Mailbox, undelivered rewards" : "Mailbox"}
-                      onClick={() => setMailOpen(true)}
-                    >
-                      <span className="text-[1.35rem] leading-none select-none" aria-hidden>
-                        ✉️
-                      </span>
-                      {mailBadgeActive ? (
-                        <span
-                          className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-[hsl(228_22%_10%)]"
-                          aria-hidden
-                        />
-                      ) : null}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="ornament-divider mb-4" />
-              </>
-            )}
-
             {!shellChromeHidden && liveEvents.length > 0 && (
               <div
-                className="mb-4 p-3 rounded-sm text-xs"
+                className="mb-3 p-3 rounded-sm text-xs"
                 style={{
                   background: "linear-gradient(180deg, hsl(43 40% 12% / 0.35) 0%, hsl(228 20% 10% / 0.5) 100%)",
                   border: "1px solid hsl(43 50% 35% / 0.35)",
@@ -424,17 +336,78 @@ export function GameShell() {
             )}
 
             {!shellChromeHidden && (
-              <div className="tab-bar rounded-sm mb-5 flex overflow-x-auto">
-                {TABS.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}
+              <div className="flex items-stretch gap-2 mb-3 min-h-0">
+                <div className="tab-bar rounded-sm flex-1 min-w-0 flex overflow-x-auto">
+                  {TABS.map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}
+                    >
+                      <span className="mr-1.5">{TAB_ICONS[tab]}</span>
+                      <span className="hidden sm:inline">{tab}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 pl-1 border-l border-border/60 self-center py-1">
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] font-medium text-muted-foreground"
+                    title="Connected to game server"
+                    style={{
+                      background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
+                      border: "1px solid hsl(228 16% 20%)",
+                    }}
                   >
-                    <span className="mr-1.5">{TAB_ICONS[tab]}</span>
-                    <span className="hidden sm:inline">{tab}</span>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full bg-connected animate-pulse-glow shrink-0"
+                      style={{ boxShadow: "0 0 4px hsl(140 55% 42% / 0.5)" }}
+                    />
+                    <span className="hidden sm:inline">Live</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm transition-transform hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    style={{
+                      background: "linear-gradient(180deg, hsl(228 18% 18%) 0%, hsl(228 22% 10%) 100%)",
+                      border: "1px solid hsl(228 16% 28%)",
+                      boxShadow: "0 2px 8px hsl(0 0% 0% / 0.35), inset 0 1px 0 hsl(228 14% 30% / 0.35)",
+                    }}
+                    aria-label={mailBadgeActive ? "Mailbox, undelivered rewards" : "Mailbox"}
+                    onClick={() => setMailOpen(true)}
+                  >
+                    <span className="text-[1.15rem] leading-none select-none" aria-hidden>
+                      ✉️
+                    </span>
+                    {mailBadgeActive ? (
+                      <span
+                        className="absolute right-0 top-0 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[hsl(228_22%_10%)]"
+                        aria-hidden
+                      />
+                    ) : null}
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setProfileOpen(true)}
+                    className="relative group cursor-pointer shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label="Open profile"
+                  >
+                    <div
+                      className="absolute -inset-[2px] rounded-full opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none"
+                      style={{
+                        background: "conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))",
+                      }}
+                    />
+                    <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-background">
+                      <Avatar className="w-full h-full">
+                        {inventory?.discord?.avatar_url ? (
+                          <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
+                        ) : (
+                          <AvatarFallback className="text-[10px]">{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
+                        )}
+                      </Avatar>
+                    </div>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -442,16 +415,18 @@ export function GameShell() {
               className={
                 shellChromeHidden
                   ? "sm:px-1 flex flex-col flex-1 min-h-0 -mt-1"
-                  : "sm:px-1"
+                  : "sm:px-1 flex flex-col flex-1 min-h-0"
               }
             >
-              {activeTab === "Hero" && <HeroTab />}
-              {activeTab === "Explore" && <ExploreTab />}
-              {activeTab === "Quests" && <QuestsTab />}
-              {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
-              {activeTab === "Market" && <MarketTab />}
-              {activeTab === "Arena" && <PvpPage />}
-              {activeTab === "Progress" && <ProgressTab />}
+              <div className="flex min-h-0 flex-1 flex-col">
+                {activeTab === "Hero" && <HeroTab />}
+                {activeTab === "Explore" && <ExploreTab />}
+                {activeTab === "Quests" && <QuestsTab />}
+                {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
+                {activeTab === "Market" && <MarketTab />}
+                {activeTab === "Arena" && <PvpPage />}
+                {activeTab === "Progress" && <ProgressTab />}
+              </div>
             </div>
           </div>
 

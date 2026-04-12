@@ -22,12 +22,6 @@ import {
   Coins,
   ChevronRight,
   Skull,
-  Shield,
-  ScrollText,
-  Bed,
-  Package,
-  ShoppingBag,
-  Trophy,
 } from "lucide-react";
 
 type Faction = "alliance" | "horde" | "neutral" | "hostile";
@@ -340,16 +334,6 @@ function ResultPanel({
   );
 }
 
-const ACTIVITY_TILES = [
-  { id: "encounters", icon: Sword, label: "Encounters", tab: "combat", badgeType: "cooldown" as const },
-  { id: "quests", icon: ScrollText, label: "Quests & NPCs", tab: "quests", badgeType: "quests" as const },
-  { id: "dungeons", icon: Shield, label: "Dungeons", tab: "combat", badgeType: "boss" as const },
-  { id: "rest", icon: Bed, label: "Rest", tab: "hero", badgeType: "static" as const, staticBadge: "+HP" },
-  { id: "materials", icon: Package, label: "Materials", tab: "market", badgeType: "static" as const, staticBadge: "3" },
-  { id: "market", icon: ShoppingBag, label: "Market", tab: "market" },
-  { id: "arena", icon: Trophy, label: "Arena", tab: "arena", badgeType: "static" as const, staticBadge: "PvP" },
-];
-
 function ZoneMap({
   zones,
   currentZone,
@@ -360,8 +344,6 @@ function ZoneMap({
   npcInteracting,
   onGoToCombat,
   onInteractNPC,
-  cooldownActive,
-  onTabChange,
 }: {
   zones: Zone[];
   currentZone: Zone;
@@ -372,8 +354,6 @@ function ZoneMap({
   npcInteracting?: boolean;
   onGoToCombat: () => void;
   onInteractNPC: (id: string) => void;
-  cooldownActive?: boolean;
-  onTabChange: (tab: string) => void;
 }) {
   const [showResult, setShowResult] = useState(false);
   const [displayedResultId, setDisplayedResultId] = useState<string | null>(null);
@@ -396,16 +376,8 @@ function ZoneMap({
   const currentCfg = latestResult ? resCfg[latestResult.type] : null;
   const ResIcon = currentCfg?.icon;
 
-  function getBadge(tile: typeof ACTIVITY_TILES[number]): string | null {
-    if (tile.badgeType === "cooldown") return cooldownActive ? "CD" : null;
-    if (tile.badgeType === "boss") return currentZone.bossAlive ? "!" : null;
-    if (tile.badgeType === "quests") return "2";
-    if (tile.badgeType === "static") return tile.staticBadge ?? null;
-    return null;
-  }
-
   return (
-    <div className="flex flex-col rounded-lg overflow-hidden border border-white/10">
+    <div className="flex min-h-0 flex-1 flex-col rounded-lg overflow-hidden border border-white/10">
       <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar border-b border-white/10 bg-black/30">
         {zones.map((zone) => {
           const isCurrent = zone.id === currentZone.id;
@@ -427,7 +399,7 @@ function ZoneMap({
         })}
       </div>
 
-      <div className="relative flex-1" style={{ background: theme.bg, minHeight: "220px" }}>
+      <div className="relative min-h-0 flex-1" style={{ background: theme.bg, minHeight: "min(44vh, 580px)" }}>
         {currentZone.mapImageUrl ? (
           <img
             src={currentZone.mapImageUrl}
@@ -542,28 +514,6 @@ function ZoneMap({
             </div>
           </div>
         )}
-      </div>
-
-      <div className="bg-black/40 border-t border-white/10 px-3 py-2.5">
-        <div className="font-serif text-[9px] tracking-[0.25em] uppercase text-muted-foreground/60 mb-2">World Activity</div>
-        <div className="grid grid-cols-7 gap-1">
-          {ACTIVITY_TILES.map((tile) => {
-            const Icon = tile.icon;
-            const badge = getBadge(tile);
-            return (
-              <button
-                key={tile.id}
-                onClick={() => tile.tab && onTabChange(tile.tab)}
-                title={tile.label}
-                className="relative flex flex-col items-center gap-1 rounded py-2 px-1 bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] hover:border-gold/30 transition-all duration-150 group"
-              >
-                <Icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-gold transition-colors" />
-                <span className="text-[8px] text-muted-foreground/70 group-hover:text-gold/80 transition-colors leading-none text-center">{tile.label.split(" ")[0]}</span>
-                {badge ? <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-gold text-[8px] font-bold text-black flex items-center justify-center leading-none">{badge}</span> : null}
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
@@ -738,18 +688,20 @@ export function ExploreTab() {
   }, [accessToken, cooldownActive, exploring, explore]);
 
   return (
-    <div className="flex flex-col gap-0 h-full" ref={topRef}>
-      <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 border-b border-panel-border/50">
+    <div className="flex min-h-0 flex-1 flex-col gap-0" ref={topRef}>
+      <div className="flex shrink-0 items-center gap-2.5 border-b border-panel-border/50 px-4 py-2.5">
         <Compass className="h-4 w-4 text-gold" />
-        <h2 className="font-serif text-sm tracking-[0.2em] uppercase text-gold font-semibold">Explore</h2>
+        <h2 className="font-serif text-sm font-semibold uppercase tracking-[0.2em] text-gold">Explore</h2>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="font-serif text-[10px] tracking-[0.2em] uppercase text-gold/60 flex items-center gap-1.5"><MapPin className="h-3 w-3" />Zone Map</span>
-            <div className="flex-1 h-px bg-panel-border/50" />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="flex items-center gap-1.5 font-serif text-[10px] uppercase tracking-[0.2em] text-gold/60">
+              <MapPin className="h-3 w-3" />
+              Zone Map
+            </span>
+            <div className="h-px flex-1 bg-panel-border/50" />
           </div>
           <ZoneMap
             zones={zones}
@@ -761,8 +713,6 @@ export function ExploreTab() {
             npcInteracting={npcInteracting}
             onGoToCombat={() => void handleGoToCombat()}
             onInteractNPC={(id) => void handleNpcInteract(id)}
-            cooldownActive={cooldownActive}
-            onTabChange={setTab}
           />
           {travelTarget.id !== currentZone.id ? (
             <button
@@ -776,7 +726,7 @@ export function ExploreTab() {
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3 bg-panel-bg border border-gold/40 rounded px-4 py-3.5 panel-inset shadow-[0_0_16px_oklch(0.74_0.13_80/0.2)]">
+        <div className="flex shrink-0 items-center gap-3 bg-panel-bg border border-gold/40 rounded px-4 py-3.5 panel-inset shadow-[0_0_16px_oklch(0.74_0.13_80/0.2)]">
           {cooldownActive ? (
             <CooldownRing key={cooldownKey} totalSeconds={cooldownSeconds} onComplete={() => setCooldownActive(false)} />
           ) : (
@@ -823,7 +773,7 @@ export function ExploreTab() {
         </div>
 
         {timelineResults.length > 0 ? (
-          <div>
+          <div className="shrink-0">
             <button className="w-full flex items-center gap-2 mb-2 group" onClick={() => setTimelineOpen((o) => !o)}>
               <span className="font-serif text-[10px] tracking-[0.2em] uppercase text-gold/60 flex items-center gap-1.5">
                 <Clock className="h-3 w-3" />
@@ -851,7 +801,7 @@ export function ExploreTab() {
           </div>
         ) : null}
 
-        <div className="flex items-start gap-2.5 rounded border border-gold/15 bg-gold/5 px-3 py-2.5">
+        <div className="flex shrink-0 items-start gap-2.5 rounded border border-gold/15 bg-gold/5 px-3 py-2.5">
           <Swords className="h-3.5 w-3.5 flex-shrink-0 text-gold/50 mt-0.5" />
           <p className="text-[11px] text-gold/60 leading-relaxed italic">
             Quests often start or advance after meeting NPCs while exploring. Check the <span className="text-gold/80 not-italic font-semibold">Quests</span> tab after any NPC encounter.
