@@ -356,11 +356,11 @@ export default function BattlePreview({
 
         <div
           className={cn(
-            "z-20 flex min-w-0 flex-col items-center justify-between overflow-visible",
-            compact ? "px-1 py-0.5" : "px-4 py-2",
+            "z-20 flex min-w-0 flex-col items-center justify-start overflow-visible",
+            compact ? "gap-0.5 px-1 py-0" : "gap-2 px-4 py-2",
           )}
         >
-          <div className={cn("flex w-full justify-center overflow-visible", compact ? "mt-0" : "mt-[4%]")}>
+          <div className="flex w-full justify-center overflow-visible">
             {combatGrid ?? (
               <GridPreview rows={data.gridRows} cols={data.gridCols} units={data.units} compact={compact} />
             )}

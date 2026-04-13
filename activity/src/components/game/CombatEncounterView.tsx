@@ -355,7 +355,10 @@ export function CombatEncounterView({
     <div
       className={
         focusMode
-          ? cn("flex h-full min-h-0 flex-col", useBattlePreview ? "gap-1" : "gap-2 sm:gap-3")
+          ? cn(
+              "flex min-h-0 flex-col",
+              useBattlePreview ? "h-auto min-h-0 justify-start gap-1" : "h-full gap-2 sm:gap-3",
+            )
           : useBattlePreview
             ? "space-y-2"
             : "space-y-4"
@@ -509,12 +512,7 @@ export function CombatEncounterView({
           </div>
         </div>
       ) : useBattlePreview && battlePreviewData ? (
-        <div
-          className={cn(
-            "w-full min-h-0 shrink-0",
-            focusMode ? "flex flex-1 flex-col justify-start" : "mx-auto max-w-6xl",
-          )}
-        >
+        <div className="mx-auto w-full max-w-6xl shrink-0">
           <BattlePreview
             compact
             data={battlePreviewData}
