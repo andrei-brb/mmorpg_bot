@@ -12,15 +12,6 @@ function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
 }
 
-function battleBackgroundZone(zoneKey?: string): string {
-  if (!zoneKey) return "volcano";
-  const k = zoneKey.toLowerCase();
-  if (k.includes("forest") || k.includes("wood")) return "forest";
-  if (k.includes("grave") || k.includes("crypt")) return "graveyard";
-  if (k.includes("dungeon") || k.includes("depth") || k.includes("shadow")) return "dungeon";
-  return "volcano";
-}
-
 function classEmoji(classKey: string): string {
   const m: Record<string, string> = {
     warrior: "🛡️",
@@ -167,7 +158,7 @@ export function CombatEncounterView({
           ? `/bosses/${enemyKey}.jpg`
           : `/mobs/${enemyKey}.jpg`
         : null;
-  const battleZone = battleZoneOverride ?? battleBackgroundZone(zoneLabel?.key);
+  const battleZone = battleZoneOverride ?? zoneLabel?.key ?? "volcano";
 
   const encounterKey = `${combatSessionId ?? "default"}|${state.enemy.name}|${state.enemy.max_hp}|${state.player.max_hp}`;
   const prevKeyRef = useRef<string | null>(null);
