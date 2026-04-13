@@ -294,14 +294,26 @@ export default function BattlePreview({ data }: { data: BattlePreviewData }) {
 
       <div className="relative z-10 w-full h-full grid gap-0 p-3 sm:p-4" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
         <div className="flex flex-col items-center justify-end gap-1 min-h-0 overflow-hidden">
-          <div className="flex-1 min-h-0 flex items-end justify-center w-full">
-            <img
-              src={data.player.portraitUrl}
-              alt={data.player.name}
-              className="object-contain drop-shadow-2xl"
-              style={{ maxHeight: "100%", maxWidth: "80%" }}
-              loading="lazy"
-            />
+          <div className="flex-1 min-h-0 flex w-full items-end justify-center px-1">
+            {/* Waist-up frame: crop with object-cover + top bias so full-body sources read as bust shots */}
+            <div
+              className={cn(
+                "relative w-[min(92%,280px)] max-h-[85%] aspect-[3/4]",
+                "overflow-hidden rounded-sm",
+                "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
+              )}
+            >
+              <img
+                src={data.player.portraitUrl}
+                alt={data.player.name}
+                className="h-full w-full object-cover object-[center_18%]"
+                loading="lazy"
+              />
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/50 to-transparent"
+                aria-hidden
+              />
+            </div>
           </div>
           <StatPanel character={data.player} />
         </div>
@@ -314,14 +326,25 @@ export default function BattlePreview({ data }: { data: BattlePreviewData }) {
         </div>
 
         <div className="flex flex-col items-center justify-end gap-1 min-h-0 overflow-hidden">
-          <div className="flex-1 min-h-0 flex items-end justify-center w-full">
-            <img
-              src={data.enemy.portraitUrl}
-              alt={data.enemy.name}
-              className="object-contain drop-shadow-2xl"
-              style={{ maxHeight: "100%", maxWidth: "80%" }}
-              loading="lazy"
-            />
+          <div className="flex-1 min-h-0 flex w-full items-end justify-center px-1">
+            <div
+              className={cn(
+                "relative w-[min(92%,280px)] max-h-[85%] aspect-[3/4]",
+                "overflow-hidden rounded-sm",
+                "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
+              )}
+            >
+              <img
+                src={data.enemy.portraitUrl}
+                alt={data.enemy.name}
+                className="h-full w-full object-cover object-[center_18%]"
+                loading="lazy"
+              />
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/50 to-transparent"
+                aria-hidden
+              />
+            </div>
           </div>
           <StatPanel character={data.enemy} />
         </div>
