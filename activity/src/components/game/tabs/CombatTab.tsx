@@ -301,6 +301,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         <CombatEncounterView
           focusMode={focusMode}
           zoneLabel={zoneLabel}
+          battleZoneOverride={map?.current_zone}
           state={state}
           inventory={inventory}
           loading={loading}
