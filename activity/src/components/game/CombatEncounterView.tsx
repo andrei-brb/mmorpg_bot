@@ -96,6 +96,9 @@ export type CombatEncounterViewProps = {
   battleZoneOverride?: string;
   /** Class key for opponent portrait in 1v1 (e.g. PvP). */
   enemyClassKey?: string | null;
+  /** Optional overworld enemy key for mob/boss art: `/mobs/<key>.jpg` / `/bosses/<key>.jpg`. */
+  enemyKey?: string;
+  enemyKind?: "enemy" | "boss";
   /** Stabilizes damage-float reset across encounters (match id, dungeon floor, …). */
   combatSessionId?: string;
   /** Override level chips when inventory/zone are wrong (PvP). */
@@ -133,6 +136,8 @@ export function CombatEncounterView({
   topBar,
   battleZoneOverride,
   enemyClassKey,
+  enemyKey,
+  enemyKind,
   combatSessionId,
   playerLevelOverride,
   enemyLevelOverride,
@@ -154,7 +159,14 @@ export function CombatEncounterView({
   const playerLevel = playerLevelOverride ?? inventory?.character?.level ?? 1;
   const enemyLevel = enemyLevelOverride ?? zoneLabel?.level_min ?? zoneLabel?.level_max ?? 1;
   const enemyIcon = enemyClassKey ? classEmoji(enemyClassKey) : firstTokenEmoji(state.enemy.name);
-  const enemyIconSrc = enemyClassKey ? classIconUrl(enemyClassKey) : null;
+  const enemyIconSrc =
+    enemyClassKey
+      ? classIconUrl(enemyClassKey)
+      : enemyKey
+        ? enemyKind === "boss"
+          ? `/bosses/${enemyKey}.jpg`
+          : `/mobs/${enemyKey}.jpg`
+        : null;
   const battleZone = battleZoneOverride ?? battleBackgroundZone(zoneLabel?.key);
 
   const encounterKey = `${combatSessionId ?? "default"}|${state.enemy.name}|${state.enemy.max_hp}|${state.player.max_hp}`;

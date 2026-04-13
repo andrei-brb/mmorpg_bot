@@ -29,6 +29,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [combatTabMode, setCombatTabMode] = useState<CombatTabMode>("overworld");
+  const [activeEnemy, setActiveEnemy] = useState<{ key: string; kind: "enemy" | "boss" } | null>(null);
   /** DungeonPanel sets this while `phase === "fight"` so we can hide the Overworld/Dungeon segment. */
   const [dungeonInFight, setDungeonInFight] = useState(false);
 
@@ -61,6 +62,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       if (pend && snap.enemies.some((e) => e.key === pend)) {
         const r = await startCombat({ kind: "zone", enemyKey: pend });
         if (r.state) {
+          const picked = snap.enemies.find((e) => e.key === pend);
+          setActiveEnemy({ key: pend, kind: picked?.kind === "boss" ? "boss" : "enemy" });
           setState(r.state);
           setMode("fight");
           return;
@@ -68,6 +71,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         toast.error(r.message || "Could not start combat");
       }
       setState(null); setMode("pick"); setOutcome(null);
+      setActiveEnemy(null);
       if (snap.enemies.length) setEnemyPick((prev) => prev || snap.enemies[0].key);
     } finally { setLoading(false); }
   }, [accessToken, guildId, loadCombatSnapshot, startCombat, pendingCombatEnemyKey]);
@@ -98,7 +102,13 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     setLoading(true);
     try {
       const r = await startCombat({ kind: "zone", enemyKey: enemyPick });
-      if (r.state) { setState(r.state); setMode("fight"); return; }
+      if (r.state) {
+        const picked = enemies.find((e) => e.key === enemyPick);
+        setActiveEnemy({ key: enemyPick, kind: picked?.kind === "boss" ? "boss" : "enemy" });
+        setState(r.state);
+        setMode("fight");
+        return;
+      }
       toast.error(r.message || "Start failed");
     } finally { setLoading(false); }
   };
@@ -298,6 +308,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           onFlee={onFlee}
           onPotion={onPotion}
           showDiscordDungeonBanner={Boolean(state.in_dungeon)}
+          enemyKey={activeEnemy?.key || undefined}
+          enemyKind={activeEnemy?.kind || undefined}
         />
       </div>
     );

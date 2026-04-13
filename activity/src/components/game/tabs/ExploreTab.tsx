@@ -273,6 +273,12 @@ function ResultPanel({
   onInteractNPC: (npcId: string) => void;
   isTimeline?: boolean;
 }) {
+  const enemyArtSrc =
+    (result.type === "enemy" || result.type === "boss") && result.enemyKey
+      ? result.type === "boss" || result.isBoss
+        ? `/bosses/${result.enemyKey}.jpg`
+        : `/mobs/${result.enemyKey}.jpg`
+      : null;
   const typeStyle = {
     enemy: "border-enemy-red/60 bg-enemy-red/5",
     boss: "border-boss-purple/70 bg-boss-purple/5",
@@ -290,12 +296,25 @@ function ResultPanel({
       </div>
       <p className={cn("text-foreground/85 leading-relaxed", isTimeline ? "text-xs" : "text-sm")}>{result.message}</p>
       {(result.type === "enemy" || result.type === "boss") && result.enemyName && (
-        <div className="rounded px-2.5 py-2 mt-2 border border-white/15">
-          <p className="font-serif font-semibold text-sm text-foreground">{result.enemyName}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            {result.enemyLevel != null ? <>Level {result.enemyLevel} · </> : null}
-            {result.isBoss ? "World Boss" : "Enemy"}
-          </p>
+        <div className="rounded px-2.5 py-2 mt-2 border border-white/15 flex items-center gap-2.5">
+          {enemyArtSrc ? (
+            <img
+              src={enemyArtSrc}
+              alt=""
+              className="h-10 w-10 rounded bg-black/20 object-contain border border-white/10"
+              onError={(e) => {
+                // Hide broken image so we fall back to text-only.
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="font-serif font-semibold text-sm text-foreground">{result.enemyName}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {result.enemyLevel != null ? <>Level {result.enemyLevel} · </> : null}
+              {result.isBoss ? "World Boss" : "Enemy"}
+            </p>
+          </div>
         </div>
       )}
       {result.type === "npc" && result.npc && (
