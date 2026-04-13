@@ -37,7 +37,6 @@ export function BattlefieldSkillGrid({
   showPotionButton,
   canPotion,
   onPotion,
-  compact,
 }: {
   abilities: CombatAbility[];
   loading: boolean;
@@ -46,18 +45,15 @@ export function BattlefieldSkillGrid({
   showPotionButton: boolean;
   canPotion: boolean;
   onPotion: () => void;
-  /** Smaller cells to fit Discord iframe height. */
-  compact?: boolean;
 }) {
   const reservePotionSlot = Boolean(showPotionButton && canPotion);
   const cells = buildCells(abilities, { reservePotionSlot });
-  const cellRem = compact ? 3.25 : 4.5;
+  const cellRem = 4.5;
 
   return (
     <div
       className={cn(
-        "grid overflow-visible",
-        compact ? "gap-0.5" : "gap-1",
+        "grid gap-1 overflow-visible",
         "[grid-template-columns:repeat(3,minmax(0,1fr))]",
       )}
       style={{

@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
 import { buildBattlePreviewDataFromCombat } from "@/lib/combatBattlePreviewData";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
-import { cn } from "@/lib/utils";
 import BattlePreview from "@/components/BattlePreview";
 import { BattleBackground } from "@/components/game/combat/BattleBackground";
 import { BattlefieldSkillGrid } from "@/components/game/combat/BattlefieldSkillGrid";
@@ -352,22 +351,11 @@ export function CombatEncounterView({
   const potionInBattleGrid = useBattlePreview && showPotionButton && state.can_potion;
 
   return (
-    <div
-      className={
-        focusMode
-          ? cn(
-              "flex min-h-0 flex-col",
-              useBattlePreview ? "h-auto min-h-0 justify-start gap-1" : "h-full gap-2 sm:gap-3",
-            )
-          : useBattlePreview
-            ? "space-y-2"
-            : "space-y-4"
-      }
-    >
+    <div className={focusMode ? "flex h-full min-h-0 flex-col gap-2 sm:gap-3" : "space-y-4"}>
       {topBar != null ? (
         topBar
       ) : dungeonHeader ? (
-        <div className={cn("game-panel flex items-center justify-between", useBattlePreview ? "py-1.5" : "py-2")}>
+        <div className="game-panel flex items-center justify-between py-2">
           <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
             {dungeonHeader.emoji} {dungeonHeader.name}
           </span>
@@ -376,7 +364,7 @@ export function CombatEncounterView({
           </span>
         </div>
       ) : (
-        <div className={cn("game-panel flex items-center justify-between", useBattlePreview ? "py-1.5" : "py-2")}>
+        <div className="game-panel flex items-center justify-between py-2">
           <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
             {zoneLabel?.emoji} {zoneLabel?.name ?? "Zone"}
           </span>
@@ -512,14 +500,12 @@ export function CombatEncounterView({
           </div>
         </div>
       ) : useBattlePreview && battlePreviewData ? (
-        <div className="mx-auto w-full max-w-6xl shrink-0">
+        <div className={focusMode ? "flex w-full min-h-0 flex-1 flex-col justify-center" : "mx-auto w-full max-w-6xl"}>
           <BattlePreview
-            compact
             data={battlePreviewData}
             combatGrid={
               <BattlefieldSkillGrid
                 abilities={gridAbilities}
-                compact
                 loading={loading}
                 canAct={canAct}
                 onAbility={onAbility}
@@ -713,36 +699,6 @@ export function CombatEncounterView({
             ))}
           </div>
         </div>
-      ) : useBattlePreview && combatInProgress ? (
-        <div className="flex min-h-0 shrink-0 flex-wrap items-center gap-2">
-          {showFleeButton && (
-            <button
-              type="button"
-              onClick={() => void onFlee()}
-              disabled={loading || !canAct}
-              className="game-btn-secondary px-2 py-1 text-[10px]"
-            >
-              🏃 Flee
-            </button>
-          )}
-          {showPotionButton && state.can_potion && !potionInBattleGrid && (
-            <button
-              type="button"
-              onClick={() => void onPotion()}
-              disabled={loading || !canAct}
-              className="game-btn-secondary px-2 py-1 text-[10px]"
-            >
-              🧪 Potion
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowLogModal(true)}
-            className="game-btn-secondary min-w-[6rem] flex-1 px-2 py-1 text-center text-[10px] sm:max-w-xs sm:flex-none"
-          >
-            📋 Combat Log
-          </button>
-        </div>
       ) : combatInProgress ? (
         <button
           type="button"
@@ -752,12 +708,7 @@ export function CombatEncounterView({
           📋 Combat Log
         </button>
       ) : (
-        <div
-          className={cn(
-            focusMode ? "game-panel flex-1 min-h-0 overflow-y-auto" : "game-panel max-h-36 overflow-y-auto",
-            useBattlePreview && "max-h-28",
-          )}
-        >
+        <div className={focusMode ? "game-panel flex-1 min-h-0 overflow-y-auto" : "game-panel max-h-36 overflow-y-auto"}>
           <div className="game-panel-header">Combat Log</div>
           <div className="space-y-1.5">
             {(state.log || []).slice(-12).map((line, i) => (
@@ -769,7 +720,7 @@ export function CombatEncounterView({
         </div>
       )}
 
-      {!useBattlePreview && (showFleeButton || (showPotionButton && state.can_potion && !potionInBattleGrid)) && (
+      {(showFleeButton || (showPotionButton && state.can_potion && !potionInBattleGrid)) && (
         <div className="flex gap-2">
           {showFleeButton && (
             <button

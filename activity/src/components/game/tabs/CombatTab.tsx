@@ -293,8 +293,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       <div
         className={
           focusMode
-            ? "flex h-full min-h-0 flex-col gap-1 -mt-2 pt-0 sm:-mt-3"
-            : "space-y-2"
+            ? "flex h-full min-h-0 flex-col gap-2 -mt-2 pt-0 sm:-mt-3"
+            : "space-y-4"
         }
       >
         {showSubModeToggle && modeSegment}

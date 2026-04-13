@@ -47,10 +47,10 @@ function parseHp(val: string | number): { current: number; max: number } | null 
   return { current: Number(m[1]), max: Number(m[2]) };
 }
 
-function HpBar({ current, max, compact }: { current: number; max: number; compact?: boolean }) {
+function HpBar({ current, max }: { current: number; max: number }) {
   const pct = Math.min(100, (current / max) * 100);
   return (
-    <div className={cn("w-full rounded-sm overflow-hidden", compact ? "h-1.5" : "h-2.5")} style={{ background: "rgba(0,0,0,0.5)" }}>
+    <div className="h-2.5 w-full rounded-sm overflow-hidden" style={{ background: "rgba(0,0,0,0.5)" }}>
       <div
         className="h-full rounded-sm transition-all duration-500"
         style={{
@@ -70,7 +70,7 @@ function HpBar({ current, max, compact }: { current: number; max: number; compac
 /* ── Ornament SVG for panel corners ── */
 function PanelOrnament({ className }: { className?: string }) {
   return (
-    <svg className={cn("w-5 h-5 text-amber-700/60", className)} viewBox="0 0 20 20" fill="currentColor">
+    <svg className={cn("h-5 w-5 text-amber-700/60", className)} viewBox="0 0 20 20" fill="currentColor">
       <path d="M0 0 L8 0 L0 8 Z" />
       <path d="M4 0 L10 0 L0 10 L0 4 Z" opacity="0.4" />
     </svg>
@@ -78,36 +78,32 @@ function PanelOrnament({ className }: { className?: string }) {
 }
 
 /* ── Stat Panel (bottom bar style) ── */
-function StatPanel({ character, compact }: { character: CharacterData; compact?: boolean }) {
+function StatPanel({ character }: { character: CharacterData }) {
   return (
     <div
       className={cn(
-        "relative flex flex-col border border-amber-900/40 rounded-sm",
-        compact ? "gap-0.5 px-2.5 py-1.5 min-w-0 max-w-[200px] sm:max-w-[220px]" : "gap-1 px-4 py-3 min-w-[240px] max-w-xs",
+        "relative flex min-w-[240px] max-w-xs flex-col gap-1 rounded-sm border border-amber-900/40 px-4 py-3",
       )}
       style={{
         background: "linear-gradient(180deg, rgba(20,15,25,0.92) 0%, rgba(30,20,35,0.95) 100%)",
         boxShadow: "inset 0 1px 0 rgba(255,215,0,0.08), 0 4px 20px rgba(0,0,0,0.5)",
       }}
     >
-      <PanelOrnament className={cn("absolute top-0 left-0", compact ? "h-3.5 w-3.5" : "h-5 w-5")} />
-      <PanelOrnament className={cn("absolute top-0 right-0 -scale-x-100", compact ? "h-3.5 w-3.5" : "h-5 w-5")} />
-      <PanelOrnament className={cn("absolute bottom-0 left-0 -scale-y-100", compact ? "h-3.5 w-3.5" : "h-5 w-5")} />
-      <PanelOrnament className={cn("absolute bottom-0 right-0 scale-[-1]", compact ? "h-3.5 w-3.5" : "h-5 w-5")} />
+      <PanelOrnament className="absolute left-0 top-0" />
+      <PanelOrnament className="absolute right-0 top-0 -scale-x-100" />
+      <PanelOrnament className="absolute bottom-0 left-0 -scale-y-100" />
+      <PanelOrnament className="absolute bottom-0 right-0 scale-[-1]" />
 
-      <div className={cn("flex items-center flex-wrap", compact ? "gap-1 mb-0.5" : "gap-2 mb-1")}>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
         <h3
-          className={cn(
-            "font-bold tracking-wider uppercase flex-1 min-w-0",
-            compact ? "text-[10px] leading-tight" : "text-sm min-w-[120px]",
-          )}
+          className="min-w-[120px] flex-1 text-sm font-bold uppercase tracking-wider"
           style={{ color: "#e8dcc8", textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
         >
           {character.name}
         </h3>
         {character.weakness && (
           <span
-            className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wide"
+            className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
             style={{
               background: "rgba(180,40,40,0.4)",
               color: "#ff9090",
@@ -120,7 +116,7 @@ function StatPanel({ character, compact }: { character: CharacterData; compact?:
         {character.indicators?.map((ind, i) => (
           <span
             key={i}
-            className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm"
+            className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold"
             style={{
               background: "rgba(140,30,30,0.5)",
               color: "#ff7070",
@@ -132,25 +128,22 @@ function StatPanel({ character, compact }: { character: CharacterData; compact?:
         ))}
       </div>
 
-      <div className={cn("w-full h-px", compact ? "mb-0.5" : "mb-1")} style={{ background: "linear-gradient(90deg, transparent, rgba(180,150,80,0.4), transparent)" }} />
+      <div className="mb-1 h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(180,150,80,0.4), transparent)" }} />
 
-      <div className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1")}>
+      <div className="flex flex-col gap-1">
         {character.stats.map((stat) => {
           const hp = parseHp(stat.value);
           return (
             <div key={stat.label}>
-              <div className={cn("flex justify-between items-baseline", compact ? "text-[9px]" : "text-xs")}>
+              <div className="flex items-baseline justify-between text-xs">
                 <span style={{ color: "#9a8e7a" }} className="tracking-wide">
                   {stat.label}
                 </span>
-                <span
-                  className={cn("font-bold tabular-nums", compact ? "text-[9px]" : hp ? "text-sm" : "text-xs")}
-                  style={{ color: "#e0d6c2" }}
-                >
+                <span className={cn("font-bold tabular-nums", hp ? "text-sm" : "text-xs")} style={{ color: "#e0d6c2" }}>
                   {hp ? `${hp.current} / ${hp.max}` : String(stat.value)}
                 </span>
               </div>
-              {hp && <HpBar current={hp.current} max={hp.max} compact={compact} />}
+              {hp && <HpBar current={hp.current} max={hp.max} />}
             </div>
           );
         })}
@@ -164,22 +157,20 @@ function GridPreview({
   rows = 3,
   cols = 3,
   units = [],
-  compact,
 }: {
   rows?: number;
   cols?: number;
   units?: GridUnit[];
-  compact?: boolean;
 }) {
-  const cellRem = compact ? 3.25 : 4.5;
   const cells: React.ReactNode[] = [];
+  const cellRem = 4.5;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const unit = units.find((u) => u.row === r && u.col === c);
       cells.push(
         <div
           key={`${r}-${c}`}
-          className={cn("aspect-square flex items-center justify-center text-sm rounded-sm border transition-all duration-300")}
+          className={cn("aspect-square flex items-center justify-center rounded-sm border text-sm transition-all duration-300")}
           style={
             unit
               ? {
@@ -197,7 +188,7 @@ function GridPreview({
             <img
               src={unit.imageUrl}
               alt={unit.label ?? ""}
-              className="w-full h-full object-cover rounded-sm"
+              className="h-full w-full rounded-sm object-cover"
               loading="lazy"
             />
           ) : unit?.label ? (
@@ -212,7 +203,7 @@ function GridPreview({
 
   return (
     <div
-      className={cn("grid", compact ? "gap-0.5" : "gap-1")}
+      className="grid gap-1"
       style={{
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
         width: `${cols * cellRem}rem`,
@@ -225,16 +216,16 @@ function GridPreview({
 }
 
 /* ── Commence Banner Button ── */
-function CommenceBanner({ label, onClick, compact }: { label: string; onClick?: () => void; compact?: boolean }) {
+function CommenceBanner({ label, onClick }: { label: string; onClick?: () => void }) {
   const inner = (
     <div
-      className={cn("relative text-center", compact ? "px-6 py-1.5" : "px-10 py-3")}
+      className="relative px-10 py-3 text-center"
       style={{
         background: "linear-gradient(180deg, #5c1a1a 0%, #3d0f0f 60%, #2a0808 100%)",
         border: "2px solid rgba(180,130,50,0.5)",
         borderBottom: "none",
         clipPath: "polygon(0 0, 100% 0, 100% 75%, 50% 100%, 0 75%)",
-        paddingBottom: compact ? "1rem" : "1.8rem",
+        paddingBottom: "1.8rem",
       }}
     >
       <div
@@ -246,7 +237,7 @@ function CommenceBanner({ label, onClick, compact }: { label: string; onClick?: 
         }}
       />
       <span
-        className={cn("relative font-bold tracking-wider uppercase", compact ? "text-[11px]" : "text-base")}
+        className="relative text-base font-bold uppercase tracking-wider"
         style={{
           color: "#e8dcc8",
           textShadow: "0 1px 4px rgba(0,0,0,0.8), 0 0 20px rgba(180,130,50,0.2)",
@@ -279,13 +270,10 @@ function CommenceBanner({ label, onClick, compact }: { label: string; onClick?: 
 export default function BattlePreview({
   data,
   combatGrid,
-  /** Tighter layout for Discord / small viewports so footer actions stay visible. */
-  compact = false,
 }: {
   data: BattlePreviewData;
   /** When set, replaces the decorative tactical grid (e.g. skill + potion buttons). */
   combatGrid?: ReactNode;
-  compact?: boolean;
 }) {
   const bgLayerStyle = data.battlefieldZoneKey
     ? getBattlefieldBackgroundStackStyle(data.battlefieldZoneKey)
@@ -296,18 +284,7 @@ export default function BattlePreview({
       };
 
   return (
-    <div
-      className={cn("relative mx-auto w-full max-w-[min(100%,920px)] overflow-visible rounded-lg", compact && "shrink-0")}
-      style={
-        compact
-          ? {
-              aspectRatio: "16 / 9",
-              maxHeight: "min(38vh, 340px)",
-              width: "100%",
-            }
-          : { aspectRatio: "16/9" }
-      }
-    >
+    <div className="relative w-full overflow-visible rounded-lg" style={{ aspectRatio: "16/9" }}>
       {/* Clip art to rounded rect; UI layer stays overflow-visible so skill tooltips are not clipped */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
         <div className="absolute inset-0" style={bgLayerStyle} />
@@ -325,18 +302,13 @@ export default function BattlePreview({
         />
       </div>
 
-      <div
-        className={cn("relative z-10 grid h-full w-full gap-0", compact ? "p-1.5 sm:p-2" : "p-3 sm:p-4")}
-        style={{ gridTemplateColumns: "1fr auto 1fr" }}
-      >
-        <div className={cn("flex min-h-0 flex-col items-center justify-end overflow-hidden", compact ? "gap-0" : "gap-1")}>
-          <div className="flex min-h-0 w-full flex-1 items-end justify-center px-0.5">
-            {/* Waist-up frame: crop with object-cover + top bias so full-body sources read as bust shots */}
+      <div className="relative z-10 grid h-full w-full gap-0 p-3 sm:p-4" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
+        <div className="flex min-h-0 flex-col items-center justify-end gap-1 overflow-hidden">
+          <div className="flex min-h-0 w-full flex-1 items-end justify-center px-1">
             <div
               className={cn(
-                "relative aspect-[3/4] overflow-hidden rounded-sm",
+                "relative aspect-[3/4] max-h-[85%] w-[min(92%,280px)] overflow-hidden rounded-sm",
                 "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
-                compact ? "w-[min(88%,200px)] max-h-[72%]" : "w-[min(92%,280px)] max-h-[85%]",
               )}
             >
               <img
@@ -351,30 +323,22 @@ export default function BattlePreview({
               />
             </div>
           </div>
-          <StatPanel character={data.player} compact={compact} />
+          <StatPanel character={data.player} />
         </div>
 
-        <div
-          className={cn(
-            "z-20 flex min-w-0 flex-col items-center justify-start overflow-visible",
-            compact ? "gap-0.5 px-1 py-0" : "gap-2 px-4 py-2",
-          )}
-        >
-          <div className="flex w-full justify-center overflow-visible">
-            {combatGrid ?? (
-              <GridPreview rows={data.gridRows} cols={data.gridCols} units={data.units} compact={compact} />
-            )}
+        <div className="z-20 flex min-w-0 flex-col items-center justify-between overflow-visible px-4 py-2">
+          <div className="mt-[4%] flex w-full justify-center overflow-visible">
+            {combatGrid ?? <GridPreview rows={data.gridRows} cols={data.gridCols} units={data.units} />}
           </div>
-          <CommenceBanner label={data.buttonLabel ?? "Commence Battle"} onClick={data.onCommence} compact={compact} />
+          <CommenceBanner label={data.buttonLabel ?? "Commence Battle"} onClick={data.onCommence} />
         </div>
 
-        <div className={cn("flex min-h-0 flex-col items-center justify-end overflow-hidden", compact ? "gap-0" : "gap-1")}>
-          <div className="flex min-h-0 w-full flex-1 items-end justify-center px-0.5">
+        <div className="flex min-h-0 flex-col items-center justify-end gap-1 overflow-hidden">
+          <div className="flex min-h-0 w-full flex-1 items-end justify-center px-1">
             <div
               className={cn(
-                "relative aspect-[3/4] overflow-hidden rounded-sm",
+                "relative aspect-[3/4] max-h-[85%] w-[min(92%,280px)] overflow-hidden rounded-sm",
                 "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
-                compact ? "w-[min(88%,200px)] max-h-[72%]" : "w-[min(92%,280px)] max-h-[85%]",
               )}
             >
               <img
@@ -389,7 +353,7 @@ export default function BattlePreview({
               />
             </div>
           </div>
-          <StatPanel character={data.enemy} compact={compact} />
+          <StatPanel character={data.enemy} />
         </div>
       </div>
     </div>
