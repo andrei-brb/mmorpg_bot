@@ -2,25 +2,6 @@ import type { BattlePreviewData, CharacterStat } from "@/components/BattlePrevie
 import type { CombatAbility, CombatStatePayload, ExploreZone, InventoryPayload } from "@/lib/apiTypes";
 import { classIconUrl } from "@/lib/classAndSpecIconUrl";
 
-function classEmoji(classKey: string): string {
-  const m: Record<string, string> = {
-    warrior: "🛡️",
-    paladin: "⚔️",
-    mage: "🧙",
-    rogue: "🗡️",
-    priest: "✨",
-    hunter: "🏹",
-    shared: "🧝",
-  };
-  return m[classKey] || "🧝";
-}
-
-function firstTokenEmoji(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  const t = parts[0] || "";
-  return t && /[^\w\s]/.test(t) ? t : "👾";
-}
-
 function displayResLabel(resType: string): string {
   if (resType === "mana") return "Mana";
   if (resType === "energy") return "Energy";
@@ -129,7 +110,6 @@ export function buildBattlePreviewDataFromCombat(args: {
         : `${base}placeholder.svg`);
 
   const abilities = state.abilities || [];
-  const enemyIcon = enemyClassKey ? classEmoji(enemyClassKey) : firstTokenEmoji(state.enemy.name);
 
   const buttonLabel = canAct
     ? `Your Turn${turnBannerSeconds != null ? ` — ${turnBannerSeconds}s` : ""}`
@@ -141,10 +121,6 @@ export function buildBattlePreviewDataFromCombat(args: {
     buttonLabel,
     gridRows: 3,
     gridCols: 3,
-    units: [
-      { id: "p", label: classEmoji(classKey), row: 2, col: 0 },
-      { id: "e", label: enemyIcon, row: 2, col: 2 },
-    ],
     player: {
       name: state.player.name,
       portraitUrl: playerPortrait,

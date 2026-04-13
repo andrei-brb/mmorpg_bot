@@ -1111,4 +1111,8 @@
       visibility: visible;
     }
   }
+  /** 3×3 battlefield grid — float tips above portraits / banner edges */
+  .combat-skill-tooltip--grid {
+    z-index: 70;
+  }
 }

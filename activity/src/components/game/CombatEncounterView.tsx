@@ -5,6 +5,7 @@ import { buildBattlePreviewDataFromCombat } from "@/lib/combatBattlePreviewData"
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
 import BattlePreview from "@/components/BattlePreview";
 import { BattleBackground } from "@/components/game/combat/BattleBackground";
+import { BattlefieldSkillGrid } from "@/components/game/combat/BattlefieldSkillGrid";
 import { CombatSkillButton } from "@/components/game/combat/CombatSkillButton";
 import { BattleFighter } from "@/components/game/combat/BattleFighter";
 import { DamageNumbers, type DamageEvent } from "@/components/game/combat/DamageNumber";
@@ -347,6 +348,8 @@ export function CombatEncounterView({
           ? "Rage"
           : displayClassTitle(state.player.res_type || "mana");
 
+  const potionInBattleGrid = useBattlePreview && showPotionButton && state.can_potion;
+
   return (
     <div className={focusMode ? "flex flex-col gap-2 sm:gap-3 h-full min-h-0" : "space-y-4"}>
       {topBar != null ? (
@@ -498,7 +501,20 @@ export function CombatEncounterView({
         </div>
       ) : useBattlePreview && battlePreviewData ? (
         <div className={focusMode ? "w-full min-h-0 flex-1 flex flex-col justify-center" : "w-full max-w-6xl mx-auto"}>
-          <BattlePreview data={battlePreviewData} />
+          <BattlePreview
+            data={battlePreviewData}
+            combatGrid={
+              <BattlefieldSkillGrid
+                abilities={gridAbilities}
+                loading={loading}
+                canAct={canAct}
+                onAbility={onAbility}
+                showPotionButton={showPotionButton}
+                canPotion={state.can_potion}
+                onPotion={onPotion}
+              />
+            }
+          />
         </div>
       ) : (
         <BattleBackground zone={battleZone}>
@@ -627,48 +643,50 @@ export function CombatEncounterView({
         </div>
       ) : null}
 
-      <div className="game-panel overflow-visible">
-        <div className="game-panel-header">{skillsPanelTitle}</div>
-        <div className={isArenaDuel || primaryAbility ? "px-3 pb-3" : ""}>
-          {primaryAbility ? (
-            <div className="mb-2 overflow-visible">
-              {(() => {
-                const pd = primaryAbility;
-                const primaryDisabled = Boolean(pd.disabled) || loading || !canAct;
-                return (
-                  <button
-                    type="button"
-                    aria-disabled={primaryDisabled}
-                    tabIndex={primaryDisabled ? -1 : undefined}
-                    className="game-btn-primary w-full py-2.5 text-sm font-cinzel font-semibold flex items-center justify-center gap-2"
-                    title={pd.description || pd.name}
-                    onClick={() => {
-                      if (primaryDisabled) return;
-                      void onAbility(pd.key);
-                    }}
-                  >
-                    <span aria-hidden>{pd.emoji || "⚔️"}</span>
-                    {pd.name}
-                  </button>
-                );
-              })()}
+      {!useBattlePreview && (
+        <div className="game-panel overflow-visible">
+          <div className="game-panel-header">{skillsPanelTitle}</div>
+          <div className={isArenaDuel || primaryAbility ? "px-3 pb-3" : ""}>
+            {primaryAbility ? (
+              <div className="mb-2 overflow-visible">
+                {(() => {
+                  const pd = primaryAbility;
+                  const primaryDisabled = Boolean(pd.disabled) || loading || !canAct;
+                  return (
+                    <button
+                      type="button"
+                      aria-disabled={primaryDisabled}
+                      tabIndex={primaryDisabled ? -1 : undefined}
+                      className="game-btn-primary w-full py-2.5 text-sm font-cinzel font-semibold flex items-center justify-center gap-2"
+                      title={pd.description || pd.name}
+                      onClick={() => {
+                        if (primaryDisabled) return;
+                        void onAbility(pd.key);
+                      }}
+                    >
+                      <span aria-hidden>{pd.emoji || "⚔️"}</span>
+                      {pd.name}
+                    </button>
+                  );
+                })()}
+              </div>
+            ) : null}
+            <div
+              className={`grid gap-2 overflow-visible ${isArenaDuel ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}
+            >
+              {gridAbilities.map((a) => (
+                <CombatSkillButton
+                  key={a.key}
+                  ability={a}
+                  loading={loading}
+                  canAct={canAct}
+                  onUse={(key) => void onAbility(key)}
+                />
+              ))}
             </div>
-          ) : null}
-          <div
-            className={`grid gap-2 overflow-visible ${isArenaDuel ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}
-          >
-            {gridAbilities.map((a) => (
-              <CombatSkillButton
-                key={a.key}
-                ability={a}
-                loading={loading}
-                canAct={canAct}
-                onUse={(key) => void onAbility(key)}
-              />
-            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {isArenaDuel ? (
         <div className="game-panel">
@@ -702,7 +720,7 @@ export function CombatEncounterView({
         </div>
       )}
 
-      {(showFleeButton || (showPotionButton && state.can_potion)) && (
+      {(showFleeButton || (showPotionButton && state.can_potion && !potionInBattleGrid)) && (
         <div className="flex gap-2">
           {showFleeButton && (
             <button
@@ -714,7 +732,7 @@ export function CombatEncounterView({
               🏃 Flee
             </button>
           )}
-          {showPotionButton && state.can_potion && (
+          {showPotionButton && state.can_potion && !potionInBattleGrid && (
             <button
               type="button"
               onClick={() => void onPotion()}

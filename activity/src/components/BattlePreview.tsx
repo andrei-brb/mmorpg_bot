@@ -1,4 +1,4 @@
-import React from "react";
+import React, { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { getBattlefieldBackgroundStackStyle } from "@/components/game/combat/BattleBackground";
 
@@ -267,7 +267,14 @@ function CommenceBanner({ label, onClick }: { label: string; onClick?: () => voi
 }
 
 /* ── Main BattlePreview ── */
-export default function BattlePreview({ data }: { data: BattlePreviewData }) {
+export default function BattlePreview({
+  data,
+  combatGrid,
+}: {
+  data: BattlePreviewData;
+  /** When set, replaces the decorative tactical grid (e.g. skill + potion buttons). */
+  combatGrid?: ReactNode;
+}) {
   const bgLayerStyle = data.battlefieldZoneKey
     ? getBattlefieldBackgroundStackStyle(data.battlefieldZoneKey)
     : {
@@ -277,20 +284,23 @@ export default function BattlePreview({ data }: { data: BattlePreviewData }) {
       };
 
   return (
-    <div className="relative w-full overflow-hidden rounded-lg" style={{ aspectRatio: "16/9" }}>
-      <div className="absolute inset-0" style={bgLayerStyle} />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(ellipse at center, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.5) 100%)",
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 40%, transparent 60%)",
-        }}
-      />
+    <div className="relative w-full overflow-visible rounded-lg" style={{ aspectRatio: "16/9" }}>
+      {/* Clip art to rounded rect; UI layer stays overflow-visible so skill tooltips are not clipped */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+        <div className="absolute inset-0" style={bgLayerStyle} />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "radial-gradient(ellipse at center, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.5) 100%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 40%, transparent 60%)",
+          }}
+        />
+      </div>
 
       <div className="relative z-10 w-full h-full grid gap-0 p-3 sm:p-4" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
         <div className="flex flex-col items-center justify-end gap-1 min-h-0 overflow-hidden">
@@ -318,9 +328,11 @@ export default function BattlePreview({ data }: { data: BattlePreviewData }) {
           <StatPanel character={data.player} />
         </div>
 
-        <div className="flex flex-col items-center justify-between py-2 px-4">
-          <div className="mt-[8%]">
-            <GridPreview rows={data.gridRows} cols={data.gridCols} units={data.units} />
+        <div className="flex flex-col items-center justify-between py-2 px-4 min-w-0 overflow-visible z-20">
+          <div className="mt-[4%] w-full flex justify-center overflow-visible">
+            {combatGrid ?? (
+              <GridPreview rows={data.gridRows} cols={data.gridCols} units={data.units} />
+            )}
           </div>
           <CommenceBanner label={data.buttonLabel ?? "Commence Battle"} onClick={data.onCommence} />
         </div>
