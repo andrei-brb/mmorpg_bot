@@ -556,6 +556,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
             ? `dungeon-${combatState.dungeon_key}-f${combatState.dungeon_floor}`
             : undefined
         }
+        presentation="battle-preview"
         state={combatState}
         inventory={inventory}
         loading={loading}

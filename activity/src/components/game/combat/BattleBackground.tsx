@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 
 const BACKGROUNDS: Record<string, { gradient: string; particles: string; label: string }> = {
   elwynn_forest: {
@@ -54,7 +54,7 @@ interface Props {
   children: ReactNode;
 }
 
-export function BattleBackground({ zone = "volcano", children }: Props) {
+function resolveBattlefieldTheme(zone?: string) {
   const key = String(zone || "volcano").toLowerCase();
   const bg =
     BACKGROUNDS[key] ||
@@ -66,11 +66,29 @@ export function BattleBackground({ zone = "volcano", children }: Props) {
           ? BACKGROUNDS.dungeon
           : BACKGROUNDS.volcano);
 
-  // Support both .png and .jpg assets (png preferred). If the png is missing (404),
-  // the jpg layer will still render under it.
   const base = import.meta.env.BASE_URL || "/";
   const pngUrl = `${base}battlefields/${key}.png`;
   const jpgUrl = `${base}battlefields/${key}.jpg`;
+
+  return { key, bg, pngUrl, jpgUrl };
+}
+
+/** Same stacked `png → jpg → gradient` as `<BattleBackground />` — use when a screen needs the art without the particle layer. */
+export function getBattlefieldBackgroundStackStyle(zone?: string): Pick<
+  CSSProperties,
+  "backgroundImage" | "backgroundSize" | "backgroundPosition" | "backgroundRepeat"
+> {
+  const { bg, pngUrl, jpgUrl } = resolveBattlefieldTheme(zone);
+  return {
+    backgroundImage: `url('${pngUrl}'), url('${jpgUrl}'), ${bg.gradient}`,
+    backgroundSize: "cover, cover, cover",
+    backgroundPosition: "center, center, center",
+    backgroundRepeat: "no-repeat, no-repeat, no-repeat",
+  };
+}
+
+export function BattleBackground({ zone = "volcano", children }: Props) {
+  const { bg } = resolveBattlefieldTheme(zone);
 
   const floatingParticles = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => ({
@@ -86,12 +104,7 @@ export function BattleBackground({ zone = "volcano", children }: Props) {
     <div
       className="relative rounded-sm overflow-hidden"
       style={{
-        // Layer order matters: first is "top". We want the image on top, with the
-        // gradient as a fallback when no asset exists for a zone.
-        backgroundImage: `url('${pngUrl}'), url('${jpgUrl}'), ${bg.gradient}`,
-        backgroundSize: "cover, cover, cover",
-        backgroundPosition: "center, center, center",
-        backgroundRepeat: "no-repeat, no-repeat, no-repeat",
+        ...getBattlefieldBackgroundStackStyle(zone),
         border: "1px solid hsl(228 16% 20%)",
         boxShadow: "inset 0 0 60px hsl(0 0% 0% / 0.6), 0 4px 20px hsl(0 0% 0% / 0.4)",
         minHeight: 220,

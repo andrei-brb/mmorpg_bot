@@ -1,7 +1,9 @@
 import { Swords } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
+import { buildBattlePreviewDataFromCombat } from "@/lib/combatBattlePreviewData";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
+import BattlePreview from "@/components/BattlePreview";
 import { BattleBackground } from "@/components/game/combat/BattleBackground";
 import { CombatSkillButton } from "@/components/game/combat/CombatSkillButton";
 import { BattleFighter } from "@/components/game/combat/BattleFighter";
@@ -103,8 +105,12 @@ export type CombatEncounterViewProps = {
   opponentTurnLabel?: string;
   /**
    * `arena-duel` — Discord Arena style: twin stat panels, crossed swords, Actions + primary row, inline log.
+   * `battle-preview` — Lovable-style 3-column battlefield (portraits + tactical grid + banner); hides party fights.
    */
-  presentation?: "battlefield" | "arena-duel";
+  presentation?: "battlefield" | "arena-duel" | "battle-preview";
+  /** Optional portrait URLs for `battle-preview` (defaults: class icon + mob/boss art). */
+  battlePreviewPlayerPortraitUrl?: string;
+  battlePreviewEnemyPortraitUrl?: string;
   /** Panel title above abilities (default `Skills`; Arena uses `Actions`). */
   skillsPanelTitle?: string;
   /** Rendered full-width above the skill grid (e.g. PvP `__pvp_attack`). */
@@ -140,6 +146,8 @@ export function CombatEncounterView({
   skillsPanelTitle = "Skills",
   primaryAbilityKey,
   enemyClassDisplayName,
+  battlePreviewPlayerPortraitUrl,
+  battlePreviewEnemyPortraitUrl,
 }: CombatEncounterViewProps) {
   const [showLogModal, setShowLogModal] = useState(false);
   const classKey = state.player.class || inventory?.character?.class || "";
@@ -284,6 +292,44 @@ export function CombatEncounterView({
   const combatInProgress = state.enemy.current_hp > 0;
 
   const isArenaDuel = presentation === "arena-duel";
+  const useBattlePreview =
+    presentation === "battle-preview" &&
+    !(partyMode && state.party_players && state.party_players.length > 0);
+  const battlePreviewData = useMemo(() => {
+    if (!useBattlePreview) return null;
+    return buildBattlePreviewDataFromCombat({
+      state,
+      inventory,
+      zoneLabel,
+      battleZoneOverride,
+      enemyKey,
+      enemyKind,
+      enemyClassKey,
+      playerLevelOverride,
+      enemyLevelOverride,
+      turnBannerSeconds,
+      canAct,
+      opponentTurnLabel,
+      playerPortraitUrl: battlePreviewPlayerPortraitUrl,
+      enemyPortraitUrl: battlePreviewEnemyPortraitUrl,
+    });
+  }, [
+    useBattlePreview,
+    state,
+    inventory,
+    zoneLabel,
+    battleZoneOverride,
+    enemyKey,
+    enemyKind,
+    enemyClassKey,
+    playerLevelOverride,
+    enemyLevelOverride,
+    turnBannerSeconds,
+    canAct,
+    opponentTurnLabel,
+    battlePreviewPlayerPortraitUrl,
+    battlePreviewEnemyPortraitUrl,
+  ]);
   const abilitiesList = state.abilities || [];
   const primaryAbility =
     isArenaDuel && primaryAbilityKey ? abilitiesList.find((a) => a.key === primaryAbilityKey) : undefined;
@@ -450,6 +496,10 @@ export function CombatEncounterView({
           </div>
           </div>
         </div>
+      ) : useBattlePreview && battlePreviewData ? (
+        <div className={focusMode ? "w-full min-h-0 flex-1 flex flex-col justify-center" : "w-full max-w-6xl mx-auto"}>
+          <BattlePreview data={battlePreviewData} />
+        </div>
       ) : (
         <BattleBackground zone={battleZone}>
           <div className="p-2 space-y-2">
@@ -499,7 +549,7 @@ export function CombatEncounterView({
         </BattleBackground>
       )}
 
-      {!isArenaDuel && (
+      {!isArenaDuel && !useBattlePreview && (
         <div className="text-center">
           <span
             className="inline-block px-5 py-1.5 font-cinzel font-semibold text-sm text-primary rounded-sm"

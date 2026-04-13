@@ -1,0 +1,220 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* MMO Dark Fantasy Theme — always dark */
+  --background: oklch(0.118 0.008 260);
+  --foreground: oklch(0.92 0.01 80);
+  --card: oklch(0.155 0.01 260);
+  --card-foreground: oklch(0.92 0.01 80);
+  --popover: oklch(0.14 0.01 260);
+  --popover-foreground: oklch(0.92 0.01 80);
+  /* Gold as primary */
+  --primary: oklch(0.74 0.13 80);
+  --primary-foreground: oklch(0.12 0.01 260);
+  --secondary: oklch(0.2 0.012 260);
+  --secondary-foreground: oklch(0.88 0.01 80);
+  --muted: oklch(0.19 0.01 260);
+  --muted-foreground: oklch(0.58 0.02 80);
+  --accent: oklch(0.22 0.015 260);
+  --accent-foreground: oklch(0.74 0.13 80);
+  --destructive: oklch(0.52 0.22 25);
+  --destructive-foreground: oklch(0.92 0.01 80);
+  --border: oklch(0.28 0.025 75);
+  --input: oklch(0.22 0.01 260);
+  --ring: oklch(0.74 0.13 80);
+  --radius: 0.375rem;
+
+  /* MMO-specific tokens */
+  --gold: oklch(0.74 0.13 80);
+  --gold-dim: oklch(0.55 0.09 75);
+  --gold-bright: oklch(0.84 0.16 82);
+  --panel-bg: oklch(0.155 0.01 260);
+  --panel-border: oklch(0.32 0.04 75);
+  --enemy-red: oklch(0.52 0.22 25);
+  --boss-purple: oklch(0.52 0.18 300);
+  --safe-green: oklch(0.55 0.14 150);
+  --xp-blue: oklch(0.58 0.18 240);
+  --npc-teal: oklch(0.58 0.12 195);
+
+  --sidebar: oklch(0.14 0.01 260);
+  --sidebar-foreground: oklch(0.92 0.01 80);
+  --sidebar-primary: oklch(0.74 0.13 80);
+  --sidebar-primary-foreground: oklch(0.12 0.01 260);
+  --sidebar-accent: oklch(0.22 0.015 260);
+  --sidebar-accent-foreground: oklch(0.74 0.13 80);
+  --sidebar-border: oklch(0.28 0.025 75);
+  --sidebar-ring: oklch(0.74 0.13 80);
+}
+
+@theme inline {
+  --font-sans: 'EB Garamond', 'Georgia', serif;
+  --font-serif: 'Cinzel', 'Times New Roman', serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+
+  --color-gold: var(--gold);
+  --color-gold-dim: var(--gold-dim);
+  --color-gold-bright: var(--gold-bright);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-border: var(--panel-border);
+  --color-enemy-red: var(--enemy-red);
+  --color-boss-purple: var(--boss-purple);
+  --color-safe-green: var(--safe-green);
+  --color-xp-blue: var(--xp-blue);
+  --color-npc-teal: var(--npc-teal);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* MMO animations */
+@keyframes cooldown-drain {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: 226; }
+}
+@keyframes result-slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes result-line {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.74 0.13 80 / 0.5); }
+  50%       { box-shadow: 0 0 0 6px oklch(0.74 0.13 80 / 0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes float-icon {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
+.animate-result-in {
+  animation: result-slide-in 0.45s ease both;
+}
+.animate-result-line {
+  animation: result-line 0.3s ease both;
+}
+.animate-pulse-gold {
+  animation: pulse-gold 2s infinite;
+}
+.animate-float {
+  animation: float-icon 3s ease-in-out infinite;
+}
+.gold-shimmer {
+  background: linear-gradient(90deg, oklch(0.74 0.13 80), oklch(0.88 0.18 82), oklch(0.74 0.13 80));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
+.panel-inset {
+  box-shadow: inset 0 1px 0 oklch(0.74 0.13 80 / 0.15), inset 0 -1px 0 oklch(0 0 0 / 0.4);
+}
+.border-gold-dim {
+  border-color: var(--gold-dim);
+}
+.divider-gold {
+  border-color: oklch(0.74 0.13 80 / 0.25);
+}
+/* Cinematic reveals */
+@keyframes backdrop-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes silhouette-enter {
+  from { opacity: 0; transform: scale(0.85) translateY(20px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes text-reveal-staggered {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes particle-burst {
+  0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); }
+}
+@keyframes glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 12px currentColor); }
+  50%       { filter: drop-shadow(0 0 20px currentColor); }
+}
+@keyframes parallax-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes zone-bg-fade {
+  from { opacity: 0; }
+  to   { opacity: 0.25; }
+}
+.animate-backdrop {
+  animation: backdrop-fade 0.15s ease-out;
+}
+.animate-silhouette {
+  animation: silhouette-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.animate-text-reveal {
+  animation: text-reveal-staggered 0.4s ease-out forwards;
+}
+.animate-particle {
+  animation: particle-burst 0.8s ease-out forwards;
+}
+.animate-glow {
+  animation: glow-pulse 1.5s ease-in-out infinite;
+}
+.animate-parallax {
+  animation: parallax-float 4s ease-in-out infinite;
+}
+.zone-bg-reveal {
+  animation: zone-bg-fade 0.5s ease-out forwards;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

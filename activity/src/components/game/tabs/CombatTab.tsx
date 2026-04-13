@@ -311,6 +311,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           showDiscordDungeonBanner={Boolean(state.in_dungeon)}
           enemyKey={activeEnemy?.key || undefined}
           enemyKind={activeEnemy?.kind || undefined}
+          presentation="battle-preview"
         />
       </div>
     );
