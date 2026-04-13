@@ -544,12 +544,6 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
   if (phase === "fight" && combatState && run) {
     return (
       <CombatEncounterView
-        dungeonHeader={{
-          emoji: run.dungeon.emoji,
-          name: run.dungeon.name,
-          floor: run.floor,
-          totalFloors: run.dungeon.floors,
-        }}
         battleZoneOverride="dungeon"
         combatSessionId={
           combatState.dungeon_key && combatState.dungeon_floor != null

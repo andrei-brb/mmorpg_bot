@@ -298,19 +298,10 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         }
       >
         {showSubModeToggle && modeSegment}
-        <div className="game-panel flex items-center justify-between py-2">
-          <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
-            {zoneLabel?.emoji} {zoneLabel?.name ?? "Zone"}
-          </span>
-          <span className="text-xs text-primary font-pixel" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.3)" }}>
-            Turn {state.turn}
-          </span>
-        </div>
         <CombatEncounterView
           focusMode={focusMode}
           zoneLabel={zoneLabel}
           battleZoneOverride={map?.current_zone}
-          topBar={null}
           state={state}
           inventory={inventory}
           loading={loading}

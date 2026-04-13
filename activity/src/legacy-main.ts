@@ -585,22 +585,6 @@ function formatCombatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-/** Optional UI context for zone bar (Step 3 layout). */
-type CombatUiMeta = {
-  guildId?: string;
-  channelId?: string;
-  /** Zone bar title until travel API provides a name */
-  zoneLabel?: string;
-};
-
-function formatZoneMetaIds(m?: CombatUiMeta): string {
-  if (!m) return "";
-  const parts: string[] = [];
-  if (m.guildId) parts.push(`Guild ${m.guildId}`);
-  if (m.channelId) parts.push(`Channel ${m.channelId}`);
-  return parts.join(" · ");
-}
-
 /** Matches Discord combat labels — warriors use Rage, not mana. */
 function resourceUiLabel(resType: string): string {
   const t = (resType || "").toLowerCase();
@@ -625,7 +609,7 @@ function resourceCostLabel(costType: string, cost: number): string {
  * Step 4: stats row + turn banner + richer placeholder party labels.
  * Skills sit under the battlefield; dungeon “Allies” column has no duplicate hero.
  */
-function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string {
+function renderCombatState(state: CombatStatePayload): string {
   const php = state.player.max_hp ? (100 * state.player.current_hp) / state.player.max_hp : 0;
   const ehp = state.enemy.max_hp ? (100 * state.enemy.current_hp) / state.enemy.max_hp : 0;
   const resLine =
@@ -669,10 +653,6 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
       `<button type="button" class="skill-btn alt" data-action="potion">🧪 Potion</button>`
     : "";
 
-  const zoneTitle = ui?.zoneLabel?.trim() ? ui.zoneLabel : "🌲 Current battle";
-  const metaIds = formatZoneMetaIds(ui);
-  const metaHtml = metaIds ? `<span class="combat-zone-bar__meta">${escapeHtml(metaIds)}</span>` : "";
-
   /** Dungeon-only: ally column (no duplicate hero — you’re already on the battlefield above). */
   const showPartyUi = Boolean(state.in_dungeon);
 
@@ -714,16 +694,6 @@ function renderCombatState(state: CombatStatePayload, ui?: CombatUiMeta): string
 
   return `
     <div class="combat-compact">
-    <div class="combat-zone-bar">
-      <div class="combat-zone-bar__left">
-        <span class="combat-zone-bar__title">${escapeHtml(zoneTitle)}</span>
-        <span class="combat-zone-bar__sub">Turn-based · same rules as <code>/fight</code></span>
-      </div>
-      <div class="combat-zone-bar__right">
-        <span class="combat-zone-bar__turn">Turn ${state.turn}</span>
-        ${metaHtml}
-      </div>
-    </div>
     <div class="scene-wrap">
       <div class="scene">
         <div class="bg-layer"></div>
@@ -884,13 +854,6 @@ function mountApp(
 
   const guildId = meta.guildId ?? undefined;
   const who = payload.discord?.global_name || payload.discord?.username || "Traveler";
-
-  function combatUiMeta(): CombatUiMeta {
-    return {
-      guildId: meta.guildId,
-      channelId: meta.channelId,
-    };
-  }
 
   /** Latest inventory snapshot; updated after combat when loot/gold/bag may change */
   let currentPayload: InventoryPayload = payload;
@@ -1422,7 +1385,7 @@ function mountApp(
       const enJson = (await enRes.json()) as { enemies?: CombatEnemy[] };
 
       if (stJson.active && stJson.state) {
-        host.innerHTML = renderCombatState(stJson.state, combatUiMeta());
+        host.innerHTML = renderCombatState(stJson.state);
         wireCombatActions(host);
         return;
       }
@@ -1445,7 +1408,7 @@ function mountApp(
         };
 
         if ((startRes.status === 200 || startRes.status === 409) && startJson.state) {
-          host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
+          host.innerHTML = renderCombatState(startJson.state);
           wireCombatActions(host);
           return;
         }
@@ -1510,7 +1473,7 @@ function mountApp(
           };
 
           if (startRes.status === 409 && startJson.state) {
-            host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
+            host.innerHTML = renderCombatState(startJson.state);
             wireCombatActions(host);
             return;
           }
@@ -1522,7 +1485,7 @@ function mountApp(
           }
 
           if (startJson.state) {
-            host.innerHTML = renderCombatState(startJson.state, combatUiMeta());
+            host.innerHTML = renderCombatState(startJson.state);
             wireCombatActions(host);
             return;
           }
@@ -1586,7 +1549,7 @@ function mountApp(
     }
 
     if (json.state) {
-      host.innerHTML = renderCombatState(json.state, combatUiMeta());
+      host.innerHTML = renderCombatState(json.state);
       wireCombatActions(host);
     }
   }

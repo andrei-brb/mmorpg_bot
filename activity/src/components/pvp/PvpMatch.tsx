@@ -17,24 +17,8 @@ export function PvpMatch({ match, onAction }: PvpMatchProps) {
   const { inventory } = useGameSession();
   const state = useMemo(() => pvpMatchToCombatState(match), [match]);
 
-  /** Same chrome as Combat tab zone row (see CombatEncounterView default header). */
-  const topBar = useMemo(
-    () => (
-      <div className="game-panel py-2 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
-          ⚔️ Arena · {match.mode === "ranked" ? "Ranked" : "Casual"}
-        </span>
-        <span className="text-xs text-primary font-pixel" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.3)" }}>
-          Turn {state.turn}
-        </span>
-      </div>
-    ),
-    [match.mode, state.turn],
-  );
-
   return (
     <CombatEncounterView
-      topBar={topBar}
       battleZoneOverride="volcano"
       combatSessionId={match.match_id}
       enemyClassKey={slugClass(match.opponent.class)}

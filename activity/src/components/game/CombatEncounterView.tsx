@@ -82,12 +82,7 @@ export type CombatEncounterViewProps = {
   onPotion: () => void;
   /** Discord /dungeon DB run — show party placeholders */
   showDiscordDungeonBanner?: boolean;
-  /** Activity Dungeon tab — custom header (zone bar replaced) */
-  dungeonHeader?: { emoji: string; name: string; floor: number; totalFloors: number };
-  /**
-   * Replaces the zone/dungeon top bar when set (e.g. Arena header).
-   * Pass `null` to hide the bar entirely (e.g. parent renders zone/turn above this view).
-   */
+  /** Optional custom chrome above the encounter (default: none). */
   topBar?: ReactNode | null;
   /** Overrides BattleBackground zone when `zoneLabel` is missing (e.g. `"dungeon"`). */
   battleZoneOverride?: string;
@@ -133,7 +128,6 @@ export function CombatEncounterView({
   onFlee,
   onPotion,
   showDiscordDungeonBanner,
-  dungeonHeader,
   topBar,
   battleZoneOverride,
   enemyClassKey,
@@ -355,27 +349,7 @@ export function CombatEncounterView({
 
   return (
     <div className={focusMode ? "flex h-full min-h-0 flex-col gap-2 sm:gap-3" : "space-y-4"}>
-      {topBar === null ? null : topBar != null ? (
-        topBar
-      ) : dungeonHeader ? (
-        <div className="game-panel flex items-center justify-between py-2">
-          <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
-            {dungeonHeader.emoji} {dungeonHeader.name}
-          </span>
-          <span className="text-xs text-primary font-pixel" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.3)" }}>
-            Floor {dungeonHeader.floor}/{dungeonHeader.totalFloors} · Turn {state.turn}
-          </span>
-        </div>
-      ) : (
-        <div className="game-panel flex items-center justify-between py-2">
-          <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
-            {zoneLabel?.emoji} {zoneLabel?.name ?? "Zone"}
-          </span>
-          <span className="text-xs text-primary font-pixel" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.3)" }}>
-            Turn {state.turn}
-          </span>
-        </div>
-      )}
+      {topBar != null ? topBar : null}
 
       {showDiscordDungeonBanner && (
         <div
