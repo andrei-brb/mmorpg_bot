@@ -84,8 +84,11 @@ export type CombatEncounterViewProps = {
   showDiscordDungeonBanner?: boolean;
   /** Activity Dungeon tab — custom header (zone bar replaced) */
   dungeonHeader?: { emoji: string; name: string; floor: number; totalFloors: number };
-  /** Replaces the zone/dungeon top bar when set (e.g. Arena header). */
-  topBar?: ReactNode;
+  /**
+   * Replaces the zone/dungeon top bar when set (e.g. Arena header).
+   * Pass `null` to hide the bar entirely (e.g. parent renders zone/turn above this view).
+   */
+  topBar?: ReactNode | null;
   /** Overrides BattleBackground zone when `zoneLabel` is missing (e.g. `"dungeon"`). */
   battleZoneOverride?: string;
   /** Class key for opponent portrait in 1v1 (e.g. PvP). */
@@ -352,7 +355,7 @@ export function CombatEncounterView({
 
   return (
     <div className={focusMode ? "flex h-full min-h-0 flex-col gap-2 sm:gap-3" : "space-y-4"}>
-      {topBar != null ? (
+      {topBar === null ? null : topBar != null ? (
         topBar
       ) : dungeonHeader ? (
         <div className="game-panel flex items-center justify-between py-2">
