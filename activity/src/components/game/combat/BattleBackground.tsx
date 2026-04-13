@@ -68,8 +68,9 @@ export function BattleBackground({ zone = "volcano", children }: Props) {
 
   // Support both .png and .jpg assets (png preferred). If the png is missing (404),
   // the jpg layer will still render under it.
-  const pngUrl = `/battlefields/${key}.png`;
-  const jpgUrl = `/battlefields/${key}.jpg`;
+  const base = import.meta.env.BASE_URL || "/";
+  const pngUrl = `${base}battlefields/${key}.png`;
+  const jpgUrl = `${base}battlefields/${key}.jpg`;
 
   const floatingParticles = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => ({
@@ -85,7 +86,9 @@ export function BattleBackground({ zone = "volcano", children }: Props) {
     <div
       className="relative rounded-sm overflow-hidden"
       style={{
-        backgroundImage: `${bg.gradient}, url('${pngUrl}'), url('${jpgUrl}')`,
+        // Layer order matters: first is "top". We want the image on top, with the
+        // gradient as a fallback when no asset exists for a zone.
+        backgroundImage: `url('${pngUrl}'), url('${jpgUrl}'), ${bg.gradient}`,
         backgroundSize: "cover, cover, cover",
         backgroundPosition: "center, center, center",
         backgroundRepeat: "no-repeat, no-repeat, no-repeat",
