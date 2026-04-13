@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { getBattlefieldBackgroundStackStyle } from "@/components/game/combat/BattleBackground";
 
@@ -38,6 +38,54 @@ export interface BattlePreviewData {
   units?: GridUnit[];
   buttonLabel?: string;
   onCommence?: () => void;
+}
+
+function SafePortraitImage({
+  src,
+  alt,
+  className,
+  fallbackCandidates,
+}: {
+  src: string;
+  alt: string;
+  className: string;
+  fallbackCandidates: string[];
+}) {
+  const sourceChain = React.useMemo(
+    () => [src, ...fallbackCandidates].filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i),
+    [src, fallbackCandidates],
+  );
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [sourceChain]);
+
+  return (
+    <img
+      src={sourceChain[activeIndex]}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => {
+        setActiveIndex((prev) => (prev < sourceChain.length - 1 ? prev + 1 : prev));
+      }}
+    />
+  );
+}
+
+function deriveFallbackCandidates(src: string, placeholder: string): string[] {
+  const lower = src.toLowerCase();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+    return [src.replace(/\.(jpe?g)$/iu, ".png"), src.replace(/\.(jpe?g)$/iu, ".webp"), placeholder];
+  }
+  if (lower.endsWith(".png")) {
+    return [src.replace(/\.png$/iu, ".jpg"), src.replace(/\.png$/iu, ".webp"), placeholder];
+  }
+  if (lower.endsWith(".webp")) {
+    return [src.replace(/\.webp$/iu, ".jpg"), src.replace(/\.webp$/iu, ".png"), placeholder];
+  }
+  return [placeholder];
 }
 
 /* ── HP helpers ── */
@@ -275,6 +323,8 @@ export default function BattlePreview({
   /** When set, replaces the decorative tactical grid (e.g. skill + potion buttons). */
   combatGrid?: ReactNode;
 }) {
+  const base = import.meta.env.BASE_URL || "/";
+  const portraitPlaceholder = `${base}placeholder.svg`;
   const bgLayerStyle = data.battlefieldZoneKey
     ? getBattlefieldBackgroundStackStyle(data.battlefieldZoneKey)
     : {
@@ -311,11 +361,11 @@ export default function BattlePreview({
                 "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
               )}
             >
-              <img
+              <SafePortraitImage
                 src={data.player.portraitUrl}
                 alt={data.player.name}
                 className="h-full w-full object-cover object-[center_18%]"
-                loading="lazy"
+                fallbackCandidates={deriveFallbackCandidates(data.player.portraitUrl, portraitPlaceholder)}
               />
               <div
                 className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/50 to-transparent"
@@ -341,11 +391,11 @@ export default function BattlePreview({
                 "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
               )}
             >
-              <img
+              <SafePortraitImage
                 src={data.enemy.portraitUrl}
                 alt={data.enemy.name}
                 className="h-full w-full object-cover object-[center_18%]"
-                loading="lazy"
+                fallbackCandidates={deriveFallbackCandidates(data.enemy.portraitUrl, portraitPlaceholder)}
               />
               <div
                 className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/50 to-transparent"
