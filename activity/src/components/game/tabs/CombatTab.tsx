@@ -289,6 +289,16 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   // Fighting screen — same combat engine as Discord /fight (real skills + stats)
   if (mode === "fight" && state) {
+    const topBar = (
+      <div className="game-panel py-2 flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-cinzel tracking-wider">
+          {zoneLabel?.emoji} {zoneLabel?.name ?? "Zone"}
+        </span>
+        <span className="text-xs text-primary font-pixel" style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.3)" }}>
+          Turn {state.turn}
+        </span>
+      </div>
+    );
     return (
       <div
         className={
@@ -302,6 +312,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           focusMode={focusMode}
           zoneLabel={zoneLabel}
           battleZoneOverride={map?.current_zone}
+          topBar={topBar}
           state={state}
           inventory={inventory}
           loading={loading}
