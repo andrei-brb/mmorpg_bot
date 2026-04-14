@@ -75,6 +75,8 @@ export interface BattlePreviewData {
   buttonLabel?: string;
   /** Overrides `buttonLabel` for the center button text when both are set in demos. */
   centerActionLabel?: string;
+  /** Small line above the skill grid (e.g. “Your Turn — 8s”) while the button stays “Combat History”. */
+  centerStatusLine?: string;
   onCommence?: () => void;
   /** Optional mock / preview skills (used when `combatGrid` is not passed). */
   playerSkills?: Skill[];
@@ -227,11 +229,12 @@ function LevelBadge({ level }: { level?: number }) {
   if (level == null) return null;
   return (
     <div
-      className="absolute left-2 top-2 z-20 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      className="absolute left-2 top-2 z-20 flex h-9 min-w-[2.25rem] items-center justify-center rounded-full border px-1.5 text-[9px] font-bold tabular-nums leading-none"
       style={{
-        background: "rgba(10, 10, 14, 0.72)",
-        borderColor: "rgba(234, 179, 8, 0.5)",
+        background: "linear-gradient(145deg, rgba(30,22,12,0.95) 0%, rgba(12,10,8,0.98) 100%)",
+        borderColor: "rgba(234, 179, 8, 0.55)",
         color: "#fde68a",
+        boxShadow: "0 0 10px rgba(234, 179, 8, 0.2), inset 0 1px 0 rgba(255,255,255,0.08)",
       }}
     >
       Lv.{level}
@@ -242,14 +245,16 @@ function LevelBadge({ level }: { level?: number }) {
 function BossOverlay({ title }: { title?: string }) {
   return (
     <div
-      className="absolute right-2 top-2 z-20 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      className="absolute right-2 top-2 z-20 flex items-center justify-center rounded-full border p-1.5 text-sm leading-none"
       style={{
-        background: "rgba(69, 10, 10, 0.78)",
-        borderColor: "rgba(248, 113, 113, 0.55)",
-        color: "#fecaca",
+        background: "rgba(10, 10, 14, 0.75)",
+        borderColor: "rgba(248, 250, 252, 0.45)",
+        color: "#f8fafc",
+        boxShadow: "0 0 12px rgba(239, 68, 68, 0.35)",
       }}
+      title={title || "Boss"}
     >
-      💀 {title || "Boss"}
+      💀
     </div>
   );
 }
@@ -372,7 +377,7 @@ function StatPanel({ character }: { character: CharacterData }) {
       <PanelOrnament className="absolute bottom-0 right-0 scale-[-1]" />
 
       <div className="mb-1 flex flex-wrap items-center gap-2">
-        {character.element && !character.isBoss && (
+        {character.element && (
           <span className="text-sm" title={character.element}>
             {ELEMENT_THEME[character.element].icon}
           </span>
@@ -411,7 +416,7 @@ function StatPanel({ character }: { character: CharacterData }) {
       </div>
       {(character.class || character.title) && (
         <p className="mb-1 text-[10px] uppercase tracking-wider text-amber-200/70">
-          {[character.class, character.title].filter(Boolean).join(" · ")}
+          {[character.class, character.title].filter(Boolean).join(" — ")}
         </p>
       )}
 
@@ -901,6 +906,7 @@ export default function BattlePreview({
     ));
 
   const centerButtonLabel = data.centerActionLabel ?? data.buttonLabel ?? "⚔️ Combat History";
+  const centerStatusLine = data.centerStatusLine?.trim();
   const showRpgPanel =
     data.showRpgPanel === true ||
     (data.showRpgPanel !== false && ((data.items?.length ?? 0) > 0 || (data.buffs?.length ?? 0) > 0));
@@ -943,8 +949,8 @@ export default function BattlePreview({
                 <SafePortraitImage
                   src={data.player.portraitUrl}
                   alt={data.player.name}
-                  className="relative z-10 h-full w-full object-cover object-[center_18%]"
-                  style={{ animation: "portrait-breathe 3s ease-in-out infinite" }}
+                  className="relative z-10 h-full w-full object-contain"
+                  style={{ animation: "portrait-breathe 3s ease-in-out infinite", objectPosition: "center bottom" }}
                   fallbackCandidates={deriveFallbackCandidates(data.player.portraitUrl, portraitPlaceholder)}
                 />
                 <LevelBadge level={data.player.level} />
@@ -961,6 +967,14 @@ export default function BattlePreview({
 
           <div className="z-20 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-visible px-2 py-2 sm:px-4">
             <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-visible">
+              {centerStatusLine ? (
+                <div
+                  className="max-w-full truncate px-2 text-center text-[10px] font-semibold uppercase tracking-wider"
+                  style={{ color: "#d4c4a8", textShadow: "0 1px 2px rgba(0,0,0,0.75)" }}
+                >
+                  {centerStatusLine}
+                </div>
+              ) : null}
               <div className="flex w-full justify-center overflow-visible">{centerGrid}</div>
             </div>
             {data.onCommence ? (
@@ -980,7 +994,7 @@ export default function BattlePreview({
               </button>
             ) : (
               <div
-                className="mt-1 shrink-0 rounded px-4 py-1.5 text-center text-xs font-bold uppercase tracking-wider pointer-events-none opacity-95"
+                className="mt-1 shrink-0 rounded px-4 py-1.5 text-center text-xs font-bold uppercase tracking-wider opacity-95"
                 style={{
                   background: "linear-gradient(135deg, #991b1b 0%, #dc2626 50%, #991b1b 100%)",
                   color: "#fde8e8",
@@ -1012,8 +1026,8 @@ export default function BattlePreview({
                 <SafePortraitImage
                   src={data.enemy.portraitUrl}
                   alt={data.enemy.name}
-                  className="relative z-10 h-full w-full object-cover object-[center_18%]"
-                  style={{ animation: "portrait-breathe 3s ease-in-out infinite" }}
+                  className="relative z-10 h-full w-full object-contain"
+                  style={{ animation: "portrait-breathe 3s ease-in-out infinite", objectPosition: "center bottom" }}
                   fallbackCandidates={deriveFallbackCandidates(data.enemy.portraitUrl, portraitPlaceholder)}
                 />
                 <LevelBadge level={data.enemy.level} />

@@ -479,7 +479,10 @@ export function CombatEncounterView({
       ) : useBattlePreview && battlePreviewData ? (
         <div className={focusMode ? "flex w-full min-h-0 flex-1 flex-col justify-center" : "mx-auto w-full max-w-6xl"}>
           <BattlePreview
-            data={battlePreviewData}
+            data={{
+              ...battlePreviewData,
+              onCommence: () => setShowLogModal(true),
+            }}
             combatGrid={
               <BattlefieldSkillGrid
                 abilities={gridAbilities}

@@ -65,11 +65,23 @@ export function BattlefieldSkillGrid({
         <div
           key={i}
           className={cn(
-            "aspect-square min-h-0 rounded-sm border transition-all duration-300",
+            "aspect-square min-h-0 overflow-hidden rounded-sm border transition-all duration-300",
             cell.kind === "empty"
-              ? "border-[rgba(100,80,120,0.3)] bg-[rgba(40,30,50,0.4)]"
-              : "border-[rgba(200,60,60,0.45)] bg-[rgba(180,40,40,0.22)] shadow-[inset_0_0_8px_rgba(200,60,60,0.12)]",
+              ? "border-[rgba(80,120,180,0.22)] shadow-[inset_0_0_12px_rgba(40,80,140,0.08)]"
+              : "border-[rgba(200,60,60,0.35)] bg-[rgba(18,14,22,0.35)] shadow-[inset_0_0_10px_rgba(200,60,60,0.08)]",
           )}
+          style={
+            cell.kind === "empty"
+              ? {
+                  backgroundColor: "rgba(25,18,35,0.45)",
+                  backgroundImage: [
+                    "linear-gradient(rgba(80,140,220,0.07) 1px, transparent 1px)",
+                    "linear-gradient(90deg, rgba(80,140,220,0.07) 1px, transparent 1px)",
+                  ].join(", "),
+                  backgroundSize: "10px 10px",
+                }
+              : undefined
+          }
         >
           {cell.kind === "ability" ? (
             <CombatSkillGridButton
