@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { GameSessionProvider } from "@/context/GameSessionContext";
 import { ActivityGate } from "@/components/ActivityGate";
 import Index from "./pages/Index.tsx";
+import BattlePreviewDemo from "./pages/BattlePreviewDemo.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const App = () => (
@@ -16,6 +17,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/battle-preview-demo" element={<BattlePreviewDemo />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
