@@ -87,6 +87,8 @@ export function buildBattlePreviewDataFromCombat(args: {
     enemyKey,
     enemyKind,
     enemyClassKey,
+    playerLevelOverride,
+    enemyLevelOverride,
     turnBannerSeconds,
     canAct,
     opponentTurnLabel,
@@ -96,6 +98,8 @@ export function buildBattlePreviewDataFromCombat(args: {
 
   const battleZone = battleZoneOverride ?? zoneLabel?.key ?? "volcano";
   const classKey = state.player.class || inventory?.character?.class || "";
+  const playerLevel = playerLevelOverride ?? inventory?.character?.level;
+  const enemyLevel = enemyLevelOverride ?? zoneLabel?.level_max ?? zoneLabel?.level_min;
   const base = import.meta.env.BASE_URL || "/";
 
   const playerPortrait =
@@ -124,11 +128,17 @@ export function buildBattlePreviewDataFromCombat(args: {
     player: {
       name: state.player.name,
       portraitUrl: playerPortrait,
+      level: playerLevel,
+      class: classKey || undefined,
       stats: buildPlayerStats(state, abilities),
     },
     enemy: {
       name: state.enemy.name,
       portraitUrl: enemyPortrait,
+      level: enemyLevel,
+      class: enemyClassKey || undefined,
+      isBoss: enemyKind === "boss",
+      title: enemyKind === "boss" ? "Boss" : undefined,
       stats: buildEnemyStats(state),
     },
   };

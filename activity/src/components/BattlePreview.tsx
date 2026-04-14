@@ -11,6 +11,11 @@ export interface CharacterData {
   name: string;
   portraitUrl: string;
   stats: CharacterStat[];
+  level?: number;
+  class?: string;
+  title?: string;
+  element?: "fire" | "ice" | "lightning" | "earth" | "dark" | "light";
+  isBoss?: boolean;
   weakness?: string;
   indicators?: string[];
 }
@@ -88,6 +93,103 @@ function deriveFallbackCandidates(src: string, placeholder: string): string[] {
   return [placeholder];
 }
 
+type AuraTheme = {
+  glow: string;
+  icon: string;
+  ring: string;
+};
+
+const ELEMENT_AURAS: Record<NonNullable<CharacterData["element"]>, AuraTheme> = {
+  fire: { glow: "rgba(251, 146, 60, 0.65)", icon: "🔥", ring: "rgba(251, 146, 60, 0.55)" },
+  ice: { glow: "rgba(96, 165, 250, 0.65)", icon: "❄️", ring: "rgba(96, 165, 250, 0.55)" },
+  lightning: { glow: "rgba(168, 85, 247, 0.65)", icon: "⚡", ring: "rgba(168, 85, 247, 0.55)" },
+  earth: { glow: "rgba(74, 222, 128, 0.6)", icon: "🌿", ring: "rgba(74, 222, 128, 0.5)" },
+  dark: { glow: "rgba(91, 33, 182, 0.7)", icon: "💀", ring: "rgba(91, 33, 182, 0.55)" },
+  light: { glow: "rgba(250, 204, 21, 0.65)", icon: "✨", ring: "rgba(250, 204, 21, 0.55)" },
+};
+
+function getAuraTheme(character: CharacterData): AuraTheme {
+  if (character.isBoss) {
+    return { glow: "rgba(239, 68, 68, 0.75)", icon: "💀", ring: "rgba(239, 68, 68, 0.6)" };
+  }
+  if (character.element && ELEMENT_AURAS[character.element]) return ELEMENT_AURAS[character.element];
+  return { glow: "rgba(250, 204, 21, 0.6)", icon: "✨", ring: "rgba(250, 204, 21, 0.45)" };
+}
+
+function EmberParticles({ tint }: { tint: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {[8, 21, 36, 52, 69, 83].map((left, i) => (
+        <span
+          key={`${left}-${i}`}
+          className="absolute bottom-2 h-1.5 w-1.5 rounded-full animate-pulse"
+          style={{
+            left: `${left}%`,
+            background: tint,
+            opacity: 0.55,
+            boxShadow: `0 0 10px ${tint}`,
+            transform: `translateY(-${(i % 3) * 8}px)`,
+            animationDelay: `${i * 120}ms`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LevelBadge({ level }: { level?: number }) {
+  if (level == null) return null;
+  return (
+    <div
+      className="absolute left-2 top-2 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      style={{
+        background: "rgba(10, 10, 14, 0.72)",
+        borderColor: "rgba(234, 179, 8, 0.5)",
+        color: "#fde68a",
+      }}
+    >
+      Lv.{level}
+    </div>
+  );
+}
+
+function BossOverlay({ title }: { title?: string }) {
+  return (
+    <div
+      className="absolute right-2 top-2 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      style={{
+        background: "rgba(69, 10, 10, 0.78)",
+        borderColor: "rgba(248, 113, 113, 0.55)",
+        color: "#fecaca",
+      }}
+    >
+      💀 {title || "Boss"}
+    </div>
+  );
+}
+
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(value);
+
+  useEffect(() => {
+    const start = performance.now();
+    const from = Math.max(0, Math.round(value * 0.4));
+    let frame = 0;
+
+    const tick = (ts: number) => {
+      const progress = Math.min(1, (ts - start) / 650);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(from + (value - from) * eased));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <>{display}</>;
+}
+
 /* ── HP helpers ── */
 function parseHp(val: string | number): { current: number; max: number } | null {
   const m = String(val).match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -149,6 +251,11 @@ function StatPanel({ character }: { character: CharacterData }) {
         >
           {character.name}
         </h3>
+        {character.element && !character.isBoss && (
+          <span className="rounded-sm border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-100/95">
+            {ELEMENT_AURAS[character.element].icon}
+          </span>
+        )}
         {character.weakness && (
           <span
             className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
@@ -175,6 +282,11 @@ function StatPanel({ character }: { character: CharacterData }) {
           </span>
         ))}
       </div>
+      {(character.class || character.title) && (
+        <p className="mb-1 text-[10px] uppercase tracking-wider text-amber-200/70">
+          {[character.class, character.title].filter(Boolean).join(" · ")}
+        </p>
+      )}
 
       <div className="mb-1 h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(180,150,80,0.4), transparent)" }} />
 
@@ -188,7 +300,11 @@ function StatPanel({ character }: { character: CharacterData }) {
                   {stat.label}
                 </span>
                 <span className={cn("font-bold tabular-nums", hp ? "text-sm" : "text-xs")} style={{ color: "#e0d6c2" }}>
-                  {hp ? `${hp.current} / ${hp.max}` : String(stat.value)}
+                  {hp
+                    ? `${hp.current} / ${hp.max}`
+                    : typeof stat.value === "number"
+                      ? <AnimatedNumber value={stat.value} />
+                      : String(stat.value)}
                 </span>
               </div>
               {hp && <HpBar current={hp.current} max={hp.max} />}
@@ -325,6 +441,8 @@ export default function BattlePreview({
 }) {
   const base = import.meta.env.BASE_URL || "/";
   const portraitPlaceholder = `${base}placeholder.svg`;
+  const playerAura = getAuraTheme(data.player);
+  const enemyAura = getAuraTheme(data.enemy);
   const bgLayerStyle = data.battlefieldZoneKey
     ? getBattlefieldBackgroundStackStyle(data.battlefieldZoneKey)
     : {
@@ -360,13 +478,18 @@ export default function BattlePreview({
                 "relative aspect-[3/4] max-h-[85%] w-[min(92%,280px)] overflow-hidden rounded-sm",
                 "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
               )}
+              style={{ boxShadow: `0 0 0 1px ${playerAura.ring}, 0 0 26px ${playerAura.glow}, 0 12px 40px -8px rgba(0,0,0,0.85)` }}
             >
+              <div className="pointer-events-none absolute inset-0 animate-pulse" style={{ boxShadow: `inset 0 0 40px ${playerAura.glow}` }} />
               <SafePortraitImage
                 src={data.player.portraitUrl}
                 alt={data.player.name}
                 className="h-full w-full object-cover object-[center_18%]"
                 fallbackCandidates={deriveFallbackCandidates(data.player.portraitUrl, portraitPlaceholder)}
               />
+              <LevelBadge level={data.player.level} />
+              <div className="absolute right-2 top-2 rounded-sm bg-black/45 px-1.5 py-0.5 text-xs">{playerAura.icon}</div>
+              <EmberParticles tint={playerAura.glow} />
               <div
                 className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/50 to-transparent"
                 aria-hidden
@@ -390,13 +513,22 @@ export default function BattlePreview({
                 "relative aspect-[3/4] max-h-[85%] w-[min(92%,280px)] overflow-hidden rounded-sm",
                 "shadow-[0_12px_40px_-8px_rgba(0,0,0,0.85)]",
               )}
+              style={{ boxShadow: `0 0 0 1px ${enemyAura.ring}, 0 0 26px ${enemyAura.glow}, 0 12px 40px -8px rgba(0,0,0,0.85)` }}
             >
+              <div className="pointer-events-none absolute inset-0 animate-pulse" style={{ boxShadow: `inset 0 0 40px ${enemyAura.glow}` }} />
               <SafePortraitImage
                 src={data.enemy.portraitUrl}
                 alt={data.enemy.name}
                 className="h-full w-full object-cover object-[center_18%]"
                 fallbackCandidates={deriveFallbackCandidates(data.enemy.portraitUrl, portraitPlaceholder)}
               />
+              <LevelBadge level={data.enemy.level} />
+              {data.enemy.isBoss ? (
+                <BossOverlay title={data.enemy.title} />
+              ) : (
+                <div className="absolute right-2 top-2 rounded-sm bg-black/45 px-1.5 py-0.5 text-xs">{enemyAura.icon}</div>
+              )}
+              <EmberParticles tint={enemyAura.glow} />
               <div
                 className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/50 to-transparent"
                 aria-hidden
