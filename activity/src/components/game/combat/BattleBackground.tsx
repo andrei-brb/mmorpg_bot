@@ -110,6 +110,27 @@ export function BattleBackground({ zone = "volcano", children }: Props) {
         minHeight: 220,
       }}
     >
+      {/* Cinematic overlays — vignette + haze for a more "game" look */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{
+          backgroundImage: [
+            "radial-gradient(ellipse at 50% 30%, hsl(0 0% 100% / 0.06) 0%, transparent 55%)",
+            "radial-gradient(ellipse at 50% 80%, hsl(0 0% 0% / 0.55) 0%, transparent 55%)",
+            "radial-gradient(ellipse at 50% 50%, transparent 40%, hsl(0 0% 0% / 0.75) 100%)",
+            "linear-gradient(180deg, hsl(228 28% 4% / 0.35) 0%, transparent 40%, hsl(228 28% 4% / 0.55) 100%)",
+          ].join(", "),
+          mixBlendMode: "multiply",
+        }}
+      />
+      <div
+        className="absolute inset-0 pointer-events-none z-0 opacity-40"
+        style={{
+          backgroundImage:
+            "linear-gradient(135deg, transparent 0%, hsl(43 78% 50% / 0.06) 50%, transparent 100%)",
+        }}
+      />
+
       {/* Particle layer */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         {floatingParticles.map((p) => (
