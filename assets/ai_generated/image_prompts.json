@@ -1,0 +1,542 @@
+{
+  "enemies": [
+    {
+      "key": "forest_wolf",
+      "kind": "mob",
+      "display_name": "Forest Wolf",
+      "filename": "enemy_mob_forest_wolf.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Forest Wolf. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "kobold",
+      "kind": "mob",
+      "display_name": "Kobold",
+      "filename": "enemy_mob_kobold.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Kobold. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "defias_bandit",
+      "kind": "mob",
+      "display_name": "Defias Bandit",
+      "filename": "enemy_mob_defias_bandit.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Defias Bandit. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "young_boar",
+      "kind": "mob",
+      "display_name": "Young Boar",
+      "filename": "enemy_mob_young_boar.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Young Boar. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "goldshire_guard",
+      "kind": "mob",
+      "display_name": "Corrupted Guard",
+      "filename": "enemy_mob_goldshire_guard.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Corrupted Guard. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "spider",
+      "kind": "mob",
+      "display_name": "Giant Spider",
+      "filename": "enemy_mob_spider.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Giant Spider. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "murloc_scout",
+      "kind": "mob",
+      "display_name": "Murloc Scout",
+      "filename": "enemy_mob_murloc_scout.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Murloc Scout. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "gnoll_raider",
+      "kind": "mob",
+      "display_name": "Gnoll Raider",
+      "filename": "enemy_mob_gnoll_raider.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Gnoll Raider. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "hogger",
+      "kind": "boss",
+      "display_name": "Hogger",
+      "filename": "enemy_boss_hogger.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Hogger. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "defias_ringleader",
+      "kind": "boss",
+      "display_name": "Defias Ringleader",
+      "filename": "enemy_boss_defias_ringleader.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Defias Ringleader. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "spider_queen",
+      "kind": "boss",
+      "display_name": "Spider Queen",
+      "filename": "enemy_boss_spider_queen.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Spider Queen. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "murloc_warlord",
+      "kind": "boss",
+      "display_name": "Murloc Warlord",
+      "filename": "enemy_boss_murloc_warlord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Murloc Warlord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "gorgoth_petrified",
+      "kind": "boss",
+      "display_name": "Gorgoth the Petrified",
+      "filename": "enemy_boss_gorgoth_petrified.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Gorgoth the Petrified. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "ice_claw_bear",
+      "kind": "mob",
+      "display_name": "Ice Claw Bear",
+      "filename": "enemy_mob_ice_claw_bear.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Ice Claw Bear. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "trogg",
+      "kind": "mob",
+      "display_name": "Trogg",
+      "filename": "enemy_mob_trogg.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Trogg. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "frostmane_troll",
+      "kind": "mob",
+      "display_name": "Frostmane Troll",
+      "filename": "enemy_mob_frostmane_troll.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Frostmane Troll. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "snow_leopard",
+      "kind": "mob",
+      "display_name": "Snow Leopard",
+      "filename": "enemy_mob_snow_leopard.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Snow Leopard. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "frozen_wraith",
+      "kind": "mob",
+      "display_name": "Frozen Wraith",
+      "filename": "enemy_mob_frozen_wraith.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Frozen Wraith. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "ice_elemental",
+      "kind": "mob",
+      "display_name": "Ice Elemental",
+      "filename": "enemy_mob_ice_elemental.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Ice Elemental. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "winter_wolf",
+      "kind": "mob",
+      "display_name": "Winter Wolf",
+      "filename": "enemy_mob_winter_wolf.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Winter Wolf. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "cave_bat",
+      "kind": "mob",
+      "display_name": "Cave Bat",
+      "filename": "enemy_mob_cave_bat.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Cave Bat. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "frostmane_shaman",
+      "kind": "mob",
+      "display_name": "Frostmane Shaman",
+      "filename": "enemy_mob_frostmane_shaman.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Frostmane Shaman. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "frostmane_headhunter",
+      "kind": "boss",
+      "display_name": "Frostmane Headhunter",
+      "filename": "enemy_boss_frostmane_headhunter.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Frostmane Headhunter. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "ice_lord",
+      "kind": "boss",
+      "display_name": "Ice Lord",
+      "filename": "enemy_boss_ice_lord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Ice Lord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "trogg_overlord",
+      "kind": "boss",
+      "display_name": "Trogg Overlord",
+      "filename": "enemy_boss_trogg_overlord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Trogg Overlord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "ancient_frost_giant",
+      "kind": "boss",
+      "display_name": "Ancient Frost Giant",
+      "filename": "enemy_boss_ancient_frost_giant.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Ancient Frost Giant. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "kaelen_tor_stabilizer",
+      "kind": "boss",
+      "display_name": "Kaelen-Tor Stabilizer",
+      "filename": "enemy_boss_kaelen_tor_stabilizer.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Kaelen-Tor Stabilizer. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "razormane_warrior",
+      "kind": "mob",
+      "display_name": "Razormane Warrior",
+      "filename": "enemy_mob_razormane_warrior.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Razormane Warrior. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "plainstrider",
+      "kind": "mob",
+      "display_name": "Plainstrider",
+      "filename": "enemy_mob_plainstrider.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Plainstrider. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "sunscale_raptor",
+      "kind": "mob",
+      "display_name": "Sunscale Raptor",
+      "filename": "enemy_mob_sunscale_raptor.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Sunscale Raptor. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "barrens_scorpion",
+      "kind": "mob",
+      "display_name": "Barrens Scorpion",
+      "filename": "enemy_mob_barrens_scorpion.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Barrens Scorpion. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "zhevra",
+      "kind": "mob",
+      "display_name": "Zhevra",
+      "filename": "enemy_mob_zhevra.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Zhevra. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "thunder_lizard",
+      "kind": "mob",
+      "display_name": "Thunder Lizard",
+      "filename": "enemy_mob_thunder_lizard.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Thunder Lizard. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "quillboar",
+      "kind": "mob",
+      "display_name": "Quillboar",
+      "filename": "enemy_mob_quillboar.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Quillboar. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "wind_sweeper",
+      "kind": "mob",
+      "display_name": "Wind Sweeper",
+      "filename": "enemy_mob_wind_sweeper.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Wind Sweeper. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "barrens_vulture",
+      "kind": "mob",
+      "display_name": "Barrens Vulture",
+      "filename": "enemy_mob_barrens_vulture.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Barrens Vulture. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "kolkar_centaur_lord",
+      "kind": "boss",
+      "display_name": "Kolkar Centaur Lord",
+      "filename": "enemy_boss_kolkar_centaur_lord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Kolkar Centaur Lord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "razormane_chieftain",
+      "kind": "boss",
+      "display_name": "Razormane Chieftain",
+      "filename": "enemy_boss_razormane_chieftain.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Razormane Chieftain. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "thunderhawk_alpha",
+      "kind": "boss",
+      "display_name": "Thunderhawk Alpha",
+      "filename": "enemy_boss_thunderhawk_alpha.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Thunderhawk Alpha. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "barrens_overlord",
+      "kind": "boss",
+      "display_name": "Barrens Overlord",
+      "filename": "enemy_boss_barrens_overlord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Barrens Overlord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "bloodsail_pirate",
+      "kind": "mob",
+      "display_name": "Bloodsail Pirate",
+      "filename": "enemy_mob_bloodsail_pirate.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Bloodsail Pirate. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "jungle_stalker",
+      "kind": "mob",
+      "display_name": "Jungle Stalker",
+      "filename": "enemy_mob_jungle_stalker.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Jungle Stalker. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "venture_co_enforcer",
+      "kind": "mob",
+      "display_name": "Venture Co. Enforcer",
+      "filename": "enemy_mob_venture_co_enforcer.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Venture Co. Enforcer. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "panther",
+      "kind": "mob",
+      "display_name": "Panther",
+      "filename": "enemy_mob_panther.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Panther. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "tiger",
+      "kind": "mob",
+      "display_name": "Tiger",
+      "filename": "enemy_mob_tiger.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Tiger. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "basilisk",
+      "kind": "mob",
+      "display_name": "Basilisk",
+      "filename": "enemy_mob_basilisk.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Basilisk. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "jungle_troll",
+      "kind": "mob",
+      "display_name": "Jungle Troll",
+      "filename": "enemy_mob_jungle_troll.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Jungle Troll. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "crocodile",
+      "kind": "mob",
+      "display_name": "Giant Crocodile",
+      "filename": "enemy_mob_crocodile.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Giant Crocodile. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "stranglethorn_ape",
+      "kind": "mob",
+      "display_name": "Stranglethorn Ape",
+      "filename": "enemy_mob_stranglethorn_ape.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Stranglethorn Ape. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "bloodsail_corsair",
+      "kind": "mob",
+      "display_name": "Bloodsail Corsair",
+      "filename": "enemy_mob_bloodsail_corsair.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Bloodsail Corsair. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "kurzen_the_mad",
+      "kind": "boss",
+      "display_name": "Kurzen the Mad",
+      "filename": "enemy_boss_kurzen_the_mad.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Kurzen the Mad. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "black_blood_vance",
+      "kind": "boss",
+      "display_name": "Black-Blood Vance",
+      "filename": "enemy_boss_black_blood_vance.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Black-Blood Vance. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "bhag_thera",
+      "kind": "boss",
+      "display_name": "Bhag'thera",
+      "filename": "enemy_boss_bhag_thera.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Bhag'thera. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "bloodsail_admiral",
+      "kind": "boss",
+      "display_name": "Bloodsail Admiral",
+      "filename": "enemy_boss_bloodsail_admiral.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Bloodsail Admiral. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "jungle_lord",
+      "kind": "boss",
+      "display_name": "Jungle Lord",
+      "filename": "enemy_boss_jungle_lord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Jungle Lord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "dark_iron_dwarf",
+      "kind": "mob",
+      "display_name": "Dark Iron Dwarf",
+      "filename": "enemy_mob_dark_iron_dwarf.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Dark Iron Dwarf. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "molten_giant",
+      "kind": "mob",
+      "display_name": "Molten Giant",
+      "filename": "enemy_mob_molten_giant.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Molten Giant. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "firelord_servant",
+      "kind": "mob",
+      "display_name": "Firelord Servant",
+      "filename": "enemy_mob_firelord_servant.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Firelord Servant. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "lava_elemental",
+      "kind": "mob",
+      "display_name": "Lava Elemental",
+      "filename": "enemy_mob_lava_elemental.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Lava Elemental. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "dark_iron_guard",
+      "kind": "mob",
+      "display_name": "Dark Iron Guard",
+      "filename": "enemy_mob_dark_iron_guard.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Dark Iron Guard. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "fire_imp",
+      "kind": "mob",
+      "display_name": "Fire Imp",
+      "filename": "enemy_mob_fire_imp.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Fire Imp. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "shadowforge_sentinel",
+      "kind": "mob",
+      "display_name": "Shadowforge Sentinel",
+      "filename": "enemy_mob_shadowforge_sentinel.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Shadowforge Sentinel. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "magma_lord",
+      "kind": "mob",
+      "display_name": "Magma Lord",
+      "filename": "enemy_mob_magma_lord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Magma Lord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "dark_iron_sorcerer",
+      "kind": "mob",
+      "display_name": "Dark Iron Sorcerer",
+      "filename": "enemy_mob_dark_iron_sorcerer.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Dark Iron Sorcerer. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "flame_wraith",
+      "kind": "mob",
+      "display_name": "Flame Wraith",
+      "filename": "enemy_mob_flame_wraith.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, standard zone mob: Flame Wraith. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "emperor_dagran_thaurissan",
+      "kind": "boss",
+      "display_name": "Emperor Thaurissan",
+      "filename": "enemy_boss_emperor_dagran_thaurissan.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Emperor Thaurissan. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "lord_incendius",
+      "kind": "boss",
+      "display_name": "Lord Incendius",
+      "filename": "enemy_boss_lord_incendius.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Lord Incendius. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "magmadar",
+      "kind": "boss",
+      "display_name": "Magmadar",
+      "filename": "enemy_boss_magmadar.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Magmadar. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "golem_lord",
+      "kind": "boss",
+      "display_name": "Golem Lord",
+      "filename": "enemy_boss_golem_lord.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Golem Lord. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    },
+    {
+      "key": "vaelkor_architect",
+      "kind": "boss",
+      "display_name": "Vaelkor the Architect",
+      "filename": "enemy_boss_vaelkor_architect.png",
+      "prompt": "Fantasy MMORPG creature portrait, full body, epic zone boss: Vaelkor the Architect. Painterly game art, dramatic lighting, neutral dark gradient background, heroic scale, readable silhouette, no text, no watermark, no UI."
+    }
+  ],
+  "classes": [
+    {
+      "key": "warrior",
+      "kind": "class",
+      "display_name": "Warrior",
+      "filename": "class_warrior.png",
+      "prompt": "Fantasy MMORPG playable class hero portrait waist-up: Warrior \u2014 tank. Unstoppable melee fighter clad in heavy armor. Painterly character art, cohesive armor or robes fitting the class, neutral background, no text, no watermark."
+    },
+    {
+      "key": "paladin",
+      "kind": "class",
+      "display_name": "Paladin",
+      "filename": "class_paladin.png",
+      "prompt": "Fantasy MMORPG playable class hero portrait waist-up: Paladin \u2014 tank. Holy warrior blending martial power with divine healing. Painterly character art, cohesive armor or robes fitting the class, neutral background, no text, no watermark."
+    },
+    {
+      "key": "mage",
+      "kind": "class",
+      "display_name": "Mage",
+      "filename": "class_mage.png",
+      "prompt": "Fantasy MMORPG playable class hero portrait waist-up: Mage \u2014 dps. Scholar of arcane arts wielding devastating elemental magic. Painterly character art, cohesive armor or robes fitting the class, neutral background, no text, no watermark."
+    },
+    {
+      "key": "rogue",
+      "kind": "class",
+      "display_name": "Rogue",
+      "filename": "class_rogue.png",
+      "prompt": "Fantasy MMORPG playable class hero portrait waist-up: Rogue \u2014 dps. Deadly assassin who strikes from the shadows with lethal precision. Painterly character art, cohesive armor or robes fitting the class, neutral background, no text, no watermark."
+    },
+    {
+      "key": "priest",
+      "kind": "class",
+      "display_name": "Priest",
+      "filename": "class_priest.png",
+      "prompt": "Fantasy MMORPG playable class hero portrait waist-up: Priest \u2014 healer. Devoted healer channeling divine or shadow power. Painterly character art, cohesive armor or robes fitting the class, neutral background, no text, no watermark."
+    },
+    {
+      "key": "hunter",
+      "kind": "class",
+      "display_name": "Hunter",
+      "filename": "class_hunter.png",
+      "prompt": "Fantasy MMORPG playable class hero portrait waist-up: Hunter \u2014 dps. Master of ranged combat and beast taming. Painterly character art, cohesive armor or robes fitting the class, neutral background, no text, no watermark."
+    }
+  ],
+  "counts": {
+    "enemies": 70,
+    "classes": 6
+  }
+}

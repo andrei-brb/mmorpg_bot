@@ -276,8 +276,8 @@ function ResultPanel({
   const enemyArtSrc =
     (result.type === "enemy" || result.type === "boss") && result.enemyKey
       ? result.type === "boss" || result.isBoss
-        ? `/bosses/${result.enemyKey}.jpg`
-        : `/mobs/${result.enemyKey}.jpg`
+        ? `/bosses/${result.enemyKey}.png`
+        : `/mobs/${result.enemyKey}.png`
       : null;
   const typeStyle = {
     enemy: "border-enemy-red/60 bg-enemy-red/5",

@@ -1,14 +1,14 @@
 export interface Mob {
   key: string;
   name: string;
-  icon: string; // path to /mobs/<key>.jpg
+  icon: string; // path to /mobs/<key>.<ext>
   level: number;
 }
 
 export interface Boss {
   key: string;
   name: string;
-  icon: string; // path to /bosses/<key>.jpg
+  icon: string; // path to /bosses/<key>.<ext>
   level: number;
   abilities: string[];
 }
@@ -23,11 +23,11 @@ export interface Zone {
 }
 
 const mob = (key: string, name: string, level: number): Mob => ({
-  key, name, icon: `/mobs/${key}.jpg`, level,
+  key, name, icon: `/mobs/${key}.png`, level,
 });
 
 const boss = (key: string, name: string, level: number, abilities: string[] = []): Boss => ({
-  key, name, icon: `/bosses/${key}.jpg`, level, abilities,
+  key, name, icon: `/bosses/${key}.png`, level, abilities,
 });
 
 export const ZONES: Zone[] = [

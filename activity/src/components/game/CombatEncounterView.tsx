@@ -161,8 +161,8 @@ export function CombatEncounterView({
       ? classIconUrl(enemyClassKey)
       : enemyKey
         ? enemyKind === "boss"
-          ? `/bosses/${enemyKey}.jpg`
-          : `/mobs/${enemyKey}.jpg`
+          ? `/bosses/${enemyKey}.png`
+          : `/mobs/${enemyKey}.png`
         : null;
   const battleZone = battleZoneOverride ?? zoneLabel?.key ?? "volcano";
 
