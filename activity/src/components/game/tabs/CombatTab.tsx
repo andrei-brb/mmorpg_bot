@@ -64,7 +64,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     loadCombatSnapshot, startCombat, combatAction, rest,
     pendingCombatEnemyKey, refreshInventory, refreshProgress, map,
     inventory, combatFocusActive, setCombatFocusActive,
-    quickFightAgain, travel,
+    quickFightAgain,
   } = useGameSession();
 
   const [mode, setMode] = useState<"pick" | "fight" | "outcome">("pick");
@@ -77,7 +77,6 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [activeEnemy, setActiveEnemy] = useState<{ key: string; kind: "enemy" | "boss" } | null>(null);
   /** DungeonPanel sets this while `phase === "fight"` so we can hide the Overworld/Dungeon segment. */
   const [dungeonInFight, setDungeonInFight] = useState(false);
-  const [travelTargetId, setTravelTargetId] = useState("");
   /** Zone whose enemy catalog is shown (may differ from `map.current_zone` for preview). */
   const [foesListZoneId, setFoesListZoneId] = useState("");
   const prevMapZoneRef = useRef<string | undefined>(undefined);
@@ -98,15 +97,6 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       };
     });
   }, [map?.zones]);
-
-  useEffect(() => {
-    const k = map?.current_zone?.trim();
-    if (!k) return;
-    setTravelTargetId((prev) => {
-      if (prev && travelZones.some((t) => t.id === prev)) return prev;
-      return k;
-    });
-  }, [map?.current_zone, travelZones]);
 
   useEffect(() => {
     const cur = map?.current_zone?.trim();
@@ -226,30 +216,6 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     foesListZoneId,
     curZone,
   ]);
-
-  const handleTravel = useCallback(async () => {
-    const cur = map?.current_zone?.trim();
-    if (!travelTargetId || travelTargetId === cur) return;
-    if (!accessToken) {
-      toast.error("Connect with Discord to travel.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const r = await travel(travelTargetId);
-      if (!r.ok) {
-        toast.error(r.message || "Travel failed");
-        return;
-      }
-      toast.success("Travelled.", { description: "Enemy list updated for the new zone." });
-      setFoesListZoneId(travelTargetId);
-      await refresh({ enemiesZoneKey: travelTargetId });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [travelTargetId, map?.current_zone, accessToken, travel, refresh]);
 
   useEffect(() => {
     if (combatTabMode !== "overworld") return;
@@ -496,51 +462,14 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   return (
     <div>
       {showSubModeToggle && modeSegment}
-      <div className="game-panel mb-3">
-        <div className="game-panel-header">Travel</div>
-        <p className="text-[10px] text-muted-foreground mb-2 px-0.5">
-          {currentTravelZone ? (
-            <>
-              You are in{" "}
-              <span className="text-foreground/90 font-medium">
-                {currentTravelZone.emoji} {currentTravelZone.name}
-              </span>{" "}
-              (levels {currentTravelZone.levelMin}–{currentTravelZone.levelMax}).
-            </>
-          ) : (
-            "Select a destination to change zones without leaving Combat."
-          )}
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-          <select
-            className="game-select flex-1 min-w-0"
-            value={travelTargetId}
-            onChange={(e) => setTravelTargetId(e.target.value)}
-            aria-label="Destination zone"
-          >
-            {travelZones.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.emoji} {z.name} (Lv {z.levelMin}–{z.levelMax})
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => void handleTravel()}
-            disabled={loading || !accessToken || !travelTargetId || travelTargetId === map?.current_zone?.trim()}
-            className="game-btn-secondary shrink-0 px-4"
-          >
-            Travel
-          </button>
-        </div>
-      </div>
       <div className="game-panel">
       <div className="game-panel-header">Choose an Enemy</div>
       {previewingRemoteZone ? (
         <div className="mb-3 rounded-sm border border-amber-500/40 bg-amber-950/25 px-2 py-2 text-[10px] leading-snug text-amber-50">
           <span className="font-semibold text-amber-100">Previewing another zone.</span>{" "}
-          You are still in {currentTravelZone ? `${currentTravelZone.emoji} ${currentTravelZone.name}` : "your current zone"}. Travel
-          there to start combat against these foes, or switch this list back to your zone below.
+          You are still in {currentTravelZone ? `${currentTravelZone.emoji} ${currentTravelZone.name}` : "your current zone"}. Use{" "}
+          <span className="font-medium text-foreground/90">Explore</span> (or Discord) to go there and fight these foes, or switch this list
+          back to your zone below.
         </div>
       ) : null}
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
@@ -582,12 +511,12 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         {browseZoneLabel ? (
           <>
             Listing <span className="text-foreground/90 font-medium">{browseZoneLabel.emoji} {browseZoneLabel.name}</span>
-            {!previewingRemoteZone ? " — you can start combat here." : " — catalog only until you travel."}
+            {!previewingRemoteZone ? " — you can start combat here." : " — catalog only until you are in this zone."}
           </>
         ) : null}
       </p>
       {enemies.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No enemies in this zone — travel elsewhere or create a character.</p>
+        <p className="text-xs text-muted-foreground">No enemies in this zone — pick another zone above or create a character.</p>
       ) : (
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-stretch lg:gap-4">
@@ -762,7 +691,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                         </div>
                         {previewingRemoteZone ? (
                           <p className="mt-1.5 text-[10px] text-amber-200/90">
-                            Travel to this zone to unlock Start Combat for these foes.
+                            Go to this zone from Explore (or Discord) to unlock Start Combat for these foes.
                           </p>
                         ) : null}
                         {hpRatioNote ? (
