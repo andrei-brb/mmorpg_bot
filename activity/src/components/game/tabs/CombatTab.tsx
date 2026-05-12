@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatEnemy, CombatStatePayload } from "@/lib/apiTypes";
 import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { DungeonPanel } from "@/components/game/panels/DungeonPanel";
+import { enemyPortraitSrc, isBossKind } from "@/lib/enemyPortraitUrl";
 import * as api from "@/lib/gameApi";
 
 type CombatTabMode = "overworld" | "dungeon";
@@ -34,6 +35,24 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [dungeonInFight, setDungeonInFight] = useState(false);
 
   const zoneLabel = map?.zones?.find((z) => z.key === map?.current_zone);
+
+  const { bossEnemies, normalEnemies } = useMemo(() => {
+    const bosses: CombatEnemy[] = [];
+    const normals: CombatEnemy[] = [];
+    for (const e of enemies) {
+      if (isBossKind(e.kind)) bosses.push(e);
+      else normals.push(e);
+    }
+    const byName = (a: CombatEnemy, b: CombatEnemy) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    bosses.sort(byName);
+    normals.sort(byName);
+    return { bossEnemies: bosses, normalEnemies: normals };
+  }, [enemies]);
+
+  const selectedEnemy = useMemo(
+    () => enemies.find((e) => e.key === enemyPick) ?? null,
+    [enemies, enemyPick],
+  );
 
   const showSubModeToggle =
     !(combatTabMode === "overworld" && mode === "fight" && Boolean(state)) &&
@@ -72,7 +91,15 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       }
       setState(null); setMode("pick"); setOutcome(null);
       setActiveEnemy(null);
-      if (snap.enemies.length) setEnemyPick((prev) => prev || snap.enemies[0].key);
+      if (snap.enemies.length) {
+        setEnemyPick((prev) => {
+          const keys = new Set(snap.enemies.map((e) => e.key));
+          if (prev && keys.has(prev)) return prev;
+          return snap.enemies[0]?.key ?? "";
+        });
+      } else {
+        setEnemyPick("");
+      }
     } finally { setLoading(false); }
   }, [accessToken, guildId, loadCombatSnapshot, startCombat, pendingCombatEnemyKey]);
 
@@ -326,23 +353,160 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       {enemies.length === 0 ? (
         <p className="text-xs text-muted-foreground">No enemies in this zone — travel elsewhere or create a character.</p>
       ) : (
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select
-            value={enemyPick}
-            onChange={(e) => setEnemyPick(e.target.value)}
-            className="game-select flex-1"
-          >
-            {enemies.map((e) => (
-              <option key={e.key} value={e.key}>
-                {e.emoji} {e.name} ({e.kind})
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <button onClick={() => void onStart()} disabled={loading} className="game-btn-danger">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-stretch lg:gap-4">
+            {/* List first on mobile (thumb-first scanning) */}
+            <div className="order-1 flex min-h-0 max-h-[min(52vh,380px)] flex-col rounded-sm border border-white/10 bg-black/15 lg:max-h-[min(60vh,440px)]">
+              <div className="shrink-0 border-b border-white/10 px-2 py-1.5 text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
+                Foes in zone
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5">
+                {bossEnemies.length > 0 && (
+                  <div className="mb-2">
+                    <div className="px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wider text-boss-purple/90">
+                      Bosses
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {bossEnemies.map((e) => {
+                        const selected = e.key === enemyPick;
+                        const src = enemyPortraitSrc(e.key, e.kind);
+                        return (
+                          <button
+                            key={e.key}
+                            type="button"
+                            onClick={() => setEnemyPick(e.key)}
+                            aria-pressed={selected}
+                            aria-current={selected ? "true" : undefined}
+                            className={`flex w-full items-center gap-2 rounded-sm px-1.5 py-1.5 text-left transition-colors ${
+                              selected
+                                ? "bg-boss-purple/15 ring-1 ring-boss-purple/50"
+                                : "hover:bg-white/5"
+                            }`}
+                          >
+                            <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm border border-white/10 bg-black/30">
+                              <span className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center text-lg">
+                                {e.emoji}
+                              </span>
+                              {src ? (
+                                <img
+                                  src={src}
+                                  alt=""
+                                  className="absolute inset-0 z-10 h-full w-full object-cover object-center"
+                                  onError={(ev) => {
+                                    (ev.currentTarget as HTMLImageElement).style.display = "none";
+                                  }}
+                                />
+                              ) : null}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold text-foreground">{e.name}</span>
+                              <span className="text-[10px] text-boss-purple/90">Boss</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {normalEnemies.length > 0 && (
+                  <div>
+                    <div className="px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Enemies
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {normalEnemies.map((e) => {
+                        const selected = e.key === enemyPick;
+                        const src = enemyPortraitSrc(e.key, e.kind);
+                        return (
+                          <button
+                            key={e.key}
+                            type="button"
+                            onClick={() => setEnemyPick(e.key)}
+                            aria-pressed={selected}
+                            aria-current={selected ? "true" : undefined}
+                            className={`flex w-full items-center gap-2 rounded-sm px-1.5 py-1.5 text-left transition-colors ${
+                              selected ? "bg-primary/10 ring-1 ring-primary/45" : "hover:bg-white/5"
+                            }`}
+                          >
+                            <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm border border-white/10 bg-black/30">
+                              <span className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center text-lg">
+                                {e.emoji}
+                              </span>
+                              {src ? (
+                                <img
+                                  src={src}
+                                  alt=""
+                                  className="absolute inset-0 z-10 h-full w-full object-cover object-center"
+                                  onError={(ev) => {
+                                    (ev.currentTarget as HTMLImageElement).style.display = "none";
+                                  }}
+                                />
+                              ) : null}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold text-foreground">{e.name}</span>
+                              <span className="text-[10px] capitalize text-muted-foreground">{e.kind}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="order-2 flex min-h-0 flex-col gap-2">
+              <div className="flex flex-1 flex-col rounded-sm border border-white/10 bg-black/20 p-2 sm:p-3">
+                <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
+                  Preview
+                </div>
+                {selectedEnemy ? (
+                  <>
+                    <div className="mt-1 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-serif text-sm font-semibold text-foreground">
+                          <span className="mr-1.5">{selectedEnemy.emoji}</span>
+                          {selectedEnemy.name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {isBossKind(selectedEnemy.kind) ? "World boss — high risk, high reward." : "Zone enemy — standard encounter."}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="relative mx-auto mt-2 aspect-[3/4] w-full max-w-[220px] overflow-hidden rounded-sm border border-white/15 bg-black/35 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.75)]">
+                      <span className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center text-5xl opacity-40">
+                        {selectedEnemy.emoji}
+                      </span>
+                      <img
+                        src={enemyPortraitSrc(selectedEnemy.key, selectedEnemy.kind)}
+                        alt=""
+                        className="absolute inset-0 z-10 h-full w-full object-contain object-bottom"
+                        style={{ objectPosition: "center bottom" }}
+                        onError={(ev) => {
+                          (ev.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1/4 bg-gradient-to-t from-black/55 to-transparent" />
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">Select a foe from the list.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <button
+              type="button"
+              onClick={() => void onStart()}
+              disabled={loading || !enemyPick}
+              className="game-btn-danger sm:min-w-[140px]"
+            >
               Start Combat
             </button>
-            <button onClick={() => void onRest()} disabled={loading} className="game-btn-secondary">
+            <button type="button" onClick={() => void onRest()} disabled={loading} className="game-btn-secondary sm:min-w-[100px]">
               Rest
             </button>
           </div>
