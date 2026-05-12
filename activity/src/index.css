@@ -967,15 +967,20 @@
     }
   }
 
+  @media (min-width: 768px) {
+    .hero-ref-hero-columns {
+      align-items: start;
+    }
+  }
+
   .hero-tab-ref .hero-ref-inventory-panel {
-    max-width: 11.25rem;
-    margin-left: auto;
-    margin-right: 0;
+    width: fit-content;
+    max-width: min(11.85rem, 100%);
   }
 
   @media (min-width: 480px) {
     .hero-tab-ref .hero-ref-inventory-panel {
-      max-width: 11.85rem;
+      max-width: min(12.25rem, 100%);
     }
   }
 
