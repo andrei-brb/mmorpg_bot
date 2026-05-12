@@ -919,13 +919,13 @@ export default function BattlePreview({
           <div
             className="absolute inset-0"
             style={{
-              background: "radial-gradient(ellipse at center, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.5) 100%)",
+              background: "radial-gradient(ellipse at center, rgba(0,0,0,0.02) 28%, rgba(0,0,0,0.34) 100%)",
             }}
           />
           <div
             className="absolute inset-0"
             style={{
-              background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 40%, transparent 60%)",
+              background: "linear-gradient(to top, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.04) 42%, transparent 64%)",
             }}
           />
         </div>

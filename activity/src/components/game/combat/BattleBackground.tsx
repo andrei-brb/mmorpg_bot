@@ -48,6 +48,8 @@ const BACKGROUNDS: Record<string, { gradient: string; particles: string; label: 
   },
 };
 
+const BATTLEFIELD_ASSET_VERSION = "combat-bg-v2";
+
 interface Props {
   /** Zone key (e.g. `elwynn_forest`). Falls back to themed gradients when no image is present. */
   zone?: string;
@@ -67,8 +69,8 @@ function resolveBattlefieldTheme(zone?: string) {
           : BACKGROUNDS.volcano);
 
   const base = import.meta.env.BASE_URL || "/";
-  const pngUrl = `${base}battlefields/${key}.png`;
-  const jpgUrl = `${base}battlefields/${key}.jpg`;
+  const pngUrl = `${base}battlefields/${key}.png?v=${BATTLEFIELD_ASSET_VERSION}`;
+  const jpgUrl = `${base}battlefields/${key}.jpg?v=${BATTLEFIELD_ASSET_VERSION}`;
 
   return { key, bg, pngUrl, jpgUrl };
 }
