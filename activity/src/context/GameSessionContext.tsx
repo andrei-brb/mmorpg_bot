@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import type {
   CombatEnemy,
+  CombatEnemiesMeta,
   CombatStatePayload,
   ExploreMapPayload,
   ExploreResultPayload,
@@ -66,11 +67,12 @@ type GameSessionValue = {
   explore: () => Promise<ExploreResultPayload>;
   /** After explore encounter — Combat tab consumes to auto-start. */
   pendingCombatEnemyKey: React.MutableRefObject<string | null>;
-  loadCombatSnapshot: () => Promise<{
+  loadCombatSnapshot: (opts?: { enemiesZoneKey?: string }) => Promise<{
     active: boolean;
     state?: CombatStatePayload;
     ended_outcome?: api.CombatActionJson;
     enemies: CombatEnemy[];
+    combatEnemiesMeta?: CombatEnemiesMeta | null;
   }>;
   startCombat: (
     params: StartCombatParams,
@@ -399,25 +401,30 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     return json;
   }, [accessToken, guildId, refreshInventory, refreshMap]);
 
-  const loadCombatSnapshot = useCallback(async () => {
-    if (!accessToken) return { active: false, enemies: [] as CombatEnemy[] };
+  const loadCombatSnapshot = useCallback(async (opts?: { enemiesZoneKey?: string }) => {
+    if (!accessToken)
+      return { active: false, enemies: [] as CombatEnemy[], combatEnemiesMeta: null as CombatEnemiesMeta | null };
+    const zoneKey = (opts?.enemiesZoneKey || "").trim() || undefined;
     const [stRes, enRes] = await Promise.all([
       api.getCombatState(accessToken, guildId),
-      api.getCombatEnemies(accessToken, guildId),
+      api.getCombatEnemies(accessToken, guildId, zoneKey),
     ]);
     const stJson = await api.parseCombatState(stRes);
-    const enJson = (await enRes.json()) as { enemies?: CombatEnemy[] };
+    const enJson = (await enRes.json()) as { enemies?: CombatEnemy[]; meta?: CombatEnemiesMeta };
+    const combatEnemiesMeta = enJson.meta ?? null;
     if (stJson.ended_outcome) {
       return {
         active: false,
         ended_outcome: stJson.ended_outcome,
         enemies: enJson.enemies || [],
+        combatEnemiesMeta,
       };
     }
     return {
       active: Boolean(stJson.active && stJson.state),
       state: stJson.state,
       enemies: enJson.enemies || [],
+      combatEnemiesMeta,
     };
   }, [accessToken, guildId]);
 

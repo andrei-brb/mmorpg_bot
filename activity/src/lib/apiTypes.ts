@@ -88,7 +88,24 @@ export type CharacterDerivedStatsPayload = {
   message?: string;
 };
 
-export type CombatEnemy = { key: string; name: string; emoji: string; kind: string };
+export type CombatEnemy = {
+  key: string;
+  name: string;
+  emoji: string;
+  kind: string;
+  /** Scaled max HP for this encounter (matches Activity combat scaling). */
+  max_hp?: number;
+  /** Server-authored difficulty hint: deadly | risky | caution | fair */
+  risk_tier?: "deadly" | "risky" | "caution" | "fair" | string;
+};
+
+/** Root `meta` from GET /api/game/combat/enemies */
+export type CombatEnemiesMeta = {
+  character_level?: number;
+  zone_key?: string;
+  zone_level_min?: number | null;
+  zone_level_max?: number | null;
+};
 
 export type CombatAbility = {
   key: string;

@@ -1,16 +1,60 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { CombatEnemy, CombatStatePayload } from "@/lib/apiTypes";
+import type { CombatEnemy, CombatEnemiesMeta, CombatStatePayload } from "@/lib/apiTypes";
 import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { DungeonPanel } from "@/components/game/panels/DungeonPanel";
 import { enemyPortraitSrc, isBossKind } from "@/lib/enemyPortraitUrl";
+import { ZONES as ZONES_DATA } from "@/data/zones";
+import { cn } from "@/lib/utils";
 import * as api from "@/lib/gameApi";
 
 type CombatTabMode = "overworld" | "dungeon";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
+}
+
+const ZONE_EMOJI_MAP: Record<string, string> = {
+  elwynn_forest: "🌲",
+  dun_morogh: "❄️",
+  barrens: "🌵",
+  stranglethorn: "🌴",
+  blackrock_depths: "🌋",
+};
+
+function riskTierPresentation(tier: string | undefined): {
+  label: string;
+  dotClass: string;
+  panelClass: string;
+} {
+  const t = String(tier || "fair").toLowerCase();
+  if (t === "deadly") {
+    return {
+      label: "Deadly — you are likely outmatched.",
+      dotClass: "bg-red-500",
+      panelClass: "border-red-500/55 bg-red-950/40 text-red-100",
+    };
+  }
+  if (t === "risky") {
+    return {
+      label: "Risky — expect a very hard fight.",
+      dotClass: "bg-orange-500",
+      panelClass: "border-orange-500/45 bg-orange-950/30 text-orange-100",
+    };
+  }
+  if (t === "caution") {
+    return {
+      label: "Caution — winnable, but dangerous.",
+      dotClass: "bg-amber-400",
+      panelClass: "border-amber-500/40 bg-amber-950/25 text-amber-50",
+    };
+  }
+  return {
+    label: "Fair — should be manageable at your level.",
+    dotClass: "bg-emerald-500",
+    panelClass: "border-emerald-600/40 bg-emerald-950/25 text-emerald-50",
+  };
 }
 
 export function CombatTab({ focusMode }: { focusMode?: boolean }) {
@@ -20,7 +64,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     loadCombatSnapshot, startCombat, combatAction, rest,
     pendingCombatEnemyKey, refreshInventory, refreshProgress, map,
     inventory, combatFocusActive, setCombatFocusActive,
-    quickFightAgain,
+    quickFightAgain, travel,
   } = useGameSession();
 
   const [mode, setMode] = useState<"pick" | "fight" | "outcome">("pick");
@@ -33,8 +77,45 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [activeEnemy, setActiveEnemy] = useState<{ key: string; kind: "enemy" | "boss" } | null>(null);
   /** DungeonPanel sets this while `phase === "fight"` so we can hide the Overworld/Dungeon segment. */
   const [dungeonInFight, setDungeonInFight] = useState(false);
+  const [travelTargetId, setTravelTargetId] = useState("");
+  /** Zone whose enemy catalog is shown (may differ from `map.current_zone` for preview). */
+  const [foesListZoneId, setFoesListZoneId] = useState("");
+  const prevMapZoneRef = useRef<string | undefined>(undefined);
+  const [combatEnemiesMeta, setCombatEnemiesMeta] = useState<CombatEnemiesMeta | null>(null);
 
   const zoneLabel = map?.zones?.find((z) => z.key === map?.current_zone);
+
+  const travelZones = useMemo(() => {
+    const apiZones = map?.zones;
+    return ZONES_DATA.map((z) => {
+      const ap = apiZones?.find((x) => x.key === z.key);
+      return {
+        id: z.key,
+        name: z.name,
+        emoji: (typeof ap?.emoji === "string" && ap.emoji.trim()) || ZONE_EMOJI_MAP[z.key] || "🗺️",
+        levelMin: z.levelRange[0],
+        levelMax: z.levelRange[1],
+      };
+    });
+  }, [map?.zones]);
+
+  useEffect(() => {
+    const k = map?.current_zone?.trim();
+    if (!k) return;
+    setTravelTargetId((prev) => {
+      if (prev && travelZones.some((t) => t.id === prev)) return prev;
+      return k;
+    });
+  }, [map?.current_zone, travelZones]);
+
+  useEffect(() => {
+    const cur = map?.current_zone?.trim();
+    if (!cur) return;
+    if (prevMapZoneRef.current !== cur) {
+      prevMapZoneRef.current = cur;
+      setFoesListZoneId(cur);
+    }
+  }, [map?.current_zone]);
 
   const { bossEnemies, normalEnemies } = useMemo(() => {
     const bosses: CombatEnemy[] = [];
@@ -54,14 +135,48 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     [enemies, enemyPick],
   );
 
+  const currentTravelZone = useMemo(
+    () => travelZones.find((z) => z.id === map?.current_zone?.trim()) ?? null,
+    [travelZones, map?.current_zone],
+  );
+
+  const curZone = map?.current_zone?.trim() || "";
+  const previewingRemoteZone = Boolean(curZone && foesListZoneId && foesListZoneId !== curZone);
+  const browseZoneLabel = useMemo(
+    () => travelZones.find((z) => z.id === foesListZoneId) ?? null,
+    [travelZones, foesListZoneId],
+  );
+
+  const selectedRisk = useMemo(
+    () => riskTierPresentation(selectedEnemy?.risk_tier),
+    [selectedEnemy?.risk_tier],
+  );
+
+  const hpRatioNote = useMemo(() => {
+    if (!selectedEnemy?.max_hp) return null;
+    const pMax = Number(inventory?.character?.max_hp ?? 0);
+    if (pMax <= 0) return null;
+    const ratio = selectedEnemy.max_hp / pMax;
+    if (ratio >= 3) return "This foe has roughly triple your max HP — expect a long fight.";
+    if (ratio >= 2) return "This foe has roughly double your max HP — pace yourself and use cooldowns wisely.";
+    return null;
+  }, [selectedEnemy?.max_hp, inventory?.character?.max_hp]);
+
   const showSubModeToggle =
     !(combatTabMode === "overworld" && mode === "fight" && Boolean(state)) &&
     !(combatTabMode === "dungeon" && dungeonInFight);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { enemiesZoneKey?: string }) => {
     setLoading(true);
     try {
-      const snap = await loadCombatSnapshot();
+      if (pendingCombatEnemyKey.current && curZone) {
+        setFoesListZoneId((z) => (z !== curZone ? curZone : z));
+      }
+      const browse = (opts?.enemiesZoneKey ?? foesListZoneId).trim();
+      const zoneForEnemies = pendingCombatEnemyKey.current ? curZone : browse || curZone;
+      const snap = await loadCombatSnapshot(
+        zoneForEnemies ? { enemiesZoneKey: zoneForEnemies } : {},
+      );
       if (snap.ended_outcome?.outcome) {
         pendingCombatEnemyKey.current = null;
         toast.info(snap.ended_outcome.outcome.title || "Encounter ended", {
@@ -77,6 +192,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         return;
       }
       setEnemies(snap.enemies);
+      setCombatEnemiesMeta(snap.combatEnemiesMeta ?? null);
       const pend = pendingCombatEnemyKey.current;
       if (pend && snap.enemies.some((e) => e.key === pend)) {
         const r = await startCombat({ kind: "zone", enemyKey: pend });
@@ -101,7 +217,39 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         setEnemyPick("");
       }
     } finally { setLoading(false); }
-  }, [accessToken, guildId, loadCombatSnapshot, startCombat, pendingCombatEnemyKey]);
+  }, [
+    accessToken,
+    guildId,
+    loadCombatSnapshot,
+    startCombat,
+    pendingCombatEnemyKey,
+    foesListZoneId,
+    curZone,
+  ]);
+
+  const handleTravel = useCallback(async () => {
+    const cur = map?.current_zone?.trim();
+    if (!travelTargetId || travelTargetId === cur) return;
+    if (!accessToken) {
+      toast.error("Connect with Discord to travel.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await travel(travelTargetId);
+      if (!r.ok) {
+        toast.error(r.message || "Travel failed");
+        return;
+      }
+      toast.success("Travelled.", { description: "Enemy list updated for the new zone." });
+      setFoesListZoneId(travelTargetId);
+      await refresh({ enemiesZoneKey: travelTargetId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [travelTargetId, map?.current_zone, accessToken, travel, refresh]);
 
   useEffect(() => {
     if (combatTabMode !== "overworld") return;
@@ -348,8 +496,96 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   return (
     <div>
       {showSubModeToggle && modeSegment}
+      <div className="game-panel mb-3">
+        <div className="game-panel-header">Travel</div>
+        <p className="text-[10px] text-muted-foreground mb-2 px-0.5">
+          {currentTravelZone ? (
+            <>
+              You are in{" "}
+              <span className="text-foreground/90 font-medium">
+                {currentTravelZone.emoji} {currentTravelZone.name}
+              </span>{" "}
+              (levels {currentTravelZone.levelMin}–{currentTravelZone.levelMax}).
+            </>
+          ) : (
+            "Select a destination to change zones without leaving Combat."
+          )}
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+          <select
+            className="game-select flex-1 min-w-0"
+            value={travelTargetId}
+            onChange={(e) => setTravelTargetId(e.target.value)}
+            aria-label="Destination zone"
+          >
+            {travelZones.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.emoji} {z.name} (Lv {z.levelMin}–{z.levelMax})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void handleTravel()}
+            disabled={loading || !accessToken || !travelTargetId || travelTargetId === map?.current_zone?.trim()}
+            className="game-btn-secondary shrink-0 px-4"
+          >
+            Travel
+          </button>
+        </div>
+      </div>
       <div className="game-panel">
       <div className="game-panel-header">Choose an Enemy</div>
+      {previewingRemoteZone ? (
+        <div className="mb-3 rounded-sm border border-amber-500/40 bg-amber-950/25 px-2 py-2 text-[10px] leading-snug text-amber-50">
+          <span className="font-semibold text-amber-100">Previewing another zone.</span>{" "}
+          You are still in {currentTravelZone ? `${currentTravelZone.emoji} ${currentTravelZone.name}` : "your current zone"}. Travel
+          there to start combat against these foes, or switch this list back to your zone below.
+        </div>
+      ) : null}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+        <label className="sr-only" htmlFor="combat-foes-list-zone">
+          Zone to list foes for
+        </label>
+        <select
+          id="combat-foes-list-zone"
+          className="game-select flex-1 min-w-0"
+          value={foesListZoneId || curZone || travelZones[0]?.id || ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            setFoesListZoneId(v);
+            void refresh({ enemiesZoneKey: v });
+          }}
+          aria-label="Zone to list foes for"
+        >
+          {travelZones.map((z) => (
+            <option key={z.id} value={z.id}>
+              {z.emoji} {z.name} (Lv {z.levelMin}–{z.levelMax})
+            </option>
+          ))}
+        </select>
+        {previewingRemoteZone && curZone ? (
+          <button
+            type="button"
+            className="game-btn-secondary shrink-0 px-3 text-[11px]"
+            onClick={() => {
+              setFoesListZoneId(curZone);
+              void refresh({ enemiesZoneKey: curZone });
+            }}
+            disabled={loading}
+          >
+            My zone
+          </button>
+        ) : null}
+      </div>
+      <p className="mb-3 text-[10px] text-muted-foreground px-0.5">
+        {browseZoneLabel ? (
+          <>
+            Listing <span className="text-foreground/90 font-medium">{browseZoneLabel.emoji} {browseZoneLabel.name}</span>
+            {!previewingRemoteZone ? " — you can start combat here." : " — catalog only until you travel."}
+          </>
+        ) : null}
+      </p>
       {enemies.length === 0 ? (
         <p className="text-xs text-muted-foreground">No enemies in this zone — travel elsewhere or create a character.</p>
       ) : (
@@ -370,6 +606,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                       {bossEnemies.map((e) => {
                         const selected = e.key === enemyPick;
                         const src = enemyPortraitSrc(e.key, e.kind);
+                        const risk = riskTierPresentation(e.risk_tier);
                         return (
                           <button
                             key={e.key}
@@ -398,9 +635,19 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                                 />
                               ) : null}
                             </span>
+                            <span
+                              className={cn("mt-1.5 h-2 w-2 shrink-0 self-start rounded-full", risk.dotClass)}
+                              title={risk.label}
+                              aria-hidden
+                            />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-xs font-semibold text-foreground">{e.name}</span>
-                              <span className="text-[10px] text-boss-purple/90">Boss</span>
+                              <span className="text-[10px] text-boss-purple/90">
+                                Boss
+                                {e.max_hp != null ? (
+                                  <span className="ml-1.5 tabular-nums text-muted-foreground">· {e.max_hp} HP</span>
+                                ) : null}
+                              </span>
                             </span>
                           </button>
                         );
@@ -417,6 +664,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                       {normalEnemies.map((e) => {
                         const selected = e.key === enemyPick;
                         const src = enemyPortraitSrc(e.key, e.kind);
+                        const risk = riskTierPresentation(e.risk_tier);
                         return (
                           <button
                             key={e.key}
@@ -443,9 +691,19 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                                 />
                               ) : null}
                             </span>
+                            <span
+                              className={cn("mt-1.5 h-2 w-2 shrink-0 self-start rounded-full", risk.dotClass)}
+                              title={risk.label}
+                              aria-hidden
+                            />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-xs font-semibold text-foreground">{e.name}</span>
-                              <span className="text-[10px] capitalize text-muted-foreground">{e.kind}</span>
+                              <span className="text-[10px] capitalize text-muted-foreground">
+                                {e.kind}
+                                {e.max_hp != null ? (
+                                  <span className="ml-1.5 tabular-nums">· {e.max_hp} HP</span>
+                                ) : null}
+                              </span>
                             </span>
                           </button>
                         );
@@ -472,6 +730,44 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                         <p className="text-[10px] text-muted-foreground">
                           {isBossKind(selectedEnemy.kind) ? "World boss — high risk, high reward." : "Zone enemy — standard encounter."}
                         </p>
+                        {combatEnemiesMeta?.zone_level_min != null && combatEnemiesMeta?.zone_level_max != null && (
+                          <p className="mt-0.5 text-[10px] text-muted-foreground/90">
+                            Zone band: Lv {combatEnemiesMeta.zone_level_min}–{combatEnemiesMeta.zone_level_max}
+                            {typeof combatEnemiesMeta.character_level === "number"
+                              ? ` · You: Lv ${combatEnemiesMeta.character_level}`
+                              : null}
+                          </p>
+                        )}
+                        <div
+                          className={cn(
+                            "mt-2 rounded-sm border px-2 py-1.5 text-[10px] leading-snug",
+                            selectedRisk.panelClass,
+                          )}
+                        >
+                          {selectedRisk.label}
+                        </div>
+                        <div className="mt-2 space-y-1 text-[10px] text-muted-foreground">
+                          <div className="flex justify-between gap-2">
+                            <span>Foe max HP</span>
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {selectedEnemy.max_hp != null ? selectedEnemy.max_hp : "—"}
+                            </span>
+                          </div>
+                          {inventory?.character?.max_hp != null ? (
+                            <div className="flex justify-between gap-2">
+                              <span>Your max HP</span>
+                              <span className="tabular-nums text-foreground/90">{inventory.character.max_hp}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                        {previewingRemoteZone ? (
+                          <p className="mt-1.5 text-[10px] text-amber-200/90">
+                            Travel to this zone to unlock Start Combat for these foes.
+                          </p>
+                        ) : null}
+                        {hpRatioNote ? (
+                          <p className="mt-1.5 text-[10px] text-amber-200/90">{hpRatioNote}</p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="relative mx-auto mt-2 aspect-[3/4] w-full max-w-[220px] overflow-hidden rounded-sm border border-white/15 bg-black/35 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.75)]">
@@ -501,7 +797,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
             <button
               type="button"
               onClick={() => void onStart()}
-              disabled={loading || !enemyPick}
+              disabled={loading || !enemyPick || previewingRemoteZone}
               className="game-btn-danger sm:min-w-[140px]"
             >
               Start Combat

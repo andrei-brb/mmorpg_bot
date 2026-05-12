@@ -103,8 +103,9 @@ def _alive_party_discord_order(ac: ActivityCombatState) -> List[int]:
     return out
 
 
-def _make_enemy(key: str, char_level: int, zone=None, party_size: int = 1) -> Combatant:
-    tmpl = ENEMIES.get(key, ENEMIES["kobold"])
+def _scaled_enemy_max_hp(enemy_key: str, char_level: int, zone, party_size: int = 1) -> int:
+    """Match overworld combat scaling used by `_make_enemy` (preview + list endpoints)."""
+    tmpl = ENEMIES.get(enemy_key, ENEMIES["kobold"])
     scale = 1 + char_level * 0.06
     hp = int(tmpl.hp_base * scale)
     if tmpl.is_boss:
@@ -112,6 +113,42 @@ def _make_enemy(key: str, char_level: int, zone=None, party_size: int = 1) -> Co
         hp = int(hp * boss_scale)
     if party_size > 1:
         hp = int(hp * (1.0 + 0.35 * (party_size - 1)))
+    return hp
+
+
+def _encounter_risk_tier(player_level: int, zone, is_boss: bool) -> str:
+    """
+    Lightweight encounter difficulty hint for UI (not a guarantee).
+    Uses zone level band vs player level; bosses are judged against the top of the band.
+    """
+    if zone is None:
+        return "fair"
+    z_lo, z_hi = zone.level_range
+    pl = max(1, int(player_level))
+    if is_boss:
+        gap = pl - int(z_hi)
+        if gap < -8:
+            return "deadly"
+        if gap < -4:
+            return "risky"
+        if gap < 0:
+            return "caution"
+        return "fair"
+    target = int(z_lo) + 2
+    gap = pl - target
+    if gap < -5:
+        return "deadly"
+    if gap < -2:
+        return "risky"
+    if gap < 0:
+        return "caution"
+    return "fair"
+
+
+def _make_enemy(key: str, char_level: int, zone=None, party_size: int = 1) -> Combatant:
+    tmpl = ENEMIES.get(key, ENEMIES["kobold"])
+    scale = 1 + char_level * 0.06
+    hp = _scaled_enemy_max_hp(key, char_level, zone, party_size)
     return Combatant(
         id=str(uuid4()),
         name=f"{tmpl.emoji} {tmpl.name}",
@@ -380,20 +417,56 @@ def _enemy_key_for_dungeon_floor(cfg, floor: int) -> tuple[str, bool]:
     return enemy_key, is_boss
 
 
-async def list_zone_enemies(char: dict) -> List[Dict[str, str]]:
+async def list_zone_enemies(char: dict) -> Dict[str, Any]:
     zone = ZONES.get(char["current_zone"])
     if not zone:
-        return []
-    out: List[Dict[str, str]] = []
+        return {
+            "enemies": [],
+            "meta": {
+                "character_level": int(char.get("level") or 1),
+                "zone_key": char.get("current_zone"),
+                "zone_level_min": None,
+                "zone_level_max": None,
+            },
+        }
+    out: List[Dict[str, Any]] = []
+    lvl = int(char.get("level") or 1)
+    z_lo, z_hi = zone.level_range
     for key in zone.enemies:
         e = ENEMIES.get(key)
         if e:
-            out.append({"key": key, "name": e.name, "emoji": e.emoji, "kind": "enemy"})
+            out.append(
+                {
+                    "key": key,
+                    "name": e.name,
+                    "emoji": e.emoji,
+                    "kind": "enemy",
+                    "max_hp": _scaled_enemy_max_hp(key, lvl, zone, 1),
+                    "risk_tier": _encounter_risk_tier(lvl, zone, False),
+                }
+            )
     for key in zone.bosses:
         e = ENEMIES.get(key)
         if e:
-            out.append({"key": key, "name": e.name, "emoji": e.emoji, "kind": "boss"})
-    return out
+            out.append(
+                {
+                    "key": key,
+                    "name": e.name,
+                    "emoji": e.emoji,
+                    "kind": "boss",
+                    "max_hp": _scaled_enemy_max_hp(key, lvl, zone, 1),
+                    "risk_tier": _encounter_risk_tier(lvl, zone, True),
+                }
+            )
+    return {
+        "enemies": out,
+        "meta": {
+            "character_level": lvl,
+            "zone_key": char["current_zone"],
+            "zone_level_min": int(z_lo),
+            "zone_level_max": int(z_hi),
+        },
+    }
 
 
 async def start_activity_combat(

@@ -7,7 +7,7 @@ Endpoints:
   POST /api/token              — Exchange OAuth code (from Embedded App SDK) for access_token
   GET  /api/game/inventory     — Bearer token → character + inventory rows
   GET  /api/game/equipment     — Bearer token → equipped items by slot
-  GET  /api/game/combat/enemies — Bearer token → enemies/bosses in current zone
+  GET  /api/game/combat/enemies — Bearer token → enemies/bosses (current zone; optional ?zone_key= for preview)
   GET  /api/game/combat/state   — Bearer token → active iframe combat (if any)
   POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
   POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
@@ -633,8 +633,8 @@ async def handle_combat_enemies(request: web.Request) -> web.Response:
         char = dict(char)
         char["current_zone"] = zone_key
 
-    enemies = await activity_combat_api.list_zone_enemies(char)
-    return web.json_response(_json_safe({"enemies": enemies}))
+    payload = await activity_combat_api.list_zone_enemies(char)
+    return web.json_response(_json_safe(payload))
 
 
 async def handle_game_dungeons(request: web.Request) -> web.Response:
