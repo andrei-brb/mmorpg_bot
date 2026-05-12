@@ -10,7 +10,7 @@ type Props = {
   style?: CSSProperties;
 };
 
-/** `assets/items/generated/{Display Name}.png` (then .jpg / .jpeg), then DB emoji. */
+/** `items/{slot}/{slug}.png` or `items/quest/{id}.png`, then generated sprites, then DB emoji. */
 export function ItemIcon({ item, size = 36, className, style }: Props) {
   const candidates = useMemo(() => itemIconCandidates(item), [item]);
   const emoji = useMemo(() => itemEmojiFallback(item), [item]);
