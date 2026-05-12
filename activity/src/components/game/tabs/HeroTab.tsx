@@ -684,7 +684,7 @@ export function HeroTab() {
         </div>
 
         {/* Inventory */}
-        <div className="game-panel game-panel-hero min-w-0">
+        <div className="game-panel game-panel-hero min-w-0 hero-ref-inventory-panel">
           <div className="game-panel-header game-panel-header-hero flex flex-col gap-1 min-w-0">
             {/* Row 1: title + gold/bag — keeps currency inside the panel */}
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
@@ -756,7 +756,7 @@ export function HeroTab() {
                 <div
                   key={inv.id}
                   data-item-slot={invKey}
-                  className={`relative aspect-square ${
+                  className={`hero-ref-bag-slot relative aspect-square ${
                     inv.name
                       ? `slot-filled slot-hero-filled ${rc} ${it ? "cursor-pointer" : ""}`
                       : "slot-empty slot-hero-empty"
@@ -789,22 +789,24 @@ export function HeroTab() {
                     </button>
                   )}
                   {it ? (
-                    <div className="absolute inset-0 z-[1] flex items-center justify-center p-1">
-                      <ItemIcon item={it} size={HERO_ITEM_ICON} />
+                    <>
+                      <div className="hero-ref-bag-icon absolute inset-0 z-[1] overflow-hidden rounded-[1px]">
+                        <ItemIcon item={it} variant="tile" size={22} />
+                      </div>
                       {Number(it.enhancement_level ?? 0) > 0 && (
                         <span
-                          className="pointer-events-none absolute bottom-0.5 right-0.5 text-[7px] font-bold leading-none text-primary"
-                          style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
+                          className="pointer-events-none absolute bottom-px right-px z-[3] text-[6px] font-bold leading-none text-primary"
+                          style={{ textShadow: "0 0 3px hsl(43 78% 50% / 0.5)" }}
                         >
                           +{it.enhancement_level}
                         </span>
                       )}
-                    </div>
+                    </>
                   ) : (
                     <span className="relative z-[1] text-[6px] leading-tight text-center opacity-35">Empty</span>
                   )}
                   {it && Number(it.quantity ?? 1) > 1 && (
-                    <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-foreground"
+                    <span className="absolute bottom-px right-px z-[4] text-[6px] font-bold text-foreground"
                       style={{ textShadow: '0 1px 2px hsl(0 0% 0% / 0.8)' }}>×{it.quantity}</span>
                   )}
                   {showHoverTip && (

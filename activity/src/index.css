@@ -953,7 +953,35 @@
   }
 
   .hero-tab-ref .hero-ref-bag-grid {
-    gap: 0.28rem;
+    gap: 0.16rem;
+    grid-template-columns: repeat(5, minmax(0, 1.52rem));
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
+  @media (min-width: 400px) {
+    .hero-tab-ref .hero-ref-bag-grid {
+      grid-template-columns: repeat(5, minmax(0, 1.62rem));
+      gap: 0.18rem;
+    }
+  }
+
+  .hero-tab-ref .hero-ref-inventory-panel {
+    max-width: 11.25rem;
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  @media (min-width: 480px) {
+    .hero-tab-ref .hero-ref-inventory-panel {
+      max-width: 11.85rem;
+    }
+  }
+
+  .hero-tab-ref .hero-ref-bag-slot.slot-hero-filled.slot-filled::after {
+    inset: 2px;
+    opacity: 0.28;
   }
 
   .hero-tab-ref .slot-hero-filled.slot-filled,
