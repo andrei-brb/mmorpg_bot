@@ -2,7 +2,7 @@ import type { InvRow } from "@/lib/apiTypes";
 import { publicBaseUrl } from "@/lib/gameApi";
 
 /** Shipped under `public/items/{slot}/` and `public/items/quest/` (world-of-mmo pack). */
-const ITEM_ICON_PACK_VERSION = "2";
+const ITEM_ICON_PACK_VERSION = "3";
 
 /** Display-name sprites under `public/assets/items/generated/` (fallback). */
 const GENERATED_DIR = "assets/items/generated/";
@@ -35,6 +35,20 @@ const TEMPLATE_ID_SLOT_PREFIXES = [
 ] as const;
 
 const RARITY_TOKEN = /_(common|uncommon|rare|epic|legendary)_\d+$/i;
+
+/**
+ * `item_templates.id` → path under `items/` for loot / quest gear that has no
+ * `{slot}/{name_slug}.png` in the pack (art lives elsewhere or uses a stand-in).
+ */
+const TEMPLATE_PACK_OVERRIDE: Record<string, string> = {
+  corsair_blade: "quest/sun_scorched_scimitar.png",
+  jungle_leather_chest: "chest/leather_vest.png",
+  necklace_t1: "neck/copper_pendant.png",
+};
+
+function isProceduralGearTemplateId(tid: string): boolean {
+  return RARITY_TOKEN.test(tid);
+}
 
 /**
  * Gear templates in DB look like `head_common_1`, `main_hand_epic_3`.
@@ -91,7 +105,16 @@ function primaryPackIconSrcs(item: InvRow, base: string): string[] {
   const slug = nameToAssetSlug(item.name);
   const tid = (item.template_id || "").trim().toLowerCase();
 
+  const override = tid ? TEMPLATE_PACK_OVERRIDE[tid] : undefined;
+  if (override) {
+    out.push(`${base}items/${override}${packQuery()}`);
+  }
+
   if (slot && ZIP_SLOTS.has(slot) && slug) {
+    // Named / artifact gear often ships art as `items/quest/{template_id}.png` only.
+    if (tid && !isProceduralGearTemplateId(tid) && !override) {
+      out.push(`${base}items/quest/${tid}.png${packQuery()}`);
+    }
     if (slot === "off_hand" && slug === "eternal_guard") {
       out.push(`${base}items/off_hand/eternal_guard_shield.png${packQuery()}`);
     } else {
