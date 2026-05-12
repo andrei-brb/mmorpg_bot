@@ -29,6 +29,9 @@ const SLOT_ICONS: Record<string, string> = {
   main_hand: "⚔️", off_hand: "🛡️", neck: "📿", ring: "💍", trinket: "💎",
 };
 
+/** Icons smaller than slot frames (reference: ~50–60% of cell). */
+const HERO_ITEM_ICON = 28;
+
 const RARITY_COLORS: Record<string, string> = {
   common: "text-rarity-common border-rarity-common/40",
   uncommon: "text-rarity-uncommon border-rarity-uncommon/40",
@@ -482,7 +485,7 @@ export function HeroTab() {
       <div
         key={slotId}
         data-item-slot={slotId}
-        className={`relative aspect-square w-full ${
+        className={`hero-ref-equip-slot relative aspect-square w-full ${
           it ? `slot-filled slot-hero-filled ${rc} cursor-pointer` : "slot-empty slot-hero-empty"
         }`}
         onMouseEnter={() => it && setHoveredKey(slotId)}
@@ -494,11 +497,11 @@ export function HeroTab() {
         }}
       >
         {it ? (
-          <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
-            <ItemIcon item={it} size={46} />
+          <div className="absolute inset-0 z-[1] flex items-center justify-center p-1">
+            <ItemIcon item={it} size={HERO_ITEM_ICON} />
             {Number(it.enhancement_level ?? 0) > 0 && (
               <span
-                className="pointer-events-none absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none text-primary"
+                className="pointer-events-none absolute bottom-0.5 right-0.5 text-[7px] font-bold leading-none text-primary"
                 style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
               >
                 +{it.enhancement_level}
@@ -507,10 +510,10 @@ export function HeroTab() {
           </div>
         ) : (
           <span className="relative z-[1] flex flex-col items-center justify-center gap-0.5 text-[7px] leading-tight text-center opacity-60 font-cinzel select-none">
-            <span className="text-[14px] leading-none opacity-80" aria-hidden>
+            <span className="text-[11px] leading-none opacity-80" aria-hidden>
               {SLOT_ICONS[slotId] ?? "◇"}
             </span>
-            <span className="hidden sm:inline text-[6px] uppercase tracking-tighter">{SLOT_LABELS[slotId]}</span>
+            <span className="hidden sm:inline text-[5px] uppercase tracking-tighter">{SLOT_LABELS[slotId]}</span>
           </span>
         )}
         {showHoverTip && (
@@ -554,7 +557,7 @@ export function HeroTab() {
   const combatStats = derivedStats?.ok !== false && derivedStats ? derivedStats : null;
 
   return (
-    <div className="space-y-4 hero-tab-ref">
+    <div className="space-y-2.5 hero-tab-ref">
       {accessToken && char ? (
         <div className="game-panel game-panel-hero">
           <div className="game-panel-header game-panel-header-hero">Offline earnings</div>
@@ -612,7 +615,7 @@ export function HeroTab() {
             </div>
           </div>
 
-          <div className="hero-ref-paper-doll mt-3">
+          <div className="hero-ref-paper-doll mt-2">
             <div className="hero-ref-paper-col">{PAPER_LEFT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
             <div className="hero-ref-paper-portrait">
               <div
@@ -623,7 +626,7 @@ export function HeroTab() {
               {inventory?.discord?.avatar_url ? (
                 <Avatar className="hero-ref-paper-portrait-avatar">
                   <AvatarImage src={String(inventory.discord.avatar_url)} alt="" className="object-cover" />
-                  <AvatarFallback className="bg-transparent text-[10px]">
+                  <AvatarFallback className="bg-transparent text-[8px]">
                     {(char?.name || "?").slice(0, 1).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -646,7 +649,7 @@ export function HeroTab() {
             <div className="hero-ref-paper-col">{PAPER_RIGHT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
           </div>
 
-          <div className="ornament-divider my-3" />
+          <div className="ornament-divider my-2" />
 
           <div className="hero-ref-combat-stats">
             {(
@@ -665,7 +668,7 @@ export function HeroTab() {
             ))}
           </div>
 
-          <div className="ornament-divider my-3" />
+          <div className="ornament-divider my-2" />
           <button
             type="button"
             onClick={() => {
@@ -674,7 +677,7 @@ export function HeroTab() {
               else if (list.length === 1) setEnhanceItemId(list[0].id);
               else setBlacksmithPickerOpen(true);
             }}
-            className="game-btn-primary hero-btn-jewel text-xs w-full uppercase tracking-widest font-cinzel font-semibold"
+            className="game-btn-primary hero-btn-jewel hero-ref-blacksmith-btn w-full uppercase tracking-widest font-cinzel font-semibold"
           >
             🔨 Open Blacksmith
           </button>
@@ -682,7 +685,7 @@ export function HeroTab() {
 
         {/* Inventory */}
         <div className="game-panel game-panel-hero min-w-0">
-          <div className="game-panel-header game-panel-header-hero flex flex-col gap-2 min-w-0">
+          <div className="game-panel-header game-panel-header-hero flex flex-col gap-1 min-w-0">
             {/* Row 1: title + gold/bag — keeps currency inside the panel */}
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
               <span className="hero-inventory-title shrink-0 hero-ref-inventory-title">Inventory</span>
@@ -691,7 +694,7 @@ export function HeroTab() {
                   {Number(char?.gold ?? 0).toLocaleString()} 🪙
                 </div>
                 {bagSlotsMax > 0 && (
-                  <div className="hero-stat-muted tabular-nums whitespace-nowrap uppercase tracking-wide text-[9px]">
+                  <div className="hero-stat-muted tabular-nums whitespace-nowrap uppercase tracking-wide text-[8px]">
                     Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
                   </div>
                 )}
@@ -741,7 +744,7 @@ export function HeroTab() {
               </button>
             </div>
           </div>
-          <div className="hero-equip-grid">
+          <div className="hero-equip-grid hero-ref-bag-grid">
             {invSlots.map((inv) => {
               const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
               const invKey = `inv-${inv.id}`;
@@ -777,7 +780,7 @@ export function HeroTab() {
                         e.stopPropagation();
                         toggleBatchSellId(it.id);
                       }}
-                      className={`absolute top-1 left-1 z-20 h-4 w-4 rounded-sm border text-[10px] leading-none ${
+                      className={`absolute top-0.5 left-0.5 z-20 h-3 w-3 rounded-sm border text-[8px] leading-none ${
                         isSelected ? "bg-primary/90 border-primary text-primary-foreground" : "bg-background/70 border-border text-foreground"
                       }`}
                       title={isSelected ? "Unselect" : "Select for batch sell"}
@@ -786,11 +789,11 @@ export function HeroTab() {
                     </button>
                   )}
                   {it ? (
-                    <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
-                      <ItemIcon item={it} size={46} />
+                    <div className="absolute inset-0 z-[1] flex items-center justify-center p-1">
+                      <ItemIcon item={it} size={HERO_ITEM_ICON} />
                       {Number(it.enhancement_level ?? 0) > 0 && (
                         <span
-                          className="pointer-events-none absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none text-primary"
+                          className="pointer-events-none absolute bottom-0.5 right-0.5 text-[7px] font-bold leading-none text-primary"
                           style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
                         >
                           +{it.enhancement_level}
@@ -798,7 +801,7 @@ export function HeroTab() {
                       )}
                     </div>
                   ) : (
-                    <span className="relative z-[1] text-[7px] leading-tight text-center opacity-30">Empty</span>
+                    <span className="relative z-[1] text-[6px] leading-tight text-center opacity-35">Empty</span>
                   )}
                   {it && Number(it.quantity ?? 1) > 1 && (
                     <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-foreground"
@@ -988,7 +991,7 @@ export function HeroTab() {
                     }}
                   >
                     <span className="shrink-0">
-                      <ItemIcon item={it} size={22} />
+                      <ItemIcon item={it} size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="font-cinzel font-semibold">{it.name}</span>
