@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
-import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
-import { getIdleRewards, postIdleClaim } from "@/lib/gameApi";
+import type { CharacterDerivedStatsPayload, EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
+import { classIconUrl } from "@/lib/classAndSpecIconUrl";
+import { getCharacterDerivedStats, getIdleRewards, postIdleClaim } from "@/lib/gameApi";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
@@ -14,6 +14,10 @@ const EQUIP_ORDER = [
   "head", "chest", "hands", "legs", "feet",
   "main_hand", "off_hand", "neck", "ring", "trinket",
 ] as const;
+
+/** Left column (top → bottom): armor block. Right: weapons & accessories. */
+const PAPER_LEFT_SLOTS = ["head", "chest", "hands", "legs", "feet"] as const;
+const PAPER_RIGHT_SLOTS = ["main_hand", "off_hand", "neck", "ring", "trinket"] as const;
 
 const SLOT_LABELS: Record<string, string> = {
   head: "Head", chest: "Chest", hands: "Hands", legs: "Legs", feet: "Feet",
@@ -108,7 +112,7 @@ function statLabel(k: string): string {
 export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
-    getEnhanceInfo, postEnhance, buyProtection, requestSpecChoice,
+    getEnhanceInfo, postEnhance, buyProtection,
     accessToken, guildId, refreshProgress,
   } = useGameSession();
 
@@ -122,7 +126,8 @@ export function HeroTab() {
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
   const [blacksmithPickerOpen, setBlacksmithPickerOpen] = useState(false);
   const [listItemId, setListItemId] = useState<string | null>(null);
-  const [inventoryView, setInventoryView] = useState<"gear" | "consumables">("gear");
+  const [inventoryView, setInventoryView] = useState<"gear" | "consumables" | "materials">("gear");
+  const [derivedStats, setDerivedStats] = useState<CharacterDerivedStatsPayload | null>(null);
   const [batchSellMode, setBatchSellMode] = useState(false);
   const [batchSellIds, setBatchSellIds] = useState<Set<string>>(() => new Set());
   const [batchSelling, setBatchSelling] = useState(false);
@@ -152,6 +157,24 @@ export function HeroTab() {
       cancelled = true;
     };
   }, [accessToken, guildId, char?.name, char?.level]);
+
+  useEffect(() => {
+    if (!accessToken || !char) {
+      setDerivedStats(null);
+      return;
+    }
+    let cancelled = false;
+    void getCharacterDerivedStats(accessToken, guildId)
+      .then((s) => {
+        if (!cancelled) setDerivedStats(s);
+      })
+      .catch(() => {
+        if (!cancelled) setDerivedStats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId, char?.name, char?.level, items]);
 
   const claimIdleRewards = useCallback(async () => {
     if (!accessToken || idleClaiming) return;
@@ -184,18 +207,28 @@ export function HeroTab() {
   const bagSlotsMax = Number(inventory?.bag_slots_max ?? 0) || 0;
   const bagSlotsUsed = Number(inventory?.bag_slots_used ?? bag.length) || 0;
   const bagSlotsFree = Math.max(0, (bagSlotsMax || 0) - (bagSlotsUsed || 0));
-  const bagConsumables = useMemo(() => {
+  const bagConsumablesOnly = useMemo(() => {
+    return bag.filter((it) => (it.item_type || "").toLowerCase() === "consumable");
+  }, [bag]);
+  const bagMaterials = useMemo(() => {
     return bag.filter((it) => {
       const t = (it.item_type || "").toLowerCase();
-      // Keep “consumables” tab as a general “non-gear bag items” bin:
-      // consumables, materials, quest items, and enhancement protection.
-      return t === "consumable" || t === "material" || t === "quest" || isProtectionTemplate(it);
+      return t === "material" || t === "quest" || isProtectionTemplate(it);
     });
   }, [bag]);
   const bagGear = useMemo(() => {
-    return bag.filter((it) => !bagConsumables.includes(it));
-  }, [bag, bagConsumables]);
-  const bagShown = inventoryView === "consumables" ? bagConsumables : bagGear;
+    return bag.filter((it) => {
+      const t = (it.item_type || "").toLowerCase();
+      if (t === "consumable" || t === "material" || t === "quest" || isProtectionTemplate(it)) return false;
+      return true;
+    });
+  }, [bag]);
+  const bagShown =
+    inventoryView === "consumables"
+      ? bagConsumablesOnly
+      : inventoryView === "materials"
+        ? bagMaterials
+        : bagGear;
 
   const SLOTS_PER_PAGE = 20; // 4 rows x 5 columns
   const maxInvPage = Math.max(0, Math.ceil(bagShown.length / SLOTS_PER_PAGE) - 1);
@@ -341,11 +374,12 @@ export function HeroTab() {
     };
   }, [enhanceItemId, getEnhanceInfo]);
 
-  const equipmentSlots = EQUIP_ORDER.map((slot) => ({
-    id: slot,
-    label: SLOT_LABELS[slot],
-    item: equipped[slot] || null,
-  }));
+  const setBonusDisplay = useMemo(() => {
+    const n = items.filter(
+      (i) => i.is_equipped && ["epic", "legendary"].includes(rarityKey(i.rarity)),
+    ).length;
+    return `${Math.min(n, 5)}/5`;
+  }, [items]);
 
   const blacksmithCandidates = useMemo(() => {
     const out: InvRow[] = [];
@@ -439,8 +473,88 @@ export function HeroTab() {
     [equipped],
   );
 
+  function renderEquipSlotCell(slotId: string) {
+    const it = equipped[slotId] || null;
+    const rc = it ? RARITY_COLORS[rarityKey(it.rarity)] || "" : "";
+    const showHoverTip = it && hoveredKey === slotId && pinnedKey !== slotId;
+    const showPinned = it && pinnedKey === slotId;
+    return (
+      <div
+        key={slotId}
+        data-item-slot={slotId}
+        className={`relative aspect-square w-full ${
+          it ? `slot-filled slot-hero-filled ${rc} cursor-pointer` : "slot-empty slot-hero-empty"
+        }`}
+        onMouseEnter={() => it && setHoveredKey(slotId)}
+        onMouseLeave={() => setHoveredKey(null)}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!it) return;
+          setPinnedKey((p) => (p === slotId ? null : slotId));
+        }}
+      >
+        {it ? (
+          <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
+            <ItemIcon item={it} size={46} />
+            {Number(it.enhancement_level ?? 0) > 0 && (
+              <span
+                className="pointer-events-none absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none text-primary"
+                style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
+              >
+                +{it.enhancement_level}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="relative z-[1] flex flex-col items-center justify-center gap-0.5 text-[7px] leading-tight text-center opacity-60 font-cinzel select-none">
+            <span className="text-[14px] leading-none opacity-80" aria-hidden>
+              {SLOT_ICONS[slotId] ?? "◇"}
+            </span>
+            <span className="hidden sm:inline text-[6px] uppercase tracking-tighter">{SLOT_LABELS[slotId]}</span>
+          </span>
+        )}
+        {showHoverTip && (
+          <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+            <ItemTooltipPanel item={it} rarityClass={rc} />
+          </div>
+        )}
+        {showPinned && (
+          <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
+            <ItemTooltipPanel item={it} rarityClass={rc}>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPinnedKey(null);
+                    setEnhanceItemId(it.id);
+                  }}
+                  className="game-btn-primary text-[9px] px-2 py-0.5"
+                >
+                  🔨 Enhance
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped");
+                  }}
+                  className="game-btn-secondary text-[9px] px-2 py-0.5"
+                >
+                  Unequip
+                </button>
+              </div>
+            </ItemTooltipPanel>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const combatStats = derivedStats?.ok !== false && derivedStats ? derivedStats : null;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 hero-tab-ref">
       {accessToken && char ? (
         <div className="game-panel game-panel-hero">
           <div className="game-panel-header game-panel-header-hero">Offline earnings</div>
@@ -484,85 +598,73 @@ export function HeroTab() {
         </div>
       ) : null}
       {/* Two columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Equipment */}
-        <div className="game-panel game-panel-hero">
-          <div className="game-panel-header game-panel-header-hero">Equipment</div>
-          <p className="hero-panel-subtitle">Worn gear and weapons</p>
-          <div className="hero-equip-grid">
-            {equipmentSlots.map((slot) => {
-              const it = slot.item;
-              const rc = it ? RARITY_COLORS[rarityKey(it.rarity)] || "" : "";
-              const showHoverTip = it && hoveredKey === slot.id && pinnedKey !== slot.id;
-              const showPinned = it && pinnedKey === slot.id;
-              return (
-                <div
-                  key={slot.id}
-                  data-item-slot={slot.id}
-                  className={`relative aspect-square ${it ? `slot-filled slot-hero-filled ${rc} cursor-pointer` : "slot-empty slot-hero-empty"}`}
-                  onMouseEnter={() => it && setHoveredKey(slot.id)}
-                  onMouseLeave={() => setHoveredKey(null)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!it) return;
-                    setPinnedKey((p) => (p === slot.id ? null : slot.id));
-                  }}
-                >
-                  {it ? (
-                    <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
-                      <ItemIcon item={it} size={46} />
-                      {Number(it.enhancement_level ?? 0) > 0 && (
-                        <span
-                          className="pointer-events-none absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none text-primary"
-                          style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
-                        >
-                          +{it.enhancement_level}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="relative z-[1] text-[8px] leading-tight text-center opacity-50 font-cinzel">
-                      {slot.label}
-                    </span>
-                  )}
-                  {showHoverTip && (
-                    <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
-                      <ItemTooltipPanel item={it} rarityClass={rc} />
-                    </div>
-                  )}
-                  {showPinned && (
-                    <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
-                      <ItemTooltipPanel item={it} rarityClass={rc}>
-                        <div className="flex flex-wrap gap-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPinnedKey(null);
-                              setEnhanceItemId(it.id);
-                            }}
-                            className="game-btn-primary text-[9px] px-2 py-0.5"
-                          >
-                            🔨 Enhance
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void runAction("/api/game/item/unequip", { slot: slot.id }, "Unequipped");
-                            }}
-                            className="game-btn-secondary text-[9px] px-2 py-0.5"
-                          >
-                            Unequip
-                          </button>
-                        </div>
-                      </ItemTooltipPanel>
-                    </div>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] gap-4">
+        {/* Equipment — paper doll + combat stats */}
+        <div className="game-panel game-panel-hero hero-ref-equip-panel">
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+            <div className="min-w-0">
+              <div className="game-panel-header game-panel-header-hero !mb-0 hero-ref-equip-title">Equipment</div>
+              <p className="hero-panel-subtitle !mb-0 !mt-1">Worn gear and weapons</p>
+            </div>
+            <div className="hero-ref-set-bonus shrink-0 text-right leading-tight">
+              <div className="hero-ref-set-bonus-label">Set bonus</div>
+              <div className="hero-ref-set-bonus-value tabular-nums">{setBonusDisplay}</div>
+            </div>
+          </div>
+
+          <div className="hero-ref-paper-doll mt-3">
+            <div className="hero-ref-paper-col">{PAPER_LEFT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
+            <div className="hero-ref-paper-portrait">
+              <div
+                className="hero-ref-paper-portrait-classbg"
+                style={{ backgroundImage: `url(${classIconUrl(char?.class || "warrior")})` }}
+                aria-hidden
+              />
+              {inventory?.discord?.avatar_url ? (
+                <Avatar className="hero-ref-paper-portrait-avatar">
+                  <AvatarImage src={String(inventory.discord.avatar_url)} alt="" className="object-cover" />
+                  <AvatarFallback className="bg-transparent text-[10px]">
+                    {(char?.name || "?").slice(0, 1).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              ) : null}
+              <div className="hero-ref-paper-portrait-level">Lv.{char?.level ?? "—"}</div>
+              <div className="hero-ref-paper-portrait-nameplate">
+                <div className="hero-ref-paper-name">{(char?.name || "Hero").toUpperCase()}</div>
+                <div className="hero-ref-paper-classline">
+                  {(char?.class || "—").toString().replace(/_/g, " ").toUpperCase()}
+                  {(char?.specialization_name || char?.specialization) && (
+                    <>
+                      {" "}
+                      <span className="opacity-60">—</span>{" "}
+                      {(char.specialization_name || String(char.specialization || "").replace(/_/g, " ")).toUpperCase()}
+                    </>
                   )}
                 </div>
-              );
-            })}
+              </div>
+            </div>
+            <div className="hero-ref-paper-col">{PAPER_RIGHT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
           </div>
+
+          <div className="ornament-divider my-3" />
+
+          <div className="hero-ref-combat-stats">
+            {(
+              [
+                ["Attack", combatStats ? Math.round(combatStats.attack_power) : "—"],
+                ["Defense", combatStats ? Math.round(combatStats.armor) : "—"],
+                ["Accuracy", combatStats ? Math.round(combatStats.hit_rating) : "—"],
+                ["Critical", combatStats ? Math.round(combatStats.crit_chance) : "—"],
+                ["Speed", combatStats ? Math.round(combatStats.haste) : "—"],
+              ] as const
+            ).map(([label, val]) => (
+              <div key={label} className="hero-ref-combat-stat-cell">
+                <div className="hero-ref-combat-stat-label">{label}</div>
+                <div className="hero-ref-combat-stat-value tabular-nums">{val}</div>
+              </div>
+            ))}
+          </div>
+
           <div className="ornament-divider my-3" />
           <button
             type="button"
@@ -572,7 +674,7 @@ export function HeroTab() {
               else if (list.length === 1) setEnhanceItemId(list[0].id);
               else setBlacksmithPickerOpen(true);
             }}
-            className="game-btn-primary hero-btn-jewel text-xs w-full"
+            className="game-btn-primary hero-btn-jewel text-xs w-full uppercase tracking-widest font-cinzel font-semibold"
           >
             🔨 Open Blacksmith
           </button>
@@ -583,19 +685,19 @@ export function HeroTab() {
           <div className="game-panel-header game-panel-header-hero flex flex-col gap-2 min-w-0">
             {/* Row 1: title + gold/bag — keeps currency inside the panel */}
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
-              <span className="hero-inventory-title shrink-0">Inventory</span>
+              <span className="hero-inventory-title shrink-0 hero-ref-inventory-title">Inventory</span>
               <div className="text-right shrink-0 min-w-0">
                 <div className="hero-stat-gold tabular-nums whitespace-nowrap">
                   {Number(char?.gold ?? 0).toLocaleString()} 🪙
                 </div>
                 {bagSlotsMax > 0 && (
-                  <div className="hero-stat-muted tabular-nums whitespace-nowrap">
+                  <div className="hero-stat-muted tabular-nums whitespace-nowrap uppercase tracking-wide text-[9px]">
                     Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
                   </div>
                 )}
               </div>
             </div>
-            <p className="hero-panel-subtitle w-full max-w-full">Stashed gear, consumables, and crafting goods</p>
+            <p className="hero-panel-subtitle w-full max-w-full">Stashed gear, consumables &amp; crafting goods</p>
             {/* Row 2: filters + batch sell — ornate chrome */}
             <div className="hero-inventory-chrome min-w-0">
               <div className="flex flex-wrap items-center gap-1 shrink-0">
@@ -613,7 +715,16 @@ export function HeroTab() {
                     inventoryView === "consumables" ? "hero-inventory-segment-active" : ""
                   }`}
                 >
-                  Consumables & Upgrades
+                  Consumables
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInventoryView("materials")}
+                  className={`hero-inventory-segment ${
+                    inventoryView === "materials" ? "hero-inventory-segment-active" : ""
+                  }`}
+                >
+                  Materials
                 </button>
               </div>
               <button
@@ -623,7 +734,7 @@ export function HeroTab() {
                   setBatchSellMode((v) => !v);
                   setBatchSellIds(new Set());
                 }}
-                className={`hero-batch-toggle shrink-0 ${batchSellMode ? "hero-batch-toggle-active" : ""}`}
+                className={`hero-batch-toggle hero-ref-batch-sell shrink-0 ${batchSellMode ? "hero-batch-toggle-active" : ""}`}
                 title="Select multiple items and sell them together"
               >
                 Batch sell

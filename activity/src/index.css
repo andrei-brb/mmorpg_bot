@@ -760,6 +760,171 @@
     box-shadow: 0 0 12px hsl(var(--gold) / 0.15);
   }
 
+  /* Hero tab — paper-doll equipment + WoM-style stat strip */
+  .hero-ref-set-bonus-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .hero-ref-set-bonus-value {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: hsl(var(--gold));
+    text-shadow: 0 0 8px hsl(var(--gold) / 0.3);
+  }
+
+  .hero-ref-paper-doll {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+
+  @media (min-width: 640px) {
+    .hero-ref-paper-doll {
+      gap: 0.6rem;
+    }
+  }
+
+  .hero-ref-paper-col {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    justify-content: space-between;
+  }
+
+  .hero-ref-paper-portrait {
+    position: relative;
+    flex: 0 0 clamp(6.5rem, 28vw, 9.75rem);
+    width: clamp(6.5rem, 28vw, 9.75rem);
+    align-self: stretch;
+    min-height: 11.5rem;
+    border-radius: 2px;
+    border: 2px solid hsl(var(--frame-mid));
+    overflow: hidden;
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--gold-dim) / 0.25),
+      0 4px 14px hsl(0 0% 0% / 0.45);
+  }
+
+  .hero-ref-paper-portrait-classbg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 22%;
+    background-repeat: no-repeat;
+    filter: saturate(0.88) contrast(1.06);
+    opacity: 0.38;
+  }
+
+  .hero-ref-paper-portrait-avatar {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -52%);
+    width: 4.25rem;
+    height: 4.25rem;
+    border: 2px solid hsl(var(--gold-dim) / 0.75);
+    border-radius: 9999px;
+    box-shadow: 0 0 20px hsl(var(--gold) / 0.28), 0 4px 12px hsl(0 0% 0% / 0.55);
+  }
+
+  .hero-ref-paper-portrait-level {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    z-index: 2;
+    font-family: 'Cinzel', serif;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: hsl(var(--gold));
+    text-shadow: 0 0 10px hsl(var(--gold) / 0.5), 0 1px 3px hsl(0 0% 0% / 0.85);
+  }
+
+  .hero-ref-paper-portrait-nameplate {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    padding: 0.35rem 0.45rem 0.5rem;
+    background: linear-gradient(180deg, transparent 0%, hsl(0 0% 0% / 0.72) 38%, hsl(0 0% 0% / 0.94) 100%);
+  }
+
+  .hero-ref-paper-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: hsl(var(--gold));
+    text-shadow: 0 0 8px hsl(var(--gold) / 0.35);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hero-ref-paper-classline {
+    margin-top: 2px;
+    font-size: 0.5rem;
+    letter-spacing: 0.05em;
+    color: hsl(43 36% 84%);
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hero-ref-combat-stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  .hero-ref-combat-stat-cell {
+    padding: 0.35rem 0.15rem;
+    text-align: center;
+    border: 1px solid hsl(var(--frame-mid) / 0.9);
+    border-radius: 2px;
+    background: linear-gradient(180deg, hsl(228 18% 12% / 0.96) 0%, hsl(228 22% 8% / 0.99) 100%);
+    box-shadow: inset 0 1px 0 hsl(var(--frame-inner) / 0.22);
+  }
+
+  .hero-ref-combat-stat-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.45rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: hsl(var(--gold) / 0.88);
+    margin-bottom: 0.12rem;
+  }
+
+  .hero-ref-combat-stat-value {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  .hero-ref-inventory-title {
+    font-size: 0.72rem;
+  }
+
+  .hero-ref-batch-sell {
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase;
+    font-size: 9px !important;
+  }
+
   @media (max-width: 520px) {
     .hero-equip-grid {
       gap: 0.3rem;
