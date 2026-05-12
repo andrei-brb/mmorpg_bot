@@ -2,7 +2,7 @@ import type { InvRow } from "@/lib/apiTypes";
 import { publicBaseUrl } from "@/lib/gameApi";
 
 /** Shipped under `public/items/{slot}/` and `public/items/quest/` (world-of-mmo pack). */
-const ITEM_ICON_PACK_VERSION = "1";
+const ITEM_ICON_PACK_VERSION = "2";
 
 /** Display-name sprites under `public/assets/items/generated/` (fallback). */
 const GENERATED_DIR = "assets/items/generated/";
@@ -19,6 +19,35 @@ const ZIP_SLOTS = new Set([
   "ring",
   "trinket",
 ]);
+
+/** Longest first so `main_hand_*` / `off_hand_*` match before shorter keys. */
+const TEMPLATE_ID_SLOT_PREFIXES = [
+  "main_hand",
+  "off_hand",
+  "trinket",
+  "neck",
+  "chest",
+  "head",
+  "hands",
+  "legs",
+  "feet",
+  "ring",
+] as const;
+
+const RARITY_TOKEN = /_(common|uncommon|rare|epic|legendary)_\d+$/i;
+
+/**
+ * Gear templates in DB look like `head_common_1`, `main_hand_epic_3`.
+ * Used when API rows omit `template_equip_slot` / `equip_slot` (e.g. Blacksmith modal stub).
+ */
+export function equipSlotFromTemplateId(templateId: string | undefined | null): string | null {
+  const tid = (templateId || "").trim().toLowerCase();
+  if (!tid || !RARITY_TOKEN.test(tid)) return null;
+  for (const p of TEMPLATE_ID_SLOT_PREFIXES) {
+    if (tid.startsWith(`${p}_`)) return p;
+  }
+  return null;
+}
 
 export function looksLikeEmoji(s: string): boolean {
   const v = (s || "").trim();
@@ -56,7 +85,9 @@ function packQuery(): string {
 
 function primaryPackIconSrcs(item: InvRow, base: string): string[] {
   const out: string[] = [];
-  const slot = (item.template_equip_slot || item.equip_slot || "").trim().toLowerCase();
+  const slot =
+    (item.template_equip_slot || item.equip_slot || "").trim().toLowerCase() ||
+    equipSlotFromTemplateId(item.template_id);
   const slug = nameToAssetSlug(item.name);
   const tid = (item.template_id || "").trim().toLowerCase();
 

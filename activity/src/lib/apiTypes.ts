@@ -496,6 +496,9 @@ export type ShopCatalogItem = {
 /** Player market listing from GET /api/game/market/listings. */
 export type MarketListingRow = {
   id: string;
+  /** Inventory row template id (item_templates.id), not the listing id. */
+  template_id?: string | null;
+  template_equip_slot?: string | null;
   price: number;
   quantity: number;
   listed_at: string;

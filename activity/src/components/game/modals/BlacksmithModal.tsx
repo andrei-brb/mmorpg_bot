@@ -9,6 +9,8 @@ interface EnhancableItem {
   icon?: string | null;
   rarity: string;
   level: number;
+  template_equip_slot?: string | null;
+  equip_slot?: string | null;
 }
 
 export type BlacksmithProtection = "none" | "blessing" | "charm";
@@ -149,6 +151,8 @@ export function BlacksmithModal({
                       template_id: item.template_id,
                       name: item.name,
                       icon: item.icon ?? undefined,
+                      template_equip_slot: item.template_equip_slot,
+                      equip_slot: item.equip_slot,
                     } as any}
                     size={40}
                     className="mx-auto my-auto"

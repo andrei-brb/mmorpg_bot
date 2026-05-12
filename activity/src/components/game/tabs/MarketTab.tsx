@@ -307,11 +307,12 @@ export function MarketTab() {
               {marketListings.map((listing) => {
                 const iconItem: Partial<InvRow> = {
                   id: listing.id,
-                  template_id: listing.id,
+                  template_id: listing.template_id ?? undefined,
                   name: listing.name,
                   icon: listing.icon,
                   rarity: listing.rarity,
                   enhancement_level: listing.enhancement_level,
+                  template_equip_slot: listing.template_equip_slot,
                 };
                 return (
                 <div key={listing.id} className="game-panel p-3 flex items-start gap-3">

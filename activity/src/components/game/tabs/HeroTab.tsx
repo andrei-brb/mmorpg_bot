@@ -912,6 +912,8 @@ export function HeroTab() {
               icon: it.icon || null,
               rarity: rarityKey(it.rarity),
               level: Number(it.enhancement_level ?? 0),
+              template_equip_slot: it.template_equip_slot,
+              equip_slot: it.equip_slot,
             }}
             enhancePayload={enhancePayload}
             infoLoading={enhanceInfoLoading}
