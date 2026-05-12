@@ -74,6 +74,13 @@ class Settings:
     REST_COOLDOWN           = 60
     DAILY_RESET_HOUR_UTC    = 0
 
+    # Idle / offline rewards (Activity — server-authoritative claim between sessions)
+    IDLE_REWARDS_MAX_HOURS        = 24
+    IDLE_XP_PER_HOUR_BASE         = 8
+    IDLE_XP_PER_HOUR_PER_LEVEL    = 1
+    IDLE_GOLD_PER_HOUR_BASE       = 4
+    IDLE_GOLD_PER_HOUR_PER_LEVEL  = 1
+
     # World events
     WORLD_EVENT_INTERVAL    = 21_600       # 6 hours in seconds
     BOSS_RESPAWN_HOURS      = 6

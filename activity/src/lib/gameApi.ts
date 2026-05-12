@@ -15,6 +15,7 @@ import type {
   LiveEventRow,
   ProgressPayload,
   DeedsPayload,
+  IdleRewardsPayload,
   QuestLogPayload,
   SpecGatePayload,
 } from "./apiTypes";
@@ -167,6 +168,20 @@ export async function postExplore(token: string, guildId?: string): Promise<Expl
     body: JSON.stringify({}),
   });
   return res.json() as Promise<ExploreResultPayload>;
+}
+
+export async function getIdleRewards(token: string, guildId?: string): Promise<IdleRewardsPayload> {
+  const res = await fetch(apiUrl("/api/game/idle/rewards"), { headers: authHeaders(token, guildId) });
+  return (await res.json()) as IdleRewardsPayload;
+}
+
+export async function postIdleClaim(token: string, guildId?: string): Promise<IdleRewardsPayload> {
+  const res = await fetch(apiUrl("/api/game/idle/claim"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ guild_id: guildId }),
+  });
+  return (await res.json()) as IdleRewardsPayload;
 }
 
 export async function getCombatState(token: string, guildId?: string) {

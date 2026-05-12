@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { EnhanceInfoPayload, InvRow } from "@/lib/apiTypes";
+import type { EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
+import { getIdleRewards, postIdleClaim } from "@/lib/gameApi";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
@@ -108,9 +109,12 @@ export function HeroTab() {
   const {
     inventory, refreshInventory, itemPost,
     getEnhanceInfo, postEnhance, buyProtection, requestSpecChoice,
+    accessToken, guildId, refreshProgress,
   } = useGameSession();
 
-  /** Hover: stats only. Click: `pinnedKey` keeps actions open until outside click or same slot toggled. */
+  const [idleRewards, setIdleRewards] = useState<IdleRewardsPayload | null>(null);
+  const [idleLoading, setIdleLoading] = useState(false);
+  const [idleClaiming, setIdleClaiming] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [enhanceItemId, setEnhanceItemId] = useState<string | null>(null);
@@ -126,6 +130,56 @@ export function HeroTab() {
 
   const char = inventory?.character;
   const items = inventory?.items || [];
+
+  useEffect(() => {
+    if (!accessToken || !char) {
+      setIdleRewards(null);
+      return;
+    }
+    let cancelled = false;
+    setIdleLoading(true);
+    void getIdleRewards(accessToken, guildId)
+      .then((j) => {
+        if (!cancelled) setIdleRewards(j);
+      })
+      .catch(() => {
+        if (!cancelled) setIdleRewards({ ok: false, error: "fetch_failed" });
+      })
+      .finally(() => {
+        if (!cancelled) setIdleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId, char?.name, char?.level]);
+
+  const claimIdleRewards = useCallback(async () => {
+    if (!accessToken || idleClaiming) return;
+    setIdleClaiming(true);
+    try {
+      const j = await postIdleClaim(accessToken, guildId);
+      setIdleRewards(j);
+      if (!j.ok) {
+        toast.error(j.error === "no_character" ? "No character found." : "Could not claim offline earnings.");
+        return;
+      }
+      if (j.claimed) {
+        const gx = typeof j.xp_result?.xp_gained === "number" ? j.xp_result.xp_gained : j.pending_xp;
+        const gg = j.gold_gained ?? j.pending_gold ?? 0;
+        toast.success(`Collected ${gx ?? 0} XP and ${gg}🪙.`);
+        await refreshInventory();
+        await refreshProgress();
+      } else if (j.message) {
+        toast.message(j.message);
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setIdleClaiming(false);
+    }
+  }, [accessToken, guildId, idleClaiming, refreshInventory, refreshProgress]);
+
+  /** Hover: stats only. Click: `pinnedKey` keeps actions open until outside click or same slot toggled. */
   const bag = useMemo(() => items.filter((i) => !i.is_equipped), [items]);
   const bagSlotsMax = Number(inventory?.bag_slots_max ?? 0) || 0;
   const bagSlotsUsed = Number(inventory?.bag_slots_used ?? bag.length) || 0;
@@ -387,6 +441,48 @@ export function HeroTab() {
 
   return (
     <div className="space-y-4">
+      {accessToken && char ? (
+        <div className="game-panel game-panel-hero">
+          <div className="game-panel-header game-panel-header-hero">Offline earnings</div>
+          <p className="hero-panel-subtitle">
+            Accrues while you&apos;re away (up to {idleRewards?.max_hours ?? 24}h per claim).
+          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              {idleLoading ? (
+                <span>Checking…</span>
+              ) : idleRewards?.ok === false ? (
+                <span className="text-destructive">Could not load offline earnings.</span>
+              ) : (
+                <>
+                  Pending{" "}
+                  <span className="font-medium tabular-nums text-foreground">{idleRewards?.pending_xp ?? 0}</span> XP ·{" "}
+                  <span className="font-medium tabular-nums text-foreground">{idleRewards?.pending_gold ?? 0}</span>{" "}
+                  🪙
+                  {typeof idleRewards?.effective_hours === "number" && idleRewards.effective_hours > 0 && (
+                    <span className="ml-1.5 text-[11px] opacity-80">
+                      (~{idleRewards.effective_hours.toFixed(1)} h accrued)
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={
+                idleClaiming ||
+                idleLoading ||
+                idleRewards?.ok === false ||
+                ((idleRewards?.pending_xp ?? 0) === 0 && (idleRewards?.pending_gold ?? 0) === 0)
+              }
+              onClick={() => void claimIdleRewards()}
+              className="game-btn-primary text-xs px-3 py-1.5 shrink-0"
+            >
+              {idleClaiming ? "Collecting…" : "Collect"}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {/* Two columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Equipment */}

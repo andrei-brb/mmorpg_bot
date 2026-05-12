@@ -305,6 +305,22 @@ export type DeedsPayload = {
   error?: string;
 };
 
+/** GET /api/game/idle/rewards — POST /api/game/idle/claim */
+export type IdleRewardsPayload = {
+  ok?: boolean;
+  error?: string;
+  claimed?: boolean;
+  message?: string;
+  elapsed_seconds?: number;
+  effective_hours?: number;
+  pending_xp?: number;
+  pending_gold?: number;
+  max_hours?: number;
+  gold_gained?: number;
+  xp_result?: Record<string, unknown>;
+  character?: Record<string, unknown>;
+};
+
 export type QuestLogRow = {
   quest_id?: string;
   state?: string;

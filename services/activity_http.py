@@ -12,6 +12,8 @@ Endpoints:
   POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
   POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
   POST /api/game/rest           — Bearer token → full HP/resource restore (rest cooldown; clears iframe combat)
+  GET  /api/game/idle/rewards  — Bearer token → pending offline XP/gold (capped window; preview only)
+  POST /api/game/idle/claim    — Bearer JSON { guild_id? } → award pending rewards, reset accrual timer
   GET  /api/game/pvp/status     — Bearer token → Arena hub + optional embedded match state
   POST /api/game/pvp/queue      — JSON { mode: casual|ranked }
   DELETE /api/game/pvp/queue    — leave queue / cancel outgoing challenge
@@ -1810,6 +1812,93 @@ async def handle_rest(request: web.Request) -> web.Response:
                 "ok": True,
                 "character": dict(fresh) if fresh else None,
                 "rest_cooldown_s": Settings.REST_COOLDOWN,
+            }
+        )
+    )
+
+
+async def handle_idle_rewards_get(request: web.Request) -> web.Response:
+    """Preview pending idle XP/gold (no mutation)."""
+    try:
+        _user, _discord_id, char, _db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    from services.activity_idle_rewards import compute_idle_pending, idle_pending_to_json
+
+    pending = compute_idle_pending(dict(char))
+    return web.json_response(_json_safe({"ok": True, **idle_pending_to_json(pending)}))
+
+
+async def handle_idle_claim_post(request: web.Request) -> web.Response:
+    """Claim accrued idle rewards (XP with rested/mult rules via CharacterService; gold with guild multipliers)."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    guild_id = _guild_id_from_request(request, body)
+
+    from services.activity_idle_rewards import compute_idle_pending, idle_pending_to_json
+    from services.reward_multipliers import get_combined_reward_multipliers
+
+    char_svc = CharacterService(db)
+    char_dict = dict(char)
+    pending = compute_idle_pending(char_dict)
+
+    if pending.pending_xp <= 0 and pending.pending_gold <= 0:
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": True,
+                    "claimed": False,
+                    "message": "Nothing to claim yet.",
+                    **idle_pending_to_json(pending),
+                }
+            )
+        )
+
+    xp_mult, gold_mult, _boss = await get_combined_reward_multipliers(db, guild_id)
+    char_id = _uuid_from_any(char_dict["id"])
+
+    xp_result: Dict[str, Any] = {}
+    if pending.pending_xp > 0:
+        xp_result = await char_svc.award_xp(char_id, pending.pending_xp, xp_mult)
+
+    gold_gained = int(pending.pending_gold * gold_mult) if pending.pending_gold > 0 else 0
+    if gold_gained > 0:
+        await char_svc.add_gold(char_id, gold_gained, "idle rewards")
+
+    await db.execute(
+        "UPDATE characters SET idle_last_claim_at = NOW() WHERE id=$1",
+        char_id,
+    )
+
+    fresh = await char_svc.get_character(discord_id)
+    if fresh:
+        fresh = CharacterService.normalize_resources(dict(fresh))
+
+    after = compute_idle_pending(dict(fresh) if fresh else char_dict)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "claimed": True,
+                "xp_result": xp_result,
+                "gold_gained": gold_gained,
+                "character": dict(fresh) if fresh else None,
+                **idle_pending_to_json(after),
             }
         )
     )
@@ -3632,6 +3721,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)
     app.router.add_post("/api/game/rest", handle_rest)
+    app.router.add_get("/api/game/idle/rewards", handle_idle_rewards_get)
+    app.router.add_post("/api/game/idle/claim", handle_idle_claim_post)
     app.router.add_get("/api/game/pvp/status", handle_pvp_status)
     app.router.add_post("/api/game/pvp/queue", handle_pvp_queue_post)
     app.router.add_delete("/api/game/pvp/queue", handle_pvp_queue_delete)

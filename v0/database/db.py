@@ -99,6 +99,12 @@ class Database:
                 ALTER TABLE characters
                 ADD COLUMN IF NOT EXISTS last_blessing_claim TIMESTAMPTZ;
             """)
+
+            # Idle/offline reward accrual anchor (defaults to now so first deploy has no retro catch-up)
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS idle_last_claim_at TIMESTAMPTZ DEFAULT NOW();
+            """)
             
             # Create enhancement_log table
             await c.execute("""
