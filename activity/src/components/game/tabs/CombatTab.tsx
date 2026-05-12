@@ -644,10 +644,29 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
             </div>
 
             <div className="order-2 flex min-h-0 flex-col gap-2">
-              <div className="flex flex-1 flex-col rounded-sm border border-white/10 bg-black/20 p-2 sm:p-3">
-                <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
-                  Preview
+              <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-sm border border-white/10 bg-black/20 p-2 sm:p-3 lg:flex-row lg:items-stretch">
+                <div className="flex shrink-0 flex-row gap-2 sm:gap-3 lg:w-[124px] lg:flex-col lg:justify-center lg:border-r lg:border-white/10 lg:pr-3">
+                  <button
+                    type="button"
+                    onClick={() => void onStart()}
+                    disabled={loading || !enemyPick || previewingRemoteZone}
+                    className="game-btn-danger flex-1 lg:flex-none lg:w-full"
+                  >
+                    Start Combat
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onRest()}
+                    disabled={loading}
+                    className="game-btn-secondary flex-1 lg:flex-none lg:w-full"
+                  >
+                    Rest
+                  </button>
                 </div>
+                <div className="flex min-h-0 flex-1 flex-col">
+              <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
+                Preview
+              </div>
                 {selectedEnemy ? (
                   <>
                     <div className="mt-1 flex items-start justify-between gap-2">
@@ -718,22 +737,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                 ) : (
                   <p className="mt-2 text-xs text-muted-foreground">Select a foe from the list.</p>
                 )}
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <button
-              type="button"
-              onClick={() => void onStart()}
-              disabled={loading || !enemyPick || previewingRemoteZone}
-              className="game-btn-danger sm:min-w-[140px]"
-            >
-              Start Combat
-            </button>
-            <button type="button" onClick={() => void onRest()} disabled={loading} className="game-btn-secondary sm:min-w-[100px]">
-              Rest
-            </button>
           </div>
         </div>
       )}
