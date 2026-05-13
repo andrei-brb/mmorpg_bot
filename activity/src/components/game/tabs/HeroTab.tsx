@@ -29,10 +29,9 @@ const SLOT_ICONS: Record<string, string> = {
   main_hand: "⚔️", off_hand: "🛡️", neck: "📿", ring: "💍", trinket: "💎",
 };
 
-/** Equipped paper-doll icons — larger so gear reads clearly on the character. */
-const HERO_ITEM_ICON = 36;
-/** Bag grid icons — compact so the inventory reads as a dense stash. */
-const HERO_BAG_ITEM_ICON = 18;
+/** Unified icon size for both paper-doll and bag tiles so all slots match. */
+const HERO_ITEM_ICON = 28;
+const HERO_BAG_ITEM_ICON = HERO_ITEM_ICON;
 
 const RARITY_COLORS: Record<string, string> = {
   common: "text-rarity-common border-rarity-common/40",
@@ -603,7 +602,7 @@ export function HeroTab() {
         </div>
       ) : null}
       {/* Two columns */}
-      <div className="hero-ref-hero-columns grid grid-cols-1 md:grid-cols-[minmax(0,1.28fr)_minmax(0,0.72fr)] gap-3 md:gap-3">
+      <div className="hero-ref-hero-columns grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 md:gap-3">
         {/* Equipment — paper doll + combat stats */}
         <div className="game-panel game-panel-hero hero-ref-equip-panel min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
