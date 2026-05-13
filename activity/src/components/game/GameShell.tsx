@@ -204,28 +204,37 @@ export function GameShell() {
         <QuestOfferModal
           offer={questOffer}
           busy={questBusy}
+          playerAvatarUrl={inventory.discord?.avatar_url ?? null}
+          playerName={inventory.character?.name ?? displayName ?? null}
+          playerClass={inventory.character?.class ?? null}
           onClose={() => {
             if (questBusy) return;
             // Closing doesn't auto-decline; user can come back via NPC again if needed.
           }}
           onIgnore={async () => {
             if (!questOffer.quest_id || questBusy) return;
+            const line = questOffer.dialogue?.decline?.trim();
             setQuestBusy(true);
             try {
               const r = await declineQuestOffer(questOffer.quest_id);
-              if (r.ok) toast.success(r.message || "Quest ignored.");
-              else toast.error(r.message || r.error || "Could not ignore quest.");
+              if (r.ok) {
+                toast.success(r.message || "Quest declined.");
+                if (line) toast.message(line, { duration: 6500 });
+              } else toast.error(r.message || r.error || "Could not decline quest.");
             } finally {
               setQuestBusy(false);
             }
           }}
           onAccept={async () => {
             if (!questOffer.quest_id || questBusy) return;
+            const line = questOffer.dialogue?.accept?.trim();
             setQuestBusy(true);
             try {
               const r = await acceptQuestOffer(questOffer.quest_id);
-              if (r.ok) toast.success(r.message || "Quest accepted.");
-              else toast.error(r.message || r.error || "Could not accept quest.");
+              if (r.ok) {
+                toast.success(r.message || "Quest accepted.");
+                if (line) toast.message(line, { duration: 6500 });
+              } else toast.error(r.message || r.error || "Could not accept quest.");
             } finally {
               setQuestBusy(false);
             }
