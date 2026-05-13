@@ -3,6 +3,8 @@ import { publicBaseUrl } from "@/lib/gameApi";
 
 /** Shipped under `public/items/{slot}/` and `public/items/quest/` (world-of-mmo pack). */
 const ITEM_ICON_PACK_VERSION = "3";
+/** Bump to force Discord/browser to refetch drop-in icons. */
+const DROPIN_ITEM_ICON_VERSION = "1";
 
 /** Display-name sprites under `public/assets/items/generated/` (fallback). */
 const GENERATED_DIR = "assets/items/generated/";
@@ -152,7 +154,7 @@ function dropInTemplateIconSrcs(item: InvRow, base: string): string[] {
   const tid = (item.template_id || "").trim();
   if (!tid) return [];
   const enc = encodeURIComponent(tid);
-  return [`${base}assets/items/${enc}.png`];
+  return [`${base}assets/items/${enc}.png?v=${DROPIN_ITEM_ICON_VERSION}`];
 }
 
 /**
