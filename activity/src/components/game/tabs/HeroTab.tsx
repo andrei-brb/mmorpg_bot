@@ -29,8 +29,13 @@ const SLOT_ICONS: Record<string, string> = {
   main_hand: "⚔️", off_hand: "🛡️", neck: "📿", ring: "💍", trinket: "💎",
 };
 
-/** Unified icon size for both paper-doll and bag tiles so all slots match. */
-const HERO_ITEM_ICON = 38;
+/**
+ * Unified icon size for both paper-doll and bag tiles (ItemIcon `size` prop = CSS px).
+ * Slot frames are capped in `index.css` (`.hero-ref-equip-slot`, `.hero-ref-bag-grid`):
+ *   <420px viewport: max 3.75rem → 60px at 16px root
+ *   ≥420px: max 4rem → 64px at 16px root
+ */
+const HERO_ITEM_ICON = 48;
 const HERO_BAG_ITEM_ICON = HERO_ITEM_ICON;
 
 const RARITY_COLORS: Record<string, string> = {
