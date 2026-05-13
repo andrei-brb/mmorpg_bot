@@ -954,15 +954,13 @@
 
   .hero-tab-ref .hero-ref-bag-grid {
     gap: 0.16rem;
-    grid-template-columns: repeat(5, minmax(0, 1.52rem));
-    width: fit-content;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    width: 100%;
     max-width: 100%;
-    margin-inline: auto;
   }
 
   @media (min-width: 400px) {
     .hero-tab-ref .hero-ref-bag-grid {
-      grid-template-columns: repeat(5, minmax(0, 1.62rem));
       gap: 0.18rem;
     }
   }
@@ -974,14 +972,9 @@
   }
 
   .hero-tab-ref .hero-ref-inventory-panel {
-    width: fit-content;
-    max-width: min(11.85rem, 100%);
-  }
-
-  @media (min-width: 480px) {
-    .hero-tab-ref .hero-ref-inventory-panel {
-      max-width: min(12.25rem, 100%);
-    }
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .hero-tab-ref .hero-ref-bag-slot.slot-hero-filled.slot-filled::after {

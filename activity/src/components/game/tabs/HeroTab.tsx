@@ -601,9 +601,9 @@ export function HeroTab() {
         </div>
       ) : null}
       {/* Two columns */}
-      <div className="hero-ref-hero-columns grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3 md:gap-3">
+      <div className="hero-ref-hero-columns grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 md:gap-3">
         {/* Equipment — paper doll + combat stats */}
-        <div className="game-panel game-panel-hero hero-ref-equip-panel">
+        <div className="game-panel game-panel-hero hero-ref-equip-panel min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
             <div className="min-w-0">
               <div className="game-panel-header game-panel-header-hero !mb-0 hero-ref-equip-title">Equipment</div>
