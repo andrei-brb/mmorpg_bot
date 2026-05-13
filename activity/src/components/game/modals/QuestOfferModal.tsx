@@ -11,7 +11,7 @@ const NPC_FALLBACK_EMOJI = "💬";
 function npcPortraitSrc(npcId: string | undefined): string {
   const id = (npcId || "unknown").trim() || "unknown";
   const base = publicBaseUrl();
-  return `${base}assets/npcs/${encodeURIComponent(id)}.png?v=1`;
+  return `${base}assets/npcs/${encodeURIComponent(id)}.png?v=2`;
 }
 
 function playerInitials(name: string | undefined): string {
