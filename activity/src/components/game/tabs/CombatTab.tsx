@@ -155,6 +155,153 @@ function MiniIcon({ kind }: { kind: "xp" | "gold" | "level" }) {
   );
 }
 
+function InlineLogIcon({ kind }: { kind: "attack" | "bleed" | "heal" | "crit" | "victory" | "death" | "potion" | "gold" }) {
+  const cls = "inline-block h-4 w-4 align-[-2px]";
+  if (kind === "heal") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 21s-7-4.7-9.5-9C.7 8.6 2.6 5 6.3 5c1.9 0 3.2 1 3.7 2 0 0 1.2-2 4-2 3.7 0 5.6 3.6 3.8 7-2.5 4.3-9.8 9-9.8 9Z"
+          fill="currentColor"
+          className="text-emerald-300/90"
+        />
+        <path
+          d="M12 8v6m-3-3h6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="text-emerald-950/70"
+        />
+      </svg>
+    );
+  }
+  if (kind === "bleed") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 2c4 6 6 9 6 13a6 6 0 1 1-12 0c0-4 2-7 6-13Z"
+          fill="currentColor"
+          className="text-red-400/90"
+        />
+      </svg>
+    );
+  }
+  if (kind === "crit") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 2l2.6 7.6H22l-6.2 4.4L18.4 22 12 17.9 5.6 22l2.6-8L2 9.6h7.4L12 2Z"
+          fill="currentColor"
+          className="text-amber-300/90"
+        />
+      </svg>
+    );
+  }
+  if (kind === "potion") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M9 2h6v3l-1 1v2.2l3.1 3.1A6.5 6.5 0 1 1 6.9 11.3L10 8.2V6L9 5V2Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-violet-200/85"
+        />
+        <path
+          d="M8.5 14.5h7"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-violet-200/60"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (kind === "gold") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 3c5 0 9 2 9 5s-4 5-9 5-9-2-9-5 4-5 9-5Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-amber-200/95"
+        />
+        <path
+          d="M3 8v6c0 3 4 5 9 5s9-2 9-5V8"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-amber-200/80"
+        />
+      </svg>
+    );
+  }
+  if (kind === "victory") {
+    return <OutcomeBadgeIcon kind="victory" />;
+  }
+  if (kind === "death") {
+    return <OutcomeBadgeIcon kind="defeat" />;
+  }
+  // attack
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 20 20 4m-6 0h6v6"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        className="text-foreground/80"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+const INLINE_EMOJI_MAP: Array<{ re: RegExp; kind: Parameters<typeof InlineLogIcon>[0]["kind"] }> = [
+  { re: /⚔️|🗡️|🪓|🔪|🛡️/g, kind: "attack" },
+  { re: /🩸|🩸️|🩸/g, kind: "bleed" },
+  { re: /💚|❤️|❤/g, kind: "heal" },
+  { re: /🏆/g, kind: "victory" },
+  { re: /💀/g, kind: "death" },
+  { re: /🧪/g, kind: "potion" },
+  { re: /🪙|💰/g, kind: "gold" },
+];
+
+function renderLineWithIcons(line: string): React.ReactNode {
+  // Replace known emojis with inline icons; strip any remaining emoji glyphs.
+  let parts: Array<string | { kind: Parameters<typeof InlineLogIcon>[0]["kind"] }> = [line];
+  for (const { re, kind } of INLINE_EMOJI_MAP) {
+    const next: typeof parts = [];
+    for (const p of parts) {
+      if (typeof p !== "string") {
+        next.push(p);
+        continue;
+      }
+      const s = p;
+      let last = 0;
+      for (const m of s.matchAll(re)) {
+        const idx = m.index ?? -1;
+        if (idx < 0) continue;
+        if (idx > last) next.push(s.slice(last, idx));
+        next.push({ kind });
+        last = idx + m[0].length;
+      }
+      if (last < s.length) next.push(s.slice(last));
+    }
+    parts = next;
+  }
+
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (typeof p === "string") {
+      // Strip any remaining emoji characters anywhere in the line.
+      const cleaned = p.replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "");
+      if (cleaned) out.push(cleaned);
+      continue;
+    }
+    out.push(<InlineLogIcon key={`ico-${i}`} kind={p.kind} />);
+  }
+  return out;
+}
+
 const ZONE_EMOJI_MAP: Record<string, string> = {
   elwynn_forest: "🌲",
   dun_morogh: "❄️",
@@ -598,7 +745,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                     <ul className="mt-2 space-y-1 text-[12px] leading-relaxed text-muted-foreground">
                       {loot.slice(0, 6).map((l, i) => (
                         <li key={i} className="leading-snug">
-                          {stripLeadingEmoji(stripMd(l))}
+                          {renderLineWithIcons(stripMd(l))}
                         </li>
                       ))}
                       {loot.length > 6 ? (
@@ -648,7 +795,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                           key={i}
                           className="rounded-sm border border-white/5 bg-black/10 px-2 py-1.5"
                         >
-                          {l}
+                          {renderLineWithIcons(l)}
                         </li>
                       ))}
                     </ul>
