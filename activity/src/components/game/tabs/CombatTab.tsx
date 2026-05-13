@@ -16,6 +16,145 @@ function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
 }
 
+function stripLeadingEmoji(s: string): string {
+  // Remove leading pictographic glyphs (emoji + variation selectors) so we can render a consistent icon column.
+  // Uses a Unicode property escape; if unsupported for any reason, fall back to trimming only.
+  try {
+    return s.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "").trim();
+  } catch {
+    return s.trim();
+  }
+}
+
+function OutcomeBadgeIcon({ kind }: { kind: "victory" | "defeat" | "neutral" }) {
+  const common = "h-10 w-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.55)]";
+  if (kind === "victory") {
+    return (
+      <svg className={common} viewBox="0 0 64 64" fill="none" aria-hidden>
+        <path
+          d="M20 10h24v10c0 8-5 15-12 17-7-2-12-9-12-17V10Z"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-amber-200"
+        />
+        <path
+          d="M24 44h16v6H24v-6Z"
+          fill="currentColor"
+          className="text-amber-300/90"
+        />
+        <path
+          d="M18 50h28v6H18v-6Z"
+          fill="currentColor"
+          className="text-amber-200/70"
+        />
+        <path
+          d="M20 14H12c0 10 6 18 14 20"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-amber-200/90"
+        />
+        <path
+          d="M44 14h8c0 10-6 18-14 20"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-amber-200/90"
+        />
+      </svg>
+    );
+  }
+  if (kind === "defeat") {
+    return (
+      <svg className={common} viewBox="0 0 64 64" fill="none" aria-hidden>
+        <path
+          d="M32 10c12 0 22 8 22 22s-10 22-22 22S10 44 10 32 20 10 32 10Z"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-slate-200/90"
+        />
+        <path
+          d="M22 27c0-3 2-5 5-5s5 2 5 5-2 5-5 5-5-2-5-5Zm15 0c0-3 2-5 5-5s5 2 5 5-2 5-5 5-5-2-5-5Z"
+          fill="currentColor"
+          className="text-slate-200/80"
+        />
+        <path
+          d="M24 44c2-3 5-5 8-5s6 2 8 5"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-slate-200/85"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg className={common} viewBox="0 0 64 64" fill="none" aria-hidden>
+      <path
+        d="M18 46 46 18m-6 0h6v6"
+        stroke="currentColor"
+        strokeWidth="4"
+        className="text-foreground/70"
+        strokeLinecap="round"
+      />
+      <path
+        d="M22 18h10l-6 6"
+        stroke="currentColor"
+        strokeWidth="4"
+        className="text-foreground/70"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MiniIcon({ kind }: { kind: "xp" | "gold" | "level" }) {
+  const cls = "h-3.5 w-3.5";
+  if (kind === "gold") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 3c5 0 9 2 9 5s-4 5-9 5-9-2-9-5 4-5 9-5Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-amber-200/95"
+        />
+        <path
+          d="M3 8v6c0 3 4 5 9 5s9-2 9-5V8"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-amber-200/85"
+        />
+      </svg>
+    );
+  }
+  if (kind === "level") {
+    return (
+      <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 3l2.2 6.5H21l-5.6 4 2.1 6.5L12 16.7 6.5 20l2.1-6.5-5.6-4h6.8L12 3Z"
+          fill="currentColor"
+          className="text-emerald-200/90"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg className={cls} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3c5 0 9 2 9 5s-4 5-9 5-9-2-9-5 4-5 9-5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-sky-200/90"
+      />
+      <path
+        d="M3 8v6c0 3 4 5 9 5s9-2 9-5V8"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-sky-200/70"
+      />
+    </svg>
+  );
+}
+
 const ZONE_EMOJI_MAP: Record<string, string> = {
   elwynn_forest: "🌲",
   dun_morogh: "❄️",
@@ -404,7 +543,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     const gold = typeof outcome.gold === "number" ? outcome.gold : null;
     const leveledUp = Boolean(outcome.leveled_up);
     const loot = Array.isArray(outcome.loot) ? outcome.loot : [];
-    const logLines = (outcome.lines || []).map(stripMd);
+    const rawLogLines = (outcome.lines || []).map(stripMd);
+    const logLines = rawLogLines.map(stripLeadingEmoji);
 
     const onClose = () => {
       setOutcome(null);
@@ -420,12 +560,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           <div className="mx-auto w-full max-w-3xl">
             <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
               <div className="rounded-sm border border-white/10 bg-black/20 p-3 sm:p-4">
-                <div
-                  className="text-5xl"
-                  style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}
-                >
-                  {isVictory ? "🏆" : isDefeat ? "💀" : "⚔️"}
-                </div>
+                <OutcomeBadgeIcon kind={isVictory ? "victory" : isDefeat ? "defeat" : "neutral"} />
                 <h2
                   className="mt-3 font-cinzel text-lg font-bold text-foreground"
                   style={{ textShadow: isVictory ? "0 0 8px hsl(43 78% 50% / 0.3)" : "none" }}
@@ -436,17 +571,20 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
                 <div className="flex flex-wrap gap-2">
                   {xp != null ? (
-                    <span className="rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[10px] font-semibold text-foreground/90">
-                      +{xp.toLocaleString()} XP
+                    <span className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-semibold text-foreground/90">
+                      <MiniIcon kind="xp" />
+                      <span className="tabular-nums">+{xp.toLocaleString()}</span> XP
                     </span>
                   ) : null}
                   {gold != null ? (
-                    <span className="rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[10px] font-semibold text-foreground/90">
-                      +{gold.toLocaleString()} 🪙
+                    <span className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-semibold text-foreground/90">
+                      <MiniIcon kind="gold" />
+                      <span className="tabular-nums">+{gold.toLocaleString()}</span>
                     </span>
                   ) : null}
                   {leveledUp ? (
-                    <span className="rounded-sm border border-emerald-500/30 bg-emerald-950/20 px-2 py-1 text-[10px] font-semibold text-emerald-50">
+                    <span className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-500/30 bg-emerald-950/20 px-2 py-1 text-[11px] font-semibold text-emerald-50">
+                      <MiniIcon kind="level" />
                       LEVEL UP
                     </span>
                   ) : null}
@@ -457,10 +595,10 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                     <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
                       Loot
                     </div>
-                    <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                    <ul className="mt-2 space-y-1 text-[12px] leading-relaxed text-muted-foreground">
                       {loot.slice(0, 6).map((l, i) => (
                         <li key={i} className="leading-snug">
-                          {stripMd(l)}
+                          {stripLeadingEmoji(stripMd(l))}
                         </li>
                       ))}
                       {loot.length > 6 ? (
@@ -502,17 +640,20 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                 <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
                   Combat log
                 </div>
-                <div className="mt-2 max-h-[42vh] overflow-y-auto overscroll-contain rounded-sm border border-white/10 bg-black/20 p-2">
+                <div className="mt-2 max-h-[42vh] overflow-y-auto overscroll-contain rounded-sm border border-white/10 bg-black/25 p-2 sm:p-2.5">
                   {logLines.length ? (
-                    <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <ul className="space-y-2 text-[12.5px] leading-relaxed text-foreground/85 sm:text-[13px]">
                       {logLines.map((l, i) => (
-                        <li key={i} className="leading-snug">
+                        <li
+                          key={i}
+                          className="rounded-sm border border-white/5 bg-black/10 px-2 py-1.5"
+                        >
                           {l}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-[11px] text-muted-foreground">No log lines.</p>
+                    <p className="text-[12px] text-muted-foreground">No log lines.</p>
                   )}
                 </div>
               </div>
