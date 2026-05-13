@@ -601,7 +601,16 @@ export type CombatActionJson = {
   ok?: boolean;
   ended?: boolean;
   state?: CombatStatePayload;
-  outcome?: { type?: string; title?: string; lines?: string[] };
+  outcome?: {
+    type?: string;
+    title?: string;
+    lines?: string[];
+    /** Structured rewards (may be absent depending on outcome type / older server payloads). */
+    xp?: number;
+    gold?: number;
+    leveled_up?: boolean;
+    loot?: string[];
+  };
   error?: string;
   message?: string;
 };

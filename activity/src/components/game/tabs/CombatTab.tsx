@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import * as api from "@/lib/gameApi";
 
 type CombatTabMode = "overworld" | "dungeon";
+type RichOutcome = NonNullable<api.CombatActionJson["outcome"]>;
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -71,7 +72,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [enemies, setEnemies] = useState<CombatEnemy[]>([]);
   const [state, setState] = useState<CombatStatePayload | null>(null);
   const [enemyPick, setEnemyPick] = useState("");
-  const [outcome, setOutcome] = useState<{ title?: string; lines?: string[] } | null>(null);
+  const [outcome, setOutcome] = useState<RichOutcome | null>(null);
   const [loading, setLoading] = useState(false);
   const [combatTabMode, setCombatTabMode] = useState<CombatTabMode>("overworld");
   const [activeEnemy, setActiveEnemy] = useState<{ key: string; kind: "enemy" | "boss" } | null>(null);
@@ -169,8 +170,13 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       );
       if (snap.ended_outcome?.outcome) {
         pendingCombatEnemyKey.current = null;
-        toast.info(snap.ended_outcome.outcome.title || "Encounter ended", {
-          description: (snap.ended_outcome.outcome.lines || []).slice(0, 3).map(stripMd).join(" "),
+        const oc = snap.ended_outcome.outcome;
+        setOutcome(oc || null);
+        setMode("outcome");
+        setState(null);
+        setActiveEnemy(null);
+        toast.info(oc.title || "Encounter ended", {
+          description: (oc.lines || []).slice(0, 3).map(stripMd).join(" "),
         });
         if (accessToken) await api.postCombatStateAck(accessToken, guildId);
         return;
@@ -262,7 +268,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         // Solo overworld wins do not surface `ended_outcome` on GET /combat/state — clear here so a later
         // `refresh()` (tab focus, Rest, etc.) cannot auto-restart from a stale explore pending key.
         pendingCombatEnemyKey.current = null;
-        setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
+        setOutcome(json.outcome);
         setMode("outcome");
         if (json.outcome.type === "victory" || json.outcome.type === "flee") {
           await refreshInventory(); await refreshProgress();
@@ -283,7 +289,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       const json = await combatAction({ flee: true });
       if (json.ended && json.outcome) {
         pendingCombatEnemyKey.current = null;
-        setOutcome({ title: json.outcome.title, lines: json.outcome.lines });
+        setOutcome(json.outcome);
         setMode("outcome");
         await refreshInventory(); await refreshProgress();
       } else if (json.state) setState(json.state);
@@ -385,44 +391,133 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   // Outcome screen (Lovable style)
   if (mode === "outcome" && outcome) {
-    const isVictory = (outcome.title || "").toLowerCase().includes("victory") || (outcome.title || "").toLowerCase().includes("won");
+    const titleText = String(outcome.title || "Combat ended");
+    const isVictory =
+      String(outcome.type || "").toLowerCase() === "victory" ||
+      titleText.toLowerCase().includes("victory") ||
+      titleText.toLowerCase().includes("won");
+    const isDefeat =
+      String(outcome.type || "").toLowerCase() === "defeat" ||
+      titleText.toLowerCase().includes("defeat") ||
+      titleText.toLowerCase().includes("defeated");
+    const xp = typeof outcome.xp === "number" ? outcome.xp : null;
+    const gold = typeof outcome.gold === "number" ? outcome.gold : null;
+    const leveledUp = Boolean(outcome.leveled_up);
+    const loot = Array.isArray(outcome.loot) ? outcome.loot : [];
+    const logLines = (outcome.lines || []).map(stripMd);
+
+    const onClose = () => {
+      setOutcome(null);
+      setState(null);
+      setActiveEnemy(null);
+      setMode("pick");
+      void refresh();
+    };
     return (
       <div>
         {showSubModeToggle && modeSegment}
-        <div className="game-panel text-center py-8">
-        <div className="text-5xl mb-4" style={{ filter: 'drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))' }}>
-          {isVictory ? "🏆" : "💀"}
-        </div>
-        <h2 className="font-cinzel text-xl font-bold text-foreground mb-2"
-          style={{ textShadow: isVictory ? '0 0 8px hsl(43 78% 50% / 0.3)' : 'none' }}>
-          {outcome.title || "Combat ended"}
-        </h2>
-        <div className="ornament-divider my-3 mx-auto max-w-[200px]" />
-        <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto mb-4">
-          {(outcome.lines || []).map((l, i) => <li key={i}>{stripMd(l)}</li>)}
-        </ul>
-        <div className="flex gap-3 justify-center mt-5">
-          <button
-            type="button"
-            onClick={() => {
-              void quickFightAgain().then((r) => {
-                if (r.state) {
-                  setState(r.state);
-                  setMode("fight");
-                  setOutcome(null);
-                  return;
-                }
-                // Fallback: refresh combat list if there isn't a quest fight intent.
-                void refresh();
-                if (r.message) toast.error(r.message);
-              });
-            }}
-            className="game-btn-primary"
-          >
-            Fight Again
-          </button>
-          <button type="button" onClick={() => void onRest()} className="game-btn-secondary">Rest</button>
-        </div>
+        <div className="game-panel py-6 sm:py-7">
+          <div className="mx-auto w-full max-w-3xl">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
+              <div className="rounded-sm border border-white/10 bg-black/20 p-3 sm:p-4">
+                <div
+                  className="text-5xl"
+                  style={{ filter: "drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5))" }}
+                >
+                  {isVictory ? "🏆" : isDefeat ? "💀" : "⚔️"}
+                </div>
+                <h2
+                  className="mt-3 font-cinzel text-lg font-bold text-foreground"
+                  style={{ textShadow: isVictory ? "0 0 8px hsl(43 78% 50% / 0.3)" : "none" }}
+                >
+                  {titleText}
+                </h2>
+                <div className="ornament-divider my-3 max-w-[220px]" />
+
+                <div className="flex flex-wrap gap-2">
+                  {xp != null ? (
+                    <span className="rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[10px] font-semibold text-foreground/90">
+                      +{xp.toLocaleString()} XP
+                    </span>
+                  ) : null}
+                  {gold != null ? (
+                    <span className="rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[10px] font-semibold text-foreground/90">
+                      +{gold.toLocaleString()} 🪙
+                    </span>
+                  ) : null}
+                  {leveledUp ? (
+                    <span className="rounded-sm border border-emerald-500/30 bg-emerald-950/20 px-2 py-1 text-[10px] font-semibold text-emerald-50">
+                      LEVEL UP
+                    </span>
+                  ) : null}
+                </div>
+
+                {loot.length > 0 ? (
+                  <div className="mt-3">
+                    <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
+                      Loot
+                    </div>
+                    <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                      {loot.slice(0, 6).map((l, i) => (
+                        <li key={i} className="leading-snug">
+                          {stripMd(l)}
+                        </li>
+                      ))}
+                      {loot.length > 6 ? (
+                        <li className="text-[10px] text-muted-foreground/80">+{loot.length - 6} more…</li>
+                      ) : null}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void quickFightAgain().then((r) => {
+                        if (r.state) {
+                          setState(r.state);
+                          setMode("fight");
+                          setOutcome(null);
+                          return;
+                        }
+                        void refresh();
+                        if (r.message) toast.error(r.message);
+                      });
+                    }}
+                    className="game-btn-primary"
+                  >
+                    Fight Again
+                  </button>
+                  <button type="button" onClick={() => void onRest()} className="game-btn-secondary">
+                    Rest
+                  </button>
+                  <button type="button" onClick={onClose} className="game-btn-secondary">
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-sm border border-white/10 bg-black/15 p-3 sm:p-4">
+                <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
+                  Combat log
+                </div>
+                <div className="mt-2 max-h-[42vh] overflow-y-auto overscroll-contain rounded-sm border border-white/10 bg-black/20 p-2">
+                  {logLines.length ? (
+                    <ul className="space-y-1 text-[11px] text-muted-foreground">
+                      {logLines.map((l, i) => (
+                        <li key={i} className="leading-snug">
+                          {l}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">No log lines.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
