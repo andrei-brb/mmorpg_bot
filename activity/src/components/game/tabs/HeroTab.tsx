@@ -30,7 +30,7 @@ const SLOT_ICONS: Record<string, string> = {
 };
 
 /** Unified icon size for both paper-doll and bag tiles so all slots match. */
-const HERO_ITEM_ICON = 29;
+const HERO_ITEM_ICON = 38;
 const HERO_BAG_ITEM_ICON = HERO_ITEM_ICON;
 
 const RARITY_COLORS: Record<string, string> = {
