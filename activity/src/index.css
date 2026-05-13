@@ -970,7 +970,7 @@
 
   @media (min-width: 768px) {
     .hero-ref-hero-columns {
-      align-items: start;
+      align-items: stretch;
     }
   }
 
@@ -978,6 +978,18 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-tab-ref .hero-ref-inventory-panel > .hero-equip-grid.hero-ref-bag-grid {
+    flex: 1 1 auto;
+    align-content: start;
+  }
+
+  .hero-tab-ref .hero-ref-equip-panel {
+    display: flex;
+    flex-direction: column;
   }
 
   .hero-tab-ref .hero-ref-bag-slot.slot-hero-filled.slot-filled::after {
