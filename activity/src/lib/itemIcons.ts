@@ -144,12 +144,25 @@ function generatedSrcsForName(itemName: string | undefined | null, base: string)
 }
 
 /**
- * Primary: `items/{slot}/{slug}.png` or `items/quest/{template_id}.png` (pack on CDN).
+ * Hand-painted drops under `public/assets/items/{template_id}.png` (see
+ * `public/assets/items/README.md`). Tried after the `public/items/` pack so
+ * consumables can match gear art without living under `items/quest/`.
+ */
+function dropInTemplateIconSrcs(item: InvRow, base: string): string[] {
+  const tid = (item.template_id || "").trim();
+  if (!tid) return [];
+  const enc = encodeURIComponent(tid);
+  return [`${base}assets/items/${enc}.png`];
+}
+
+/**
+ * Primary: `items/{slot}/{slug}.png` or `items/quest/{template_id}.png` (pack under `public/items/`).
+ * Then: `assets/items/{template_id}.png` (drop-in, same naming as DB template id).
  * Fallback: `assets/items/generated/{Display Name}.png` / `.jpg` / `.jpeg`.
  */
 export function itemIconCandidates(item: InvRow): string[] {
   const base = publicBaseUrl();
-  return [...new Set([...primaryPackIconSrcs(item, base), ...generatedSrcsForName(item.name, base)])];
+  return [...new Set([...primaryPackIconSrcs(item, base), ...dropInTemplateIconSrcs(item, base), ...generatedSrcsForName(item.name, base)])];
 }
 
 export function itemEmojiFallback(item: InvRow, defaultEmoji = "📦"): string {
