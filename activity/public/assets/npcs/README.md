@@ -9,4 +9,10 @@ The Activity resolves NPC art by **convention** (no portrait URL on `QuestOfferP
 
 **Fallback:** If the file is missing or fails to load, the quest-offer modal shows a speech-bubble emoji placeholder instead.
 
-Shipped PNGs here are **simple gradient placeholders** (one per known template id). Swap them for final portrait art without changing code, keeping the same filenames.
+**Regenerate in-repo cards** (soft silhouette + name + discovery hint, distinct per `npc_id`):
+
+```bash
+PYTHONPATH=. python3 scripts/render_npc_quest_portraits.py
+```
+
+**Illustrated art pass (v0 / external gen):** copy-paste prompts for every NPC are in [`scripts/v0_prompts_npcs_quest_vn.md`](../../../../scripts/v0_prompts_npcs_quest_vn.md). Export PNGs with the same `{npc_id}.png` filenames into this folder.
