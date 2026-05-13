@@ -30,6 +30,7 @@ import type {
 } from "@/lib/apiTypes";
 import type { StartCombatParams } from "@/lib/gameApi";
 import * as api from "@/lib/gameApi";
+import { ZONES as ZONES_DATA } from "@/data/zones";
 
 type Phase = "boot" | "loading" | "ready" | "error" | "no_client";
 
@@ -80,6 +81,8 @@ type GameSessionValue = {
   /** "Quick fight" intent used by Quest tab + Combat "Fight again". */
   setQuickFightIntent: (intent: { kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null) => void;
   quickFightAgain: () => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
+  /** Last overworld enemy started from Activity (used to resolve portraits for quest-started fights). */
+  lastStartedEnemy: MutableRefObject<{ key: string; kind: "enemy" | "boss" } | null>;
   combatAction: (body: Record<string, unknown>) => Promise<api.CombatActionJson>;
   rest: () => Promise<{ ok: boolean; message?: string; cooldown_s?: number }>;
   itemPost: (endpoint: string, body: Record<string, unknown>) => Promise<Response>;
@@ -240,6 +243,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
 
   const pendingCombatEnemyKey = useRef<string | null>(null);
   const quickFightIntentRef = useRef<{ kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null>(null);
+  const lastStartedEnemy = useRef<{ key: string; kind: "enemy" | "boss" } | null>(null);
   const sdkRef = useRef<DiscordSDK | null>(null);
 
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
@@ -431,6 +435,13 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const startCombat = useCallback(
     async (params: StartCombatParams) => {
       if (!accessToken) return { ok: false, message: "no token" };
+      if (params.kind === "zone" && params.enemyKey) {
+        const k = String(params.enemyKey).trim();
+        if (k) {
+          const isBoss = ZONES_DATA.some((z) => z.bosses?.some((b) => b.key === k));
+          lastStartedEnemy.current = { key: k, kind: isBoss ? "boss" : "enemy" };
+        }
+      }
       const startRes = await api.postCombatStart(accessToken, guildId, params);
       const startJson = (await startRes.json()) as {
         ok?: boolean;
@@ -813,6 +824,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       startCombat,
       setQuickFightIntent,
       quickFightAgain,
+      lastStartedEnemy,
       combatAction,
       rest,
       itemPost,
@@ -867,6 +879,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       startCombat,
       setQuickFightIntent,
       quickFightAgain,
+      lastStartedEnemy,
       combatAction,
       rest,
       itemPost,

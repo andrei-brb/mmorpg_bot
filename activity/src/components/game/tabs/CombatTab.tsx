@@ -352,6 +352,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     pendingCombatEnemyKey, refreshInventory, refreshProgress, map,
     inventory, combatFocusActive, setCombatFocusActive,
     quickFightAgain,
+    lastStartedEnemy,
   } = useGameSession();
 
   const [mode, setMode] = useState<"pick" | "fight" | "outcome">("pick");
@@ -468,6 +469,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
         return;
       }
       if (snap.active && snap.state) {
+        const ls = lastStartedEnemy?.current;
+        if (ls?.key) setActiveEnemy({ key: ls.key, kind: ls.kind });
         setState(snap.state);
         setMode("fight");
         setOutcome(null);
@@ -761,6 +764,8 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                     onClick={() => {
                       void quickFightAgain().then((r) => {
                         if (r.state) {
+                          const ls = lastStartedEnemy?.current;
+                          if (ls?.key) setActiveEnemy({ key: ls.key, kind: ls.kind });
                           setState(r.state);
                           setMode("fight");
                           setOutcome(null);
