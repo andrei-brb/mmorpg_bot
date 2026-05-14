@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
-from config.settings import Settings, ZONES
+from config.settings import Settings, ZONES, ENEMIES
 from services.character.character_service import CharacterService
 
 log = logging.getLogger("cog.events")
@@ -60,12 +60,14 @@ class EventsCog(commands.Cog, name="Events"):
         self.world_event_loop.start()
         self.boss_respawn_loop.start()
         self.daily_reset_loop.start()
+        self.world_boss_trigger_loop.start()
         log.info("Event loops started.")
 
     def cog_unload(self):
         self.world_event_loop.cancel()
         self.boss_respawn_loop.cancel()
         self.daily_reset_loop.cancel()
+        self.world_boss_trigger_loop.cancel()
 
     # ── Tasks ─────────────────────────────────────────────────────────────────
 
@@ -109,6 +111,80 @@ class EventsCog(commands.Cog, name="Events"):
                WHERE boss_alive=FALSE AND (boss_next_spawn IS NULL OR boss_next_spawn <= NOW())"""
         )
 
+    @tasks.loop(minutes=3)
+    async def world_boss_trigger_loop(self):
+        """Evaluate guild-scoped world boss windows (milestones + zone presence)."""
+        from config.world_boss_triggers import WORLD_BOSS_TRIGGERS
+        from services.world_boss.world_boss_service import WorldBossService
+
+        try:
+            db = self.bot.db
+            ids = set(await WorldBossService.distinct_activity_guild_ids(db))
+            for g in self.bot.guilds:
+                ids.add(g.id)
+            for gid in ids:
+                svc = WorldBossService(db)
+                opened = await svc.evaluate_all_triggers_for_guild(gid)
+                for trig in opened:
+                    try:
+                        await self._send_world_boss_announce(gid, trig)
+                        wid = await svc.latest_window_id(gid, trig.slug)
+                        if wid:
+                            await svc.set_window_announced(wid)
+                    except Exception as e:
+                        log.warning("World boss announce failed guild=%s: %s", gid, e)
+                for row in await svc.pending_announce_rows(gid):
+                    slug = row.get("trigger_slug") or ""
+                    trig = next((t for t in WORLD_BOSS_TRIGGERS if t.slug == slug), None)
+                    if not trig:
+                        continue
+                    try:
+                        await self._send_world_boss_announce(gid, trig)
+                        await svc.set_window_announced(row["id"])
+                    except Exception as e:
+                        log.warning("World boss announce retry failed guild=%s: %s", gid, e)
+        except Exception:
+            log.exception("world_boss_trigger_loop")
+
+    async def _send_world_boss_announce(self, guild_id: int, trig) -> None:
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+        zone = ZONES.get(trig.zone_key)
+        zone_name = zone.name if zone else trig.zone_key
+        boss = ENEMIES.get(trig.boss_key)
+        boss_name = boss.name if boss else trig.boss_key.replace("_", " ").title()
+        embed = discord.Embed(
+            title=f"💀 {trig.title}",
+            description=(
+                f"**{boss_name}** threatens **{zone_name}**.\n"
+                f"Use **`/explore`** in that zone (or the Activity Explore tab) for a chance to confront them."
+            ),
+            color=0x8B0000,
+        )
+        embed.set_footer(text="World boss window — guild-wide event")
+        channel = None
+        try:
+            if hasattr(self.bot, "channels"):
+                ch_id = self.bot.channels.get_channel_id(guild_id, "announce") or self.bot.channels.get_channel_id(
+                    guild_id, "general"
+                )
+                if ch_id:
+                    channel = guild.get_channel(ch_id)
+        except Exception:
+            channel = None
+        if channel is None:
+            channel = guild.system_channel
+        if channel is None:
+            for ch in guild.text_channels:
+                perms = ch.permissions_for(guild.me)
+                if perms.send_messages and perms.embed_links:
+                    channel = ch
+                    break
+        if channel is None:
+            return
+        await channel.send(embed=embed)
+
     @tasks.loop(hours=24)
     async def daily_reset_loop(self):
         """Reset daily quests and zone kill counts."""
@@ -122,6 +198,7 @@ class EventsCog(commands.Cog, name="Events"):
     @world_event_loop.before_loop
     @boss_respawn_loop.before_loop
     @daily_reset_loop.before_loop
+    @world_boss_trigger_loop.before_loop
     async def wait_ready(self): await self.bot.wait_until_ready()
 
     # ── Commands ──────────────────────────────────────────────────────────────

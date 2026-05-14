@@ -27,6 +27,8 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             await interaction.response.defer()
         char = await self.svc.get_character(interaction.user.id)
         if not char: return await interaction.followup.send("❌ No character — use `/character create`.")
+        if interaction.guild_id:
+            await self.svc.set_last_discord_guild(char["id"], interaction.guild_id)
         
         # Auto-fix stuck combat status (no active fight but status says in_combat)
         if char["combat_status"] == "in_combat":
@@ -59,7 +61,19 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         xp_mult, gold_mult, boss_add = await get_combined_reward_multipliers(
             self.bot.db, interaction.guild_id
         )
-        outcome = roll_explore_outcome(zone, boss_add)
+        from services.world_boss.world_boss_service import WorldBossService
+
+        wbs = WorldBossService(self.bot.db)
+        zone_patrol = await WorldBossService.fetch_zone_patrol_boss_alive(self.bot.db, char["current_zone"])
+        world_key = await wbs.active_window_boss_for_zone(interaction.guild_id, char["current_zone"])
+        if world_key:
+            boss_add = min(boss_add + 0.08, 0.15)
+        outcome = roll_explore_outcome(
+            zone,
+            boss_add,
+            zone_patrol_boss_alive=zone_patrol,
+            world_boss_key=world_key,
+        )
         embed = discord.Embed(title=f"{zone.emoji} Exploring {zone.name}", description=random.choice(zone.ambients), color=0x2F7F3F)
 
         # Set cooldown based on outcome: 10s for rewards, 30s for encounters
@@ -153,6 +167,8 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             await interaction.response.defer()
         char = await self.svc.get_character(interaction.user.id)
         if not char: return await interaction.followup.send("❌ No character.")
+        if interaction.guild_id:
+            await self.svc.set_last_discord_guild(char["id"], interaction.guild_id)
         if char["current_zone"] == zone: return await interaction.followup.send(f"You're already in **{ZONES[zone].name}**!")
         z = ZONES[zone]
         if char["level"] < z.level_range[0]:

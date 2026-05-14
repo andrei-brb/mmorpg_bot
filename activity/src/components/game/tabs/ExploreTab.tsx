@@ -356,6 +356,7 @@ function ResultPanel({
 function ZoneMap({
   zones,
   currentZone,
+  loreWindowTitle,
   onSelectZone,
   latestResult,
   exploring,
@@ -366,6 +367,7 @@ function ZoneMap({
 }: {
   zones: Zone[];
   currentZone: Zone;
+  loreWindowTitle?: string | null;
   onSelectZone: (zone: Zone) => void;
   latestResult?: ExploreResult | null;
   exploring?: boolean;
@@ -451,6 +453,12 @@ function ZoneMap({
                 <span className="text-[10px] font-serif text-red-300 uppercase tracking-wide">World Boss Active</span>
               </div>
             )}
+            {loreWindowTitle ? (
+              <div className="flex items-center gap-1.5 mt-1 rounded px-2 py-0.5 bg-purple-950/70 border border-purple-400/40">
+                <Crown className="h-3 w-3 text-purple-300 animate-pulse" />
+                <span className="text-[10px] font-serif text-purple-200 uppercase tracking-wide">{loreWindowTitle}</span>
+              </div>
+            ) : null}
             {currentZone.regionHint && <p className="text-[10px] text-muted-foreground/70 italic max-w-[220px] leading-relaxed mt-1">{currentZone.regionHint}</p>}
           </div>
         )}
@@ -581,6 +589,12 @@ export function ExploreTab() {
     () => zones.find((z) => z.id === travelTargetId) ?? EXPLORE_ZONES[0],
     [zones, travelTargetId],
   );
+
+  const activeLoreWindow = useMemo(() => {
+    const wins = map?.world_boss_windows;
+    if (!wins?.length) return null;
+    return wins.find((w) => w.zone_key === currentZoneId) ?? null;
+  }, [map?.world_boss_windows, currentZoneId]);
 
   useEffect(() => {
     const key = map?.current_zone?.trim();
@@ -725,6 +739,7 @@ export function ExploreTab() {
           <ZoneMap
             zones={zones}
             currentZone={currentZone}
+            loreWindowTitle={activeLoreWindow?.title ?? null}
             onSelectZone={(z) => setTravelTargetId(z.id)}
             latestResult={latestResult}
             exploring={exploring}

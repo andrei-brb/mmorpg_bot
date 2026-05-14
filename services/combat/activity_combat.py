@@ -1736,6 +1736,17 @@ async def _finish_victory(
         log.error("Quest progress failed: %s", e)
 
     await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
+    if session.is_boss and not ac.dungeon_key:
+        try:
+            from services.world_boss.world_boss_service import WorldBossService
+
+            await WorldBossService.mark_zone_patrol_boss_defeated(
+                db,
+                session.zone_key or char.get("current_zone") or "",
+                session.enemy_key,
+            )
+        except Exception:
+            log.warning("mark_zone_patrol_boss_defeated (activity) failed", exc_info=True)
     _clear_activity_session(discord_id)
 
     summary = [

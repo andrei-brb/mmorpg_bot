@@ -84,6 +84,8 @@ class Settings:
     # World events
     WORLD_EVENT_INTERVAL    = 21_600       # 6 hours in seconds
     BOSS_RESPAWN_HOURS      = 6
+    # Zone patrol boss: after a zone boss kill, respawn after this many hours (hourly loop clears boss_alive).
+    ZONE_PATROL_BOSS_RESPAWN_HOURS = 4
 
     # Resource tuning (optional)
     # Per-class multipliers applied to ability costs (mana/energy/rage).
@@ -422,7 +424,7 @@ ZONES: Dict[str, ZoneConfig] = {
         level_range=(10, 25),
         description="A vast sun-scorched wasteland where only the ruthless survive.",
         enemies=("razormane_warrior", "plainstrider", "sunscale_raptor", "barrens_scorpion", "zhevra", "thunder_lizard", "quillboar", "wind_sweeper", "barrens_vulture"),
-        bosses=("kolkar_centaur_lord", "razormane_chieftain", "thunderhawk_alpha", "barrens_overlord"),
+        bosses=("kolkar_centaur_lord", "razormane_chieftain", "thunderhawk_alpha", "barrens_overlord", "glass_titan"),
         loot_pool=("bone_club", "raptor_hide_vest", "stamina_draught", "silk_cloth", "bracelet_t2", "ring_t2", "necklace_t2", "trinket_t2"),
         ambients=(
             "Heat shimmers off the cracked, sun-baked earth.",
@@ -437,7 +439,7 @@ ZONES: Dict[str, ZoneConfig] = {
         level_range=(25, 45),
         description="A lush but deadly jungle where pirates, predators, and rival factions clash.",
         enemies=("bloodsail_pirate", "jungle_stalker", "venture_co_enforcer", "panther", "tiger", "basilisk", "jungle_troll", "crocodile", "stranglethorn_ape", "bloodsail_corsair"),
-        bosses=("kurzen_the_mad", "black_blood_vance", "bhag_thera", "bloodsail_admiral", "jungle_lord"),
+        bosses=("kurzen_the_mad", "black_blood_vance", "bhag_thera", "bloodsail_admiral", "jungle_lord", "ghost_admiral"),
         loot_pool=("corsair_blade", "jungle_leather_chest", "elixir_of_fortitude", "mageweave_cloth", "bracelet_t3", "ring_t3", "necklace_t3", "trinket_t3"),
         ambients=(
             "Parrots screech loudly overhead in the dense canopy.",
@@ -533,6 +535,7 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "razormane_chieftain":  EnemyTemplate("Razormane Chieftain", "👑", 950, 32, 52, 52, 125, 14.0, 580, 85,170, True, ("war_cry", "charge")),
     "thunderhawk_alpha":    EnemyTemplate("Thunderhawk Alpha",  "⚡", 920, 31, 51, 48, 122, 13.0, 560, 82,165, True, ("lightning_strike", "dive")),
     "barrens_overlord":     EnemyTemplate("Barrens Overlord",   "👹", 980, 33, 54, 55, 130, 14.0, 600, 90,180, True, ("earthquake", "summon")),
+    "glass_titan":          EnemyTemplate("Glass Titan",         "🪟", 2200, 38, 62, 58, 145, 14.0, 720, 100, 200, True, ("shatter_wave", "reflect", "enrage")),
     # ── Stranglethorn (25-45) ─────────────────────────────────────────────────
     "bloodsail_pirate":     EnemyTemplate("Bloodsail Pirate",    "🏴‍☠️",320, 28, 46, 30,  90, 11.0, 180, 20,50),
     "jungle_stalker":       EnemyTemplate("Jungle Stalker",      "🐆", 280, 25, 40, 25,  80, 13.0, 160, 18,42),
@@ -550,6 +553,7 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "bhag_thera":           EnemyTemplate("Bhag'thera",          "🐆",1800, 60,100, 85, 220, 16.0,1400,220,450, True),
     "bloodsail_admiral":    EnemyTemplate("Bloodsail Admiral",   "⚓",1700, 58, 95, 82, 210, 15.0,1300,210,430, True, ("cannon_blast", "boarding")),
     "jungle_lord":          EnemyTemplate("Jungle Lord",         "👑",1750, 59, 98, 84, 215, 15.0,1350,215,440, True, ("beast_call", "frenzy")),
+    "ghost_admiral":        EnemyTemplate("Ghost Admiral",       "👻",1900, 60, 100, 86, 218, 15.0,1380, 225, 455, True, ("spectral_broadside", "haunt", "enrage")),
     # ── Blackrock Depths (50-60) ──────────────────────────────────────────────
     "dark_iron_dwarf":      EnemyTemplate("Dark Iron Dwarf",     "⛏️", 600, 55, 85, 75, 180, 12.0, 380, 50,100),
     "molten_giant":         EnemyTemplate("Molten Giant",        "🔥", 900, 75,110,100, 250, 10.0, 520, 70,140),

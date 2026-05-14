@@ -298,6 +298,14 @@ export type ExploreZone = {
 export type ExploreMapPayload = {
   current_zone?: string;
   zones?: ExploreZone[];
+  world_boss_windows?: Array<{
+    zone_key: string;
+    boss_key: string;
+    ends_at?: string | null;
+    trigger_slug?: string;
+    trigger_kind?: string;
+    title?: string;
+  }>;
 };
 
 export type ExploreOutcome =

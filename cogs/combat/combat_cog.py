@@ -392,6 +392,8 @@ class CombatCog(commands.Cog, name="Combat"):
         char = await self.char_svc.get_character(interaction.user.id)
         if not char:
             return await interaction.followup.send("❌ No character. Use `/character create`.")
+        if interaction.guild_id:
+            await self.char_svc.set_last_discord_guild(char["id"], interaction.guild_id)
 
         from services.combat.activity_combat import ACTIVE_ACTIVITY
 
@@ -1004,6 +1006,19 @@ class CombatCog(commands.Cog, name="Combat"):
 
         if quest_lines:
             embed.add_field(name="📜 Quest Progress", value="\n".join(quest_lines), inline=False)
+
+        # Zone patrol boss defeated (open world only)
+        if session.is_boss and not char.get("in_dungeon"):
+            try:
+                from services.world_boss.world_boss_service import WorldBossService
+
+                await WorldBossService.mark_zone_patrol_boss_defeated(
+                    self.bot.db,
+                    session.zone_key or char.get("current_zone") or "",
+                    session.enemy_key,
+                )
+            except Exception:
+                log.warning("mark_zone_patrol_boss_defeated failed", exc_info=True)
 
         # Milestone updates from combat outcomes.
         if interaction.guild_id:

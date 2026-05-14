@@ -749,6 +749,20 @@ class CharacterService:
             char_id, action, str(seconds),
         )
 
+    async def set_last_discord_guild(self, character_id: Any, guild_id: Optional[int]) -> None:
+        """Remember last Discord server id for guild-scoped world boss presence triggers."""
+        if guild_id is None:
+            return
+        try:
+            gid = int(guild_id)
+        except (TypeError, ValueError):
+            return
+        await self.db.execute(
+            "UPDATE characters SET last_discord_guild_id=$2 WHERE id=$1",
+            character_id,
+            gid,
+        )
+
     # ── Profile ───────────────────────────────────────────────────────────────
 
     async def full_profile(self, player_id: int) -> Optional[Dict]:
