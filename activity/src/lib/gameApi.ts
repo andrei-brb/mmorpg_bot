@@ -443,6 +443,18 @@ export async function postItem(
   });
 }
 
+export async function getForgeOptions(
+  token: string,
+  itemId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; options?: unknown }> {
+  const res = await fetch(
+    apiUrl(`/api/game/forge/options?item_id=${encodeURIComponent(itemId)}`),
+    { headers: authHeaders(token, guildId) },
+  );
+  return res.json() as Promise<{ ok?: boolean; message?: string; options?: unknown }>;
+}
+
 export async function getEnhanceInfo(token: string, itemId: string, guildId?: string): Promise<EnhanceInfoPayload> {
   const res = await fetch(
     apiUrl(`/api/game/item/enhance/info?item_id=${encodeURIComponent(itemId)}`),

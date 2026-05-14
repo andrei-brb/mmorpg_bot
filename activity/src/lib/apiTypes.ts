@@ -65,12 +65,30 @@ export type CraftRecipeRow = {
   gold_cost: number;
   costs: Record<string, number>;
   crafting_xp_reward: number;
+  /** 0–1; branch forge roll on claim. */
+  success_chance?: number;
+  destroy_input_on_fail?: boolean | null;
+};
+
+export type ForgeRarityRuleRow = {
+  id: string;
+  name: string;
+  from_rarity: string;
+  to_rarity: string;
+  applies_to: string;
+  required_crafting_level: number;
+  max_input_template_level?: number | null;
+  gold_cost: number;
+  costs: Record<string, number>;
+  craft_seconds: number;
+  success_chance: number;
+  crafting_xp_reward: number;
 };
 
 export type CraftJobRow = {
   id: string;
   character_id?: string;
-  recipe_id: string;
+  recipe_id?: string | null;
   recipe_name?: string;
   input_template_id?: string;
   output_template_id?: string;
@@ -78,6 +96,13 @@ export type CraftJobRow = {
   gold_cost?: number;
   costs?: Record<string, number>;
   crafting_xp_reward?: number;
+  job_kind?: string | null;
+  rarity_rule_id?: string | null;
+  rarity_rule_name?: string | null;
+  rarity_from?: string | null;
+  rarity_to?: string | null;
+  success_chance?: number;
+  destroy_input_on_fail?: boolean | null;
   payload?: Record<string, unknown>;
   started_at?: string;
   completes_at?: string;
@@ -104,6 +129,9 @@ export type InventoryPayload = {
   items: InvRow[];
   craft_job?: CraftJobRow | null;
   craft_recipes?: CraftRecipeRow[];
+  forge_rarity_rules?: ForgeRarityRuleRow[];
+  /** Server ceiling for branch forge outputs (Path B). */
+  forge_output_max_level_req?: number;
 };
 
 export type CharacterDerivedStatsPayload = {

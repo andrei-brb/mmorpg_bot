@@ -262,6 +262,99 @@ class Database:
                     costs = EXCLUDED.costs,
                     crafting_xp_reward = EXCLUDED.crafting_xp_reward;
             """)
+
+            # ── Forge: rarity rules, branch recipe columns, unified jobs, forge log ──
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS forge_rarity_rules (
+                    id                      VARCHAR(64) PRIMARY KEY,
+                    name                    VARCHAR(120) NOT NULL,
+                    from_rarity             item_rarity NOT NULL,
+                    to_rarity               item_rarity NOT NULL,
+                    applies_to              VARCHAR(32) NOT NULL,
+                    required_crafting_level SMALLINT NOT NULL DEFAULT 1,
+                    max_input_template_level SMALLINT,
+                    gold_cost               INT NOT NULL DEFAULT 0,
+                    costs                   JSONB NOT NULL DEFAULT '{}',
+                    craft_seconds           INT NOT NULL DEFAULT 10,
+                    success_chance          DOUBLE PRECISION NOT NULL DEFAULT 0.65
+                        CHECK (success_chance >= 0 AND success_chance <= 1),
+                    crafting_xp_reward      INT NOT NULL DEFAULT 5
+                );
+            """)
+            await c.execute("""
+                INSERT INTO forge_rarity_rules
+                    (id, name, from_rarity, to_rarity, applies_to, required_crafting_level,
+                     max_input_template_level, gold_cost, costs, craft_seconds, success_chance, crafting_xp_reward)
+                VALUES
+                    ('forge_rarity_common_uncommon', 'Temper the metal',
+                     'common', 'uncommon', 'all_equipment', 1, 35, 40,
+                     '{"weapon_scrap": 2, "armor_scrap": 2, "accessory_scrap": 1}'::jsonb, 8, 0.68, 6),
+                    ('forge_rarity_uncommon_rare', 'Draw out the gleam',
+                     'uncommon', 'rare', 'all_equipment', 3, 35, 90,
+                     '{"weapon_scrap": 4, "armor_scrap": 4, "accessory_scrap": 2}'::jsonb, 14, 0.55, 12)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    from_rarity = EXCLUDED.from_rarity,
+                    to_rarity = EXCLUDED.to_rarity,
+                    applies_to = EXCLUDED.applies_to,
+                    required_crafting_level = EXCLUDED.required_crafting_level,
+                    max_input_template_level = EXCLUDED.max_input_template_level,
+                    gold_cost = EXCLUDED.gold_cost,
+                    costs = EXCLUDED.costs,
+                    craft_seconds = EXCLUDED.craft_seconds,
+                    success_chance = EXCLUDED.success_chance,
+                    crafting_xp_reward = EXCLUDED.crafting_xp_reward;
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS forge_log (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    job_kind        VARCHAR(24) NOT NULL,
+                    success         BOOLEAN NOT NULL,
+                    rng_roll        DOUBLE PRECISION,
+                    recipe_id       VARCHAR(64),
+                    rarity_rule_id  VARCHAR(64),
+                    gold_spent      INT NOT NULL DEFAULT 0,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_forge_log_char ON forge_log(character_id, created_at DESC);
+            """)
+            await c.execute("""
+                ALTER TABLE craft_recipes
+                ADD COLUMN IF NOT EXISTS success_chance DOUBLE PRECISION DEFAULT 1.0,
+                ADD COLUMN IF NOT EXISTS destroy_input_on_fail BOOLEAN DEFAULT TRUE;
+            """)
+            await c.execute("""
+                UPDATE craft_recipes SET success_chance = 0.72, destroy_input_on_fail = TRUE
+                WHERE id LIKE 'upgrade_%' AND (success_chance IS NULL OR success_chance >= 0.999);
+            """)
+            await c.execute("""
+                ALTER TABLE craft_jobs
+                ADD COLUMN IF NOT EXISTS job_kind VARCHAR(24) DEFAULT 'template_branch';
+            """)
+            await c.execute("""
+                ALTER TABLE craft_jobs
+                ADD COLUMN IF NOT EXISTS rarity_rule_id VARCHAR(64) REFERENCES forge_rarity_rules(id);
+            """)
+            await c.execute("""
+                UPDATE craft_jobs SET job_kind = 'template_branch'
+                WHERE job_kind IS NULL AND recipe_id IS NOT NULL;
+            """)
+            await c.execute("""
+                ALTER TABLE craft_jobs ALTER COLUMN recipe_id DROP NOT NULL;
+            """)
+            try:
+                await c.execute("""
+                    ALTER TABLE craft_jobs ADD CONSTRAINT craft_jobs_forge_kind_chk CHECK (
+                        (COALESCE(job_kind, 'template_branch') = 'template_branch'
+                         AND recipe_id IS NOT NULL AND rarity_rule_id IS NULL)
+                        OR (job_kind = 'rarity_forge' AND recipe_id IS NULL AND rarity_rule_id IS NOT NULL)
+                    );
+                """)
+            except Exception as e:
+                log.warning("craft_jobs_forge_kind_chk: %s", e)
             
             # Create enhancement_log table
             await c.execute("""

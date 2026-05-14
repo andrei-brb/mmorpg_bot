@@ -401,6 +401,7 @@ async def handle_inventory(request: web.Request) -> web.Response:
     craft_svc = CraftingService(db)
     craft_job = await craft_svc.get_inflight_job(char["id"])
     craft_recipes = await craft_svc.list_recipes()
+    forge_rarity_rules = await craft_svc.list_rarity_rules()
     # Inventory capacity metadata (bag only: unequipped rows).
     player = await db.fetchrow(
         """SELECT p.is_premium FROM players p
@@ -435,6 +436,8 @@ async def handle_inventory(request: web.Request) -> web.Response:
                 "items": items,
                 "craft_job": _json_safe(craft_job),
                 "craft_recipes": _json_safe(craft_recipes),
+                "forge_rarity_rules": _json_safe(forge_rarity_rules),
+                "forge_output_max_level_req": 35,
             }
         )
     )
@@ -547,6 +550,112 @@ async def handle_craft_start(request: web.Request) -> web.Response:
 
 
 async def handle_craft_claim(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    craft_svc = CraftingService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    ok, msg, data = await craft_svc.claim_craft(char["id"], inv_svc)
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg, "result": _json_safe(data)}, status=status)
+
+
+async def handle_forge_options(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    raw_id = (request.rel_url.query.get("item_id") or "").strip()
+    if not raw_id:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+    try:
+        item_uid = UUID(raw_id)
+    except ValueError:
+        return web.json_response({"ok": False, "message": "Invalid item id."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    craft_svc = CraftingService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    ok, msg, data = await craft_svc.forge_options(char["id"], item_uid)
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg, "options": _json_safe(data)}, status=status)
+
+
+async def handle_forge_start(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    path = (body.get("path") or "").strip().lower()
+    item_raw = (body.get("item_id") or "").strip()
+    recipe_id = (body.get("recipe_id") or "").strip() or None
+    if path not in ("a", "b") or not item_raw:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_fields"}), content_type="application/json")
+    try:
+        item_uid = UUID(item_raw)
+    except ValueError:
+        return web.json_response({"ok": False, "message": "Invalid item id."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    craft_svc = CraftingService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    ok, msg, job = await craft_svc.start_forge(char["id"], path, item_uid, recipe_id, inv_svc, char_svc)
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg, "craft_job": _json_safe(job)}, status=status)
+
+
+async def handle_forge_claim(request: web.Request) -> web.Response:
+    """Same as POST /api/game/craft/claim — unified forge job claim."""
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
     if db is None or db.pool is None:
@@ -4414,6 +4523,9 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/item/salvage", handle_item_salvage)
     app.router.add_post("/api/game/craft/start", handle_craft_start)
     app.router.add_post("/api/game/craft/claim", handle_craft_claim)
+    app.router.add_get("/api/game/forge/options", handle_forge_options)
+    app.router.add_post("/api/game/forge/start", handle_forge_start)
+    app.router.add_post("/api/game/forge/claim", handle_forge_claim)
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)
