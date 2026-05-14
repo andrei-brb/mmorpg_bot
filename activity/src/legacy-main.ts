@@ -97,6 +97,8 @@ type InventoryPayload = {
     specialization?: string | null;
     specialization_name?: string | null;
   } | null;
+  bag_slots_used?: number;
+  bag_slots_max?: number;
   items: InvRow[];
 };
 
@@ -438,7 +440,7 @@ function buildHeroHtml(payload: InventoryPayload): string {
   const char = payload.character;
   const items = payload.items || [];
   const bag = items.filter((i) => !i.is_equipped);
-  const bagSlots = 20;
+  const bagSlots = Math.max(0, Number(payload.bag_slots_max ?? 60)) || 60;
   const emptySlots = Math.max(0, bagSlots - bag.length);
   const hp = Number((char as { current_hp?: number } | null)?.current_hp ?? 0);
   const maxHp = Number((char as { max_hp?: number } | null)?.max_hp ?? 0);

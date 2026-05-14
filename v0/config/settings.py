@@ -51,8 +51,8 @@ class Settings:
     DUNGEON_GOLD_MULTIPLIER = 1.5          # Gold multiplier for dungeon completion
 
     # Inventory
-    FREE_INVENTORY_SLOTS    = 20
-    PREMIUM_INVENTORY_SLOTS = 60
+    FREE_INVENTORY_SLOTS    = 60
+    PREMIUM_INVENTORY_SLOTS = 100
 
     # Economy
     CURRENCY_SYMBOL         = "🪙"
