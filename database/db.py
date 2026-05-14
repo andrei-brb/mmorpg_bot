@@ -685,6 +685,20 @@ class Database:
                     PRIMARY KEY (run_id, character_id)
                 );
             """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_checkins (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    checkin_day     DATE NOT NULL,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (guild_id, character_id, checkin_day)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_checkins_guild_day
+                ON guild_checkins(guild_id, checkin_day DESC);
+            """)
 
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:

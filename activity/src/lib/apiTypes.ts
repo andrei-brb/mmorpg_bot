@@ -638,6 +638,14 @@ export type GuildCreateResponse = {
   guild?: { id: string; name: string; tag: string };
 };
 
+export type GuildCheckinPayload = {
+  checked_today: boolean;
+  streak: number;
+  utc_day: string;
+  checked_in_guild_today: number;
+  rewards: { gold: number; xp: number; guild_xp: number };
+};
+
 export type GuildMePayload = {
   ok: boolean;
   in_guild?: boolean;
@@ -669,4 +677,5 @@ export type GuildMePayload = {
   raids?: {
     recent: Array<Record<string, unknown>>;
   };
+  checkin?: GuildCheckinPayload;
 };

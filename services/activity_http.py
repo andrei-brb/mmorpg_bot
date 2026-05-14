@@ -14,6 +14,7 @@ Endpoints:
   POST /api/game/rest           — Bearer token → full HP/resource restore (rest cooldown; clears iframe combat)
   GET  /api/game/idle/rewards  — Bearer token → pending offline XP/gold (capped window; preview only)
   POST /api/game/idle/claim    — Bearer JSON { guild_id? } → award pending rewards, reset accrual timer
+  POST /api/game/guild/checkin     — POST daily hall check-in (gold + XP + guild XP; UTC day)
   GET  /api/game/guild/me           — Bearer → in-guild snapshot (bank, boss, tech, raids)
   POST /api/game/guild/create      — JSON { name, tag?, guild_id? } — found a guild (needs X-Guild-Id / guild_id = Discord server)
   POST /api/game/guild/bank/deposit — JSON { amount }
@@ -4023,6 +4024,7 @@ async def handle_guild_me(request: web.Request) -> web.Response:
     )
     from services.guild import guild_boss as guild_boss_mod
     from services.guild import guild_tech as guild_tech_mod
+    from services.guild import guild_checkin as guild_checkin_mod
     from services.guild import guild_raid as guild_raid_mod
 
     bot = request.app.get("bot")
@@ -4040,6 +4042,7 @@ async def handle_guild_me(request: web.Request) -> web.Response:
         }
     unlocked = await guild_tech_mod.fetch_unlocked_ids(db, gid)
     raids = await guild_raid_mod.list_runs(db, gid, limit=8)
+    checkin = await guild_checkin_mod.status_payload(db, gid, _uuid_from_any(char["id"]))
     return web.json_response(
         _json_safe(
             {
@@ -4057,9 +4060,29 @@ async def handle_guild_me(request: web.Request) -> web.Response:
                     "unlocked": unlocked,
                 },
                 "raids": {"recent": raids},
+                "checkin": checkin,
             }
         )
     )
+
+
+async def handle_guild_checkin_post(request: web.Request) -> web.Response:
+    """POST — daily guild hall check-in (UTC calendar day)."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild", "message": "Not in a guild."}), status=400)
+    gid = _uuid_from_any(char["guild_id"])
+    g = await db.fetchrow("SELECT id FROM guilds WHERE id=$1", gid)
+    if not g:
+        return web.json_response(_json_safe({"ok": False, "error": "guild_missing", "message": "Guild not found."}), status=400)
+    from services.guild import guild_checkin as guild_checkin_mod
+
+    char_svc = CharacterService(db)
+    ok, msg, st = await guild_checkin_mod.perform_checkin(db, char_svc, gid, _uuid_from_any(char["id"]))
+    return web.json_response(_json_safe({"ok": ok, "message": msg, "checkin": st}))
 
 
 async def handle_guild_bank_deposit(request: web.Request) -> web.Response:
@@ -4795,6 +4818,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/market/buy", handle_market_buy)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_post("/api/game/guild/create", handle_guild_create)
+    app.router.add_post("/api/game/guild/checkin", handle_guild_checkin_post)
     app.router.add_get("/api/game/guild/me", handle_guild_me)
     app.router.add_get("/api/game/guild/invite/candidates", handle_guild_invite_candidates)
     app.router.add_post("/api/game/guild/invite/send", handle_guild_invite_send)

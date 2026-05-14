@@ -21,6 +21,7 @@ import type {
   GuildMePayload,
   GuildInviteCandidate,
   GuildCreateResponse,
+  GuildCheckinPayload,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -658,6 +659,18 @@ export async function postGuildCreate(
     body: JSON.stringify({ name: payload.name.trim(), tag: payload.tag.trim() }),
   });
   return res.json() as Promise<GuildCreateResponse>;
+}
+
+export async function postGuildCheckin(
+  token: string,
+  guildId?: string,
+): Promise<{ ok: boolean; message?: string; checkin?: GuildCheckinPayload }> {
+  const res = await fetch(apiUrl("/api/game/guild/checkin"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: "{}",
+  });
+  return res.json() as Promise<{ ok: boolean; message?: string; checkin?: GuildCheckinPayload }>;
 }
 
 export async function getGuildInviteCandidates(

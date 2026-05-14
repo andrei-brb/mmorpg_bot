@@ -187,6 +187,30 @@ class GuildCog(commands.Cog, name="Guild"):
         
         await interaction.followup.send(f"✅ You joined **[{guild['tag']}] {guild['name']}**!")
 
+    @g.command(name="checkin", description="Daily guild hall check-in (gold, XP, guild XP)")
+    async def checkin(self, interaction: discord.Interaction):
+        from uuid import UUID
+
+        from services.channel_manager import check_channel
+        from services.guild import guild_checkin as guild_checkin_mod
+
+        if not await check_channel(interaction, "guild"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        char = await self.svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ You need a character first.")
+        if not char.get("guild_id"):
+            return await interaction.followup.send("❌ You're not in a guild.")
+        gid = UUID(str(char["guild_id"]))
+        cid = UUID(str(char["id"]))
+        ok, msg, _st = await guild_checkin_mod.perform_checkin(self.bot.db, self.svc, gid, cid)
+        if ok:
+            await interaction.followup.send(f"✅ {msg}")
+        else:
+            await interaction.followup.send(f"ℹ️ {msg}" if "Already" in msg else f"❌ {msg}")
+
     @g.command(name="leave", description="Leave your current guild")
     async def leave(self, interaction: discord.Interaction):
         if not interaction.response.is_done():

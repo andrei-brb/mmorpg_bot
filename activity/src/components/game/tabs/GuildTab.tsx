@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { CalendarDays, Castle, Cpu, Crown, Flag, ShieldHalf, Sword } from "lucide-react";
+import { CalendarCheck, CalendarDays, Castle, Cpu, Crown, Flag, ShieldHalf, Sword } from "lucide-react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +131,7 @@ export function GuildTab() {
   const [createName, setCreateName] = useState("");
   const [createTag, setCreateTag] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
+  const [checkinBusy, setCheckinBusy] = useState(false);
   /** Avoid full skeleton on every refetch after boss/bank actions (only first paint / not-in-guild). */
   const hasLoadedGuildHubRef = useRef(false);
 
@@ -556,6 +557,23 @@ export function GuildTab() {
 
   const motd = g?.motd?.trim();
   const mottoText = motd || "No motto of the day — officers can set one in Discord.";
+  const ci = data.checkin;
+
+  const onCheckin = async () => {
+    if (!accessToken || checkinBusy) return;
+    setCheckinBusy(true);
+    try {
+      const r = await api.postGuildCheckin(accessToken, guildId);
+      if (r.ok) toast.success(r.message || "Checked in!");
+      else toast.message(r.message || "Check-in", { duration: 5000 });
+      await refreshInventory();
+      await loadMe();
+    } catch (e) {
+      toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/checkin")));
+    } finally {
+      setCheckinBusy(false);
+    }
+  };
 
   return (
     <div className="guild-root">
@@ -696,6 +714,56 @@ export function GuildTab() {
             </div>
           </div>
         </Panel>
+
+        {ci ? (
+          <Panel>
+            <SectionHeader
+              kicker="Daily attendance (UTC)"
+              title="Hall check-in"
+              right={
+                ci.checked_today ? (
+                  <span className="pill success">Signed today</span>
+                ) : (
+                  <CalendarCheck size={18} color="var(--gold-400)" strokeWidth={1.5} aria-hidden />
+                )
+              }
+            />
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 16,
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.55 }}>
+                  Streak <span className="font-mono" style={{ color: "var(--gold-200)" }}>{ci.streak}</span> day(s)
+                  {" · "}
+                  <span style={{ color: "var(--text-secondary)" }}>
+                    {ci.checked_in_guild_today}/{g?.max_members ?? 20} members today
+                  </span>
+                </p>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, marginBottom: 0 }}>
+                  Rewards: <span className="font-mono">{ci.rewards.gold}</span> gold,{" "}
+                  <span className="font-mono">{ci.rewards.xp}</span> XP,{" "}
+                  <span className="font-mono">{ci.rewards.guild_xp}</span> guild XP — UTC day{" "}
+                  <span className="font-mono">{ci.utc_day}</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-gold"
+                disabled={Boolean(ci.checked_today) || checkinBusy}
+                onClick={() => void onCheckin()}
+                style={{ flexShrink: 0 }}
+              >
+                {ci.checked_today ? "Done for today" : checkinBusy ? "…" : "Check in"}
+              </button>
+            </div>
+          </Panel>
+        ) : null}
 
         <div className="grid">
           <Panel className="col-8">

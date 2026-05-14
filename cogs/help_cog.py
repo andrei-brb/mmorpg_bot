@@ -74,6 +74,7 @@ class HelpCog(commands.Cog, name="Help"):
             name="🏰 Guild",
             value=(
                 "`/guild create` — Found a guild\n"
+                "`/guild checkin` — Daily hall check-in (rewards + guild XP)\n"
                 "`/guild info [name]` — View guild info\n"
                 "`/guild leave` — Leave your guild\n"
                 "`/guild disband` — Disband (guildmaster only)"
