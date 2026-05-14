@@ -217,10 +217,47 @@ export function CraftingTab() {
 
   const sourceRarity = normRarity(selectedItem?.rarity);
 
+  const pathTabsLocked = Boolean(job);
+  const rarityTabDisabled =
+    pathTabsLocked || Boolean(forgeOptions != null && pathA != null && pathA.ok === false);
+  const upgradeTabDisabled =
+    pathTabsLocked || Boolean(forgeOptions != null && pathB != null && pathB.ok === false);
+
+  const pathTabClass = (active: boolean) =>
+    `btn-ghost flex-1 min-h-[4.25rem] flex-col justify-center gap-0.5 py-3 sm:min-h-[4.5rem] ${
+      active ? "!border-[var(--gold-600)] !bg-[rgba(184,151,88,0.12)] !text-[var(--gold-200)]" : ""
+    }`;
+
   return (
     <div className="forge-tab-root wom-anim-fade-up space-y-4 px-0.5 pb-2 font-body">
       <WomPanel className="p-5 sm:p-6" glow>
         <WomSectionHeader kicker="Guild services" title="Forge" />
+
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:gap-3">
+          <button
+            type="button"
+            className={pathTabClass(forgeMode === "a")}
+            disabled={rarityTabDisabled}
+            onClick={() => setForgeMode("a")}
+          >
+            <span className="text-[10px] font-cinzel font-semibold uppercase tracking-[0.22em] text-[var(--gold-500)]">
+              Rarity path
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)]">Safer</span>
+          </button>
+          <button
+            type="button"
+            className={pathTabClass(forgeMode === "b")}
+            disabled={upgradeTabDisabled}
+            onClick={() => setForgeMode("b")}
+          >
+            <span className="text-[10px] font-cinzel font-semibold uppercase tracking-[0.22em] text-[var(--gold-500)]">
+              Upgrade
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)]">Riskier</span>
+          </button>
+        </div>
+
         <p className="mb-5 max-w-prose text-sm leading-relaxed text-[var(--text-secondary)]">
           <span className="text-gold font-semibold">Rarity</span> nudges the same piece toward a higher tier; failure spends
           costs only. <span className="text-gold font-semibold">Upgrade</span> re-shapes the item — the input is consumed at
@@ -337,25 +374,6 @@ export function CraftingTab() {
 
         {selectedItem && !job && (
           <div className="mt-6 space-y-5 border-t border-[var(--border-default)] pt-6">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={`btn-ghost flex-1 min-w-[8rem] sm:flex-initial ${forgeMode === "a" ? "!border-[var(--gold-600)] !bg-[rgba(184,151,88,0.12)] !text-[var(--gold-200)]" : ""}`}
-                disabled={!pathA?.ok}
-                onClick={() => setForgeMode("a")}
-              >
-                Rarity
-              </button>
-              <button
-                type="button"
-                className={`btn-ghost flex-1 min-w-[8rem] sm:flex-initial ${forgeMode === "b" ? "!border-[var(--gold-600)] !bg-[rgba(184,151,88,0.12)] !text-[var(--gold-200)]" : ""}`}
-                disabled={!pathB?.ok}
-                onClick={() => setForgeMode("b")}
-              >
-                Upgrade
-              </button>
-            </div>
-
             {forgeMode === "a" && pathA && (
               <div className="border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-4">
                 {!pathA.ok || !rule ? (
