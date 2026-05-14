@@ -11,7 +11,7 @@ const NPC_FALLBACK_EMOJI = "💬";
 function npcPortraitSrc(npcId: string | undefined): string {
   const id = (npcId || "unknown").trim() || "unknown";
   const base = publicBaseUrl();
-  return `${base}assets/npcs/${encodeURIComponent(id)}.png?v=2`;
+  return `${base}assets/npcs/${encodeURIComponent(id)}.png?v=3`;
 }
 
 function playerInitials(name: string | undefined): string {
@@ -109,17 +109,29 @@ export function QuestOfferModal({
           <div className="grid grid-cols-[minmax(4.5rem,1fr)_minmax(0,2.6fr)_minmax(4.5rem,1fr)] gap-1.5 p-2 sm:gap-2 sm:p-3">
             {/* NPC column */}
             <aside className="flex min-w-0 flex-col items-center gap-1 border border-border/60 bg-muted/10 p-1.5 sm:p-2">
-              <div className="relative aspect-[3/4] w-full max-w-[120px] overflow-hidden rounded-sm border border-border bg-background/80 shadow-inner">
+              {/* Opaque dark matte: many NPC PNGs ship with white / checkerboard “transparency” art — blend into UI. */}
+              <div
+                className={cn(
+                  "relative flex aspect-[3/4] w-full max-w-[120px] items-center justify-center overflow-hidden rounded-sm border border-border",
+                  "bg-[hsl(222_28%_8%)] shadow-[inset_0_0_28px_hsl(0_0%_0%/0.55)]",
+                )}
+              >
                 {offer.npc_id && !npcImgFailed ? (
                   <img
                     src={npcPortraitSrc(offer.npc_id)}
                     alt=""
-                    className="h-full w-full object-cover object-top"
+                    className="relative z-[1] max-h-full max-w-full object-contain object-center"
                     onError={() => setNpcImgFailed(true)}
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-4xl sm:text-5xl">{NPC_FALLBACK_EMOJI}</div>
+                  <div className="relative z-[1] flex h-full min-h-[5rem] w-full items-center justify-center text-4xl sm:min-h-[6rem] sm:text-5xl">
+                    {NPC_FALLBACK_EMOJI}
+                  </div>
                 )}
+                <div
+                  className="pointer-events-none absolute inset-0 z-[2] rounded-[inherit] ring-1 ring-inset ring-white/[0.06]"
+                  aria-hidden
+                />
               </div>
               <div className="w-full text-center">
                 <div className="font-cinzel text-[10px] font-semibold leading-tight text-foreground sm:text-xs">{npcLabel}</div>
