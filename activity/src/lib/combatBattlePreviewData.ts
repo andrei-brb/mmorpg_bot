@@ -1,21 +1,7 @@
 import type { BattlePreviewData, CharacterData, CharacterStat, Item } from "@/components/BattlePreview";
 import type { CombatAbility, CombatStatePayload, ExploreZone, InventoryPayload } from "@/lib/apiTypes";
 import { classIconUrl } from "@/lib/classAndSpecIconUrl";
-
-const AVAILABLE_SPEC_PORTRAITS = new Set<string>([
-  "warrior_arms",
-  "warrior_protection",
-  "paladin_holy_paladin",
-  "paladin_retribution",
-  "mage_fire",
-  "mage_frost",
-  "rogue_assassination",
-  "rogue_subtlety",
-  "priest_holy_priest",
-  "priest_shadow",
-  "hunter_beast_mastery",
-  "hunter_marksmanship",
-]);
+import { AVAILABLE_SPEC_PORTRAITS } from "@/lib/specPortraitCatalog";
 
 function displaySpecOrClassTitle(slug: string | null | undefined): string | undefined {
   if (!slug) return undefined;
@@ -174,11 +160,11 @@ export function buildBattlePreviewDataFromCombat(args: {
   const base = import.meta.env.BASE_URL || "/";
 
   const specKey = state.player.specialization || inventory?.character?.specialization || "";
-  const specPortraitKey = `${String(classKey).trim().toLowerCase()}_${String(specKey).trim().toLowerCase()}`;
+  const specPortraitKey = `${String(classKey).trim().toLowerCase().replace(/\s+/g, "_")}_${String(specKey).trim().toLowerCase()}`;
   const playerPortrait =
     playerOverride ??
     (AVAILABLE_SPEC_PORTRAITS.has(specPortraitKey)
-      ? `${base}portraits/characters/${specPortraitKey}.png`
+      ? `${base}portraits/characters/${specPortraitKey}.png?v=3`
       : classKey
         ? classIconUrl(classKey)
         : `${base}placeholder.svg`);

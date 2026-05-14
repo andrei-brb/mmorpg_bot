@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { CharacterDerivedStatsPayload, EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
 import { classIconUrl } from "@/lib/classAndSpecIconUrl";
 import { getCharacterDerivedStats, getIdleRewards, postIdleClaim, publicBaseUrl } from "@/lib/gameApi";
+import { hasSpecPortrait, specPortraitKey } from "@/lib/specPortraitCatalog";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
@@ -148,15 +149,34 @@ export function HeroTab() {
   const char = inventory?.character;
   const items = inventory?.items || [];
   const heroPaperClassKey = normalizeClassKeyForHero(char?.class || "warrior");
-  const [paperPortraitPublicFailed, setPaperPortraitPublicFailed] = useState(false);
+  const trySpecPortraitFirst = hasSpecPortrait(char?.class || "warrior", char?.specialization);
+  const specPortraitFileKey = specPortraitKey(char?.class || "warrior", char?.specialization);
+
+  type PaperPortraitStep = "spec" | "class" | "bundled";
+  const [paperPortraitStep, setPaperPortraitStep] = useState<PaperPortraitStep>(() =>
+    trySpecPortraitFirst ? "spec" : "class",
+  );
 
   useEffect(() => {
-    setPaperPortraitPublicFailed(false);
-  }, [heroPaperClassKey]);
+    setPaperPortraitStep(trySpecPortraitFirst ? "spec" : "class");
+  }, [trySpecPortraitFirst, heroPaperClassKey, char?.specialization]);
 
-  const paperPortraitSrc = paperPortraitPublicFailed
-    ? classIconUrl(char?.class || "warrior")
-    : `${publicBaseUrl()}classes/class_${encodeURIComponent(heroPaperClassKey)}.png?v=2`;
+  const PORTRAIT_CACHE_BUSTER = "3";
+  const paperPortraitSrc = useMemo(() => {
+    const base = publicBaseUrl();
+    const v = PORTRAIT_CACHE_BUSTER;
+    if (paperPortraitStep === "bundled") return classIconUrl(char?.class || "warrior");
+    if (paperPortraitStep === "spec" && trySpecPortraitFirst && specPortraitFileKey) {
+      return `${base}portraits/characters/${encodeURIComponent(specPortraitFileKey)}.png?v=${v}`;
+    }
+    return `${base}classes/class_${encodeURIComponent(heroPaperClassKey)}.png?v=${v}`;
+  }, [
+    paperPortraitStep,
+    trySpecPortraitFirst,
+    specPortraitFileKey,
+    heroPaperClassKey,
+    char?.class,
+  ]);
 
   useEffect(() => {
     if (!accessToken || !char) {
@@ -642,7 +662,13 @@ export function HeroTab() {
                 alt=""
                 className="hero-ref-paper-portrait-art"
                 decoding="async"
-                onError={() => setPaperPortraitPublicFailed(true)}
+                onError={() => {
+                  setPaperPortraitStep((prev) => {
+                    if (prev === "spec") return "class";
+                    if (prev === "class") return "bundled";
+                    return prev;
+                  });
+                }}
               />
               <div className="hero-ref-paper-portrait-level">Lv.{char?.level ?? "—"}</div>
               <div className="hero-ref-paper-portrait-nameplate">
