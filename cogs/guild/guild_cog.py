@@ -324,4 +324,80 @@ class GuildCog(commands.Cog, name="Guild"):
             await self.bot.db.execute("DELETE FROM guilds WHERE id=$1", char["guild_id"])
             await interaction.edit_original_response(content="💀 Guild disbanded.", view=None)
 
+    @g.command(name="bank", description="View guild bank balance (read-only)")
+    async def bank(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        char = await self.svc.get_character(interaction.user.id)
+        if not char or not char.get("guild_id"):
+            return await interaction.followup.send("❌ You're not in a guild.", ephemeral=True)
+        g = await self.bot.db.fetchrow("SELECT name, tag, bank_gold, guild_xp FROM guilds WHERE id=$1", char["guild_id"])
+        if not g:
+            return await interaction.followup.send("❌ Guild not found.", ephemeral=True)
+        await interaction.followup.send(
+            f"🏦 **[{g['tag']}] {g['name']}** treasury: **{int(g['bank_gold'] or 0):,}** gold · "
+            f"**{int(g['guild_xp'] or 0):,}** guild XP\n"
+            f"_Use the Activity **Guild** tab to donate or (officers) withdraw._",
+            ephemeral=True,
+        )
+
+    @g.command(name="boss", description="Guild boss encounter status (read-only)")
+    async def boss(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        char = await self.svc.get_character(interaction.user.id)
+        if not char or not char.get("guild_id"):
+            return await interaction.followup.send("❌ You're not in a guild.", ephemeral=True)
+        row = await self.bot.db.fetchrow(
+            """
+            SELECT id, boss_key, hp_remaining, hp_max, status, closes_at
+            FROM guild_boss_encounters
+            WHERE guild_id = $1 AND status = 'active'
+            ORDER BY opens_at DESC LIMIT 1
+            """,
+            char["guild_id"],
+        )
+        if not row:
+            return await interaction.followup.send(
+                "🛡️ No active guild boss. Officers can summon one from the Activity **Guild** tab.",
+                ephemeral=True,
+            )
+        hp_pct = 100.0 * int(row["hp_remaining"] or 0) / max(1, int(row["hp_max"] or 1))
+        closes = row["closes_at"]
+        rel = ""
+        if closes:
+            try:
+                rel = f"\nEnds <t:{int(closes.timestamp())}:R>"
+            except Exception:
+                rel = ""
+        await interaction.followup.send(
+            f"👹 **{row['boss_key']}** — {int(row['hp_remaining']):,} / {int(row['hp_max']):,} HP ({hp_pct:.1f}%)\n"
+            f"Status: **{row['status']}**{rel}\n"
+            f"_Strike from the Activity **Guild** tab._",
+            ephemeral=True,
+        )
+
+    @g.command(name="announce_here", description="Post guild boss/bank summaries to this channel (guildmaster only)")
+    async def announce_here(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        if not interaction.channel_id:
+            return await interaction.followup.send("❌ No channel context.", ephemeral=True)
+        char = await self.svc.get_character(interaction.user.id)
+        if not char or not char.get("guild_id"):
+            return await interaction.followup.send("❌ You're not in a guild.", ephemeral=True)
+        if char.get("guild_rank") != "guildmaster":
+            return await interaction.followup.send("❌ Only the guildmaster can set the announce channel.", ephemeral=True)
+        await self.bot.db.execute(
+            "UPDATE guilds SET announce_channel_id=$2 WHERE id=$1",
+            char["guild_id"],
+            int(interaction.channel_id),
+        )
+        await interaction.followup.send(
+            f"✅ Guild announcements will post in <#{interaction.channel_id}> when members use the Activity **Guild** tab "
+            f"(boss summon/end, bank deposits/withdrawals, tech unlocks, raid schedule/completion).",
+            ephemeral=True,
+        )
+
+
 async def setup(bot): await bot.add_cog(GuildCog(bot))
