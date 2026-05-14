@@ -4,7 +4,7 @@ import { publicBaseUrl } from "@/lib/gameApi";
 /** Shipped under `public/items/{slot}/` and `public/items/quest/` (world-of-mmo pack). */
 const ITEM_ICON_PACK_VERSION = "3";
 /** Bump to force Discord/browser to refetch drop-in icons. */
-const DROPIN_ITEM_ICON_VERSION = "4";
+const DROPIN_ITEM_ICON_VERSION = "5";
 
 /** Display-name sprites under `public/assets/items/generated/` (fallback). */
 const GENERATED_DIR = "assets/items/generated/";
