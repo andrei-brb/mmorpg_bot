@@ -12,7 +12,12 @@ import {
 import * as api from "@/lib/gameApi";
 import type { GuildFeedMessage, GuildInviteCandidate, GuildMePayload, GuildTechDefinition } from "@/lib/apiTypes";
 import { toast } from "sonner";
-import { WomPanel } from "@/components/wom/WomUi";
+import {
+  WomOrnateDivider,
+  WomPanel,
+  WomPill,
+  WomSectionHeader,
+} from "@/components/wom/WomUi";
 
 function isOfficer(rank?: string | null) {
   return rank === "officer" || rank === "guildmaster";
@@ -94,19 +99,21 @@ function GuildBanner({
   onAddMember,
 }: GuildBannerProps) {
   return (
-    <WomPanel glow className="guild-hall-banner relative overflow-hidden">
-      <div className="game-panel-header">Guild hall</div>
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 relative z-[1]">
-        <div className="min-w-0 flex-1">
+    <WomPanel glow className="guild-hall-banner relative overflow-hidden p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-label mb-1 text-[var(--gold-600)]">Guild hall</div>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-2xl sm:text-3xl leading-none select-none" aria-hidden>
               🏰
             </span>
-            <h1 className="font-cinzel text-xl sm:text-2xl text-primary tracking-tight">
-              <span className="text-primary/90">[{tag}]</span> {name}
+            <h1 className="font-display text-xl font-bold leading-none tracking-wide text-[var(--gold-200)] sm:text-2xl md:text-3xl">
+              <span className="text-[var(--gold-400)]">[{tag}]</span>{" "}
+              <span className="text-foreground/95 normal-case">{name}</span>
             </h1>
           </div>
-          <p className="text-xs text-muted-foreground mt-2 font-cinzel uppercase tracking-wider">
+          <div className="mt-2 h-0.5 w-16 bg-gradient-to-r from-[var(--gold-400)] to-transparent" />
+          <p className="text-xs text-muted-foreground mt-3 font-cinzel uppercase tracking-wider">
             Your rank: <span className="text-foreground normal-case tracking-normal capitalize">{rank || "member"}</span>
           </p>
           {motd?.trim() ? (
@@ -393,7 +400,7 @@ export function GuildTab() {
     return (
       <div className="guild-hall max-w-lg mx-auto">
         <WomPanel glow className="text-center">
-          <div className="game-panel-header justify-center">No guild yet</div>
+          <WomSectionHeader kicker="Recruitment" title="No guild yet" />
           <div className="text-4xl my-3" aria-hidden>
             🏰
           </div>
@@ -537,79 +544,138 @@ export function GuildTab() {
       </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <WomPanel glow className="lg:col-span-7 flex flex-col min-h-0">
-          <div className="game-panel-header">War council</div>
+        <WomPanel glow className="lg:col-span-7 flex min-h-0 flex-col p-5 sm:p-6">
+          <WomSectionHeader
+            kicker="World boss assault"
+            title="War council"
+            right={bossActive ? <WomPill tone="crimson">Active</WomPill> : null}
+          />
           {bossActive ? (
             <>
               <div className="flex items-start gap-3">
-                <span className="text-4xl shrink-0 opacity-90" title="Boss" aria-hidden>
-                  🗿
-                </span>
+                <div
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-sm border border-[var(--gold-600)]/45 bg-muted/25 text-2xl shadow-[inset_0_1px_0_hsl(43_50%_50%/0.12)]"
+                  title="Boss"
+                  aria-hidden
+                >
+                  🛡️
+                </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-foreground font-cinzel tracking-wide">{tpl.name || "Boss"}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
+                  <p className="font-display text-base font-bold uppercase tracking-wide text-[var(--gold-200)] sm:text-lg">
+                    {tpl.name || "Boss"}
+                  </p>
+                  <p className="mt-1 font-cinzel text-[11px] tabular-nums text-muted-foreground">
                     {(enc?.hp_remaining ?? 0).toLocaleString()} / {(enc?.hp_max ?? 0).toLocaleString()} HP
                   </p>
                 </div>
               </div>
-              <div className="guild-hall-boss-hp-track mt-3" role="progressbar" aria-valuenow={Math.round(hpPct)} aria-valuemin={0} aria-valuemax={100}>
+              <div
+                className="guild-hall-boss-hp-track mt-3"
+                role="progressbar"
+                aria-valuenow={Math.round(hpPct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
                 <div className="guild-hall-boss-hp-fill" style={{ width: `${hpPct}%` }} />
               </div>
               {closesLabel ? (
-                <p className="text-[10px] text-muted-foreground mt-2 font-cinzel uppercase tracking-wider">
+                <p className="mt-2 font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">
                   Seal breaks · <span className="text-foreground/80 normal-case tracking-normal">{closesLabel}</span>
                 </p>
               ) : null}
-              <Button size="sm" className="mt-4 w-fit font-cinzel" onClick={() => void onHitBoss()} aria-label="Strike the guild boss">
-                Strike
-              </Button>
-              {lb.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-border/40">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-cinzel mb-2">Top damage</p>
-                  <ol className="text-xs space-y-1 list-decimal list-inside text-foreground/90">
-                    {lb.slice(0, 8).map((row, i) => (
-                      <li key={`${row.name}-${i}`} className="tabular-nums">
-                        <span className="font-medium">{row.name}</span> — {Number(row.total_damage).toLocaleString()}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                {officer ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={bossActive}
+                    className="font-cinzel border-primary/40"
+                    onClick={() => void onSummonBoss()}
+                  >
+                    Summon Stone Siege Golem
+                  </Button>
+                ) : null}
+                {bossActive ? (
+                  <Button
+                    size="sm"
+                    type="button"
+                    className="shrink-0 border border-red-500/55 bg-gradient-to-b from-red-950/95 to-red-950 font-cinzel uppercase tracking-wider text-amber-50 shadow-[0_0_14px_rgba(220,38,38,0.35)] hover:from-red-900 hover:to-red-950"
+                    onClick={() => void onHitBoss()}
+                    aria-label="Strike the guild boss"
+                  >
+                    Strike
+                  </Button>
+                ) : null}
+              </div>
+              {lb.length > 0 ? (
+                <>
+                  <WomOrnateDivider />
+                  <div>
+                    <p className="mb-2 font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">Top damage</p>
+                    <ol className="list-inside list-decimal space-y-1 text-xs tabular-nums text-foreground/90">
+                      {lb.slice(0, 8).map((row, i) => (
+                        <li key={`${row.name}-${i}`}>
+                          <span className="font-medium">{row.name}</span> — {Number(row.total_damage).toLocaleString()}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </>
+              ) : null}
             </>
           ) : (
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              No active siege target. Officers can summon a shared boss for the whole guild — everyone contributes damage for
-              rewards.
-            </p>
-          )}
-          {officer && (
-            <Button size="sm" variant="outline" className="w-fit mt-3 font-cinzel border-primary/35" onClick={() => void onSummonBoss()}>
-              Summon Stone Siege Golem
-            </Button>
+            <>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                No active siege target. Officers can summon a shared boss for the whole guild — everyone contributes damage for
+                rewards.
+              </p>
+              {officer ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-4 w-fit font-cinzel border-primary/35"
+                  onClick={() => void onSummonBoss()}
+                >
+                  Summon Stone Siege Golem
+                </Button>
+              ) : null}
+            </>
           )}
         </WomPanel>
 
-        <WomPanel glow className="lg:col-span-5 flex flex-col min-h-0">
-          <div className="game-panel-header">Treasury</div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
+        <WomPanel glow className="lg:col-span-5 flex min-h-0 flex-col p-5 sm:p-6">
+          <WomSectionHeader kicker="Guild bank" title="Treasury" />
+          <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
             Donations fund tech and campaigns. Officers may withdraw (per-guild daily cap on the server).
           </p>
-          <div className="flex flex-wrap gap-2 items-end mt-2">
-            <div className="flex-1 min-w-[120px]">
-              <label className="text-[10px] text-muted-foreground uppercase font-cinzel tracking-wider block mb-1">Donate gold</label>
-              <Input value={depositStr} onChange={(e) => setDepositStr(e.target.value)} type="number" min={1} className="h-9" />
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <label className="mb-1 block font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">Donate gold</label>
+              <Input
+                value={depositStr}
+                onChange={(e) => setDepositStr(e.target.value)}
+                type="number"
+                min={1}
+                className="h-9 border-[var(--gold-600)]/35 bg-background/80"
+              />
             </div>
-            <Button size="sm" className="h-9 font-cinzel shrink-0" onClick={() => void onDeposit()}>
+            <Button size="sm" className="h-9 shrink-0 font-cinzel btn-gold" type="button" onClick={() => void onDeposit()}>
               Donate
             </Button>
           </div>
           {officer && (
-            <div className="flex flex-wrap gap-2 items-end mt-4 pt-4 border-t border-border/40">
-              <div className="flex-1 min-w-[120px]">
-                <label className="text-[10px] text-muted-foreground uppercase font-cinzel tracking-wider block mb-1">Withdraw</label>
-                <Input value={withdrawStr} onChange={(e) => setWithdrawStr(e.target.value)} type="number" min={1} className="h-9" />
+            <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border/40 pt-4">
+              <div className="min-w-0 flex-1">
+                <label className="mb-1 block font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">Withdraw</label>
+                <Input
+                  value={withdrawStr}
+                  onChange={(e) => setWithdrawStr(e.target.value)}
+                  type="number"
+                  min={1}
+                  className="h-9 border-[var(--gold-600)]/35 bg-background/80"
+                />
               </div>
-              <Button size="sm" variant="secondary" className="h-9 font-cinzel shrink-0" onClick={() => void onWithdraw()}>
+              <Button size="sm" variant="secondary" className="h-9 shrink-0 font-cinzel" type="button" onClick={() => void onWithdraw()}>
                 Withdraw
               </Button>
             </div>
@@ -617,11 +683,14 @@ export function GuildTab() {
         </WomPanel>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <WomPanel glow className="min-h-0">
-          <div className="game-panel-header">Guild tech</div>
-          <p className="text-xs text-muted-foreground mb-3">Passive bonuses for all members (explore, combat, idle).</p>
-          <div className="grid sm:grid-cols-1 gap-2 max-h-[min(48vh,420px)] overflow-y-auto pr-1 -mr-1">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <WomPanel glow className="min-h-0 lg:col-span-7">
+          <div className="p-5 sm:p-6">
+            <WomSectionHeader
+              kicker="Passive bonuses for all members (explore, combat, idle)"
+              title="Guild tech"
+            />
+            <div className="-mr-1 grid max-h-[min(48vh,420px)] gap-2 overflow-y-auto pr-1 sm:grid-cols-1">
             {techDefs.map((node: GuildTechDefinition) => {
               const has = unlocked.has(node.id);
               const missingReq = (node.requires || []).filter((rid) => !unlocked.has(rid));
@@ -631,7 +700,7 @@ export function GuildTab() {
                 <div
                   key={node.id}
                   className={
-                    "guild-hall-tech-card rounded-sm p-3 text-xs flex flex-col gap-1.5 border " +
+                    "guild-hall-tech-card flex gap-3 rounded-sm border p-3 text-xs " +
                     (has
                       ? "guild-hall-tech-card--unlocked border-emerald-600/35 bg-emerald-950/20"
                       : blocked
@@ -639,14 +708,21 @@ export function GuildTab() {
                         : "border-border/60 bg-muted/5")
                   }
                 >
+                  <div
+                    className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-[var(--gold-600)]/40 bg-muted/20 shadow-[inset_0_1px_0_hsl(43_50%_50%/0.1)]"
+                    aria-hidden
+                  >
+                    <span className="text-[11px] text-[var(--gold-500)]">◆</span>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-foreground font-cinzel text-[13px] tracking-wide">{node.name}</span>
+                    <span className="font-cinzel text-[13px] font-semibold tracking-wide text-foreground">{node.name}</span>
                     {has ? (
-                      <span className="text-[10px] uppercase tracking-wider text-emerald-400/95 shrink-0">Unlocked</span>
+                      <span className="shrink-0 text-[10px] uppercase tracking-wider text-emerald-400/95">Unlocked</span>
                     ) : null}
                   </div>
-                  <p className="text-muted-foreground leading-snug font-serif">{node.description}</p>
-                  <p className="text-[10px] text-muted-foreground/90 tabular-nums">
+                  <p className="font-serif leading-snug text-muted-foreground">{node.description}</p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground/90">
                     Cost: {node.cost_guild_xp.toLocaleString()} guild XP
                     {node.cost_bank_gold ? ` + ${node.cost_bank_gold.toLocaleString()} bank gold` : ""}
                   </p>
@@ -659,28 +735,43 @@ export function GuildTab() {
                     <span className="text-[10px] text-muted-foreground">Officers may unlock this node.</span>
                   ) : null}
                   {canBuy ? (
-                    <Button size="sm" className="h-8 mt-1 w-fit font-cinzel" onClick={() => void onUnlockTech(node.id)}>
-                      Unlock
+                    <Button size="sm" className="mt-1 h-8 w-fit font-cinzel" onClick={() => void onUnlockTech(node.id)}>
+                      Research
                     </Button>
                   ) : null}
+                  </div>
                 </div>
               );
             })}
+            </div>
           </div>
         </WomPanel>
 
-        <WomPanel glow className="min-h-0 flex flex-col">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div className="game-panel-header flex-1 min-w-0">Raids</div>
-            {officer && (
-              <Button size="sm" variant="secondary" className="h-8 font-cinzel text-[11px] shrink-0 mb-1" onClick={() => void onCreateRaid()}>
-                Schedule sortie
-              </Button>
-            )}
-          </div>
-          <p className="text-[10px] text-muted-foreground mb-2">Recent runs — sign up when recruiting is open.</p>
-          <ul className="space-y-2 text-xs flex-1 min-h-0 overflow-y-auto max-h-[min(48vh,420px)] pr-1">
-            {recentRaids.length === 0 && <li className="text-muted-foreground italic">No raids logged yet.</li>}
+        <WomPanel glow className="flex min-h-0 flex-col lg:col-span-5">
+          <div className="flex flex-col p-5 sm:p-6">
+            <WomSectionHeader
+              kicker="Recent runs — sign up when recruiting is open"
+              title="Raids"
+              right={
+                officer ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 font-cinzel text-[11px] shrink-0"
+                    type="button"
+                    onClick={() => void onCreateRaid()}
+                  >
+                    Schedule sortie
+                  </Button>
+                ) : null
+              }
+            />
+            <ul className="mt-1 max-h-[min(48vh,420px)] flex-1 list-none space-y-2 overflow-y-auto pr-1 text-xs">
+              {recentRaids.length === 0 ? (
+                <li className="py-8 text-center text-sm italic leading-relaxed text-muted-foreground">
+                  No raids logged yet. Cull a world boss together to add the first entry.
+                </li>
+              ) : null}
             {recentRaids.map((run) => (
               <li
                 key={run.id}
@@ -715,11 +806,12 @@ export function GuildTab() {
               </li>
             ))}
           </ul>
+          </div>
         </WomPanel>
       </div>
 
-      <WomPanel glow className="flex flex-col min-h-[min(52vh,440px)] max-h-[min(60vh,560px)] flex-1">
-        <div className="game-panel-header">Hall chat</div>
+      <WomPanel glow className="flex min-h-[min(52vh,440px)] max-h-[min(60vh,560px)] flex-1 flex-col p-5 sm:p-6">
+        <WomSectionHeader kicker="Guild channel" title="Hall chat" />
         <div className="guild-hall-feed-scroll flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 -mr-1 mb-2">
           {feed.length === 0 && <p className="text-xs text-muted-foreground italic py-2">No messages yet — greet your guild.</p>}
           {feed.map((m) => (
