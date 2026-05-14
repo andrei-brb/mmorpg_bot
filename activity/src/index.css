@@ -437,6 +437,74 @@
   }
 
   /* ═══════════════════════════════════════
+     GUILD HALL TAB (Activity)
+     ═══════════════════════════════════════ */
+  .guild-hall-banner {
+    background-image:
+      linear-gradient(125deg, hsl(43 40% 12% / 0.35) 0%, transparent 45%),
+      linear-gradient(180deg, hsl(230 20% 12% / 0.74) 0%, hsl(228 22% 9% / 0.76) 100%),
+      url('/textures/stone-dark.jpg'),
+      url('/textures/parchment-dark.jpg');
+    background-size: 100% 100%, 100% 100%, 220px 220px, 320px 320px;
+    background-repeat: no-repeat, no-repeat, repeat, repeat;
+    background-blend-mode: normal, normal, multiply, soft-light;
+  }
+
+  .guild-hall-stat-chip {
+    @apply rounded-sm px-3 py-2 min-w-[5.5rem] flex flex-col gap-0.5;
+    border: 1px solid hsl(var(--frame-inner) / 0.35);
+    background: linear-gradient(180deg, hsl(228 18% 12% / 0.85) 0%, hsl(228 22% 8% / 0.75) 100%);
+    box-shadow: inset 0 1px 0 hsl(var(--frame-inner) / 0.2);
+  }
+
+  .guild-hall-stat-chip--gold {
+    border-color: hsl(var(--gold-dim) / 0.45);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--gold) / 0.12),
+      0 0 20px hsl(var(--gold) / 0.06);
+  }
+
+  .guild-hall-stat-chip__label {
+    @apply text-[9px] uppercase tracking-wider text-muted-foreground font-cinzel;
+  }
+
+  .guild-hall-stat-chip__value {
+    @apply text-sm font-semibold leading-tight;
+  }
+
+  .guild-hall-boss-hp-track {
+    height: 0.75rem;
+    border-radius: 2px;
+    background: hsl(var(--stone-dark));
+    border: 1px solid hsl(var(--frame-mid));
+    box-shadow: inset 0 2px 6px hsl(0 0% 0% / 0.45);
+    overflow: hidden;
+  }
+
+  .guild-hall-boss-hp-fill {
+    height: 100%;
+    min-width: 4px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, hsl(25 75% 32%) 0%, hsl(43 78% 48%) 55%, hsl(48 90% 62%) 100%);
+    box-shadow: inset 0 1px 0 hsl(48 90% 70% / 0.35);
+    transition: width 0.35s ease;
+  }
+
+  .guild-hall-feed-msg {
+    border: 1px solid hsl(var(--frame-inner) / 0.25);
+    background: linear-gradient(180deg, hsl(38 22% 14% / 0.25) 0%, hsl(228 18% 11% / 0.55) 100%);
+  }
+
+  .guild-hall-feed-msg--system {
+    border-color: hsl(43 45% 32% / 0.35);
+    background: linear-gradient(180deg, hsl(43 30% 12% / 0.4) 0%, hsl(228 20% 10% / 0.5) 100%);
+  }
+
+  .guild-hall-feed-scroll {
+    scrollbar-gutter: stable;
+  }
+
+  /* ═══════════════════════════════════════
      HERO TAB — ornate panel + slot pass (Discord iframe)
      ═══════════════════════════════════════ */
   .game-panel.game-panel-hero {
