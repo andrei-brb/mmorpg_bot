@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { CalendarDays, Castle, Cpu, Crown, ShieldHalf, Sword } from "lucide-react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,153 +13,104 @@ import {
 import * as api from "@/lib/gameApi";
 import type { GuildFeedMessage, GuildInviteCandidate, GuildMePayload, GuildTechDefinition } from "@/lib/apiTypes";
 import { toast } from "sonner";
-import {
-  WomOrnateDivider,
-  WomPanel,
-  WomPill,
-  WomSectionHeader,
-} from "@/components/wom/WomUi";
+import "./guild.css";
 
 function isOfficer(rank?: string | null) {
   return rank === "officer" || rank === "guildmaster";
 }
 
-const RAID_STATUS_BADGE: Record<string, string> = {
-  recruiting: "bg-violet-500/20 text-violet-200 border border-violet-500/35",
-  active: "bg-amber-500/20 text-amber-200 border border-amber-500/35",
-  completed: "bg-emerald-500/15 text-emerald-200/90 border border-emerald-500/30",
-  cancelled: "bg-muted/80 text-muted-foreground border border-border/60",
-};
-
-function raidStatusClass(status?: string) {
+function raidPillClass(status?: string) {
   const k = String(status || "").toLowerCase();
-  return RAID_STATUS_BADGE[k] || "bg-muted/50 text-muted-foreground border border-border/50";
+  if (k === "recruiting") return "pill violet";
+  if (k === "active") return "pill amber";
+  if (k === "completed") return "pill success";
+  if (k === "cancelled") return "pill crimson";
+  return "pill";
 }
 
-function GuildHallSkeleton() {
+function Panel({ children, className = "", style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
   return (
-    <div className="guild-hall flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1" aria-busy="true" aria-label="Loading guild">
-      <WomPanel bracket={false} glow={false} className="relative overflow-hidden">
-        <div className="h-5 w-40 rounded-sm bg-muted/50 animate-pulse mb-4" />
-        <div className="h-8 w-3/4 max-w-md rounded-sm bg-muted/40 animate-pulse" />
-        <div className="h-4 w-full max-w-lg rounded-sm bg-muted/30 animate-pulse mt-3" />
-        <div className="flex flex-wrap gap-2 mt-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="guild-hall-stat-chip h-14 w-24 animate-pulse bg-muted/30 border-transparent" />
-          ))}
-        </div>
-      </WomPanel>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <WomPanel bracket={false} glow={false} className="lg:col-span-7 min-h-[180px] animate-pulse bg-muted/20">
-          {null}
-        </WomPanel>
-        <WomPanel bracket={false} glow={false} className="lg:col-span-5 min-h-[180px] animate-pulse bg-muted/20">
-          {null}
-        </WomPanel>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <WomPanel bracket={false} glow={false} className="min-h-[120px] animate-pulse bg-muted/20">
-          {null}
-        </WomPanel>
-        <WomPanel bracket={false} glow={false} className="min-h-[120px] animate-pulse bg-muted/20">
-          {null}
-        </WomPanel>
-      </div>
-      <WomPanel bracket={false} glow={false} className="min-h-[200px] animate-pulse bg-muted/20">
-        {null}
-      </WomPanel>
+    <div className={`gpanel ${className}`.trim()} style={style}>
+      <span className="corner tl" />
+      <span className="corner tr" />
+      <span className="corner bl" />
+      <span className="corner br" />
+      {children}
     </div>
   );
 }
 
-type GuildBannerProps = {
-  tag?: string;
-  name?: string;
-  motd?: string | null;
-  rank?: string | null;
-  guildLevel?: number;
-  memberCount?: number;
-  maxMembers?: number;
-  bankGold?: number;
-  guildXp?: number;
-  canInvite?: boolean;
-  onAddMember?: () => void;
-};
-
-function GuildBanner({
-  tag,
-  name,
-  motd,
-  rank,
-  guildLevel,
-  memberCount,
-  maxMembers,
-  bankGold,
-  guildXp,
-  canInvite,
-  onAddMember,
-}: GuildBannerProps) {
+function SectionHeader({ kicker, title, right }: { kicker?: string; title: string; right?: ReactNode }) {
   return (
-    <WomPanel glow className="guild-hall-banner relative overflow-hidden p-5 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-label mb-1 text-[var(--gold-600)]">Guild hall</div>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-2xl sm:text-3xl leading-none select-none" aria-hidden>
-              🏰
-            </span>
-            <h1 className="font-display text-xl font-bold leading-none tracking-wide text-[var(--gold-200)] sm:text-2xl md:text-3xl">
-              <span className="text-[var(--gold-400)]">[{tag}]</span>{" "}
-              <span className="text-foreground/95 normal-case">{name}</span>
-            </h1>
-          </div>
-          <div className="mt-2 h-0.5 w-16 bg-gradient-to-r from-[var(--gold-400)] to-transparent" />
-          <p className="text-xs text-muted-foreground mt-3 font-cinzel uppercase tracking-wider">
-            Your rank: <span className="text-foreground normal-case tracking-normal capitalize">{rank || "member"}</span>
-          </p>
-          {motd?.trim() ? (
-            <p className="text-sm text-foreground/85 mt-3 leading-relaxed border-l-2 border-primary/40 pl-3 italic font-serif">
-              {motd}
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground/80 mt-2 italic">No motto of the day — officers can set one in Discord.</p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end lg:max-w-[min(100%,22rem)]">
-          <div className="flex flex-col gap-1.5 min-w-[6.5rem]">
-            <div className="guild-hall-stat-chip">
-              <span className="guild-hall-stat-chip__label">Guild level</span>
-              <span className="guild-hall-stat-chip__value text-primary">{guildLevel ?? 1}</span>
+    <div className="section-h">
+      <div>
+        {kicker ? <div className="kicker">{kicker}</div> : null}
+        <h2>{title}</h2>
+        <div className="accent-line" />
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function GoldCoin({ size = 14 }: { size?: number }) {
+  const uid = useId().replace(/:/g, "");
+  const gid = `coin-grad-${uid}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: "inline-block" }} aria-hidden>
+      <defs>
+        <radialGradient id={gid} cx="35%" cy="35%">
+          <stop offset="0%" stopColor="#fff8e1" />
+          <stop offset="50%" stopColor="#d4a94e" />
+          <stop offset="100%" stopColor="#5d4720" />
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="12" r="10" fill={`url(#${gid})`} />
+      <circle cx="12" cy="12" r="7" fill="none" stroke="#5d4720" strokeWidth="0.8" />
+      <path
+        d="M12 7 L13.4 10.2 L17 10.6 L14.3 13.1 L15 16.6 L12 14.9 L9 16.6 L9.7 13.1 L7 10.6 L10.6 10.2 Z"
+        fill="#5d4720"
+        opacity="0.6"
+      />
+    </svg>
+  );
+}
+
+function GuildHallSkeleton() {
+  return (
+    <div className="guild-root" aria-busy="true" aria-label="Loading guild">
+      <div className="guild-container">
+        <Panel className="guild-banner">
+          <div className="banner-bg" />
+          <div className="banner-fade" />
+          <div className="guild-banner-row">
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div className="guild-skel-block guild-crest" style={{ border: "none" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="guild-skel-block h-3 w-24 mb-2" />
+                <div className="guild-skel-block h-8 w-48 max-w-full mb-2" />
+                <div className="guild-skel-block h-3 w-40" />
+              </div>
             </div>
-            {canInvite && onAddMember ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 text-[11px] font-cinzel shrink-0 border-primary/35 w-full"
-                onClick={onAddMember}
-              >
-                Add member
-              </Button>
-            ) : null}
+            <div className="guild-stat-grid" style={{ flex: "1 1 200px", maxWidth: 420 }}>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="guild-skel-block stat-tile" style={{ minHeight: 72 }} />
+              ))}
+            </div>
           </div>
-          <div className="guild-hall-stat-chip">
-            <span className="guild-hall-stat-chip__label">Members</span>
-            <span className="guild-hall-stat-chip__value tabular-nums">
-              {memberCount ?? 0}/{maxMembers ?? 20}
-            </span>
-          </div>
-          <div className="guild-hall-stat-chip guild-hall-stat-chip--gold">
-            <span className="guild-hall-stat-chip__label">Treasury</span>
-            <span className="guild-hall-stat-chip__value tabular-nums text-amber-200/95">{(bankGold ?? 0).toLocaleString()}</span>
-          </div>
-          <div className="guild-hall-stat-chip">
-            <span className="guild-hall-stat-chip__label">Guild XP</span>
-            <span className="guild-hall-stat-chip__value tabular-nums">{(guildXp ?? 0).toLocaleString()}</span>
-          </div>
+        </Panel>
+        <div className="grid">
+          <Panel className="col-8">
+            <div className="guild-skel-block h-6 w-40 mb-4" />
+            <div className="guild-skel-block h-24 w-full" />
+          </Panel>
+          <Panel className="col-4">
+            <div className="guild-skel-block h-6 w-32 mb-4" />
+            <div className="guild-skel-block h-20 w-full" />
+          </Panel>
         </div>
       </div>
-    </WomPanel>
+    </div>
   );
 }
 
@@ -389,7 +341,13 @@ export function GuildTab() {
   };
 
   if (!accessToken) {
-    return <p className="text-muted-foreground text-sm p-4 font-serif">Sign in to manage your guild.</p>;
+    return (
+      <div className="guild-root">
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Sign in to manage your guild.
+        </p>
+      </div>
+    );
   }
 
   if (loading) {
@@ -398,28 +356,48 @@ export function GuildTab() {
 
   if (!data?.in_guild) {
     return (
-      <div className="guild-hall max-w-lg mx-auto">
-        <WomPanel glow className="text-center">
-          <WomSectionHeader kicker="Recruitment" title="No guild yet" />
-          <div className="text-4xl my-3" aria-hidden>
-            🏰
-          </div>
-          <p className="text-sm text-muted-foreground leading-relaxed font-serif px-1">
-            Join the war effort with your Discord server:
-          </p>
-          <ul className="text-left text-xs text-foreground/90 mt-4 space-y-2 mx-auto max-w-sm font-mono border border-border/40 rounded-sm p-3 bg-muted/20">
-            <li>
-              <span className="text-primary">/guild create</span> — found a guild (guildmaster)
-            </li>
-            <li>
-              <span className="text-primary">/guild join</span> — enlist by guild name
-            </li>
-            <li>Return here for treasury, boss, tech, raids, and hall chat.</li>
-          </ul>
-          <Button variant="secondary" size="sm" className="mt-5 font-cinzel" onClick={() => void loadMe()}>
-            Refresh
-          </Button>
-        </WomPanel>
+      <div className="guild-root">
+        <div className="guild-container">
+          <Panel>
+            <SectionHeader kicker="Recruitment" title="No guild yet" />
+            <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+              <div style={{ fontSize: "2.5rem", lineHeight: 1 }} aria-hidden>
+                🏰
+              </div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 12, lineHeight: 1.5 }}>
+                Join the war effort with your Discord server:
+              </p>
+              <ul
+                style={{
+                  textAlign: "left",
+                  fontSize: 12,
+                  marginTop: 16,
+                  padding: 12,
+                  border: "1px solid var(--border-default)",
+                  background: "var(--bg-panel-raised)",
+                  maxWidth: 360,
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  listStyle: "disc",
+                  paddingLeft: 28,
+                  color: "var(--text-primary)",
+                  fontFamily: '"JetBrains Mono", monospace',
+                }}
+              >
+                <li style={{ marginBottom: 8 }}>
+                  <span style={{ color: "var(--gold-400)" }}>/guild create</span> — found a guild (guildmaster)
+                </li>
+                <li style={{ marginBottom: 8 }}>
+                  <span style={{ color: "var(--gold-400)" }}>/guild join</span> — enlist by guild name
+                </li>
+                <li>Return here for treasury, boss, tech, raids, and hall chat.</li>
+              </ul>
+              <button type="button" className="btn-ghost mt-4" onClick={() => void loadMe()}>
+                Refresh
+              </button>
+            </div>
+          </Panel>
+        </div>
       </div>
     );
   }
@@ -427,14 +405,16 @@ export function GuildTab() {
   const g = data.guild;
   const rank = g?.my_rank;
   const officer = isOfficer(rank);
-  const enc = data.boss?.encounter as {
-    id?: string;
-    hp_remaining?: number;
-    hp_max?: number;
-    status?: string;
-    closes_at?: string;
-  } | undefined;
-  const bossActive = enc && enc.status === "active";
+  const enc = data.boss?.encounter as
+    | {
+        id?: string;
+        hp_remaining?: number;
+        hp_max?: number;
+        status?: string;
+        closes_at?: string;
+      }
+    | undefined;
+  const bossActive = Boolean(enc && enc.status === "active");
   const tpl = (data.boss?.template as { name?: string; hp_max?: number }) || {};
   const lb = (data.boss?.leaderboard as { name: string; total_damage: number }[]) || [];
   const techDefs = data.tech?.definitions || [];
@@ -459,401 +439,463 @@ export function GuildTab() {
     }
   }
 
-  return (
-    <div className="guild-hall flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
-      <GuildBanner
-        tag={g?.tag}
-        name={g?.name}
-        motd={g?.motd}
-        rank={rank}
-        guildLevel={g?.guild_level}
-        memberCount={g?.member_count}
-        maxMembers={g?.max_members}
-        bankGold={g?.bank_gold}
-        guildXp={g?.guild_xp}
-        canInvite={officer}
-        onAddMember={() => setInviteOpen(true)}
-      />
+  const motd = g?.motd?.trim();
+  const mottoText = motd || "No motto of the day — officers can set one in Discord.";
 
-      <Dialog
-        open={inviteOpen}
-        onOpenChange={(open) => {
-          setInviteOpen(open);
-          if (!open) {
-            setInviteQuery("");
-            setInviteResults([]);
-            setInviteSearchLoading(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-[min(calc(100vw-2rem),22rem)] sm:max-w-sm gap-3 p-4">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-base font-cinzel tracking-wide">Invite to guild</DialogTitle>
-            <DialogDescription className="text-xs leading-relaxed">
-              Type the start of a character name. Pick a player to send them a Discord DM with Accept / Decline.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={inviteQuery}
-            onChange={(e) => setInviteQuery(e.target.value)}
-            placeholder="Character name…"
-            className="h-9 font-serif"
-            autoComplete="off"
-            autoFocus
-          />
-          <div
-            className="max-h-52 overflow-y-auto rounded-sm border border-border/50 bg-muted/15"
-            role="listbox"
-            aria-label="Matching characters"
-          >
-            {inviteSearchLoading ? (
-              <p className="text-xs text-muted-foreground p-3 font-serif">Searching…</p>
-            ) : inviteQuery.trim().length === 0 ? (
-              <p className="text-xs text-muted-foreground p-3 font-serif">Type a letter to search.</p>
-            ) : inviteResults.length === 0 ? (
-              <p className="text-xs text-muted-foreground p-3 font-serif">No guildless characters match.</p>
-            ) : (
-              <ul className="divide-y divide-border/40">
-                {inviteResults.map((row) => (
-                  <li key={row.character_id} className="p-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{row.name}</p>
-                        <p className="text-[11px] text-muted-foreground tabular-nums">
-                          Lv {row.level} {row.class}
-                          {row.username ? <span className="ml-1 opacity-80">· @{row.username}</span> : null}
-                        </p>
+  return (
+    <div className="guild-root">
+      <div className="guild-container">
+        <Dialog
+          open={inviteOpen}
+          onOpenChange={(open) => {
+            setInviteOpen(open);
+            if (!open) {
+              setInviteQuery("");
+              setInviteResults([]);
+              setInviteSearchLoading(false);
+            }
+          }}
+        >
+          <DialogContent className="max-w-[min(calc(100vw-2rem),22rem)] sm:max-w-sm gap-3 p-4">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-base font-cinzel tracking-wide">Invite to guild</DialogTitle>
+              <DialogDescription className="text-xs leading-relaxed">
+                Type the start of a character name. Pick a player to send them a Discord DM with Accept / Decline.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              value={inviteQuery}
+              onChange={(e) => setInviteQuery(e.target.value)}
+              placeholder="Character name…"
+              className="h-9 font-serif"
+              autoComplete="off"
+              autoFocus
+            />
+            <div
+              className="max-h-52 overflow-y-auto rounded-sm border border-border/50 bg-muted/15"
+              role="listbox"
+              aria-label="Matching characters"
+            >
+              {inviteSearchLoading ? (
+                <p className="text-xs text-muted-foreground p-3 font-serif">Searching…</p>
+              ) : inviteQuery.trim().length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3 font-serif">Type a letter to search.</p>
+              ) : inviteResults.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3 font-serif">No guildless characters match.</p>
+              ) : (
+                <ul className="divide-y divide-border/40">
+                  {inviteResults.map((row) => (
+                    <li key={row.character_id} className="p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{row.name}</p>
+                          <p className="text-[11px] text-muted-foreground tabular-nums">
+                            Lv {row.level} {row.class}
+                            {row.username ? <span className="ml-1 opacity-80">· @{row.username}</span> : null}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 shrink-0 text-[11px] font-cinzel"
+                          disabled={inviteSendingId !== null}
+                          onClick={() => void sendGuildInvite(row.character_id)}
+                        >
+                          {inviteSendingId === row.character_id ? "…" : "Invite"}
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 shrink-0 text-[11px] font-cinzel"
-                        disabled={inviteSendingId !== null}
-                        onClick={() => void sendGuildInvite(row.character_id)}
-                      >
-                        {inviteSendingId === row.character_id ? "…" : "Invite"}
-                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Panel className="guild-banner">
+          <div className="banner-bg" />
+          <div className="banner-fade" />
+          <div className="guild-banner-row">
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div className="guild-crest">
+                <Castle size={36} color="var(--gold-200)" strokeWidth={1.25} />
+                <span className="badge">
+                  <Crown size={10} color="var(--gold-200)" strokeWidth={2} />
+                </span>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div className="text-label">Guild Hall</div>
+                <h1 className="guild-name">
+                  <span style={{ color: "var(--gold-400)" }}>[{g?.tag || "—"}]</span> {g?.name || "Guild"}
+                </h1>
+                <div
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: "0.28em",
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                    marginTop: 8,
+                  }}
+                >
+                  Your rank:{" "}
+                  <span style={{ color: "var(--gold-200)", fontFamily: "Cinzel, serif", textTransform: "capitalize" }}>
+                    {rank || "member"}
+                  </span>
+                </div>
+                <p className="guild-motto" style={motd ? { color: "var(--text-secondary)", fontStyle: "normal" } : undefined}>
+                  {mottoText}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}>
+              <div className="guild-stat-grid">
+                <div className="stat-tile">
+                  <div className="lbl">Guild Lv</div>
+                  <div className="val">{g?.guild_level ?? 1}</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="lbl">Members</div>
+                  <div className="val">
+                    {g?.member_count ?? 0}/{g?.max_members ?? 20}
+                  </div>
+                </div>
+                <div className="stat-tile">
+                  <div className="lbl">Treasury</div>
+                  <div className="val">
+                    {(g?.bank_gold ?? 0).toLocaleString()}
+                    <GoldCoin size={14} />
+                  </div>
+                </div>
+                <div className="stat-tile">
+                  <div className="lbl">Guild XP</div>
+                  <div className="val">{(g?.guild_xp ?? 0).toLocaleString()}</div>
+                </div>
+              </div>
+              {officer ? (
+                <button type="button" className="btn-ghost" style={{ width: "100%" }} onClick={() => setInviteOpen(true)}>
+                  Add member
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </Panel>
+
+        <div className="grid">
+          <Panel className="col-8">
+            <SectionHeader
+              kicker="World boss assault"
+              title="War Council"
+              right={bossActive ? <span className="pill crimson">Active</span> : null}
+            />
+
+            {bossActive ? (
+              <>
+                <div className="boss-row">
+                  <div className="boss-icon">
+                    <ShieldHalf size={26} color="var(--crimson-400)" strokeWidth={1.5} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+                      {tpl.name || "Boss"}
+                    </div>
+                    <div className="font-mono" style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                      {(enc?.hp_remaining ?? 0).toLocaleString()} / {(enc?.hp_max ?? 0).toLocaleString()} HP
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <div className="bar-track" role="progressbar" aria-valuenow={Math.round(hpPct)} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="bar-fill" style={{ width: `${hpPct}%` }} />
+                  </div>
+                </div>
+
+                {closesLabel ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: 12,
+                      fontSize: 11,
+                      letterSpacing: "0.24em",
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <CalendarDays size={11} strokeWidth={2} />
+                    Seal breaks: <span style={{ color: "var(--gold-200)", letterSpacing: "0.06em" }}>{closesLabel}</span>
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    alignItems: "start",
+                    gap: 16,
+                    marginTop: 20,
+                  }}
+                >
+                  <div>
+                    <div className="text-label" style={{ marginBottom: 6 }}>
+                      Top Damage
+                    </div>
+                    {lb.length === 0 ? (
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>No strikes logged yet.</p>
+                    ) : (
+                      lb.slice(0, 8).map((row, i) => (
+                        <div key={`${row.name}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4 }}>
+                          <span style={{ fontFamily: "Cinzel, serif", color: "var(--gold-400)" }}>{i + 1}.</span>
+                          <span style={{ color: "var(--text-primary)" }}>{row.name}</span>
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                          <span className="font-mono" style={{ color: "var(--gold-200)" }}>
+                            {Number(row.total_damage).toLocaleString()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <button type="button" className="btn-crimson self-center" onClick={() => void onHitBoss()}>
+                    <Sword size={13} strokeWidth={2.5} /> Strike
+                  </button>
+                </div>
+
+                <div className="divider" />
+                {officer ? (
+                  <button type="button" className="btn-ghost" disabled={bossActive} onClick={() => void onSummonBoss()}>
+                    Summon Stone Siege Golem
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55, margin: 0 }}>
+                  No active siege target. Officers can summon a shared boss for the whole guild — everyone contributes damage for rewards.
+                </p>
+                {officer ? (
+                  <button type="button" className="btn-ghost" style={{ marginTop: 16 }} onClick={() => void onSummonBoss()}>
+                    Summon Stone Siege Golem
+                  </button>
+                ) : null}
+              </>
+            )}
+          </Panel>
+
+          <Panel className="col-4">
+            <SectionHeader kicker="Guild bank" title="Treasury" />
+            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 0, marginBottom: 16, lineHeight: 1.5 }}>
+              Donations fund tech and campaigns. Officers may withdraw (per-guild daily cap on the server).
+            </p>
+
+            <div style={{ marginBottom: 16 }}>
+              <div className="text-label" style={{ marginBottom: 6 }}>
+                Donate Gold
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="number"
+                  className="gold-input"
+                  style={{ flex: "1 1 120px" }}
+                  value={depositStr}
+                  min={1}
+                  onChange={(e) => setDepositStr(e.target.value)}
+                  aria-label="Donate gold amount"
+                />
+                <button type="button" className="btn-gold shrink-0" onClick={() => void onDeposit()}>
+                  Donate
+                </button>
+              </div>
+            </div>
+
+            {officer ? (
+              <div>
+                <div className="text-label" style={{ marginBottom: 6 }}>
+                  Withdraw
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="number"
+                    className="gold-input"
+                    style={{ flex: "1 1 120px" }}
+                    value={withdrawStr}
+                    min={1}
+                    onChange={(e) => setWithdrawStr(e.target.value)}
+                    aria-label="Withdraw gold amount"
+                  />
+                  <button type="button" className="btn-ghost shrink-0" onClick={() => void onWithdraw()}>
+                    Withdraw
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </Panel>
+
+          <Panel className="col-7">
+            <SectionHeader
+              kicker="Passive bonuses for all members (explore, combat, idle)"
+              title="Guild Tech"
+              right={<Cpu size={16} color="var(--gold-400)" strokeWidth={1.5} aria-hidden />}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "min(48vh, 420px)", overflowY: "auto", paddingRight: 4 }}>
+              {techDefs.map((node: GuildTechDefinition) => {
+                const has = unlocked.has(node.id);
+                const missingReq = (node.requires || []).filter((rid) => !unlocked.has(rid));
+                const blocked = !has && missingReq.length > 0;
+                const canBuy = officer && !has && !blocked;
+                return (
+                  <div
+                    key={node.id}
+                    className={`tech-card${has ? " tech-card--unlocked" : ""}${blocked ? " tech-card--locked" : ""}`}
+                  >
+                    <div className="tech-icon">
+                      <Cpu size={16} color="var(--gold-400)" strokeWidth={1.5} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="font-display" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                        {node.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.4 }}>{node.description}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }} className="font-mono">
+                        Cost: {node.cost_guild_xp.toLocaleString()} guild XP
+                        {node.cost_bank_gold ? ` + ${node.cost_bank_gold.toLocaleString()} bank gold` : ""}
+                      </div>
+                      {blocked ? (
+                        <p style={{ fontSize: 10, color: "var(--gold-200)", marginTop: 6, marginBottom: 0 }}>
+                          Requires: {missingReq.join(", ") || "prerequisites"}
+                        </p>
+                      ) : null}
+                      {!has && !blocked && !officer ? (
+                        <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, marginBottom: 0 }}>Officers may unlock this node.</p>
+                      ) : null}
+                      {canBuy ? (
+                        <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => void onUnlockTech(node.id)}>
+                          Research
+                        </button>
+                      ) : null}
+                    </div>
+                    {has ? <span className="pill success shrink-0">Unlocked</span> : null}
+                  </div>
+                );
+              })}
+            </div>
+          </Panel>
+
+          <Panel className="col-5">
+            <SectionHeader
+              kicker="Recent runs — sign up when recruiting is open"
+              title="Raids"
+              right={
+                officer ? (
+                  <button type="button" className="btn-ghost" onClick={() => void onCreateRaid()}>
+                    Schedule sortie
+                  </button>
+                ) : null
+              }
+            />
+            {recentRaids.length === 0 ? (
+              <div className="empty-card">
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>No raids logged yet.</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", marginTop: 8 }}>
+                  Cull a world boss together to add the first entry.
+                </div>
+              </div>
+            ) : (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                {recentRaids.map((run) => (
+                  <li
+                    key={run.id}
+                    style={{
+                      padding: 10,
+                      border: "1px solid var(--border-default)",
+                      background: "var(--bg-panel-raised)",
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{run.template_key}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                        Leader <span style={{ color: "var(--text-primary)" }}>{run.leader_name || "?"}</span>
+                      </div>
+                      <span className={`${raidPillClass(run.status)}`} style={{ marginTop: 8, display: "inline-block" }}>
+                        {run.status || "?"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
+                      {run.status === "recruiting" ? (
+                        <button type="button" className="btn-ghost" style={{ padding: "6px 12px", fontSize: 10 }} onClick={() => void onSignupRaid(run.id)}>
+                          Sign up
+                        </button>
+                      ) : null}
+                      {officer && run.status === "recruiting" ? (
+                        <button type="button" className="btn-gold" style={{ padding: "6px 14px", fontSize: 10 }} onClick={() => void onStartRaid(run.id)}>
+                          Start
+                        </button>
+                      ) : null}
+                      {officer && run.status === "active" ? (
+                        <button type="button" className="btn-gold" style={{ padding: "6px 14px", fontSize: 10 }} onClick={() => void onCompleteRaid(run.id)}>
+                          Complete
+                        </button>
+                      ) : null}
                     </div>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </Panel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <WomPanel glow className="lg:col-span-7 flex min-h-0 flex-col p-5 sm:p-6">
-          <WomSectionHeader
-            kicker="World boss assault"
-            title="War council"
-            right={bossActive ? <WomPill tone="crimson">Active</WomPill> : null}
-          />
-          {bossActive ? (
-            <>
-              <div className="flex items-start gap-3">
+          <Panel className="col-12" style={{ display: "flex", flexDirection: "column", minHeight: "min(52vh, 440px)", maxHeight: "min(60vh, 560px)" }}>
+            <SectionHeader kicker="Guild channel" title="Hall Chat" />
+            <div className="guild-feed-scroll">
+              {feed.length === 0 ? (
+                <p style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", margin: 0 }}>No messages yet — greet your guild.</p>
+              ) : null}
+              {feed.map((m) => (
                 <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-sm border border-[var(--gold-600)]/45 bg-muted/25 text-2xl shadow-[inset_0_1px_0_hsl(43_50%_50%/0.12)]"
-                  title="Boss"
-                  aria-hidden
+                  key={m.id}
+                  className={`guild-feed-msg${m.message_type?.startsWith("system") ? " guild-feed-msg--system" : ""}`}
                 >
-                  🛡️
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-display text-base font-bold uppercase tracking-wide text-[var(--gold-200)] sm:text-lg">
-                    {tpl.name || "Boss"}
-                  </p>
-                  <p className="mt-1 font-cinzel text-[11px] tabular-nums text-muted-foreground">
-                    {(enc?.hp_remaining ?? 0).toLocaleString()} / {(enc?.hp_max ?? 0).toLocaleString()} HP
-                  </p>
-                </div>
-              </div>
-              <div
-                className="guild-hall-boss-hp-track mt-3"
-                role="progressbar"
-                aria-valuenow={Math.round(hpPct)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div className="guild-hall-boss-hp-fill" style={{ width: `${hpPct}%` }} />
-              </div>
-              {closesLabel ? (
-                <p className="mt-2 font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Seal breaks · <span className="text-foreground/80 normal-case tracking-normal">{closesLabel}</span>
-                </p>
-              ) : null}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                {officer ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={bossActive}
-                    className="font-cinzel border-primary/40"
-                    onClick={() => void onSummonBoss()}
-                  >
-                    Summon Stone Siege Golem
-                  </Button>
-                ) : null}
-                {bossActive ? (
-                  <Button
-                    size="sm"
-                    type="button"
-                    className="shrink-0 border border-red-500/55 bg-gradient-to-b from-red-950/95 to-red-950 font-cinzel uppercase tracking-wider text-amber-50 shadow-[0_0_14px_rgba(220,38,38,0.35)] hover:from-red-900 hover:to-red-950"
-                    onClick={() => void onHitBoss()}
-                    aria-label="Strike the guild boss"
-                  >
-                    Strike
-                  </Button>
-                ) : null}
-              </div>
-              {lb.length > 0 ? (
-                <>
-                  <WomOrnateDivider />
-                  <div>
-                    <p className="mb-2 font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">Top damage</p>
-                    <ol className="list-inside list-decimal space-y-1 text-xs tabular-nums text-foreground/90">
-                      {lb.slice(0, 8).map((row, i) => (
-                        <li key={`${row.name}-${i}`}>
-                          <span className="font-medium">{row.name}</span> — {Number(row.total_damage).toLocaleString()}
-                        </li>
-                      ))}
-                    </ol>
+                  <div className="text-label" style={{ marginBottom: 4, letterSpacing: "0.12em" }}>
+                    {m.author_name || (m.message_type?.startsWith("system") ? "Herald" : "Unknown")}{" "}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 400, textTransform: "none", letterSpacing: "0.02em" }}>
+                      · {m.created_at ? new Date(m.created_at).toLocaleString() : ""}
+                    </span>
                   </div>
-                </>
+                  <div style={{ fontSize: 14, color: "var(--text-primary)", whiteSpace: "pre-wrap", lineHeight: 1.45 }}>{m.body}</div>
+                </div>
+              ))}
+              {feedCursor ? (
+                <button type="button" className="btn-ghost" style={{ width: "100%" }} onClick={() => void loadMoreFeed()}>
+                  Older messages
+                </button>
               ) : null}
-            </>
-          ) : (
-            <>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                No active siege target. Officers can summon a shared boss for the whole guild — everyone contributes damage for
-                rewards.
-              </p>
-              {officer ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-4 w-fit font-cinzel border-primary/35"
-                  onClick={() => void onSummonBoss()}
-                >
-                  Summon Stone Siege Golem
-                </Button>
-              ) : null}
-            </>
-          )}
-        </WomPanel>
-
-        <WomPanel glow className="lg:col-span-5 flex min-h-0 flex-col p-5 sm:p-6">
-          <WomSectionHeader kicker="Guild bank" title="Treasury" />
-          <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-            Donations fund tech and campaigns. Officers may withdraw (per-guild daily cap on the server).
-          </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1">
-              <label className="mb-1 block font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">Donate gold</label>
-              <Input
-                value={depositStr}
-                onChange={(e) => setDepositStr(e.target.value)}
-                type="number"
-                min={1}
-                className="h-9 border-[var(--gold-600)]/35 bg-background/80"
+            </div>
+            <div className="guild-chat-composer">
+              <input
+                value={chatDraft}
+                onChange={(e) => setChatDraft(e.target.value)}
+                placeholder="Message the hall…"
+                className="gold-input"
+                style={{ flex: 1 }}
+                maxLength={400}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void onSendChat();
+                }}
+                aria-label="Guild chat message"
               />
+              <button type="button" className="btn-gold" style={{ padding: "10px 16px" }} onClick={() => void onSendChat()}>
+                Send
+              </button>
             </div>
-            <Button size="sm" className="h-9 shrink-0 font-cinzel btn-gold" type="button" onClick={() => void onDeposit()}>
-              Donate
-            </Button>
-          </div>
-          {officer && (
-            <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border/40 pt-4">
-              <div className="min-w-0 flex-1">
-                <label className="mb-1 block font-cinzel text-[10px] uppercase tracking-wider text-muted-foreground">Withdraw</label>
-                <Input
-                  value={withdrawStr}
-                  onChange={(e) => setWithdrawStr(e.target.value)}
-                  type="number"
-                  min={1}
-                  className="h-9 border-[var(--gold-600)]/35 bg-background/80"
-                />
-              </div>
-              <Button size="sm" variant="secondary" className="h-9 shrink-0 font-cinzel" type="button" onClick={() => void onWithdraw()}>
-                Withdraw
-              </Button>
-            </div>
-          )}
-        </WomPanel>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <WomPanel glow className="min-h-0 lg:col-span-7">
-          <div className="p-5 sm:p-6">
-            <WomSectionHeader
-              kicker="Passive bonuses for all members (explore, combat, idle)"
-              title="Guild tech"
-            />
-            <div className="-mr-1 grid max-h-[min(48vh,420px)] gap-2 overflow-y-auto pr-1 sm:grid-cols-1">
-            {techDefs.map((node: GuildTechDefinition) => {
-              const has = unlocked.has(node.id);
-              const missingReq = (node.requires || []).filter((rid) => !unlocked.has(rid));
-              const blocked = !has && missingReq.length > 0;
-              const canBuy = officer && !has && !blocked;
-              return (
-                <div
-                  key={node.id}
-                  className={
-                    "guild-hall-tech-card flex gap-3 rounded-sm border p-3 text-xs " +
-                    (has
-                      ? "guild-hall-tech-card--unlocked border-emerald-600/35 bg-emerald-950/20"
-                      : blocked
-                        ? "guild-hall-tech-card--locked border-border/50 bg-muted/10 opacity-80"
-                        : "border-border/60 bg-muted/5")
-                  }
-                >
-                  <div
-                    className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-[var(--gold-600)]/40 bg-muted/20 shadow-[inset_0_1px_0_hsl(43_50%_50%/0.1)]"
-                    aria-hidden
-                  >
-                    <span className="text-[11px] text-[var(--gold-500)]">◆</span>
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-cinzel text-[13px] font-semibold tracking-wide text-foreground">{node.name}</span>
-                    {has ? (
-                      <span className="shrink-0 text-[10px] uppercase tracking-wider text-emerald-400/95">Unlocked</span>
-                    ) : null}
-                  </div>
-                  <p className="font-serif leading-snug text-muted-foreground">{node.description}</p>
-                  <p className="text-[10px] tabular-nums text-muted-foreground/90">
-                    Cost: {node.cost_guild_xp.toLocaleString()} guild XP
-                    {node.cost_bank_gold ? ` + ${node.cost_bank_gold.toLocaleString()} bank gold` : ""}
-                  </p>
-                  {blocked ? (
-                    <p className="text-[10px] text-amber-200/80">
-                      Requires: {missingReq.join(", ") || "prerequisites"}
-                    </p>
-                  ) : null}
-                  {!has && !blocked && !officer ? (
-                    <span className="text-[10px] text-muted-foreground">Officers may unlock this node.</span>
-                  ) : null}
-                  {canBuy ? (
-                    <Button size="sm" className="mt-1 h-8 w-fit font-cinzel" onClick={() => void onUnlockTech(node.id)}>
-                      Research
-                    </Button>
-                  ) : null}
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-          </div>
-        </WomPanel>
-
-        <WomPanel glow className="flex min-h-0 flex-col lg:col-span-5">
-          <div className="flex flex-col p-5 sm:p-6">
-            <WomSectionHeader
-              kicker="Recent runs — sign up when recruiting is open"
-              title="Raids"
-              right={
-                officer ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 font-cinzel text-[11px] shrink-0"
-                    type="button"
-                    onClick={() => void onCreateRaid()}
-                  >
-                    Schedule sortie
-                  </Button>
-                ) : null
-              }
-            />
-            <ul className="mt-1 max-h-[min(48vh,420px)] flex-1 list-none space-y-2 overflow-y-auto pr-1 text-xs">
-              {recentRaids.length === 0 ? (
-                <li className="py-8 text-center text-sm italic leading-relaxed text-muted-foreground">
-                  No raids logged yet. Cull a world boss together to add the first entry.
-                </li>
-              ) : null}
-            {recentRaids.map((run) => (
-              <li
-                key={run.id}
-                className="rounded-sm p-2.5 border border-border/50 bg-muted/5 flex flex-wrap items-center justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium text-foreground truncate">{run.template_key}</div>
-                  <div className="text-muted-foreground text-[11px] mt-0.5">
-                    Leader <span className="text-foreground/90">{run.leader_name || "?"}</span>
-                  </div>
-                  <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wider font-cinzel ${raidStatusClass(run.status)}`}>
-                    {run.status || "?"}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1 shrink-0">
-                  {run.status === "recruiting" && (
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-cinzel px-2" onClick={() => void onSignupRaid(run.id)}>
-                      Sign up
-                    </Button>
-                  )}
-                  {officer && run.status === "recruiting" && (
-                    <Button size="sm" className="h-7 text-[11px] font-cinzel px-2" onClick={() => void onStartRaid(run.id)}>
-                      Start
-                    </Button>
-                  )}
-                  {officer && run.status === "active" && (
-                    <Button size="sm" className="h-7 text-[11px] font-cinzel px-2" onClick={() => void onCompleteRaid(run.id)}>
-                      Complete
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-          </div>
-        </WomPanel>
-      </div>
-
-      <WomPanel glow className="flex min-h-[min(52vh,440px)] max-h-[min(60vh,560px)] flex-1 flex-col p-5 sm:p-6">
-        <WomSectionHeader kicker="Guild channel" title="Hall chat" />
-        <div className="guild-hall-feed-scroll flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 -mr-1 mb-2">
-          {feed.length === 0 && <p className="text-xs text-muted-foreground italic py-2">No messages yet — greet your guild.</p>}
-          {feed.map((m) => (
-            <div
-              key={m.id}
-              className={
-                "guild-hall-feed-msg rounded-sm p-2.5 leading-relaxed " +
-                (m.message_type?.startsWith("system") ? "guild-hall-feed-msg--system" : "")
-              }
-            >
-              <div className="text-[10px] text-muted-foreground mb-1 font-cinzel uppercase tracking-wider">
-                {m.author_name || (m.message_type?.startsWith("system") ? "Herald" : "Unknown")}{" "}
-                <span className="text-muted-foreground/70 font-normal normal-case tracking-normal">
-                  · {m.created_at ? new Date(m.created_at).toLocaleString() : ""}
-                </span>
-              </div>
-              <div className="text-foreground text-sm whitespace-pre-wrap font-serif">{m.body}</div>
-            </div>
-          ))}
-          {feedCursor ? (
-            <Button variant="ghost" size="sm" className="text-xs h-8 font-cinzel w-full" onClick={() => void loadMoreFeed()}>
-              Older messages
-            </Button>
-          ) : null}
+          </Panel>
         </div>
-        <div className="guild-hall-chat-composer mt-auto pt-3 border-t border-border/50 flex gap-2 shrink-0">
-          <Input
-            value={chatDraft}
-            onChange={(e) => setChatDraft(e.target.value)}
-            placeholder="Message the hall…"
-            className="h-9 flex-1"
-            maxLength={400}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void onSendChat();
-            }}
-            aria-label="Guild chat message"
-          />
-          <Button size="sm" className="h-9 shrink-0 font-cinzel" onClick={() => void onSendChat()}>
-            Send
-          </Button>
-        </div>
-      </WomPanel>
+      </div>
     </div>
   );
 }
