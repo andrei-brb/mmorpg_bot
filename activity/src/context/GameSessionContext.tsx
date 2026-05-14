@@ -77,10 +77,10 @@ type GameSessionValue = {
   }>;
   startCombat: (
     params: StartCombatParams,
-  ) => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
+  ) => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string; error?: string }>;
   /** "Quick fight" intent used by Quest tab + Combat "Fight again". */
   setQuickFightIntent: (intent: { kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null) => void;
-  quickFightAgain: () => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string }>;
+  quickFightAgain: () => Promise<{ ok: boolean; state?: CombatStatePayload; message?: string; error?: string }>;
   /** Last overworld enemy started from Activity (used to resolve portraits for quest-started fights). */
   lastStartedEnemy: MutableRefObject<{ key: string; kind: "enemy" | "boss" } | null>;
   combatAction: (body: Record<string, unknown>) => Promise<api.CombatActionJson>;
@@ -454,7 +454,12 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         pendingCombatEnemyKey.current = null;
         return { ok: true, state: startJson.state };
       }
-      return { ok: false, message: startJson.message || startJson.error };
+      const err = typeof startJson.error === "string" ? startJson.error : undefined;
+      return {
+        ok: false,
+        message: startJson.message || startJson.error || "Combat start failed",
+        error: err,
+      };
     },
     [accessToken, guildId],
   );

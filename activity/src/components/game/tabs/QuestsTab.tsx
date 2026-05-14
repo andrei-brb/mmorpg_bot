@@ -3,6 +3,9 @@ import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
+import { ZONES } from "@/data/zones";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const STATE_STYLES: Record<string, string> = {
   active: "bg-accent/60 text-accent-foreground border border-accent",
@@ -20,6 +23,20 @@ function questBucketLabel(q: QuestLogRow): { label: string; tint: string } {
 function questStableId(q: QuestLogRow, idx: number): string {
   const id = String(q.quest_id ?? "").trim();
   return id || `row-${idx}`;
+}
+
+/** Zone where this quest step's fight must happen (matches server zone enemy lists). */
+function zoneKeyForQuestObjectiveFight(ck: { type?: string; value?: string } | null | undefined): string | null {
+  if (!ck?.type) return null;
+  const t = String(ck.type).trim();
+  const v = typeof ck.value === "string" ? ck.value.trim() : "";
+  if (t === "kill_any_zone" || t === "kill_boss_zone") return v || null;
+  if (t === "kill_enemy" && v) {
+    for (const z of ZONES) {
+      if (z.mobs.some((m) => m.key === v) || z.bosses.some((b) => b.key === v)) return z.key;
+    }
+  }
+  return null;
 }
 
 function StoryBeacon({ ptr }: { ptr: MainQuestPointerPayload }) {
@@ -93,11 +110,18 @@ export function QuestsTab() {
     guildId,
     setQuickFightIntent,
     progress,
+    travel,
   } = useGameSession();
   const [rows, setRows] = useState<QuestLogRow[]>([]);
   /** Discord Activity WebViews often block or no-op `window.confirm` — use inline confirm instead. */
   const [pendingAbandonId, setPendingAbandonId] = useState<string | null>(null);
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
+  const [travelFightPrompt, setTravelFightPrompt] = useState<{
+    zoneKey: string;
+    zoneName: string;
+    resumeFight: () => Promise<{ ok: boolean; message?: string; error?: string }>;
+  } | null>(null);
+  const [travelFightBusy, setTravelFightBusy] = useState(false);
 
   useEffect(() => { void refreshQuests(); }, [refreshQuests]);
   useEffect(() => { setRows(quests?.quests || []); }, [quests]);
@@ -133,6 +157,7 @@ export function QuestsTab() {
       : null;
 
   return (
+    <>
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px] items-start">
         <div className="space-y-4 min-w-0">
@@ -307,14 +332,32 @@ export function QuestsTab() {
                                 if (!enemyKey) return { ok: false, message: "No suitable enemy found for this zone." };
                                 return await startCombat({ kind: "zone", enemyKey });
                               };
-                              void run().then((r) => {
+
+                              const finish = (r: { ok: boolean; message?: string; error?: string }) => {
                                 if (r.ok) {
                                   window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Combat" }));
                                   toast.success("Combat started.", { description: "Switched to Combat tab." });
-                                } else {
-                                  toast.error(r.message || "Could not start combat.");
+                                  return;
                                 }
-                              });
+                                const wrongZone =
+                                  r.error === "invalid_enemy" ||
+                                  /not in your current zone/i.test(String(r.message || ""));
+                                if (wrongZone) {
+                                  const zk = zoneKeyForQuestObjectiveFight(ck);
+                                  if (zk) {
+                                    const z = ZONES.find((x) => x.key === zk);
+                                    setTravelFightPrompt({
+                                      zoneKey: zk,
+                                      zoneName: z?.name || zk,
+                                      resumeFight: run,
+                                    });
+                                    return;
+                                  }
+                                }
+                                toast.error(r.message || "Could not start combat.");
+                              };
+
+                              void run().then(finish);
                             }}
                             className="game-btn-primary text-xs px-3 py-2"
                           >
@@ -552,5 +595,72 @@ export function QuestsTab() {
         </div>
       </div>
     </div>
+
+    <Dialog
+      open={travelFightPrompt !== null}
+      onOpenChange={(open) => {
+        if (!open && !travelFightBusy) setTravelFightPrompt(null);
+      }}
+    >
+      <DialogContent className="z-[95] max-w-[min(96vw,420px)]">
+        <DialogHeader>
+          <DialogTitle className="font-cinzel">Travel to fight?</DialogTitle>
+          <DialogDescription className="text-left text-sm leading-relaxed pt-1">
+            {travelFightPrompt ? (
+              <>
+                This step targets <span className="text-foreground font-medium">{travelFightPrompt.zoneName}</span>.
+                You are not in that zone right now. Travel there and start combat?
+              </>
+            ) : null}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={travelFightBusy}
+            onClick={() => !travelFightBusy && setTravelFightPrompt(null)}
+          >
+            No
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={travelFightBusy || !travelFightPrompt}
+            onClick={() => {
+              const p = travelFightPrompt;
+              if (!p || travelFightBusy) return;
+              setTravelFightBusy(true);
+              void (async () => {
+                try {
+                  const t = await travel(p.zoneKey);
+                  if (!t.ok) {
+                    toast.error(t.message || "Could not travel.");
+                    return;
+                  }
+                  if (t.message && !/^already here/i.test(t.message)) {
+                    toast.success(t.message, { description: p.zoneName });
+                  }
+                  const r = await p.resumeFight();
+                  setTravelFightPrompt(null);
+                  if (r.ok) {
+                    window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Combat" }));
+                    toast.success("Combat started.", { description: "Switched to Combat tab." });
+                  } else {
+                    toast.error(r.message || "Could not start combat.");
+                  }
+                } finally {
+                  setTravelFightBusy(false);
+                }
+              })();
+            }}
+          >
+            {travelFightBusy ? "…" : "Yes, travel & fight"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
