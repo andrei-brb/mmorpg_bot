@@ -23,7 +23,28 @@ function prettyMaterialKey(key: string): string {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function materialLabel(templateId: string, sample: InvRow | undefined): string {
+function lookupForgeMaterialName(
+  templateId: string,
+  catalog: Record<string, string> | undefined,
+): string | undefined {
+  if (!catalog) return undefined;
+  const tid = String(templateId || "").trim();
+  const direct = catalog[tid]?.trim();
+  if (direct) return direct;
+  const low = tid.toLowerCase();
+  for (const [k, v] of Object.entries(catalog)) {
+    if (k.toLowerCase() === low && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+function materialLabel(
+  templateId: string,
+  sample: InvRow | undefined,
+  catalog?: Record<string, string>,
+): string {
+  const fromApi = lookupForgeMaterialName(templateId, catalog);
+  if (fromApi) return fromApi;
   const n = sample?.name?.trim();
   if (n) return n;
   const tid = String(templateId || "").trim();
@@ -47,11 +68,13 @@ function ForgeMaterialAudit({
   goldNeed,
   goldHave,
   items,
+  materialNames,
 }: {
   costs: Record<string, number> | undefined;
   goldNeed: number;
   goldHave: number;
   items: InvRow[];
+  materialNames?: Record<string, string>;
 }) {
   const scrapRows = Object.entries(costs || {}).filter(([, n]) => (n || 0) > 0);
   const goldOk = goldHave >= goldNeed;
@@ -86,7 +109,7 @@ function ForgeMaterialAudit({
               );
               return (
                 <li key={templateId} className="text-xs sm:text-sm">
-                  <span className="font-semibold text-foreground">{materialLabel(templateId, sample)}</span>
+                  <span className="font-semibold text-foreground">{materialLabel(templateId, sample, materialNames)}</span>
                   <span className="text-[var(--text-muted)]"> — </span>
                   <span className="wom-font-mono tabular-nums text-[var(--text-muted)]">
                     need <span className="font-semibold text-foreground">{need}</span>
@@ -133,6 +156,9 @@ type ForgePathBOption = {
 };
 
 type ForgeOptionsPayload = {
+  item_id?: string;
+  /** Server-resolved `item_templates.name` for each `costs` key (works when the player owns 0). */
+  material_names?: Record<string, string>;
   path_a?: ForgePathAOption;
   path_b?: ForgePathBOption;
 };
@@ -524,7 +550,13 @@ export function CraftingTab() {
                     Your forging skill is Lv.{craftLevel}; this infusion requires Lv.{rule.required_crafting_level}.
                   </p>
                 ) : null}
-                <ForgeMaterialAudit costs={rule.costs} goldNeed={rule.gold_cost || 0} goldHave={playerGold} items={items} />
+                <ForgeMaterialAudit
+                  costs={rule.costs}
+                  goldNeed={rule.gold_cost || 0}
+                  goldHave={playerGold}
+                  items={items}
+                  materialNames={forgeOptions?.material_names}
+                />
                 <p className="text-xs text-[var(--text-muted)]">On failure the piece remains; spent gold and scrap are lost.</p>
                 <button
                   type="button"
@@ -593,6 +625,7 @@ export function CraftingTab() {
                       goldNeed={selectedBranch.gold_cost || 0}
                       goldHave={playerGold}
                       items={items}
+                      materialNames={forgeOptions?.material_names}
                     />
                   </>
                 ) : (

@@ -45,6 +45,23 @@ def _normalize_ts(dt: Any) -> Optional[datetime]:
     return None
 
 
+def _cost_template_keys(costs_raw: Any) -> List[str]:
+    """Return `costs` dict keys with positive quantity (string ids / slugs)."""
+    if isinstance(costs_raw, str):
+        try:
+            costs_raw = json.loads(costs_raw)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(costs_raw, dict):
+        return []
+    keys: List[str] = []
+    for k, qty in costs_raw.items():
+        if int(qty or 0) <= 0:
+            continue
+        keys.append(str(k))
+    return keys
+
+
 class ForgeService:
     """`crafting_service` is the owning CraftingService (for XP); avoid importing it at module load."""
 
@@ -221,8 +238,16 @@ class ForgeService:
         if ok_b and not recipes:
             msg_b = "No upgrade paths for this item." if msg_b == "ok" else msg_b
 
+        mat_keys: List[str] = []
+        if rule:
+            mat_keys.extend(_cost_template_keys(rule.get("costs")))
+        for rec in recipes:
+            mat_keys.extend(_cost_template_keys(rec.get("costs")))
+        material_names = await self._template_names_for_cost_keys(mat_keys)
+
         return True, "ok", {
             "item_id": str(item_id),
+            "material_names": material_names,
             "path_a": {
                 "ok": bool(ok_a and rule),
                 "message": msg_a if not (ok_a and rule) else None,
@@ -237,6 +262,30 @@ class ForgeService:
                 "risk_destroy_on_fail": True,
             },
         }
+
+    async def _template_names_for_cost_keys(self, keys: List[str]) -> Dict[str, str]:
+        """Resolve forge `costs` keys to `item_templates.name` for UI (including when the player owns 0)."""
+        uniq: List[str] = []
+        seen: set[str] = set()
+        for k in keys:
+            s = str(k).strip()
+            if not s or s in seen:
+                continue
+            seen.add(s)
+            uniq.append(s)
+        if not uniq:
+            return {}
+        rows = await self.db.fetch(
+            "SELECT id::text AS id, name FROM item_templates WHERE id::text = ANY($1::text[])",
+            uniq,
+        )
+        out: Dict[str, str] = {}
+        for r in rows:
+            tid = str(r["id"])
+            nm = (r.get("name") or "").strip()
+            if nm:
+                out[tid] = nm
+        return out
 
     async def start_forge(
         self,
