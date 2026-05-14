@@ -949,7 +949,7 @@ export default function BattlePreview({
                 <SafePortraitImage
                   src={data.player.portraitUrl}
                   alt={data.player.name}
-                  className="relative z-10 h-full w-full object-contain"
+                  className="relative z-10 h-full w-full object-cover"
                   style={{ animation: "portrait-breathe 3s ease-in-out infinite", objectPosition: "center bottom" }}
                   fallbackCandidates={deriveFallbackCandidates(data.player.portraitUrl, portraitPlaceholder)}
                 />
@@ -1026,7 +1026,7 @@ export default function BattlePreview({
                 <SafePortraitImage
                   src={data.enemy.portraitUrl}
                   alt={data.enemy.name}
-                  className="relative z-10 h-full w-full object-contain"
+                  className="relative z-10 h-full w-full object-cover"
                   style={{ animation: "portrait-breathe 3s ease-in-out infinite", objectPosition: "center bottom" }}
                   fallbackCandidates={deriveFallbackCandidates(data.enemy.portraitUrl, portraitPlaceholder)}
                 />

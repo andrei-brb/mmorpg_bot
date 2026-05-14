@@ -823,7 +823,8 @@
     z-index: 0;
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    /* Portrait column stretches to paper-doll row height; contain left large empty bands. */
+    object-fit: cover;
     object-position: center bottom;
     filter: saturate(0.95) contrast(1.04);
     pointer-events: none;
