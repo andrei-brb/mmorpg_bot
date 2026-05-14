@@ -492,6 +492,107 @@ class Database:
                 ON pvp_match_history(character_id, created_at DESC);
             """)
 
+            # ── In-game guild hub (UUID guilds) — bank, feed, boss, tech, raids ──
+            await c.execute("""
+                ALTER TABLE guilds
+                ADD COLUMN IF NOT EXISTS announce_channel_id BIGINT;
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_bank_ledger (
+                    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id            UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    character_id        UUID REFERENCES characters(id) ON DELETE SET NULL,
+                    delta               BIGINT NOT NULL,
+                    reason              VARCHAR(32) NOT NULL,
+                    meta                JSONB NOT NULL DEFAULT '{}',
+                    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_bank_ledger_guild
+                ON guild_bank_ledger(guild_id, created_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_feed_messages (
+                    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id                UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    author_character_id     UUID REFERENCES characters(id) ON DELETE SET NULL,
+                    body                    TEXT NOT NULL,
+                    message_type            VARCHAR(32) NOT NULL DEFAULT 'chat',
+                    meta                    JSONB NOT NULL DEFAULT '{}',
+                    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_feed_guild
+                ON guild_feed_messages(guild_id, created_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_boss_encounters (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    boss_key        VARCHAR(64) NOT NULL,
+                    hp_remaining    BIGINT NOT NULL,
+                    hp_max          BIGINT NOT NULL,
+                    status          VARCHAR(16) NOT NULL DEFAULT 'active'
+                        CHECK (status IN ('active','defeated','expired')),
+                    opens_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    closes_at       TIMESTAMPTZ NOT NULL,
+                    settled_at      TIMESTAMPTZ
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_boss_enc_guild
+                ON guild_boss_encounters(guild_id, status, opens_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_boss_hits (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    encounter_id    UUID NOT NULL REFERENCES guild_boss_encounters(id) ON DELETE CASCADE,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    damage          INT NOT NULL CHECK (damage >= 0),
+                    source          VARCHAR(32) NOT NULL DEFAULT 'simplified_roll',
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_boss_hits_enc
+                ON guild_boss_hits(encounter_id, created_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_tech_unlocks (
+                    guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    node_id         VARCHAR(64) NOT NULL,
+                    unlocked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, node_id)
+                );
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_raid_runs (
+                    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id                UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    template_key            VARCHAR(64) NOT NULL,
+                    status                  VARCHAR(16) NOT NULL DEFAULT 'recruiting'
+                        CHECK (status IN ('recruiting','active','completed','cancelled')),
+                    leader_character_id     UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    started_at              TIMESTAMPTZ,
+                    completed_at            TIMESTAMPTZ
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_raid_runs_guild
+                ON guild_raid_runs(guild_id, created_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_raid_participants (
+                    run_id          UUID NOT NULL REFERENCES guild_raid_runs(id) ON DELETE CASCADE,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    role            VARCHAR(16) NOT NULL DEFAULT 'member',
+                    PRIMARY KEY (run_id, character_id)
+                );
+            """)
+
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:
                 import os

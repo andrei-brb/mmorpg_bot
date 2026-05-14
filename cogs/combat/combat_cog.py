@@ -8,7 +8,7 @@ import asyncio
 import logging
 import random
 from typing import Dict, List, Optional
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 import discord
 from discord import app_commands
@@ -763,8 +763,9 @@ class CombatCog(commands.Cog, name="Combat"):
     async def _victory(self, interaction, session, char, player: Combatant, msg=None):
         from services.reward_multipliers import get_combined_reward_multipliers
 
+        ig = UUID(str(char["guild_id"])) if char.get("guild_id") else None
         xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(
-            self.bot.db, interaction.guild_id
+            self.bot.db, interaction.guild_id, ingame_guild_id=ig
         )
 
         rewards = self.engine.calculate_rewards(session)

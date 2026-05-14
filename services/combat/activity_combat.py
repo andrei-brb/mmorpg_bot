@@ -1430,7 +1430,9 @@ async def _finish_party_victory(
         return {"error": "internal", "message": "Dungeon config missing."}
 
     floor = int(run["current_floor"])
-    xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id)
+    leader = await char_svc.get_character(acting_discord_id)
+    ig = UUID(str(leader["guild_id"])) if leader and leader.get("guild_id") else None
+    xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id, ingame_guild_id=ig)
     n = max(1, len(ac.party_discord_order))
     base_xp = int(cfg.xp_reward * Settings.DUNGEON_XP_MULTIPLIER * xp_mult / n)
     base_gold = int(random.randint(cfg.gold_reward[0], cfg.gold_reward[1]) * Settings.DUNGEON_GOLD_MULTIPLIER * gold_mult / n)
@@ -1683,7 +1685,8 @@ async def _finish_victory(
         player.current_hp,
     )
 
-    xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id)
+    ig = UUID(str(char["guild_id"])) if char.get("guild_id") else None
+    xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id, ingame_guild_id=ig)
 
     rewards = engine.calculate_rewards(session)
     xp_result = await char_svc.award_xp(char["id"], rewards["xp"], xp_mult)

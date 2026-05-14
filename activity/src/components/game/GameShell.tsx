@@ -8,8 +8,9 @@ import { CraftingTab } from "./tabs/CraftingTab";
 import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
 import { CombatTab } from "./tabs/CombatTab";
-import { ProgressTab } from "./tabs/ProgressTab";
+import { GuildTab } from "./tabs/GuildTab";
 import { MarketTab } from "./tabs/MarketTab";
+import { ProgressTab } from "./tabs/ProgressTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
@@ -21,7 +22,7 @@ import { usePvpApi } from "@/hooks/usePvpApi";
 import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
 
-const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Market", "Arena", "Progress"] as const;
+const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabName, string> = {
@@ -30,6 +31,7 @@ const TAB_ICONS: Record<TabName, string> = {
   Explore: "🗺️",
   Quests: "📜",
   Combat: "💀",
+  Guild: "🏰",
   Market: "🏪",
   Arena: "🏟️",
   Progress: "📊",
@@ -435,6 +437,7 @@ export function GameShell() {
                 {activeTab === "Explore" && <ExploreTab />}
                 {activeTab === "Quests" && <QuestsTab />}
                 {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
+                {activeTab === "Guild" && <GuildTab />}
                 {activeTab === "Market" && <MarketTab />}
                 {activeTab === "Arena" && <PvpPage />}
                 {activeTab === "Progress" && <ProgressTab />}

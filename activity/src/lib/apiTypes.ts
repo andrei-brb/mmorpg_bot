@@ -571,3 +571,57 @@ export type MarketListingRow = {
   enhancement_level?: number | null;
   seller_name: string;
 };
+
+/** GET /api/game/guild/me + related guild hub payloads */
+export type GuildTechDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  cost_guild_xp: number;
+  cost_bank_gold: number;
+  requires: string[];
+};
+
+export type GuildFeedMessage = {
+  id: string;
+  guild_id?: string;
+  author_character_id?: string | null;
+  body: string;
+  message_type?: string;
+  meta?: Record<string, unknown>;
+  created_at?: string;
+  author_name?: string | null;
+};
+
+export type GuildMePayload = {
+  ok: boolean;
+  in_guild?: boolean;
+  message?: string;
+  error?: string;
+  guild?: {
+    id: string;
+    name: string;
+    tag: string;
+    bank_gold?: number;
+    guild_level?: number;
+    guild_xp?: number;
+    max_members?: number;
+    member_count?: number;
+    my_rank?: string | null;
+    my_character_id?: string;
+    motd?: string | null;
+    announce_channel_id?: number | null;
+  };
+  boss?: {
+    encounter: Record<string, unknown>;
+    template: Record<string, unknown>;
+    leaderboard: Array<{ character_id: string; total_damage: number; name: string }>;
+  } | null;
+  tech?: {
+    definitions: GuildTechDefinition[];
+    unlocked: string[];
+  };
+  raids?: {
+    recent: Array<Record<string, unknown>>;
+  };
+};

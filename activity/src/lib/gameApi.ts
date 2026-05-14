@@ -18,6 +18,7 @@ import type {
   IdleRewardsPayload,
   QuestLogPayload,
   SpecGatePayload,
+  GuildMePayload,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -625,4 +626,159 @@ export async function parseCombatState(res: Response): Promise<{
     state?: CombatStatePayload;
     ended_outcome?: CombatActionJson;
   }>;
+}
+
+export async function getGuildMe(token: string, guildId?: string): Promise<GuildMePayload> {
+  const res = await fetch(apiUrl("/api/game/guild/me"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<GuildMePayload>;
+}
+
+export async function postGuildBankDeposit(
+  token: string,
+  amount: number,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; bank_gold?: number }> {
+  const res = await fetch(apiUrl("/api/game/guild/bank/deposit"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ amount }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; bank_gold?: number }>;
+}
+
+export async function postGuildBankWithdraw(
+  token: string,
+  amount: number,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; bank_gold?: number; character_gold?: number }> {
+  const res = await fetch(apiUrl("/api/game/guild/bank/withdraw"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ amount }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; bank_gold?: number; character_gold?: number }>;
+}
+
+export async function getGuildFeed(
+  token: string,
+  guildId?: string,
+  cursor?: string,
+): Promise<{ ok?: boolean; messages?: unknown[]; next_cursor?: string | null }> {
+  const q = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const res = await fetch(apiUrl(`/api/game/guild/feed${q}`), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<{ ok?: boolean; messages?: unknown[]; next_cursor?: string | null }>;
+}
+
+export async function postGuildFeed(
+  token: string,
+  body: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/guild/feed"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function postGuildBossStart(
+  token: string,
+  bossKey: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; encounter?: Record<string, unknown> | null }> {
+  const res = await fetch(apiUrl("/api/game/guild/boss/start"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ boss_key: bossKey }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; encounter?: Record<string, unknown> | null }>;
+}
+
+export async function postGuildBossHit(
+  token: string,
+  encounterId: string | undefined,
+  guildId?: string,
+): Promise<{
+  ok?: boolean;
+  message?: string;
+  encounter?: Record<string, unknown> | null;
+  leaderboard?: unknown[];
+}> {
+  const res = await fetch(apiUrl("/api/game/guild/boss/hit"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify(encounterId ? { encounter_id: encounterId } : {}),
+  });
+  return res.json() as Promise<{
+    ok?: boolean;
+    message?: string;
+    encounter?: Record<string, unknown> | null;
+    leaderboard?: unknown[];
+  }>;
+}
+
+export async function postGuildTechUnlock(
+  token: string,
+  nodeId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; guild_xp?: number; bank_gold?: number; unlocked?: string[] }> {
+  const res = await fetch(apiUrl("/api/game/guild/tech/unlock"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; guild_xp?: number; bank_gold?: number; unlocked?: string[] }>;
+}
+
+export async function postGuildRaidCreate(
+  token: string,
+  templateKey: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown>; participants?: unknown[] }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/create"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ template_key: templateKey }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown>; participants?: unknown[] }>;
+}
+
+export async function postGuildRaidSignup(
+  token: string,
+  runId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; participants?: unknown[] }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/signup"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; participants?: unknown[] }>;
+}
+
+export async function postGuildRaidStart(
+  token: string,
+  runId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/start"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }>;
+}
+
+export async function postGuildRaidComplete(
+  token: string,
+  runId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/complete"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }>;
 }

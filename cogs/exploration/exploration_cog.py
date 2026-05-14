@@ -4,6 +4,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import logging, random
+from uuid import UUID
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -58,8 +59,9 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             char["current_zone"]
         )
 
+        ig = UUID(str(char["guild_id"])) if char.get("guild_id") else None
         xp_mult, gold_mult, boss_add = await get_combined_reward_multipliers(
-            self.bot.db, interaction.guild_id
+            self.bot.db, interaction.guild_id, ingame_guild_id=ig
         )
         from services.world_boss.world_boss_service import WorldBossService
 
