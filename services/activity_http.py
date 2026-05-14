@@ -26,6 +26,8 @@ Endpoints:
   POST /api/game/guild/raid/signup  — JSON { run_id }
   POST /api/game/guild/raid/start   — JSON { run_id }
   POST /api/game/guild/raid/complete — JSON { run_id }
+  GET  /api/game/guild/invite/candidates — ?q= prefix search (officer/guildmaster; character names)
+  POST /api/game/guild/invite/send — JSON { target_character_id } → DM invite (same as /guild invite)
   GET  /api/game/pvp/status     — Bearer token → Arena hub + optional embedded match state
   POST /api/game/pvp/queue      — JSON { mode: casual|ranked }
   DELETE /api/game/pvp/queue    — leave queue / cancel outgoing challenge
@@ -55,6 +57,7 @@ from urllib.parse import unquote, urlencode
 from uuid import UUID
 
 import aiohttp
+import discord
 from aiohttp import web
 import random
 
@@ -4393,6 +4396,140 @@ async def handle_guild_raid_complete(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"ok": True, "run": dict(run) if run else None}))
 
 
+async def handle_guild_invite_candidates(request: web.Request) -> web.Response:
+    """Search guildless characters by name prefix for Activity invite UI (officers only)."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild", "players": []}), status=400)
+    rnk = (char.get("guild_rank") or "").lower()
+    if rnk not in ("guildmaster", "officer"):
+        return web.json_response(_json_safe({"ok": False, "error": "forbidden", "players": []}), status=403)
+
+    q = str((request.query.get("q") or "")).strip()
+    if not q:
+        return web.json_response(_json_safe({"ok": True, "players": []}))
+    q = q[:32]
+    inviter_player_id = char["player_id"]
+    q_esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+    rows = await db.fetch(
+        """
+        SELECT c.id, c.name, c.level, c.class, c.player_id, p.username
+        FROM characters c
+        JOIN players p ON p.id = c.player_id
+        WHERE c.is_active = TRUE
+          AND c.guild_id IS NULL
+          AND c.player_id != $1
+          AND c.name ILIKE $2 ESCAPE '\\'
+        ORDER BY c.name ASC
+        LIMIT 15
+        """,
+        inviter_player_id,
+        q_esc,
+    )
+    players = [
+        {
+            "character_id": str(r["id"]),
+            "name": r["name"],
+            "level": int(r["level"] or 1),
+            "class": r["class"],
+            "username": str(r["username"]) if r.get("username") is not None else None,
+        }
+        for r in rows
+    ]
+    return web.json_response(_json_safe({"ok": True, "players": players}))
+
+
+async def handle_guild_invite_send(request: web.Request) -> web.Response:
+    """Officer sends the same Discord DM invite flow as `/guild invite`."""
+    bot = request.app.get("bot")
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "message": "You're not in a guild."}), status=400)
+    rnk = (char.get("guild_rank") or "").lower()
+    if rnk not in ("guildmaster", "officer"):
+        return web.json_response(_json_safe({"ok": False, "message": "Only guildmasters and officers can invite."}), status=403)
+    if not bot:
+        return web.json_response(
+            _json_safe({"ok": False, "message": "Bot is unavailable — try again from Discord."}),
+            status=503,
+        )
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    raw_tid = body.get("target_character_id") or body.get("character_id")
+    if not raw_tid:
+        return web.json_response(_json_safe({"ok": False, "message": "Missing target_character_id."}), status=400)
+    try:
+        target_cid = _uuid_from_any(raw_tid)
+    except (ValueError, TypeError):
+        return web.json_response(_json_safe({"ok": False, "message": "Invalid character id."}), status=400)
+
+    gid = _uuid_from_any(char["guild_id"])
+    guild = await db.fetchrow("SELECT * FROM guilds WHERE id=$1", gid)
+    if not guild:
+        return web.json_response(_json_safe({"ok": False, "message": "Guild not found."}), status=400)
+    if int(guild["member_count"] or 0) >= int(guild["max_members"] or 0):
+        return web.json_response(_json_safe({"ok": False, "message": "Guild is full."}), status=400)
+
+    target = await db.fetchrow(
+        """
+        SELECT c.id, c.name, c.guild_id, c.player_id, c.is_active
+        FROM characters c
+        WHERE c.id = $1
+        """,
+        target_cid,
+    )
+    if not target:
+        return web.json_response(_json_safe({"ok": False, "message": "Character not found."}), status=400)
+    if not target.get("is_active"):
+        return web.json_response(_json_safe({"ok": False, "message": "That character is inactive."}), status=400)
+    if target["guild_id"]:
+        return web.json_response(_json_safe({"ok": False, "message": "That player is already in a guild."}), status=400)
+    if int(target["player_id"]) == int(char["player_id"]):
+        return web.json_response(_json_safe({"ok": False, "message": "You can't invite your own account."}), status=400)
+
+    from services.guild.guild_invite_dm import GuildInviteView, build_guild_invite_embed
+
+    char_svc = CharacterService(db)
+    embed = build_guild_invite_embed(dict(guild), char["name"])
+    view = GuildInviteView(guild["id"], bot, char_svc)
+    target_discord_id = int(target["player_id"])
+    try:
+        user = await bot.fetch_user(target_discord_id)
+        await user.send(embed=embed, view=view)
+    except discord.Forbidden:
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": False,
+                    "message": "Could not DM that player — they may have DMs disabled.",
+                }
+            ),
+            status=400,
+        )
+    except discord.HTTPException as e:
+        log.warning("guild invite DM HTTP error: %s", e)
+        return web.json_response(
+            _json_safe({"ok": False, "message": "Discord could not deliver the invite. Try again later."}),
+            status=502,
+        )
+
+    return web.json_response(
+        _json_safe({"ok": True, "message": f"Invited {target['name']} — they received a DM with Accept / Decline."})
+    )
+
+
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "world-of-discord-activity-api"})
 
@@ -4536,6 +4673,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/market/buy", handle_market_buy)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_get("/api/game/guild/me", handle_guild_me)
+    app.router.add_get("/api/game/guild/invite/candidates", handle_guild_invite_candidates)
+    app.router.add_post("/api/game/guild/invite/send", handle_guild_invite_send)
     app.router.add_post("/api/game/guild/bank/deposit", handle_guild_bank_deposit)
     app.router.add_post("/api/game/guild/bank/withdraw", handle_guild_bank_withdraw)
     app.router.add_get("/api/game/guild/feed", handle_guild_feed_get)

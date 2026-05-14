@@ -9,6 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from services.character.character_service import CharacterService
+from services.guild.guild_invite_dm import GuildInviteView, build_guild_invite_embed
 
 log = logging.getLogger("cog.guild")
 
@@ -138,62 +139,9 @@ class GuildCog(commands.Cog, name="Guild"):
         if guild["member_count"] >= guild["max_members"]:
             return await interaction.followup.send("❌ Guild is full.")
         
-        # Create invite (could be stored in DB, but for now just notify)
-        embed = discord.Embed(
-            title=f"🏰 Guild Invitation",
-            description=f"**{char['name']}** has invited you to join **[{guild['tag']}] {guild['name']}**!",
-            color=0xFFD700,
-        )
-        embed.add_field(name="Guildmaster", value=guild.get("guildmaster_name", "Unknown"), inline=True)
-        embed.add_field(name="Members", value=f"{guild['member_count']}/{guild['max_members']}", inline=True)
-        
-        class InviteView(discord.ui.View):
-            def __init__(self, guild_id, inviter_char):
-                super().__init__(timeout=300)  # 5 minutes
-                self.guild_id = guild_id
-                self.inviter_char = inviter_char
-            
-            @discord.ui.button(label="✅ Accept", style=discord.ButtonStyle.green)
-            async def accept(self, interaction: discord.Interaction, _):
-                if not interaction.response.is_done():
-                    await interaction.response.defer(ephemeral=True)
-                target = await self.svc.get_character(interaction.user.id)
-                if not target:
-                    return await interaction.followup.send("❌ No character found.")
-                if target["guild_id"]:
-                    return await interaction.followup.send("❌ You're already in a guild.")
-                
-                guild = await self.bot.db.fetchrow("SELECT * FROM guilds WHERE id=$1", self.guild_id)
-                if guild["member_count"] >= guild["max_members"]:
-                    return await interaction.followup.send("❌ Guild is now full.")
-                
-                await self.bot.db.execute(
-                    "UPDATE characters SET guild_id=$1, guild_rank='member' WHERE id=$2",
-                    self.guild_id, target["id"]
-                )
-                # Sync member count
-                await self.bot.db.execute(
-                    """
-                    UPDATE guilds SET member_count=(
-                        SELECT COUNT(*) FROM characters WHERE guild_id=$1
-                    ) WHERE id=$1
-                    """,
-                    self.guild_id
-                )
-                await interaction.followup.send(f"✅ You joined **[{guild['tag']}] {guild['name']}**!")
-                self.stop()
-            
-            @discord.ui.button(label="❌ Decline", style=discord.ButtonStyle.red)
-            async def decline(self, interaction: discord.Interaction, _):
-                if not interaction.response.is_done():
-                    await interaction.response.defer(ephemeral=True)
-                await interaction.followup.send("❌ Invitation declined.")
-                self.stop()
-        
-        view = InviteView(guild["id"], char)
-        view.svc = self.svc
-        view.bot = self.bot
-        
+        embed = build_guild_invite_embed(guild, char["name"])
+        view = GuildInviteView(guild["id"], self.bot, self.svc)
+
         try:
             await member.send(embed=embed, view=view)
             await interaction.followup.send(f"✅ Invited **{target_char['name']}** to your guild!")

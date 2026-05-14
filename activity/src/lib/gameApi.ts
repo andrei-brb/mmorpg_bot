@@ -19,6 +19,7 @@ import type {
   QuestLogPayload,
   SpecGatePayload,
   GuildMePayload,
+  GuildInviteCandidate,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -643,6 +644,32 @@ export async function parseCombatState(res: Response): Promise<{
 export async function getGuildMe(token: string, guildId?: string): Promise<GuildMePayload> {
   const res = await fetch(apiUrl("/api/game/guild/me"), { headers: authHeaders(token, guildId) });
   return res.json() as Promise<GuildMePayload>;
+}
+
+export async function getGuildInviteCandidates(
+  token: string,
+  query: string,
+  guildId?: string,
+  signal?: AbortSignal,
+): Promise<{ ok?: boolean; error?: string; players?: GuildInviteCandidate[] }> {
+  const res = await fetch(
+    apiUrl(`/api/game/guild/invite/candidates?q=${encodeURIComponent(query)}`),
+    { headers: authHeaders(token, guildId), signal },
+  );
+  return res.json() as Promise<{ ok?: boolean; error?: string; players?: GuildInviteCandidate[] }>;
+}
+
+export async function postGuildInviteSend(
+  token: string,
+  targetCharacterId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/guild/invite/send"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ target_character_id: targetCharacterId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
 }
 
 export async function postGuildBankDeposit(

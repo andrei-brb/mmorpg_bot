@@ -2,8 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import * as api from "@/lib/gameApi";
-import type { GuildFeedMessage, GuildMePayload, GuildTechDefinition } from "@/lib/apiTypes";
+import type { GuildFeedMessage, GuildInviteCandidate, GuildMePayload, GuildTechDefinition } from "@/lib/apiTypes";
 import { toast } from "sonner";
 
 function isOfficer(rank?: string | null) {
@@ -58,9 +65,23 @@ type GuildBannerProps = {
   maxMembers?: number;
   bankGold?: number;
   guildXp?: number;
+  canInvite?: boolean;
+  onAddMember?: () => void;
 };
 
-function GuildBanner({ tag, name, motd, rank, guildLevel, memberCount, maxMembers, bankGold, guildXp }: GuildBannerProps) {
+function GuildBanner({
+  tag,
+  name,
+  motd,
+  rank,
+  guildLevel,
+  memberCount,
+  maxMembers,
+  bankGold,
+  guildXp,
+  canInvite,
+  onAddMember,
+}: GuildBannerProps) {
   return (
     <section className="game-panel guild-hall-banner relative overflow-hidden">
       <div className="game-panel-header">Guild hall</div>
@@ -86,9 +107,22 @@ function GuildBanner({ tag, name, motd, rank, guildLevel, memberCount, maxMember
           )}
         </div>
         <div className="flex flex-wrap gap-2 lg:justify-end lg:max-w-[min(100%,22rem)]">
-          <div className="guild-hall-stat-chip">
-            <span className="guild-hall-stat-chip__label">Guild level</span>
-            <span className="guild-hall-stat-chip__value text-primary">{guildLevel ?? 1}</span>
+          <div className="flex flex-col gap-1.5 min-w-[6.5rem]">
+            <div className="guild-hall-stat-chip">
+              <span className="guild-hall-stat-chip__label">Guild level</span>
+              <span className="guild-hall-stat-chip__value text-primary">{guildLevel ?? 1}</span>
+            </div>
+            {canInvite && onAddMember ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-[11px] font-cinzel shrink-0 border-primary/35 w-full"
+                onClick={onAddMember}
+              >
+                Add member
+              </Button>
+            ) : null}
           </div>
           <div className="guild-hall-stat-chip">
             <span className="guild-hall-stat-chip__label">Members</span>
@@ -119,6 +153,11 @@ export function GuildTab() {
   const [chatDraft, setChatDraft] = useState("");
   const [feed, setFeed] = useState<GuildFeedMessage[]>([]);
   const [feedCursor, setFeedCursor] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteQuery, setInviteQuery] = useState("");
+  const [inviteResults, setInviteResults] = useState<GuildInviteCandidate[]>([]);
+  const [inviteSearchLoading, setInviteSearchLoading] = useState(false);
+  const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
 
   const loadMe = useCallback(async () => {
     if (!accessToken) return;
@@ -147,6 +186,63 @@ export function GuildTab() {
   useEffect(() => {
     void loadMe();
   }, [loadMe]);
+
+  useEffect(() => {
+    if (!inviteOpen || !accessToken) return;
+    const q = inviteQuery.trim();
+    if (!q) {
+      setInviteResults([]);
+      setInviteSearchLoading(false);
+      return;
+    }
+    setInviteSearchLoading(true);
+    const ac = new AbortController();
+    const t = window.setTimeout(() => {
+      void api
+        .getGuildInviteCandidates(accessToken, q, guildId, ac.signal)
+        .then((r) => {
+          if (ac.signal.aborted) return;
+          if (r.error === "forbidden") {
+            setInviteResults([]);
+            toast.error("Only officers can search for recruits.");
+          } else {
+            setInviteResults(r.players ?? []);
+          }
+        })
+        .catch((e) => {
+          if (ac.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
+          toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/invite/candidates")));
+          setInviteResults([]);
+        })
+        .finally(() => {
+          if (!ac.signal.aborted) setInviteSearchLoading(false);
+        });
+    }, 280);
+    return () => {
+      ac.abort();
+      window.clearTimeout(t);
+    };
+  }, [inviteOpen, inviteQuery, accessToken, guildId]);
+
+  const sendGuildInvite = async (characterId: string) => {
+    if (!accessToken) return;
+    setInviteSendingId(characterId);
+    try {
+      const r = await api.postGuildInviteSend(accessToken, characterId, guildId);
+      if (!r.ok) {
+        toast.error(r.message || "Invite failed");
+        return;
+      }
+      toast.success(r.message || "Invite sent");
+      setInviteOpen(false);
+      setInviteQuery("");
+      setInviteResults([]);
+    } catch (e) {
+      toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/invite/send")));
+    } finally {
+      setInviteSendingId(null);
+    }
+  };
 
   const loadMoreFeed = async () => {
     if (!accessToken || !feedCursor) return;
@@ -357,7 +453,77 @@ export function GuildTab() {
         maxMembers={g?.max_members}
         bankGold={g?.bank_gold}
         guildXp={g?.guild_xp}
+        canInvite={officer}
+        onAddMember={() => setInviteOpen(true)}
       />
+
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          setInviteOpen(open);
+          if (!open) {
+            setInviteQuery("");
+            setInviteResults([]);
+            setInviteSearchLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[min(calc(100vw-2rem),22rem)] sm:max-w-sm gap-3 p-4">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base font-cinzel tracking-wide">Invite to guild</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              Type the start of a character name. Pick a player to send them a Discord DM with Accept / Decline.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={inviteQuery}
+            onChange={(e) => setInviteQuery(e.target.value)}
+            placeholder="Character name…"
+            className="h-9 font-serif"
+            autoComplete="off"
+            autoFocus
+          />
+          <div
+            className="max-h-52 overflow-y-auto rounded-sm border border-border/50 bg-muted/15"
+            role="listbox"
+            aria-label="Matching characters"
+          >
+            {inviteSearchLoading ? (
+              <p className="text-xs text-muted-foreground p-3 font-serif">Searching…</p>
+            ) : inviteQuery.trim().length === 0 ? (
+              <p className="text-xs text-muted-foreground p-3 font-serif">Type a letter to search.</p>
+            ) : inviteResults.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-3 font-serif">No guildless characters match.</p>
+            ) : (
+              <ul className="divide-y divide-border/40">
+                {inviteResults.map((row) => (
+                  <li key={row.character_id} className="p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{row.name}</p>
+                        <p className="text-[11px] text-muted-foreground tabular-nums">
+                          Lv {row.level} {row.class}
+                          {row.username ? <span className="ml-1 opacity-80">· @{row.username}</span> : null}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 shrink-0 text-[11px] font-cinzel"
+                        disabled={inviteSendingId !== null}
+                        onClick={() => void sendGuildInvite(row.character_id)}
+                      >
+                        {inviteSendingId === row.character_id ? "…" : "Invite"}
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <section className="game-panel lg:col-span-7 flex flex-col min-h-0">

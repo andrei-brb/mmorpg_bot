@@ -621,6 +621,15 @@ export type GuildFeedMessage = {
   author_name?: string | null;
 };
 
+/** GET /api/game/guild/invite/candidates */
+export type GuildInviteCandidate = {
+  character_id: string;
+  name: string;
+  level: number;
+  class: string;
+  username?: string | null;
+};
+
 export type GuildMePayload = {
   ok: boolean;
   in_guild?: boolean;
