@@ -64,6 +64,13 @@ function isProtectionTemplate(it: InvRow): boolean {
   return (it.template_id || "").toLowerCase().startsWith("protection_");
 }
 
+function canSalvage(it: InvRow): boolean {
+  if (it.locked || it.is_equipped) return false;
+  const t = (it.item_type || "").toLowerCase();
+  if (!["weapon", "armor", "accessory"].includes(t)) return false;
+  return Boolean(it.template_equip_slot || it.equip_slot);
+}
+
 function isEnhanceableGear(it: InvRow): boolean {
   if (!gearSlot(it) || isProtectionTemplate(it)) return false;
   const t = (it.item_type || "").toLowerCase();
@@ -141,9 +148,9 @@ export function HeroTab() {
   const [listItemId, setListItemId] = useState<string | null>(null);
   const [inventoryView, setInventoryView] = useState<"gear" | "consumables" | "materials">("gear");
   const [derivedStats, setDerivedStats] = useState<CharacterDerivedStatsPayload | null>(null);
-  const [batchSellMode, setBatchSellMode] = useState(false);
-  const [batchSellIds, setBatchSellIds] = useState<Set<string>>(() => new Set());
-  const [batchSelling, setBatchSelling] = useState(false);
+  const [salvageMode, setSalvageMode] = useState(false);
+  const [salvageIds, setSalvageIds] = useState<Set<string>>(() => new Set());
+  const [salvaging, setSalvaging] = useState(false);
   const [inventoryPage, setInventoryPage] = useState(0);
 
   const char = inventory?.character;
@@ -290,8 +297,16 @@ export function HeroTab() {
     async (endpoint: string, body: Record<string, unknown>, msg: string) => {
       try {
         const res = await itemPost(endpoint, body);
-        const j = (await res.json()) as { ok?: boolean; message?: string };
-        toast(j.message || msg);
+        const j = (await res.json()) as {
+          ok?: boolean;
+          message?: string;
+          results?: { message?: string; ok?: boolean }[];
+        };
+        const line =
+          j.message ||
+          (Array.isArray(j.results) && j.results[0]?.message) ||
+          msg;
+        toast(line);
         await refreshInventory();
         if (res.ok && j.ok !== false) setPinnedKey(null);
       } catch (e) {
@@ -301,19 +316,19 @@ export function HeroTab() {
     [itemPost, refreshInventory],
   );
 
-  // Keep batch selection in sync with inventory refreshes.
+  // Keep salvage selection in sync with inventory refreshes.
   useEffect(() => {
-    if (!batchSellMode || batchSellIds.size === 0) return;
+    if (!salvageMode || salvageIds.size === 0) return;
     const bagIdSet = new Set(bag.map((x) => x.id));
-    setBatchSellIds((prev) => {
+    setSalvageIds((prev) => {
       const next = new Set<string>();
       for (const id of prev) if (bagIdSet.has(id)) next.add(id);
       return next;
     });
-  }, [batchSellMode, batchSellIds.size, bag]);
+  }, [salvageMode, salvageIds.size, bag]);
 
-  const toggleBatchSellId = useCallback((id: string) => {
-    setBatchSellIds((prev) => {
+  const toggleSalvageId = useCallback((id: string) => {
+    setSalvageIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -323,63 +338,57 @@ export function HeroTab() {
 
   const selectShownBy = useCallback(
     (pred: (it: InvRow) => boolean) => {
-      setBatchSellIds((prev) => {
+      setSalvageIds((prev) => {
         const next = new Set(prev);
-        for (const it of bagShown) if (pred(it)) next.add(it.id);
+        for (const it of bagShown) if (pred(it) && canSalvage(it)) next.add(it.id);
         return next;
       });
     },
     [bagShown],
   );
 
-  const clearBatchSell = useCallback(() => setBatchSellIds(new Set()), []);
+  const clearSalvageSelection = useCallback(() => setSalvageIds(new Set()), []);
 
-  const sellBatchSelected = useCallback(async () => {
-    if (batchSelling) return;
-    const ids = Array.from(batchSellIds);
+  const salvageBatchSelected = useCallback(async () => {
+    if (salvaging) return;
+    const ids = Array.from(salvageIds).filter((id) => {
+      const it = bag.find((x) => x.id === id);
+      return it && canSalvage(it);
+    });
     if (ids.length === 0) return;
 
-    setBatchSelling(true);
+    setSalvaging(true);
     try {
-      let okCount = 0;
-      let failCount = 0;
-      let goldTotal = 0;
-      const failMsgs: string[] = [];
-
-      for (const id of ids) {
-        const res = await itemPost("/api/game/item/sell", { item_id: id });
-        const j = (await res.json()) as { ok?: boolean; message?: string; gold?: number };
-        const ok = res.ok && j.ok !== false;
-        if (ok) {
-          okCount += 1;
-          goldTotal += Number(j.gold ?? 0) || 0;
-        } else {
-          failCount += 1;
-          if (j.message && failMsgs.length < 3) failMsgs.push(j.message);
-        }
-      }
-
+      const res = await itemPost("/api/game/item/salvage", { item_ids: ids });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        results?: { item_id?: string; ok?: boolean; message?: string }[];
+      };
       await refreshInventory();
-      setBatchSellIds(new Set());
+      setSalvageIds(new Set());
 
-      if (okCount > 0 && failCount === 0) {
-        toast.success(`Sold ${okCount} item${okCount === 1 ? "" : "s"} for ${goldTotal}🪙.`);
+      const results = j.results || [];
+      const okCount = results.filter((r) => r.ok).length;
+      const failCount = results.length - okCount;
+      const failMsgs = results.filter((r) => !r.ok && r.message).map((r) => r.message as string);
+
+      if (res.ok && j.ok !== false && okCount > 0 && failCount === 0) {
+        toast.success(`Salvaged ${okCount} item${okCount === 1 ? "" : "s"}. Check materials tab for scrap.`);
       } else if (okCount > 0) {
-        toast.warning(
-          `Sold ${okCount} item${okCount === 1 ? "" : "s"} for ${goldTotal}🪙. ${failCount} failed.`,
-          { description: failMsgs.length ? failMsgs.join(" · ") : undefined },
-        );
+        toast.warning(`Salvaged ${okCount} item(s). ${failCount} failed.`, {
+          description: failMsgs.length ? failMsgs.slice(0, 3).join(" · ") : undefined,
+        });
       } else {
-        toast.error("Could not sell selected items.", {
-          description: failMsgs.length ? failMsgs.join(" · ") : undefined,
+        toast.error("Could not salvage selected items.", {
+          description: failMsgs.length ? failMsgs.slice(0, 3).join(" · ") : undefined,
         });
       }
     } catch (e) {
       toast.error(String(e));
     } finally {
-      setBatchSelling(false);
+      setSalvaging(false);
     }
-  }, [batchSellIds, batchSelling, itemPost, refreshInventory]);
+  }, [salvageIds, salvaging, itemPost, refreshInventory, bag]);
 
   useEffect(() => {
     if (!pinnedKey) return;
@@ -746,7 +755,7 @@ export function HeroTab() {
                 not free slots.
               </p>
             ) : null}
-            {/* Row 2: filters + batch sell — ornate chrome */}
+            {/* Row 2: filters + salvage — ornate chrome */}
             <div className="hero-inventory-chrome min-w-0">
               <div className="flex flex-wrap items-center gap-1 shrink-0">
                 <button
@@ -758,7 +767,11 @@ export function HeroTab() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInventoryView("consumables")}
+                  onClick={() => {
+                    setSalvageMode(false);
+                    setSalvageIds(new Set());
+                    setInventoryView("consumables");
+                  }}
                   className={`hero-inventory-segment ${
                     inventoryView === "consumables" ? "hero-inventory-segment-active" : ""
                   }`}
@@ -767,7 +780,11 @@ export function HeroTab() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInventoryView("materials")}
+                  onClick={() => {
+                    setSalvageMode(false);
+                    setSalvageIds(new Set());
+                    setInventoryView("materials");
+                  }}
                   className={`hero-inventory-segment ${
                     inventoryView === "materials" ? "hero-inventory-segment-active" : ""
                   }`}
@@ -779,13 +796,13 @@ export function HeroTab() {
                 type="button"
                 onClick={() => {
                   setPinnedKey(null);
-                  setBatchSellMode((v) => !v);
-                  setBatchSellIds(new Set());
+                  setSalvageMode((v) => !v);
+                  setSalvageIds(new Set());
                 }}
-                className={`hero-batch-toggle hero-ref-batch-sell shrink-0 ${batchSellMode ? "hero-batch-toggle-active" : ""}`}
-                title="Select multiple items and sell them together"
+                className={`hero-batch-toggle hero-ref-batch-sell shrink-0 ${salvageMode ? "hero-batch-toggle-active" : ""}`}
+                title="Select multiple weapons, armor, or accessories to salvage for scrap"
               >
-                Batch sell
+                Salvage
               </button>
             </div>
           </div>
@@ -796,7 +813,7 @@ export function HeroTab() {
               const it = inv.item;
               const showHoverTip = it && hoveredKey === invKey && pinnedKey !== invKey;
               const showPinned = it && pinnedKey === invKey;
-              const isSelected = it ? batchSellIds.has(it.id) : false;
+              const isSelected = it ? salvageIds.has(it.id) : false;
               return (
                 <div
                   key={inv.id}
@@ -811,24 +828,24 @@ export function HeroTab() {
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!it) return;
-                    if (batchSellMode) {
-                      toggleBatchSellId(it.id);
+                    if (salvageMode) {
+                      if (it && canSalvage(it)) toggleSalvageId(it.id);
                       return;
                     }
                     setPinnedKey((p) => (p === invKey ? null : invKey));
                   }}
                 >
-                  {batchSellMode && it && (
+                  {salvageMode && it && canSalvage(it) && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleBatchSellId(it.id);
+                        toggleSalvageId(it.id);
                       }}
                       className={`absolute top-0.5 left-0.5 z-20 h-3 w-3 rounded-sm border text-[8px] leading-none ${
                         isSelected ? "bg-primary/90 border-primary text-primary-foreground" : "bg-background/70 border-border text-foreground"
                       }`}
-                      title={isSelected ? "Unselect" : "Select for batch sell"}
+                      title={isSelected ? "Unselect" : "Select for salvage"}
                     >
                       {isSelected ? "✓" : ""}
                     </button>
@@ -915,16 +932,18 @@ export function HeroTab() {
                               📦 List
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void runAction("/api/game/item/sell", { item_id: it.id }, "Sold");
-                            }}
-                            className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                          >
-                            Sell
-                          </button>
+                          {canSalvage(it) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void runAction("/api/game/item/salvage", { item_id: it.id }, "Salvaged");
+                              }}
+                              className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                            >
+                              Salvage
+                            </button>
+                          )}
                           </div>
                         </div>
                       </ItemTooltipPanel>
@@ -961,26 +980,26 @@ export function HeroTab() {
             </div>
           )}
 
-          {batchSellMode && (
+          {salvageMode && (
             <div className="hero-batch-panel mt-3 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-foreground">
-                  Selected: <span className="font-semibold tabular-nums">{batchSellIds.size}</span>
+                  Selected: <span className="font-semibold tabular-nums">{salvageIds.size}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 justify-end">
                   <button
                     type="button"
                     onClick={() => selectShownBy(() => true)}
                     className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={batchSelling}
+                    disabled={salvaging}
                   >
-                    Select shown
+                    Select salvageable
                   </button>
                   <button
                     type="button"
                     onClick={() => selectShownBy((it) => rarityKey(it.rarity) === "common")}
                     className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={batchSelling}
+                    disabled={salvaging}
                   >
                     Common
                   </button>
@@ -988,30 +1007,31 @@ export function HeroTab() {
                     type="button"
                     onClick={() => selectShownBy((it) => rarityKey(it.rarity) === "uncommon")}
                     className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={batchSelling}
+                    disabled={salvaging}
                   >
                     Uncommon
                   </button>
                   <button
                     type="button"
-                    onClick={clearBatchSell}
+                    onClick={clearSalvageSelection}
                     className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={batchSelling || batchSellIds.size === 0}
+                    disabled={salvaging || salvageIds.size === 0}
                   >
                     Clear
                   </button>
                   <button
                     type="button"
-                    onClick={() => void sellBatchSelected()}
+                    onClick={() => void salvageBatchSelected()}
                     className="game-btn-primary px-2 py-1 text-[10px]"
-                    disabled={batchSelling || batchSellIds.size === 0}
+                    disabled={salvaging || salvageIds.size === 0}
                   >
-                    {batchSelling ? "Selling…" : "Sell selected"}
+                    {salvaging ? "Salvaging…" : "Salvage selected"}
                   </button>
                 </div>
               </div>
               <div className="mt-2 text-[10px] text-muted-foreground">
-                Tip: locked / equipped / soulbound items will fail and remain in your bag.
+                Weapons, armor, and accessories only. Equipped and locked items cannot be salvaged. Use the Forge tab
+                for timed upgrades. Vendor sell remains on Discord.
               </div>
             </div>
           )}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { HeroTab } from "./tabs/HeroTab";
+import { CraftingTab } from "./tabs/CraftingTab";
 import { ExploreTab } from "./tabs/ExploreTab";
 import { QuestsTab } from "./tabs/QuestsTab";
 import { CombatTab } from "./tabs/CombatTab";
@@ -20,11 +21,12 @@ import { usePvpApi } from "@/hooks/usePvpApi";
 import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
 
-const TABS = ["Hero", "Explore", "Quests", "Combat", "Market", "Arena", "Progress"] as const;
+const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Market", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabName, string> = {
   Hero: "⚔️",
+  Forge: "🔨",
   Explore: "🗺️",
   Quests: "📜",
   Combat: "💀",
@@ -429,6 +431,7 @@ export function GameShell() {
             >
               <div className="flex min-h-0 flex-1 flex-col">
                 {activeTab === "Hero" && <HeroTab />}
+                {activeTab === "Forge" && <CraftingTab />}
                 {activeTab === "Explore" && <ExploreTab />}
                 {activeTab === "Quests" && <QuestsTab />}
                 {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}

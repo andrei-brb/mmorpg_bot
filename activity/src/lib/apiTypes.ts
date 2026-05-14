@@ -36,6 +36,9 @@ export type InvRow = {
   r_resistance?: number | null;
   r_hit_rating?: number | null;
   enhancement_level?: number | null;
+  locked?: boolean | null;
+  soulbound?: boolean | null;
+  vendor_sell?: number | null;
   effect_type?: string | null;
   effect_value?: number | null;
   effect_duration?: number | null;
@@ -51,6 +54,36 @@ export type ClassOptionRow = {
   description: string;
 };
 
+export type CraftRecipeRow = {
+  id: string;
+  name: string;
+  description?: string | null;
+  input_template_id: string;
+  output_template_id: string;
+  craft_seconds: number;
+  required_crafting_level: number;
+  gold_cost: number;
+  costs: Record<string, number>;
+  crafting_xp_reward: number;
+};
+
+export type CraftJobRow = {
+  id: string;
+  character_id?: string;
+  recipe_id: string;
+  recipe_name?: string;
+  input_template_id?: string;
+  output_template_id?: string;
+  craft_seconds?: number;
+  gold_cost?: number;
+  costs?: Record<string, number>;
+  crafting_xp_reward?: number;
+  payload?: Record<string, unknown>;
+  started_at?: string;
+  completes_at?: string;
+  status?: string;
+};
+
 export type InventoryPayload = {
   discord?: { id?: string; username?: string; global_name?: string | null; avatar?: string | null; avatar_url?: string | null };
   character: {
@@ -62,11 +95,15 @@ export type InventoryPayload = {
     specialization_name?: string | null;
     current_hp?: number;
     max_hp?: number;
+    crafting_level?: number;
+    crafting_xp?: number;
   } | null;
   /** Bag capacity counts unequipped inventory rows (equipped gear doesn't count). */
   bag_slots_used?: number;
   bag_slots_max?: number;
   items: InvRow[];
+  craft_job?: CraftJobRow | null;
+  craft_recipes?: CraftRecipeRow[];
 };
 
 export type CharacterDerivedStatsPayload = {

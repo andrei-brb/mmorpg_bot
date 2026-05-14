@@ -194,6 +194,74 @@ class Database:
                 ALTER TABLE characters
                 ADD COLUMN IF NOT EXISTS idle_last_claim_at TIMESTAMPTZ DEFAULT NOW();
             """)
+
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS crafting_level SMALLINT DEFAULT 1;
+            """)
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS crafting_xp INT DEFAULT 0;
+            """)
+
+            # Crafting tables (older installs may predate _SCHEMA embed)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS craft_recipes (
+                    id                      VARCHAR(64) PRIMARY KEY,
+                    name                    VARCHAR(120) NOT NULL,
+                    description             TEXT,
+                    input_template_id       VARCHAR(64) NOT NULL REFERENCES item_templates(id),
+                    output_template_id      VARCHAR(64) NOT NULL REFERENCES item_templates(id),
+                    craft_seconds           INT NOT NULL DEFAULT 10,
+                    required_crafting_level SMALLINT NOT NULL DEFAULT 1,
+                    gold_cost               INT NOT NULL DEFAULT 0,
+                    costs                   JSONB NOT NULL DEFAULT '{}',
+                    crafting_xp_reward      INT NOT NULL DEFAULT 5
+                );
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS craft_jobs (
+                    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    character_id            UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    recipe_id               VARCHAR(64) NOT NULL REFERENCES craft_recipes(id),
+                    payload                 JSONB NOT NULL DEFAULT '{}',
+                    started_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    completes_at            TIMESTAMPTZ NOT NULL,
+                    status                  VARCHAR(16) NOT NULL DEFAULT 'active'
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_craft_recipes_input ON craft_recipes(input_template_id);
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_craft_jobs_char ON craft_jobs(character_id, status);
+            """)
+            await c.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_craft_jobs_one_inflight
+                ON craft_jobs(character_id) WHERE (status IN ('active', 'ready'));
+            """)
+
+            # Seed / upsert forge recipes (idempotent)
+            await c.execute("""
+                INSERT INTO craft_recipes
+                    (id, name, description, input_template_id, output_template_id, craft_seconds, required_crafting_level, gold_cost, costs, crafting_xp_reward)
+                VALUES
+                    ('upgrade_iron_to_steel_sword', 'Refined blade', 'Upgrade Iron Sword into a Steel Sword.', 'iron_sword', 'steel_sword', 5, 1, 50, '{"weapon_scrap": 3}'::jsonb, 15),
+                    ('upgrade_leather_to_chain_coif', 'Reinforced hood', 'Upgrade Leather Cap into a Chain Coif.', 'leather_cap', 'chain_coif', 8, 1, 80, '{"armor_scrap": 4}'::jsonb, 20),
+                    ('upgrade_bone_club_to_dwarven_axe', 'Ironforge pattern', 'Upgrade Bone Club into a Dwarven Axe.', 'bone_club', 'dwarven_axe', 30, 2, 200, '{"weapon_scrap": 6}'::jsonb, 35),
+                    ('upgrade_raptor_to_jungle_chest', 'Stranglethorn weave', 'Upgrade Raptor Hide Vest into Jungle Leather Chest.', 'raptor_hide_vest', 'jungle_leather_chest', 45, 3, 350, '{"armor_scrap": 8}'::jsonb, 50),
+                    ('upgrade_bracelet_t1_to_t2', 'Better wristwrap', 'Upgrade Woven Bracelet to a Carved Bracelet.', 'bracelet_t1', 'bracelet_t2', 6, 1, 60, '{"accessory_scrap": 3}'::jsonb, 12)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    input_template_id = EXCLUDED.input_template_id,
+                    output_template_id = EXCLUDED.output_template_id,
+                    craft_seconds = EXCLUDED.craft_seconds,
+                    required_crafting_level = EXCLUDED.required_crafting_level,
+                    gold_cost = EXCLUDED.gold_cost,
+                    costs = EXCLUDED.costs,
+                    crafting_xp_reward = EXCLUDED.crafting_xp_reward;
+            """)
             
             # Create enhancement_log table
             await c.execute("""
@@ -353,6 +421,42 @@ class Database:
             await c.execute("""
                 CREATE INDEX IF NOT EXISTS idx_guild_live_events_window
                 ON guild_live_events(guild_id, starts_at, ends_at);
+            """)
+
+            # Discord server context (Activity / slash commands) for guild-scoped world boss presence
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS last_discord_guild_id BIGINT;
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_char_discord_guild_zone
+                ON characters(last_discord_guild_id, current_zone)
+                WHERE is_active = TRUE AND last_discord_guild_id IS NOT NULL;
+            """)
+
+            # Scheduled lore/world boss windows per Discord guild
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_world_boss_windows (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id        BIGINT NOT NULL,
+                    trigger_slug    VARCHAR(64) NOT NULL,
+                    zone_key        VARCHAR(64) NOT NULL,
+                    boss_key        VARCHAR(64) NOT NULL,
+                    starts_at       TIMESTAMPTZ NOT NULL,
+                    ends_at         TIMESTAMPTZ NOT NULL,
+                    trigger_kind    VARCHAR(32) NOT NULL,
+                    trigger_detail  JSONB NOT NULL DEFAULT '{}',
+                    announce_sent   BOOLEAN DEFAULT FALSE,
+                    created_at      TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_world_boss_windows_guild_active
+                ON guild_world_boss_windows(guild_id, ends_at DESC);
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_world_boss_windows_zone_active
+                ON guild_world_boss_windows(zone_key, ends_at DESC);
             """)
 
             # ── Activity PvP (Arena) ─────────────────────────────────────────────
@@ -523,6 +627,10 @@ CREATE TABLE IF NOT EXISTS characters (
     -- Prestige (end-game)
     prestige        SMALLINT DEFAULT 0,
 
+    -- Crafting / forge progression
+    crafting_level  SMALLINT DEFAULT 1 CHECK (crafting_level BETWEEN 1 AND 99),
+    crafting_xp     INT DEFAULT 0 CHECK (crafting_xp >= 0),
+
     -- Timestamps
     is_active       BOOLEAN DEFAULT TRUE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -624,6 +732,38 @@ CREATE TABLE IF NOT EXISTS inventory (
 
 CREATE INDEX IF NOT EXISTS idx_inv_char     ON inventory(character_id);
 CREATE INDEX IF NOT EXISTS idx_inv_equipped ON inventory(character_id, is_equipped) WHERE is_equipped;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- CRAFTING (timed upgrades + recipes)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS craft_recipes (
+    id                      VARCHAR(64) PRIMARY KEY,
+    name                    VARCHAR(120) NOT NULL,
+    description             TEXT,
+    input_template_id       VARCHAR(64) NOT NULL REFERENCES item_templates(id),
+    output_template_id      VARCHAR(64) NOT NULL REFERENCES item_templates(id),
+    craft_seconds           INT NOT NULL DEFAULT 10 CHECK (craft_seconds >= 1 AND craft_seconds <= 86400),
+    required_crafting_level SMALLINT NOT NULL DEFAULT 1 CHECK (required_crafting_level BETWEEN 1 AND 99),
+    gold_cost               INT NOT NULL DEFAULT 0 CHECK (gold_cost >= 0),
+    costs                   JSONB NOT NULL DEFAULT '{}',
+    crafting_xp_reward      INT NOT NULL DEFAULT 5 CHECK (crafting_xp_reward >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_craft_recipes_input ON craft_recipes(input_template_id);
+
+CREATE TABLE IF NOT EXISTS craft_jobs (
+    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    character_id            UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    recipe_id               VARCHAR(64) NOT NULL REFERENCES craft_recipes(id),
+    payload                 JSONB NOT NULL DEFAULT '{}',
+    started_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completes_at            TIMESTAMPTZ NOT NULL,
+    status                  VARCHAR(16) NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active','ready','claimed','cancelled'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_craft_jobs_char ON craft_jobs(character_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_craft_jobs_one_inflight ON craft_jobs(character_id) WHERE (status IN ('active', 'ready'));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- GUILDS
@@ -895,6 +1035,14 @@ INSERT INTO item_templates
 VALUES
     ('iron_sword','Iron Sword','A sturdy iron blade.','weapon','common','main_hand',1,
      4,2,0,0,2,0,8,14, NULL,0,0, 10,4,'⚔️'),
+    ('steel_sword','Steel Sword','Refined from iron stock at the forge.','weapon','uncommon','main_hand',5,
+     6,3,0,0,3,0,10,18, NULL,0,0, 40,16,'⚔️'),
+    ('weapon_scrap','Weapon Scrap','Salvaged metal from broken arms.','material','common',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'⚙️'),
+    ('armor_scrap','Armor Scrap','Straps, plates, and leather salvage.','material','common',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🛡️'),
+    ('accessory_scrap','Accessory Scrap','Rings, cords, and charm fragments.','material','common',NULL,1,
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'✨'),
     ('leather_cap','Leather Cap','Soft leather headgear.','armor','common','head',1,
      0,2,0,1,2,12,0,0, NULL,0,0, 8,3,'🪖'),
     ('health_potion','Health Potion','Restores 25% of max HP (min 80).','consumable','common',NULL,1,
@@ -1032,6 +1180,25 @@ ON CONFLICT (id) DO UPDATE SET
     vendor_buy = EXCLUDED.vendor_buy,
     vendor_sell = EXCLUDED.vendor_sell,
     icon = EXCLUDED.icon;
+
+INSERT INTO craft_recipes
+    (id, name, description, input_template_id, output_template_id, craft_seconds, required_crafting_level, gold_cost, costs, crafting_xp_reward)
+VALUES
+    ('upgrade_iron_to_steel_sword', 'Refined blade', 'Upgrade Iron Sword into a Steel Sword.', 'iron_sword', 'steel_sword', 5, 1, 50, '{"weapon_scrap": 3}'::jsonb, 15),
+    ('upgrade_leather_to_chain_coif', 'Reinforced hood', 'Upgrade Leather Cap into a Chain Coif.', 'leather_cap', 'chain_coif', 8, 1, 80, '{"armor_scrap": 4}'::jsonb, 20),
+    ('upgrade_bone_club_to_dwarven_axe', 'Ironforge pattern', 'Upgrade Bone Club into a Dwarven Axe.', 'bone_club', 'dwarven_axe', 30, 2, 200, '{"weapon_scrap": 6}'::jsonb, 35),
+    ('upgrade_raptor_to_jungle_chest', 'Stranglethorn weave', 'Upgrade Raptor Hide Vest into Jungle Leather Chest.', 'raptor_hide_vest', 'jungle_leather_chest', 45, 3, 350, '{"armor_scrap": 8}'::jsonb, 50),
+    ('upgrade_bracelet_t1_to_t2', 'Better wristwrap', 'Upgrade Woven Bracelet to a Carved Bracelet.', 'bracelet_t1', 'bracelet_t2', 6, 1, 60, '{"accessory_scrap": 3}'::jsonb, 12)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    input_template_id = EXCLUDED.input_template_id,
+    output_template_id = EXCLUDED.output_template_id,
+    craft_seconds = EXCLUDED.craft_seconds,
+    required_crafting_level = EXCLUDED.required_crafting_level,
+    gold_cost = EXCLUDED.gold_cost,
+    costs = EXCLUDED.costs,
+    crafting_xp_reward = EXCLUDED.crafting_xp_reward;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ACHIEVEMENT TEMPLATES

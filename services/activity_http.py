@@ -52,6 +52,7 @@ from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
+from services.crafting.crafting_service import CraftingService
 from services.lore.lore_gate_service import LoreGateService
 from services.quest.npc_quest_service import (
     NPCQuestService,
@@ -385,6 +386,9 @@ async def handle_inventory(request: web.Request) -> web.Response:
         )
 
     items = await inv_svc.get_all(char["id"])
+    craft_svc = CraftingService(db)
+    craft_job = await craft_svc.get_inflight_job(char["id"])
+    craft_recipes = await craft_svc.list_recipes()
     # Inventory capacity metadata (bag only: unequipped rows).
     player = await db.fetchrow(
         """SELECT p.is_premium FROM players p
@@ -417,9 +421,144 @@ async def handle_inventory(request: web.Request) -> web.Response:
                 "bag_slots_used": bag_slots_used,
                 "bag_slots_max": int(bag_slots_max),
                 "items": items,
+                "craft_job": _json_safe(craft_job),
+                "craft_recipes": _json_safe(craft_recipes),
             }
         )
     )
+
+
+async def handle_item_salvage(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    raw_ids = body.get("item_ids")
+    if isinstance(raw_ids, list) and raw_ids:
+        id_list = [str(x).strip() for x in raw_ids if str(x).strip()][:40]
+    else:
+        one = (body.get("item_id") or "").strip()
+        id_list = [one] if one else []
+
+    if not id_list:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_item_id"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    craft_svc = CraftingService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    results = []
+    ok_any = False
+    for sid in id_list:
+        try:
+            uid = UUID(sid)
+        except ValueError:
+            results.append({"item_id": sid, "ok": False, "message": "Invalid item id."})
+            continue
+        ok, msg, pay = await inv_svc.salvage(char["id"], uid)
+        if ok and pay:
+            ok_any = True
+            g = int(pay.get("gold") or 0)
+            if g > 0:
+                await char_svc.add_gold(char["id"], g, "salvage")
+            xp = int(pay.get("crafting_xp") or 0)
+            if xp > 0:
+                await craft_svc.add_crafting_xp(char["id"], xp)
+        results.append({"item_id": sid, "ok": ok, "message": msg, "payload": _json_safe(pay) if pay else None})
+
+    summary = next((r.get("message") for r in reversed(results) if r.get("ok")), None)
+    return web.json_response({"ok": ok_any, "message": summary or ("Salvaged." if ok_any else "Nothing salvaged."), "results": results})
+
+
+async def handle_craft_start(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    recipe_id = (body.get("recipe_id") or "").strip()
+    src = (body.get("source_item_id") or "").strip()
+    if not recipe_id or not src:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_fields"}), content_type="application/json")
+
+    try:
+        src_uid = UUID(src)
+    except ValueError:
+        return web.json_response({"ok": False, "message": "Invalid source item id."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    craft_svc = CraftingService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    ok, msg, job = await craft_svc.start_craft(char["id"], recipe_id, src_uid, inv_svc, char_svc)
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg, "craft_job": _json_safe(job)}, status=status)
+
+
+async def handle_craft_claim(request: web.Request) -> web.Response:
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    craft_svc = CraftingService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    ok, msg, data = await craft_svc.claim_craft(char["id"], inv_svc)
+    status = 200 if ok else 400
+    return web.json_response({"ok": ok, "message": msg, "result": _json_safe(data)}, status=status)
 
 
 async def handle_character_stats(request: web.Request) -> web.Response:
@@ -579,6 +718,9 @@ async def handle_character_create(request: web.Request) -> web.Response:
 
 
 def _guild_id_from_request(request: web.Request, body: Optional[Dict[str, Any]] = None) -> Optional[int]:
+    q = request.rel_url.query.get("guild_id") or request.rel_url.query.get("guildId")
+    if q and str(q).strip().isdigit():
+        return int(str(q).strip())
     raw = request.headers.get("X-Guild-Id") or request.headers.get("X-Guild-ID")
     if raw and str(raw).strip().isdigit():
         return int(str(raw).strip())
@@ -1414,6 +1556,11 @@ async def handle_combat_start(request: web.Request) -> web.Response:
     force = bool(body.get("force"))
     guild_id = _guild_id_from_request(request, body)
 
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if char and guild_id:
+        await char_svc.set_last_discord_guild(char["id"], guild_id)
+
     if dungeon_key and floor_raw is not None:
         try:
             dungeon_floor = int(floor_raw)
@@ -2123,6 +2270,16 @@ async def handle_map(request: web.Request) -> web.Response:
     if not char:
         return web.json_response(_json_safe({"zones": [], "error": "no_character"}))
 
+    guild_id = _guild_id_from_request(request, None)
+    world_boss_windows: List[Dict[str, Any]] = []
+    if guild_id:
+        try:
+            from services.world_boss.world_boss_service import WorldBossService
+
+            world_boss_windows = await WorldBossService(db).list_active_windows(guild_id)
+        except Exception:
+            log.exception("handle_map world_boss_windows")
+
     out = []
     for key, z in sorted(ZONES.items(), key=lambda kv: kv[1].level_range[0]):
         players = await db.fetchval(
@@ -2145,7 +2302,9 @@ async def handle_map(request: web.Request) -> web.Response:
                 "is_current": key == char.get("current_zone"),
             }
         )
-    return web.json_response(_json_safe({"zones": out, "current_zone": char.get("current_zone")}))
+    return web.json_response(
+        _json_safe({"zones": out, "current_zone": char.get("current_zone"), "world_boss_windows": world_boss_windows})
+    )
 
 
 def _npc_for_quest_id(quest_id: str) -> Optional[Dict[str, Any]]:
@@ -2359,6 +2518,9 @@ async def handle_travel(request: web.Request) -> web.Response:
     if not zone_key or zone_key not in ZONES:
         return web.json_response(_json_safe({"ok": False, "error": "invalid_zone"}), status=400)
 
+    guild_id = _guild_id_from_request(request, body)
+    char_svc = CharacterService(db)
+
     if char.get("current_zone") == zone_key:
         return web.json_response(_json_safe({"ok": True, "message": "Already here.", "zone_key": zone_key}))
 
@@ -2374,6 +2536,9 @@ async def handle_travel(request: web.Request) -> web.Response:
             ),
             status=400,
         )
+
+    if guild_id:
+        await char_svc.set_last_discord_guild(_uuid_from_any(char["id"]), guild_id)
 
     # zone_state counters (best-effort)
     try:
@@ -2393,7 +2558,6 @@ async def handle_travel(request: web.Request) -> web.Response:
         pass
 
     # refresh char
-    char_svc = CharacterService(db)
     fresh = await char_svc.get_character(discord_id)
     return web.json_response(_json_safe({"ok": True, "character": dict(fresh), "zone_key": zone_key}))
 
@@ -2416,6 +2580,9 @@ async def handle_explore(request: web.Request) -> web.Response:
     char_svc = CharacterService(db)
     inv_svc = InventoryService(db)
     quest_svc = NPCQuestService(db)
+
+    if guild_id:
+        await char_svc.set_last_discord_guild(_uuid_from_any(char["id"]), guild_id)
 
     # combat gate similar to /explore
     if (char.get("combat_status") or "") == "in_combat":
@@ -2442,9 +2609,20 @@ async def handle_explore(request: web.Request) -> web.Response:
 
     from services.exploration.zone_explore import roll_explore_outcome
     from services.reward_multipliers import get_combined_reward_multipliers
+    from services.world_boss.world_boss_service import WorldBossService
 
     xp_mult, gold_mult, boss_add = await get_combined_reward_multipliers(db, guild_id)
-    outcome = roll_explore_outcome(zone, boss_add)
+    wbs = WorldBossService(db)
+    zone_patrol = await WorldBossService.fetch_zone_patrol_boss_alive(db, char.get("current_zone"))
+    world_key = await wbs.active_window_boss_for_zone(guild_id, char.get("current_zone") or "")
+    if world_key:
+        boss_add = min(boss_add + 0.08, 0.15)
+    outcome = roll_explore_outcome(
+        zone,
+        boss_add,
+        zone_patrol_boss_alive=zone_patrol,
+        world_boss_key=world_key,
+    )
 
     cooldown = Settings.EXPLORE_COOLDOWN if outcome["type"] in ("enemy", "boss") else 10
     await char_svc.set_cooldown(_uuid_from_any(char["id"]), "explore", cooldown)
@@ -3696,6 +3874,9 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/item/equip", handle_item_equip)
     app.router.add_post("/api/game/item/unequip", handle_item_unequip)
     app.router.add_post("/api/game/item/sell", handle_item_sell)
+    app.router.add_post("/api/game/item/salvage", handle_item_salvage)
+    app.router.add_post("/api/game/craft/start", handle_craft_start)
+    app.router.add_post("/api/game/craft/claim", handle_craft_claim)
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)

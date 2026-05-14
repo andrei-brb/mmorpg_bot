@@ -382,6 +382,7 @@ class InventoryService:
         bonus: Optional[Dict] = None,
         from_: str = "drop",
         enhancement_level: int = 0,
+        locked: bool = False,
     ) -> Tuple[bool, str]:
         tmpl = await self.db.fetchrow("SELECT * FROM item_templates WHERE id=$1", template_id)
         if not tmpl:
@@ -433,14 +434,14 @@ class InventoryService:
                        (character_id,template_id,quantity,rarity,
                         r_str,r_agi,r_int,r_spi,r_sta,
                         r_haste,r_lifesteal,r_resistance,r_hit_rating,
-                        enhancement_level,obtained_from)
-                       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
+                        enhancement_level,obtained_from,locked)
+                       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)""",
                     char_id, template_id, chunk, rarity,
                     bonus.get("r_str",0), bonus.get("r_agi",0), bonus.get("r_int",0),
                     bonus.get("r_spi",0), bonus.get("r_sta",0),
                     bonus.get("r_haste",0), bonus.get("r_lifesteal",0),
                     bonus.get("r_resistance",0), bonus.get("r_hit_rating",0),
-                    enhancement_level, from_,
+                    enhancement_level, from_, locked,
                 )
                 remaining -= chunk
                 bonus = None
@@ -463,14 +464,14 @@ class InventoryService:
                (character_id,template_id,quantity,rarity,
                 r_str,r_agi,r_int,r_spi,r_sta,
                 r_haste,r_lifesteal,r_resistance,r_hit_rating,
-                enhancement_level,obtained_from)
-               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)""",
+                enhancement_level,obtained_from,locked)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)""",
             char_id, template_id, quantity, rarity,
             bonus.get("r_str",0), bonus.get("r_agi",0), bonus.get("r_int",0),
             bonus.get("r_spi",0), bonus.get("r_sta",0),
             bonus.get("r_haste",0), bonus.get("r_lifesteal",0),
             bonus.get("r_resistance",0), bonus.get("r_hit_rating",0),
-            enhancement_level, from_,
+            enhancement_level, from_, locked,
         )
         return True, f"Added {RARITIES.get(rarity, RARITIES['common']).name} item."
 
@@ -586,6 +587,159 @@ class InventoryService:
         return True, f"Used **{item['name']}**.", {
             "type": item["effect_type"], "value": item["effect_value"], "duration": item["effect_duration"]
         }
+
+    _SCRAP_BY_SLOT = {
+        "main_hand": "weapon_scrap",
+        "off_hand": "weapon_scrap",
+        "head": "armor_scrap",
+        "chest": "armor_scrap",
+        "hands": "armor_scrap",
+        "legs": "armor_scrap",
+        "feet": "armor_scrap",
+        "ring": "accessory_scrap",
+        "neck": "accessory_scrap",
+        "trinket": "accessory_scrap",
+    }
+    _RARITY_SCRAP_BASE = {
+        "common": 2,
+        "uncommon": 4,
+        "rare": 7,
+        "epic": 12,
+        "legendary": 20,
+        "artifact": 35,
+    }
+
+    @classmethod
+    def scrap_yield_for_item(cls, equip_slot: Optional[str], rarity: str, level_req: int, enhancement_level: int) -> Tuple[str, int]:
+        slot = (equip_slot or "").strip().lower()
+        tid = cls._SCRAP_BY_SLOT.get(slot)
+        if not tid:
+            return "", 0
+        r = (rarity or "common").lower()
+        base = cls._RARITY_SCRAP_BASE.get(r, 2)
+        qty = base + max(0, int(level_req or 0) // 10) + max(0, int(enhancement_level or 0))
+        return tid, max(1, qty)
+
+    async def consume_template_quantity(
+        self,
+        char_id: UUID,
+        template_id: str,
+        quantity: int,
+        *,
+        rarity: str = "common",
+    ) -> Tuple[bool, str]:
+        """Remove `quantity` from stackable rows (materials/consumables)."""
+        if quantity <= 0:
+            return True, "ok"
+        remaining = int(quantity)
+        rows = await self.db.fetch(
+            """SELECT id, quantity FROM inventory
+               WHERE character_id=$1 AND template_id=$2
+                 AND COALESCE(rarity::text, 'common') = COALESCE($3::text, 'common')
+                 AND COALESCE(is_equipped, FALSE)=FALSE
+               ORDER BY obtained_at NULLS FIRST""",
+            char_id,
+            template_id,
+            rarity,
+        )
+        for row in rows:
+            if remaining <= 0:
+                break
+            q = int(row["quantity"] or 0)
+            take = min(remaining, q)
+            new_q = q - take
+            if new_q <= 0:
+                await self.db.execute("DELETE FROM inventory WHERE id=$1", row["id"])
+            else:
+                await self.db.execute("UPDATE inventory SET quantity=$1 WHERE id=$2", new_q, row["id"])
+            remaining -= take
+        if remaining > 0:
+            return False, f"Not enough {template_id} (short by {remaining})."
+        return True, "ok"
+
+    async def count_template_quantity(
+        self,
+        char_id: UUID,
+        template_id: str,
+        *,
+        rarity: str = "common",
+    ) -> int:
+        v = await self.db.fetchval(
+            """SELECT COALESCE(SUM(quantity),0)::bigint FROM inventory
+               WHERE character_id=$1 AND template_id=$2
+                 AND COALESCE(rarity::text, 'common') = COALESCE($3::text, 'common')
+                 AND COALESCE(is_equipped, FALSE)=FALSE""",
+            char_id,
+            template_id,
+            rarity,
+        )
+        return int(v or 0)
+
+    async def salvage(self, char_id: UUID, item_id: UUID) -> Tuple[bool, str, Optional[Dict]]:
+        """
+        Destroy gear for scrap (+ small gold). Soulbound allowed; locked and equipped blocked.
+        Returns (ok, message, payload dict with scraps + xp + gold).
+        """
+        try:
+            item = await self.db.fetchrow(
+                """SELECT i.*, t.name, t.soulbound, t.item_type, t.equip_slot, t.level_req,
+                          t.rarity as template_rarity,
+                          COALESCE(i.rarity, t.rarity) as rarity,
+                          COALESCE(i.enhancement_level, 0) as enhancement_level
+                   FROM inventory i JOIN item_templates t ON i.template_id=t.id
+                   WHERE i.id=$1 AND i.character_id=$2""",
+                item_id,
+                char_id,
+            )
+            if not item:
+                return False, "Item not found.", None
+            if item["locked"]:
+                return False, "Item is locked. Unlock it first.", None
+            if item["is_equipped"]:
+                return False, "Unequip the item before salvaging.", None
+
+            itype = (item.get("item_type") or "").lower()
+            if itype not in ("weapon", "armor", "accessory"):
+                return False, "Only weapons, armor, and accessories can be salvaged.", None
+            if not item.get("equip_slot"):
+                return False, "This item cannot be salvaged.", None
+
+            scrap_tid, scrap_qty = self.scrap_yield_for_item(
+                item.get("equip_slot"),
+                str(item.get("rarity") or "common"),
+                int(item.get("level_req") or 0),
+                int(item.get("enhancement_level") or 0),
+            )
+            if not scrap_tid or scrap_qty <= 0:
+                return False, "Nothing to salvage from this item.", None
+
+            name = item["name"]
+            enh = int(item.get("enhancement_level") or 0)
+            vendor = int(item.get("vendor_sell") or 0)
+            gold = max(0, int(vendor * 0.25) + enh * 2)
+
+            await self.db.execute("DELETE FROM inventory WHERE id=$1", item_id)
+
+            ok, msg = await self.add_item(char_id, scrap_tid, rarity="common", quantity=scrap_qty, from_="salvage")
+            if not ok:
+                log.error("salvage add_item scrap failed post-delete char=%s: %s", char_id, msg)
+                return False, f"Salvage failed while adding scrap: {msg}", None
+
+            xp_gain = 4 + min(20, enh * 2)
+            if (str(item.get("rarity") or "").lower()) in ("epic", "legendary", "artifact"):
+                xp_gain += 3
+
+            payload = {
+                "scrap_template_id": scrap_tid,
+                "scrap_quantity": scrap_qty,
+                "gold": gold,
+                "crafting_xp": xp_gain,
+                "name": name,
+            }
+            return True, f"Salvaged **{name}** into scrap.", payload
+        except Exception as e:
+            log.error("salvage error %s: %s", item_id, e, exc_info=True)
+            return False, f"Salvage error: {str(e)}", None
 
     # ── Sell ─────────────────────────────────────────────────────────────────
 
