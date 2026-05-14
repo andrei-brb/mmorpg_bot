@@ -1,5 +1,6 @@
 import { Trophy, Skull, Minus, ChevronDown } from "lucide-react";
 import type { PvpHistoryResponse } from "@/lib/pvpTypes";
+import { WomPanel } from "@/components/wom/WomUi";
 
 interface PvpHistoryProps {
   history: PvpHistoryResponse;
@@ -8,7 +9,7 @@ interface PvpHistoryProps {
 
 export function PvpHistory({ history, onLoadMore }: PvpHistoryProps) {
   return (
-    <div className="game-panel">
+    <WomPanel glow>
       <div className="game-panel-header">Match History</div>
       <div className="divide-y divide-border">
         {history.matches.map((m) => {
@@ -53,6 +54,6 @@ export function PvpHistory({ history, onLoadMore }: PvpHistoryProps) {
           </button>
         </div>
       )}
-    </div>
+    </WomPanel>
   );
 }

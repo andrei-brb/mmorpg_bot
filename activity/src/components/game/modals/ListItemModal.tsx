@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "../ItemIcon";
 import { calculateMarketPrice } from "@/lib/gameApi";
 import type { InvRow } from "@/lib/apiTypes";
+import { WomPanel } from "@/components/wom/WomUi";
 
 const RARITY_COLORS: Record<string, string> = {
   common: "text-rarity-common border-rarity-common/40",
@@ -91,8 +92,9 @@ export function ListItemModal({ item, onClose, onSuccess }: ListItemModalProps) 
       style={{ background: "hsl(0 0% 0% / 0.7)", backdropFilter: "blur(4px)" }}
       onClick={onClose}
     >
-      <div
-        className="game-panel w-full max-w-md"
+      <WomPanel
+        glow
+        className="w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="game-panel-header">List Item on Marketplace</div>
@@ -224,7 +226,7 @@ export function ListItemModal({ item, onClose, onSuccess }: ListItemModalProps) 
             {isLoading ? "Listing..." : "List Item"}
           </button>
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { EnhanceInfoPayload } from "@/lib/apiTypes";
 import { ItemIcon } from "@/components/game/ItemIcon";
+import { WomPanel } from "@/components/wom/WomUi";
 
 interface EnhancableItem {
   id: string;
@@ -122,8 +123,9 @@ export function BlacksmithModal({
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-4 sm:items-center"
       style={{ background: "hsl(0 0% 0% / 0.7)", backdropFilter: "blur(4px)" }}
     >
-      <div
-        className="game-panel my-4 flex w-full max-w-[540px] max-h-[min(92dvh,680px)] flex-col"
+      <WomPanel
+        glow
+        className="my-4 flex w-full max-w-[540px] max-h-[min(92dvh,680px)] flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="game-panel-header shrink-0">🔨 Blacksmith — Enhance</div>
@@ -327,7 +329,7 @@ export function BlacksmithModal({
                     <div className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
                       Enhancement Fragments
                     </div>
-                    <div className="game-panel p-3">
+                    <WomPanel bracket={false} glow={false} className="p-3">
                       <div className="text-xs text-muted-foreground mb-2">
                         Each fragment adds <span className="text-primary font-semibold">+10%</span> success (max {MAX_STACK_FRAGMENTS}).
                       </div>
@@ -364,7 +366,7 @@ export function BlacksmithModal({
                           </button>
                         )}
                       </div>
-                    </div>
+                    </WomPanel>
 
                     <div
                       className="mt-3 p-2 rounded-sm text-center"
@@ -416,7 +418,7 @@ export function BlacksmithModal({
             </button>
           )}
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

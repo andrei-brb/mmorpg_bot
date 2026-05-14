@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Press+Start+2P&display=swap');
+/* Fonts: see index.html (Google Fonts preconnect + link). */
 
 @tailwind base;
 @tailwind components;
@@ -6,72 +6,70 @@
 
 @layer base {
   :root {
-    /* Deep dark fantasy palette */
-    --background: 228 28% 6%;
-    --foreground: 38 25% 82%;
+    /* WoldOfMmo emergent / shadcn parity */
+    --background: 240 6% 3%;
+    --foreground: 40 33% 94%;
 
-    --card: 230 22% 10%;
-    --card-foreground: 38 25% 82%;
+    --card: 240 6% 7%;
+    --card-foreground: 40 33% 94%;
 
-    --popover: 228 24% 12%;
-    --popover-foreground: 38 25% 82%;
+    --popover: 240 6% 6%;
+    --popover-foreground: 40 33% 94%;
 
-    /* Gold / amber primary */
-    --primary: 43 78% 50%;
-    --primary-foreground: 228 30% 6%;
+    --primary: 40 47% 53%;
+    --primary-foreground: 240 10% 5%;
 
-    /* Deep purple secondary */
-    --secondary: 262 28% 18%;
-    --secondary-foreground: 38 18% 78%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 40 33% 94%;
 
-    --muted: 228 18% 14%;
-    --muted-foreground: 218 14% 50%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 40 6% 65%;
 
-    --accent: 268 35% 26%;
-    --accent-foreground: 38 28% 88%;
+    --accent: 40 47% 53%;
+    --accent-foreground: 240 10% 5%;
 
-    --destructive: 0 68% 46%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 72% 41%;
+    --destructive-foreground: 40 33% 94%;
 
-    --border: 228 16% 20%;
-    --input: 228 18% 15%;
-    --ring: 43 78% 50%;
+    --border: 40 12% 14%;
+    --input: 240 5% 12%;
+    --ring: 40 47% 53%;
 
-    --radius: 0.125rem;
+    --radius: 0px;
 
-    /* Frame & bevel tokens */
-    --frame-outer: 228 20% 8%;
-    --frame-mid: 228 16% 16%;
-    --frame-inner: 228 14% 22%;
-    --frame-highlight: 38 30% 40%;
-    --frame-rim: 43 50% 35%;
+    /* Frame & bevel tokens (legacy shell / panels) */
+    --frame-outer: 240 6% 4%;
+    --frame-mid: 40 8% 16%;
+    --frame-inner: 40 6% 22%;
+    --frame-highlight: 40 30% 40%;
+    --frame-rim: 40 35% 38%;
 
     /* Game-specific tokens */
-    --gold: 43 78% 50%;
-    --gold-dim: 43 50% 35%;
+    --gold: 40 47% 53%;
+    --gold-dim: 40 30% 38%;
     --hp-bar: 0 60% 42%;
     --hp-bar-fill: 120 45% 36%;
     --mana-bar: 210 65% 48%;
-    --xp-bar: 43 78% 50%;
+    --xp-bar: 40 47% 53%;
     --connected: 140 55% 42%;
-    --stone: 228 14% 14%;
-    --stone-light: 226 12% 24%;
-    --stone-dark: 228 18% 8%;
-    --parchment: 38 28% 82%;
-    --rarity-common: 0 0% 65%;
-    --rarity-uncommon: 120 38% 46%;
-    --rarity-rare: 210 65% 52%;
-    --rarity-epic: 268 55% 58%;
-    --rarity-legendary: 43 85% 52%;
+    --stone: 240 5% 10%;
+    --stone-light: 40 6% 24%;
+    --stone-dark: 240 6% 5%;
+    --parchment: 40 33% 94%;
+    --rarity-common: 40 8% 72%;
+    --rarity-uncommon: 120 60% 58%;
+    --rarity-rare: 214 90% 68%;
+    --rarity-epic: 270 85% 72%;
+    --rarity-legendary: 43 96% 60%;
 
-    --sidebar-background: 228 22% 8%;
-    --sidebar-foreground: 38 25% 82%;
-    --sidebar-primary: 43 78% 50%;
-    --sidebar-primary-foreground: 228 30% 6%;
-    --sidebar-accent: 262 28% 18%;
-    --sidebar-accent-foreground: 38 18% 78%;
-    --sidebar-border: 228 16% 20%;
-    --sidebar-ring: 43 78% 50%;
+    --sidebar-background: 240 6% 4%;
+    --sidebar-foreground: 40 33% 94%;
+    --sidebar-primary: 40 47% 53%;
+    --sidebar-primary-foreground: 240 10% 5%;
+    --sidebar-accent: 240 5% 14%;
+    --sidebar-accent-foreground: 40 33% 94%;
+    --sidebar-border: 40 12% 14%;
+    --sidebar-ring: 40 47% 53%;
   }
 }
 
@@ -132,11 +130,11 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Crimson Text', serif;
+    font-family: "Chivo", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(ellipse at 20% 0%, hsl(268 35% 14% / 0.38) 0%, transparent 55%),
-      radial-gradient(ellipse at 80% 100%, hsl(228 28% 11% / 0.58) 0%, transparent 60%),
+      radial-gradient(ellipse at 20% 0%, hsl(268 35% 14% / 0.28) 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 100%, hsl(240 8% 8% / 0.55) 0%, transparent 60%),
       url('/textures/stone-dark.jpg');
     background-size: auto, auto, 420px 420px;
     background-repeat: no-repeat, no-repeat, repeat;
@@ -1195,7 +1193,11 @@
      STAT CARD
      ═══════════════════════════════════════ */
   .stat-card {
-    @apply game-panel p-3 text-center;
+    @apply p-3 text-center;
+    position: relative;
+    background: var(--bg-panel-raised);
+    border: 1px solid var(--border-default);
+    box-shadow: inset 0 1px 0 rgba(255, 248, 225, 0.04);
   }
 
   /* ═══════════════════════════════════════

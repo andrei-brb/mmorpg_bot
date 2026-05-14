@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { usePvpApi } from "@/hooks/usePvpApi";
 import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
+import { WomPanel } from "@/components/wom/WomUi";
 
 const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Progress"] as const;
 type TabName = (typeof TABS)[number];
@@ -165,15 +166,15 @@ export function GameShell() {
 
   if (!inventory) {
     return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="app-bg min-h-[100dvh] flex items-center justify-center">
+        <p className="text-sm text-[var(--text-secondary)] font-body">Loading…</p>
       </div>
     );
   }
 
   if (!inventory.character) {
     return (
-      <div className="min-h-[100dvh] bg-background flex flex-col">
+      <div className="app-bg min-h-[100dvh] flex flex-col">
         <CreateCharacterModal
           createCharacter={createCharacter}
           onCreated={() => toast.success("Welcome to World of Discord!")}
@@ -183,7 +184,7 @@ export function GameShell() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col">
+    <div className="app-bg min-h-[100dvh] flex flex-col text-foreground">
       <MailModal
         open={mailOpen}
         onOpenChange={setMailOpen}
@@ -254,7 +255,7 @@ export function GameShell() {
           aria-modal="true"
           aria-label="Choose specialization"
         >
-          <div className="game-panel w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <WomPanel glow className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="game-panel-header">Choose specialization</div>
             <p className="text-xs text-muted-foreground mb-3">
               Level {specModal.unlockLevel}+ — this choice is permanent.
@@ -295,7 +296,7 @@ export function GameShell() {
               <Button variant="outline" size="sm" type="button" onClick={closeSpecModal}>Later</Button>
               <Button size="sm" type="button" onClick={() => specSel && void chooseSpecialization(specSel)}>Confirm</Button>
             </div>
-          </div>
+          </WomPanel>
         </div>
       )}
 
@@ -355,7 +356,7 @@ export function GameShell() {
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`tab-btn ${activeTab === tab ? "tab-btn-active" : ""}`}
+                      className={`tab-btn ${activeTab === tab ? "tab-btn-active tab-active-glow" : ""}`}
                     >
                       <span className="mr-1.5">{TAB_ICONS[tab]}</span>
                       <span className="hidden sm:inline">{tab}</span>

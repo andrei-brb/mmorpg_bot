@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Swords, Search, Trophy, UserPlus, X, Loader2, Shield, Eye } from "lucide-react";
 import type { PvpStatus } from "@/lib/pvpTypes";
 import type { PvpPlayerSearchRow } from "@/hooks/usePvpApi";
+import { WomPanel } from "@/components/wom/WomUi";
 
 interface PvpHubProps {
   status: PvpStatus;
@@ -84,7 +85,7 @@ export function PvpHub({
   return (
     <div className="space-y-4">
       {incoming_challenge && (
-        <div className="game-panel border-gold/40">
+        <WomPanel glow className="border-gold/40">
           <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <p className="font-cinzel text-sm text-gold">Challenge received</p>
@@ -97,10 +98,10 @@ export function PvpHub({
               Accept
             </button>
           </div>
-        </div>
+        </WomPanel>
       )}
       {stats && (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="game-panel-header">PvP Stats</div>
           <div className="p-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
@@ -113,11 +114,11 @@ export function PvpHub({
               <StatBlock label="Streak" value={`🔥 ${stats.streak}`} />
             </div>
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {player && rules && (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="game-panel-header">Loadout</div>
           <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -139,12 +140,12 @@ export function PvpHub({
               <Eye className="w-3 h-3 inline mr-1" /> Details
             </button>
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {!isQueued && !isChallenged && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="game-panel">
+          <WomPanel glow>
             <div className="game-panel-header flex items-center gap-2">
               <UserPlus className="w-3.5 h-3.5" /> Challenge
             </div>
@@ -207,9 +208,9 @@ export function PvpHub({
                 </button>
               </div>
             </div>
-          </div>
+          </WomPanel>
 
-          <div className="game-panel">
+          <WomPanel glow>
             <div className="game-panel-header flex items-center gap-2">
               <Search className="w-3.5 h-3.5" /> Find Match
             </div>
@@ -219,9 +220,9 @@ export function PvpHub({
                 Queue Casual
               </button>
             </div>
-          </div>
+          </WomPanel>
 
-          <div className="game-panel">
+          <WomPanel glow>
             <div className="game-panel-header flex items-center gap-2">
               <Trophy className="w-3.5 h-3.5" /> Ranked
             </div>
@@ -231,12 +232,12 @@ export function PvpHub({
                 Queue Ranked
               </button>
             </div>
-          </div>
+          </WomPanel>
         </div>
       )}
 
       {isQueued && (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="p-8 text-center space-y-4">
             <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto" />
             <p className="font-cinzel text-sm text-foreground uppercase tracking-wider">Searching for opponent…</p>
@@ -245,11 +246,11 @@ export function PvpHub({
               <X className="w-3 h-3 inline mr-1" /> Cancel Queue
             </button>
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {isChallenged && (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="p-8 text-center space-y-4">
             <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto" />
             <p className="font-cinzel text-sm text-foreground uppercase tracking-wider">
@@ -260,7 +261,7 @@ export function PvpHub({
               <X className="w-3 h-3 inline mr-1" /> Cancel
             </button>
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {showRules && (
@@ -269,7 +270,7 @@ export function PvpHub({
           onClick={() => setShowRules(false)}
           role="presentation"
         >
-          <div className="game-panel max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+          <WomPanel glow className="max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="game-panel-header">Arena Rules</div>
             <div className="p-5 space-y-3 text-xs text-foreground font-crimson">
               <p>
@@ -292,7 +293,7 @@ export function PvpHub({
                 Close
               </button>
             </div>
-          </div>
+          </WomPanel>
         </div>
       )}
     </div>

@@ -1,4 +1,6 @@
 import type { QuestCompletionPayload } from "@/lib/apiTypes";
+import { cn } from "@/lib/utils";
+import { WomPanel } from "@/components/wom/WomUi";
 
 export function QuestCompleteModal({
   completion,
@@ -36,10 +38,12 @@ export function QuestCompleteModal({
         if (!busy) onContinue();
       }}
     >
-      <div
-        className={`game-panel my-4 flex w-full max-w-[540px] max-h-[min(92dvh,640px)] flex-col${
-          completion.lore_main ? " ring-2 ring-violet-500/45 shadow-[0_0_24px_hsl(270_50%_40%/0.25)]" : ""
-        }`}
+      <WomPanel
+        glow
+        className={cn(
+          "my-4 flex w-full max-w-[540px] max-h-[min(92dvh,640px)] flex-col",
+          completion.lore_main && "ring-2 ring-violet-500/45 shadow-[0_0_24px_hsl(270_50%_40%/0.25)]",
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="game-panel-header shrink-0">
@@ -114,7 +118,7 @@ export function QuestCompleteModal({
             Continue
           </button>
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

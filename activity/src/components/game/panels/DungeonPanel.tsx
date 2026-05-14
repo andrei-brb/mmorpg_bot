@@ -5,6 +5,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatStatePayload, DungeonCatalogEntry, DungeonPartyStatus, DungeonParticipant, DungeonPartyInvite } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import type { CombatActionJson } from "@/lib/gameApi";
+import { WomPanel } from "@/components/wom/WomUi";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -564,7 +565,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
   if (phase === "complete" && outcome && run) {
     return (
       <div className="space-y-4">
-        <div className="game-panel text-center py-8">
+        <WomPanel glow className="text-center py-8">
           <div className="text-5xl mb-4" style={{ filter: "drop-shadow(0 2px 6px hsl(0 0% 0% / 0.6))" }}>🏆</div>
           <h2
             className="font-cinzel text-xl font-bold text-foreground mb-1"
@@ -582,7 +583,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
           <button type="button" onClick={resetAll} className="game-btn-primary px-6 py-2">
             Back to dungeons
           </button>
-        </div>
+        </WomPanel>
       </div>
     );
   }
@@ -590,7 +591,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
   if (phase === "failed" && outcome) {
     return (
       <div className="space-y-4">
-        <div className="game-panel text-center py-8">
+        <WomPanel glow className="text-center py-8">
           <div className="text-5xl mb-4" style={{ filter: "drop-shadow(0 2px 6px hsl(0 0% 0% / 0.6))" }}>💀</div>
           <h2 className="font-cinzel text-xl font-bold text-foreground mb-1">{outcome.title || "Defeated"}</h2>
           <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto mb-4">
@@ -601,7 +602,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
           <button type="button" onClick={resetAll} className="game-btn-primary px-5 py-2">
             Back to dungeons
           </button>
-        </div>
+        </WomPanel>
       </div>
     );
   }
@@ -614,7 +615,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
 
     return (
       <div className="space-y-4">
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="game-panel-header">
             {run.dungeon.emoji} {run.dungeon.name} — Floor {run.floor}/{run.dungeon.floors}
           </div>
@@ -679,7 +680,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
               Party (2+): only the leader can start the next floor. Party members will auto-join when the fight starts.
             </p>
           )}
-        </div>
+        </WomPanel>
       </div>
     );
   }
@@ -692,7 +693,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
     <div className="space-y-4">
       {/* Incoming Invites Panel */}
       {incomingInvites.length > 0 && (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="game-panel-header">
             📨 Dungeon Party Invites ({incomingInvites.length})
           </div>
@@ -731,12 +732,12 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
               </div>
             ))}
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {/* Party Panel */}
       {partyStatus?.in_party && (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="game-panel-header">
             🏰 Dungeon Party {partyStatus.is_leader && "(Leader)"}
           </div>
@@ -835,10 +836,10 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
               </p>
             )}
           </div>
-        </div>
+        </WomPanel>
       )}
 
-      <div className="game-panel">
+      <WomPanel glow>
         <div className="game-panel-header">⚔️ Dungeons</div>
         <p className="text-xs text-muted-foreground mb-4">
           Server-driven runs — enemies match <code className="text-[10px]">/dungeon</code> in Discord. Requires a valid map
@@ -914,7 +915,7 @@ export function DungeonPanel({ playerLevel = 1, onCombatUiChange }: DungeonPanel
             );
           })}
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

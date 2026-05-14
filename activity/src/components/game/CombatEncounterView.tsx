@@ -10,6 +10,7 @@ import { CombatSkillButton } from "@/components/game/combat/CombatSkillButton";
 import { BattleFighter } from "@/components/game/combat/BattleFighter";
 import { DamageNumbers, type DamageEvent } from "@/components/game/combat/DamageNumber";
 import { TurnOrder } from "@/components/game/combat/TurnOrder";
+import { WomPanel } from "@/components/wom/WomUi";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -376,7 +377,7 @@ export function CombatEncounterView({
         <div className="relative">
           <DamageNumbers events={damageEvents} />
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
-          <div className="game-panel order-1 sm:order-none">
+          <WomPanel glow className="order-1 sm:order-none">
             <div className="p-3 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-sm border border-border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
@@ -418,11 +419,11 @@ export function CombatEncounterView({
                 ) : null}
               </div>
             </div>
-          </div>
+          </WomPanel>
           <div className="flex items-center justify-center py-2 sm:py-8 order-2 sm:order-none">
             <Swords className="w-7 h-7 text-primary shrink-0" style={{ filter: "drop-shadow(0 0 8px hsl(43 78% 50% / 0.35))" }} />
           </div>
-          <div className="game-panel order-3 sm:order-none">
+          <WomPanel glow className="order-3 sm:order-none">
             <div className="p-3 space-y-3">
               <div className="flex items-center gap-3 flex-row-reverse text-right">
                 <div className="w-12 h-12 rounded-sm border border-border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
@@ -473,7 +474,7 @@ export function CombatEncounterView({
                 ) : null}
               </div>
             </div>
-          </div>
+          </WomPanel>
           </div>
         </div>
       ) : useBattlePreview && battlePreviewData ? (
@@ -564,7 +565,7 @@ export function CombatEncounterView({
       )}
 
       {partyMode ? (
-        <div className="game-panel py-2">
+        <WomPanel glow className="py-2">
           <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-2">Party</div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-lg mx-auto">
             {(state.party_players as PartyCombatRow[]).map((row, i) => {
@@ -594,9 +595,9 @@ export function CombatEncounterView({
               );
             })}
           </div>
-        </div>
+        </WomPanel>
       ) : showDiscordDungeonBanner ? (
-        <div className="game-panel py-2">
+        <WomPanel glow className="py-2">
           <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mb-2">Allies</div>
           <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
             <div
@@ -620,11 +621,11 @@ export function CombatEncounterView({
               <div className="text-[9px] text-muted-foreground">Solo / invite friends</div>
             </div>
           </div>
-        </div>
+        </WomPanel>
       ) : null}
 
       {!useBattlePreview && (
-        <div className="game-panel overflow-visible">
+        <WomPanel glow className="overflow-visible">
           <div className="game-panel-header">{skillsPanelTitle}</div>
           <div className={isArenaDuel || primaryAbility ? "px-3 pb-3" : ""}>
             {primaryAbility ? (
@@ -665,11 +666,11 @@ export function CombatEncounterView({
               ))}
             </div>
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {isArenaDuel ? (
-        <div className="game-panel">
+        <WomPanel glow>
           <div className="game-panel-header">Combat Log</div>
           <div className="h-40 overflow-y-auto p-3 space-y-0.5 font-mono text-[11px]">
             {(state.log || []).map((line, i) => (
@@ -678,7 +679,7 @@ export function CombatEncounterView({
               </p>
             ))}
           </div>
-        </div>
+        </WomPanel>
       ) : combatInProgress ? (
         <button
           type="button"
@@ -688,7 +689,7 @@ export function CombatEncounterView({
           📋 Combat Log
         </button>
       ) : (
-        <div className={focusMode ? "game-panel flex-1 min-h-0 overflow-y-auto" : "game-panel max-h-36 overflow-y-auto"}>
+        <WomPanel glow className={focusMode ? "flex-1 min-h-0 overflow-y-auto" : "max-h-36 overflow-y-auto"}>
           <div className="game-panel-header">Combat Log</div>
           <div className="space-y-1.5">
             {(state.log || []).slice(-12).map((line, i) => (
@@ -697,7 +698,7 @@ export function CombatEncounterView({
               </p>
             ))}
           </div>
-        </div>
+        </WomPanel>
       )}
 
       {(showFleeButton || (showPotionButton && state.can_potion && !potionInBattleGrid)) && (
@@ -730,8 +731,9 @@ export function CombatEncounterView({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
           onClick={() => setShowLogModal(false)}
         >
-          <div
-            className="game-panel w-full max-w-md max-h-[70vh] flex flex-col"
+          <WomPanel
+            glow
+            className="w-full max-w-md max-h-[70vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="game-panel-header flex items-center justify-between pb-2 border-b border-primary/20">
@@ -758,7 +760,7 @@ export function CombatEncounterView({
             >
               Close
             </button>
-          </div>
+          </WomPanel>
         </div>
       )}
     </div>

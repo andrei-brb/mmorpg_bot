@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { ProgressPayload } from "@/lib/apiTypes";
+import { WomPanel } from "@/components/wom/WomUi";
 
 const TYPE_ICONS: Record<string, string> = {
   victory: "🏆",
@@ -64,7 +65,7 @@ export function ProgressTab() {
   return (
     <div className="space-y-4">
       {/* Stats grid */}
-      <div className="game-panel">
+      <WomPanel glow>
         <div className="game-panel-header">Progress</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {stats.map((st) => (
@@ -85,10 +86,10 @@ export function ProgressTab() {
             <>Loading combat stats…</>
           )}
         </p>
-      </div>
+      </WomPanel>
 
       {/* Achievements */}
-      <div className="game-panel">
+      <WomPanel glow>
         <div className="game-panel-header">Achievements</div>
         <div className="space-y-1">
           {ach.length === 0 && <p className="text-xs text-muted-foreground">None earned yet.</p>}
@@ -107,10 +108,10 @@ export function ProgressTab() {
             </div>
           ))}
         </div>
-      </div>
+      </WomPanel>
 
       {/* History */}
-      <div className="game-panel">
+      <WomPanel glow>
         <div className="game-panel-header">History</div>
         <div className="space-y-0">
           {hist.length === 0 && <p className="text-xs text-muted-foreground">No history.</p>}
@@ -128,7 +129,7 @@ export function ProgressTab() {
             </div>
           ))}
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

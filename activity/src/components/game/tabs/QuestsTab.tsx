@@ -6,6 +6,7 @@ import * as api from "@/lib/gameApi";
 import { ZONES } from "@/data/zones";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { WomPanel } from "@/components/wom/WomUi";
 
 const STATE_STYLES: Record<string, string> = {
   active: "bg-accent/60 text-accent-foreground border border-accent",
@@ -56,8 +57,9 @@ function StoryBeacon({ ptr }: { ptr: MainQuestPointerPayload }) {
     ? ptr.regions.map((r) => `${r.emoji || ""} ${r.name || r.key}`.trim()).join(" · ")
     : null;
   return (
-    <div
-      className="game-panel quest-card--main-story"
+    <WomPanel
+      glow
+      className="quest-card--main-story"
       style={{
         borderColor: "hsl(270 45% 45% / 0.55)",
         background: "linear-gradient(180deg, hsl(270 28% 14% / 0.5) 0%, hsl(228 20% 10% / 0.4) 100%)",
@@ -93,9 +95,9 @@ function StoryBeacon({ ptr }: { ptr: MainQuestPointerPayload }) {
         </p>
       )}
       {kind === "blocked_level" && ptr.level_required != null && (
-        <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">Required level: {ptr.level_required}</p>
+        <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">Required level: {ptr.level_required}        </p>
       )}
-    </div>
+    </WomPanel>
   );
 }
 
@@ -161,8 +163,9 @@ export function QuestsTab() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px] items-start">
         <div className="space-y-4 min-w-0">
-          <div
-            className="game-panel overflow-hidden"
+          <WomPanel
+            glow
+            className="overflow-hidden"
             style={{
               background: "linear-gradient(180deg, hsl(226 30% 14% / 0.9) 0%, hsl(230 32% 10% / 0.92) 100%)",
               border: "1px solid hsl(43 50% 35% / 0.35)",
@@ -463,12 +466,12 @@ export function QuestsTab() {
                 </>
               ) : null}
             </div>
-          </div>
+          </WomPanel>
         </div>
 
         <div className="space-y-4">
-          <div
-            className="game-panel"
+          <WomPanel
+            glow
             style={{
               background: "linear-gradient(180deg, hsl(226 28% 14% / 0.85) 0%, hsl(230 32% 10% / 0.9) 100%)",
               border: "1px solid hsl(43 50% 35% / 0.3)",
@@ -556,10 +559,10 @@ export function QuestsTab() {
                 )}
               </div>
             </div>
-          </div>
+          </WomPanel>
 
-          <div
-            className="game-panel"
+          <WomPanel
+            glow
             style={{
               background: "linear-gradient(180deg, hsl(226 28% 14% / 0.85) 0%, hsl(230 32% 10% / 0.9) 100%)",
               border: "1px solid hsl(43 50% 35% / 0.3)",
@@ -591,7 +594,7 @@ export function QuestsTab() {
                 Cosmetic UI for now — we can wire this to real progression later.
               </div>
             </div>
-          </div>
+          </WomPanel>
         </div>
       </div>
     </div>

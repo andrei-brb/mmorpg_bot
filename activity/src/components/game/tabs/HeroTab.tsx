@@ -9,6 +9,7 @@ import { BlacksmithModal, type BlacksmithProtection } from "../modals/Blacksmith
 import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
+import { WomPanel } from "@/components/wom/WomUi";
 
 const EQUIP_ORDER = [
   "head", "chest", "hands", "legs", "feet",
@@ -607,7 +608,7 @@ export function HeroTab() {
   return (
     <div className="space-y-2.5 hero-tab-ref">
       {accessToken && char ? (
-        <div className="game-panel game-panel-hero">
+        <WomPanel glow className="game-panel-hero">
           <div className="game-panel-header game-panel-header-hero">Offline earnings</div>
           <p className="hero-panel-subtitle">
             Accrues while you&apos;re away (up to {idleRewards?.max_hours ?? 24}h per claim).
@@ -646,12 +647,12 @@ export function HeroTab() {
               {idleClaiming ? "Collecting…" : "Collect"}
             </button>
           </div>
-        </div>
+        </WomPanel>
       ) : null}
       {/* Two columns */}
       <div className="hero-ref-hero-columns grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 md:gap-3">
         {/* Equipment — paper doll + combat stats */}
-        <div className="game-panel game-panel-hero hero-ref-equip-panel min-w-0">
+        <WomPanel glow className="game-panel-hero hero-ref-equip-panel min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
             <div className="min-w-0">
               <div className="game-panel-header game-panel-header-hero !mb-0 hero-ref-equip-title">Equipment</div>
@@ -729,10 +730,10 @@ export function HeroTab() {
           >
             🔨 Open Blacksmith
           </button>
-        </div>
+        </WomPanel>
 
         {/* Inventory */}
-        <div className="game-panel game-panel-hero min-w-0 hero-ref-inventory-panel">
+        <WomPanel glow className="game-panel-hero min-w-0 hero-ref-inventory-panel">
           <div className="game-panel-header game-panel-header-hero flex flex-col gap-1 min-w-0">
             {/* Row 1: title + gold/bag — keeps currency inside the panel */}
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
@@ -1035,7 +1036,7 @@ export function HeroTab() {
               </div>
             </div>
           )}
-        </div>
+        </WomPanel>
       </div>
 
       {blacksmithPickerOpen && (
@@ -1044,7 +1045,7 @@ export function HeroTab() {
           style={{ background: "hsl(0 0% 0% / 0.7)", backdropFilter: "blur(4px)" }}
           onClick={() => setBlacksmithPickerOpen(false)}
         >
-          <div className="game-panel w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <WomPanel glow className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="game-panel-header">Choose item to enhance</div>
             <ul className="max-h-72 overflow-y-auto space-y-1 mb-4">
               {blacksmithCandidates.map((it) => (
@@ -1076,7 +1077,7 @@ export function HeroTab() {
                 Cancel
               </button>
             </div>
-          </div>
+          </WomPanel>
         </div>
       )}
 

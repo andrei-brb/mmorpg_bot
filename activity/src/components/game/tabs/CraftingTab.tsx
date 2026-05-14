@@ -5,12 +5,26 @@ import type { CraftRecipeRow, CraftJobRow, InvRow } from "@/lib/apiTypes";
 import { craftingXpToNextLevel } from "@/lib/craftingXp";
 import * as api from "@/lib/gameApi";
 import { ItemIcon } from "../ItemIcon";
+import {
+  WomGoldCoin,
+  WomOrnateDivider,
+  WomPanel,
+  WomPill,
+  WomSectionHeader,
+  WomStatBar,
+} from "@/components/wom/WomUi";
 
 function recipeCostLines(costs: Record<string, number> | undefined): string[] {
   if (!costs) return [];
   return Object.entries(costs)
     .filter(([, n]) => (n || 0) > 0)
     .map(([k, n]) => `${k.replace(/_/g, " ")} ×${n}`);
+}
+
+function normRarity(r?: string | null): "common" | "uncommon" | "rare" | "epic" | "legendary" | "mythic" {
+  const s = String(r || "common").toLowerCase();
+  if (s === "uncommon" || s === "rare" || s === "epic" || s === "legendary" || s === "mythic") return s;
+  return "common";
 }
 
 type ForgePathAOption = {
@@ -128,7 +142,7 @@ export function CraftingTab() {
 
   const startForge = useCallback(async () => {
     if (!selectedId) {
-      toast.error("Select an item in the left slot.");
+      toast.error("Select an item in the source slot.");
       return;
     }
     try {
@@ -190,67 +204,75 @@ export function CraftingTab() {
     return job.recipe_name || job.recipe_id || "Upgrade";
   }, [job]);
 
+  const jobStatusLine = !job
+    ? "No work order in the queue."
+    : job.status === "ready" || canClaim
+      ? "Ready to claim — success rolls when you collect."
+      : secondsLeft != null
+        ? `Hammering… ${secondsLeft}s remaining`
+        : "In progress…";
+
+  const successPct =
+    job?.success_chance != null ? Math.round(Number(job.success_chance) * 100) : null;
+
+  const sourceRarity = normRarity(selectedItem?.rarity);
+
   return (
-    <div className="space-y-3 hero-tab-ref">
-      <div className="game-panel game-panel-hero min-w-0">
-        <div className="game-panel-header game-panel-header-hero">Forge</div>
-        <p className="hero-panel-subtitle text-[11px]">
-          <strong className="text-amber-200/90">Rarity</strong> — same piece, one step toward rare; failure costs
-          gold/scrap only. <strong className="text-amber-200/90">Upgrade</strong> — new item template; the input is
-          consumed at start and <strong>destroyed on failure</strong> at claim.
+    <div className="forge-tab-root wom-anim-fade-up space-y-4 px-0.5 pb-2 font-body">
+      <WomPanel className="p-5 sm:p-6" glow>
+        <WomSectionHeader kicker="Guild services" title="Forge" />
+        <p className="mb-5 max-w-prose text-sm leading-relaxed text-[var(--text-secondary)]">
+          <span className="text-gold font-semibold">Rarity</span> nudges the same piece toward a higher tier; failure spends
+          costs only. <span className="text-gold font-semibold">Upgrade</span> re-shapes the item — the input is consumed at
+          start and may be <span className="text-crimson font-semibold">destroyed on a failed claim</span>.
         </p>
 
-        <div className="mt-3 rounded-sm border border-border/60 bg-muted/10 px-3 py-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-cinzel font-semibold text-foreground">Forging skill</span>
-            <span className="text-[10px] tabular-nums text-muted-foreground">
-              Lv.{craftLevel} · {craftXp} / {needXp} XP
-            </span>
-          </div>
-          <div className="mt-1.5 h-2 overflow-hidden rounded-sm bg-black/40">
-            <div className="h-full bg-primary/80 transition-all" style={{ width: `${xpPct}%` }} />
-          </div>
-        </div>
+        <WomOrnateDivider label="Skill" />
 
-        <div className="mt-3 rounded-sm border border-amber-900/30 bg-black/20 px-3 py-2">
-          <div className="text-xs font-cinzel font-semibold text-foreground mb-1">Active job</div>
-          {!job ? (
-            <p className="text-[11px] text-muted-foreground">No job in progress.</p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-foreground">{jobTitle}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {job.status === "ready" || canClaim
-                  ? "Ready to claim (rolls success on claim)."
-                  : secondsLeft != null
-                    ? `Finishes in ${secondsLeft}s`
-                    : "In progress…"}
-              </p>
-              {job.success_chance != null && (
-                <p className="text-[10px] text-amber-200/80">
-                  Success chance: {Math.round(Number(job.success_chance) * 100)}%
-                </p>
-              )}
-              <button
-                type="button"
-                className="game-btn-primary text-xs px-3 py-1"
-                disabled={!canClaim}
-                onClick={() => void claimForge()}
-              >
-                Claim
-              </button>
-            </div>
-          )}
+        <div className="mb-1 flex flex-wrap items-end justify-between gap-2">
+          <span className="text-label">Forging experience</span>
+          <span className="wom-font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+            Lv.{craftLevel} · {craftXp.toLocaleString()} / {needXp.toLocaleString()} XP
+          </span>
         </div>
-      </div>
+        <WomStatBar value={craftXp} max={needXp} variant="gold" />
+        <p className="mt-1.5 text-[10px] uppercase tracking-widest text-[var(--text-muted)]">{xpPct}% toward next level</p>
 
-      <div className="game-panel game-panel-hero min-w-0">
-        <div className="game-panel-header game-panel-header-hero">Anvil</div>
-        <div className="mt-2 grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-start">
-          <div className="rounded-sm border border-border/50 bg-muted/5 p-2 min-h-[120px]">
-            <div className="text-[10px] font-cinzel font-semibold text-muted-foreground mb-1">Source</div>
+        <WomOrnateDivider label="Work order" />
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-2">
+            {!job ? (
+              <p className="text-sm text-[var(--text-secondary)]">{jobStatusLine}</p>
+            ) : (
+              <>
+                <div className="font-blackletter text-2xl leading-none tracking-wide text-[var(--gold-200)] drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)] sm:text-3xl">
+                  {jobTitle}
+                </div>
+                <p className="text-sm text-[var(--text-secondary)]">{jobStatusLine}</p>
+                {successPct != null ? (
+                  <WomPill tone="gold">
+                    Success <span className="wom-font-mono">{successPct}%</span>
+                  </WomPill>
+                ) : null}
+              </>
+            )}
+          </div>
+          <button type="button" className="btn-gold shrink-0 !px-6 !py-3 !text-[11px]" disabled={!job || !canClaim} onClick={() => void claimForge()}>
+            Claim
+          </button>
+        </div>
+      </WomPanel>
+
+      <WomPanel className="p-5 sm:p-6" glow>
+        <WomSectionHeader kicker="Equipment" title="Anvil" />
+        <p className="mb-5 text-sm text-[var(--text-secondary)]">Bag gear only — select a piece, choose path, then strike the forge.</p>
+
+        <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
+          <div className="flex min-h-[200px] flex-col gap-2">
+            <div className="text-label">Source</div>
             <select
-              className="w-full text-[11px] bg-background border border-border rounded-sm px-2 py-1 mb-2"
+              className="wom-select"
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
             >
@@ -261,38 +283,64 @@ export function CraftingTab() {
                 </option>
               ))}
             </select>
-            {selectedItem ? (
-              <div className="flex justify-center pt-1">
-                <ItemIcon item={selectedItem} size={56} />
-              </div>
-            ) : (
-              <p className="text-[10px] text-muted-foreground text-center pt-4">Unequipped gear only.</p>
-            )}
+            <div
+              className="wom-slot mx-auto flex w-full max-w-[8.5rem] flex-1 items-center justify-center"
+              data-rarity={sourceRarity}
+              data-empty={selectedItem ? "false" : "true"}
+            >
+              {selectedItem ? (
+                <>
+                  <ItemIcon item={selectedItem} size={64} />
+                  {Number(selectedItem.enhancement_level ?? 0) > 0 ? (
+                    <span className="wom-slot-badge">+{selectedItem.enhancement_level}</span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-label !tracking-[0.2em] text-[var(--text-disabled)]">Empty</span>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-col items-center justify-center gap-2 py-2 md:py-8">
-            <div className="text-2xl text-muted-foreground hidden md:block">→</div>
-            <div className="text-xl text-muted-foreground md:hidden">↓</div>
+          <div className="flex flex-col items-center justify-center gap-2 py-2 text-[var(--text-muted)] md:py-0">
+            <span className="font-display hidden text-2xl md:inline" aria-hidden>
+              →
+            </span>
+            <span className="font-display text-2xl md:hidden" aria-hidden>
+              ↓
+            </span>
           </div>
 
-          <div className="rounded-sm border border-border/50 bg-muted/5 p-2 min-h-[120px]">
-            <div className="text-[10px] font-cinzel font-semibold text-muted-foreground mb-1">Outcome</div>
-            {outcome ? (
-              <p className={`text-[11px] ${outcome.ok ? "text-emerald-200" : "text-destructive"}`}>{outcome.text}</p>
-            ) : selectedItem && job ? (
-              <p className="text-[10px] text-muted-foreground">Claim your active job to resolve.</p>
-            ) : (
-              <p className="text-[10px] text-muted-foreground text-center pt-4 opacity-70">?</p>
-            )}
+          <div className="flex min-h-[200px] flex-col gap-2">
+            <div className="text-label">Outcome</div>
+            <div
+              className="wom-slot mx-auto flex w-full max-w-[8.5rem] flex-1 items-center justify-center px-2"
+              data-empty={outcome || (selectedItem && job) ? "false" : "true"}
+            >
+              {outcome ? (
+                <p
+                  className={`text-center font-body text-xs leading-snug ${
+                    outcome.ok ? "text-[var(--verdant)]" : "text-[var(--crimson-400)]"
+                  }`}
+                >
+                  {outcome.text}
+                </p>
+              ) : selectedItem && job ? (
+                <p className="text-center text-xs text-[var(--text-muted)]">Claim your work order to resolve the hammer&apos;s verdict.</p>
+              ) : (
+                <span className="font-display text-3xl text-[var(--text-disabled)]" aria-hidden>
+                  ?
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
         {selectedItem && !job && (
-          <div className="mt-3 space-y-3">
-            <div className="flex gap-2">
+          <div className="mt-6 space-y-5 border-t border-[var(--border-default)] pt-6">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className={`text-[10px] px-2 py-1 rounded-sm border ${forgeMode === "a" ? "border-primary bg-primary/15" : "border-border/60"}`}
+                className={`btn-ghost flex-1 min-w-[8rem] sm:flex-initial ${forgeMode === "a" ? "!border-[var(--gold-600)] !bg-[rgba(184,151,88,0.12)] !text-[var(--gold-200)]" : ""}`}
                 disabled={!pathA?.ok}
                 onClick={() => setForgeMode("a")}
               >
@@ -300,7 +348,7 @@ export function CraftingTab() {
               </button>
               <button
                 type="button"
-                className={`text-[10px] px-2 py-1 rounded-sm border ${forgeMode === "b" ? "border-primary bg-primary/15" : "border-border/60"}`}
+                className={`btn-ghost flex-1 min-w-[8rem] sm:flex-initial ${forgeMode === "b" ? "!border-[var(--gold-600)] !bg-[rgba(184,151,88,0.12)] !text-[var(--gold-200)]" : ""}`}
                 disabled={!pathB?.ok}
                 onClick={() => setForgeMode("b")}
               >
@@ -309,39 +357,56 @@ export function CraftingTab() {
             </div>
 
             {forgeMode === "a" && pathA && (
-              <div className="rounded-sm border border-border/40 p-2 space-y-1">
+              <div className="border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-4">
                 {!pathA.ok || !rule ? (
-                  <p className="text-[10px] text-destructive">{pathA.message || "Infusion unavailable."}</p>
+                  <p className="text-sm text-[var(--crimson-400)]">{pathA.message || "Infusion unavailable."}</p>
                 ) : (
-                  <>
-                    <p className="text-[11px] text-foreground">
-                      {pathA.from_rarity} → <strong>{pathA.to_rarity}</strong>
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {rule.craft_seconds}s · {rule.gold_cost}🪙 · Lv.{rule.required_crafting_level}+ · success{" "}
-                      {Math.round(Number(rule.success_chance) * 100)}% · +{rule.crafting_xp_reward} forge XP
-                    </p>
-                    <p className="text-[10px] text-amber-200/90">{recipeCostLines(rule.costs).join(" · ") || "No scrap"}</p>
-                    <p className="text-[10px] text-muted-foreground">On failure: item stays; costs are lost.</p>
-                  </>
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-display text-lg uppercase tracking-wider text-[var(--gold-200)]">
+                        {pathA.from_rarity}
+                      </span>
+                      <span className="text-[var(--text-muted)]">→</span>
+                      <span className={`font-display text-lg uppercase tracking-wider rar-${normRarity(pathA.to_rarity || undefined)}`}>
+                        {pathA.to_rarity}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                      {(
+                        [
+                          ["Time", `${rule.craft_seconds}s`],
+                          ["Gold", rule.gold_cost],
+                          ["Req.Lv", rule.required_crafting_level],
+                          ["Success", `${Math.round(Number(rule.success_chance) * 100)}%`],
+                          ["Forge XP", `+${rule.crafting_xp_reward}`],
+                        ] as const
+                      ).map(([label, val]) => (
+                        <div key={label} className="border border-[var(--border-default)] bg-[var(--bg-void)] px-2 py-2 text-center">
+                          <div className="text-label !text-[9px] !tracking-[0.2em] text-[var(--gold-600)]">{label}</div>
+                          <div className="wom-font-mono text-sm font-bold text-[var(--text-primary)]">{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--gold-200)]">
+                      <WomGoldCoin size={16} />
+                      <span>{recipeCostLines(rule.costs).join(" · ") || "No scrap cost"}</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">On failure the piece remains; spent gold and scrap are lost.</p>
+                  </div>
                 )}
               </div>
             )}
 
             {forgeMode === "b" && pathB && (
-              <div className="rounded-sm border border-amber-900/40 p-2 space-y-2">
+              <div className="border border-[var(--crimson-600)]/50 bg-[rgba(176,32,32,0.06)] p-4">
                 {!pathB.ok ? (
-                  <p className="text-[10px] text-destructive">{pathB.message || "No upgrades."}</p>
+                  <p className="text-sm text-[var(--crimson-400)]">{pathB.message || "No upgrades."}</p>
                 ) : (
-                  <>
-                    <p className="text-[10px] font-semibold text-destructive">
-                      Risk: input is consumed when you start. On failed claim, it is gone — no refund.
+                  <div className="space-y-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--crimson-400)]">
+                      Risk: input consumed at start — failed claim destroys it. No refund.
                     </p>
-                    <select
-                      className="w-full text-[11px] bg-background border border-border rounded-sm px-2 py-1"
-                      value={branchRecipeId}
-                      onChange={(e) => setBranchRecipeId(e.target.value)}
-                    >
+                    <select className="wom-select" value={branchRecipeId} onChange={(e) => setBranchRecipeId(e.target.value)}>
                       <option value="">Select upgrade…</option>
                       {branchRecipes.map((r) => (
                         <option key={r.id} value={r.id}>
@@ -349,25 +414,38 @@ export function CraftingTab() {
                         </option>
                       ))}
                     </select>
-                    {selectedBranch && (
-                      <div className="text-[10px] text-muted-foreground space-y-0.5">
-                        <div>{selectedBranch.description}</div>
-                        <div>
-                          {selectedBranch.craft_seconds}s · {selectedBranch.gold_cost}🪙 · Lv.
-                          {selectedBranch.required_crafting_level}+ · success{" "}
-                          {Math.round(Number(selectedBranch.success_chance ?? 1) * 100)}%
+                    {selectedBranch ? (
+                      <div className="space-y-3">
+                        <p className="text-sm text-[var(--text-secondary)]">{selectedBranch.description}</p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {(
+                            [
+                              ["Time", `${selectedBranch.craft_seconds}s`],
+                              ["Gold", selectedBranch.gold_cost],
+                              ["Req.Lv", selectedBranch.required_crafting_level],
+                              ["Success", `${Math.round(Number(selectedBranch.success_chance ?? 1) * 100)}%`],
+                            ] as const
+                          ).map(([label, val]) => (
+                            <div key={label} className="border border-[var(--border-default)] bg-[var(--bg-void)] px-2 py-2 text-center">
+                              <div className="text-label !text-[9px] !tracking-[0.2em] text-[var(--gold-600)]">{label}</div>
+                              <div className="wom-font-mono text-sm font-bold text-[var(--text-primary)]">{val}</div>
+                            </div>
+                          ))}
                         </div>
-                        <div>{recipeCostLines(selectedBranch.costs).join(" · ") || "No scrap"}</div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--gold-200)]">
+                          <WomGoldCoin size={16} />
+                          <span>{recipeCostLines(selectedBranch.costs).join(" · ") || "No scrap cost"}</span>
+                        </div>
                       </div>
-                    )}
-                  </>
+                    ) : null}
+                  </div>
                 )}
               </div>
             )}
 
             <button
               type="button"
-              className="game-btn-primary text-xs px-3 py-1.5"
+              className="btn-gold w-full !py-3.5 !tracking-[0.22em]"
               disabled={
                 job != null ||
                 (forgeMode === "a" && (!pathA?.ok || !rule)) ||
@@ -375,11 +453,11 @@ export function CraftingTab() {
               }
               onClick={() => void startForge()}
             >
-              Forge
+              Strike forge
             </button>
           </div>
         )}
-      </div>
+      </WomPanel>
     </div>
   );
 }

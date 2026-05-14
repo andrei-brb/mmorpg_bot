@@ -1,0 +1,529 @@
+/* WoldOfMmo emergent design — loaded after index.css for overrides */
+
+:root {
+  --bg-void: #050505;
+  --bg-obsidian: #0a0a0c;
+  --bg-panel: #111114;
+  --bg-panel-raised: #17171c;
+  --bg-glass: rgba(20, 20, 24, 0.78);
+
+  --text-primary: #f5f1e8;
+  --text-secondary: #a8a098;
+  --text-muted: #6b6660;
+  --text-disabled: #3a3833;
+
+  --gold-50: #fff8e1;
+  --gold-200: #f5dc8a;
+  --gold-400: #d4a94e;
+  --gold-500: #b89758;
+  --gold-600: #8c6b34;
+  --gold-700: #5d4720;
+  --gold-glow: rgba(212, 169, 78, 0.45);
+
+  --crimson-400: #d44848;
+  --crimson-500: #b02020;
+  --crimson-600: #7d0a0a;
+  --crimson-glow: rgba(208, 36, 36, 0.45);
+
+  --ember: #ff6b1a;
+  --ember-glow: rgba(255, 107, 26, 0.5);
+
+  --arcane: #5fa8ff;
+  --arcane-glow: rgba(95, 168, 255, 0.4);
+
+  --verdant: #6ee36e;
+  --verdant-glow: rgba(110, 227, 110, 0.4);
+
+  --border-default: #2a2823;
+  --border-soft: #1d1b18;
+  --border-gold: rgba(184, 151, 88, 0.4);
+  --border-gold-strong: rgba(212, 169, 78, 0.85);
+
+  --rarity-common-hex: #c8c0b3;
+  --rarity-uncommon-hex: #6ee36e;
+  --rarity-rare-hex: #5fa8ff;
+  --rarity-epic-hex: #c084fc;
+  --rarity-legendary-hex: #fbbf24;
+  --rarity-mythic-hex: #ff5c5c;
+}
+
+.app-bg {
+  background-color: var(--bg-void);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(184, 151, 88, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, rgba(125, 10, 10, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(255, 107, 26, 0.04) 0%, transparent 70%);
+  position: relative;
+}
+
+.app-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.15 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: overlay;
+}
+
+.app-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+.font-display {
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.04em;
+}
+
+.font-blackletter {
+  font-family: "Pirata One", "Cinzel", serif;
+  letter-spacing: 0.02em;
+}
+
+.wom-font-mono {
+  font-family: "JetBrains Mono", monospace;
+}
+
+.text-label {
+  font-family: "Chivo", ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.text-gold {
+  color: var(--gold-400);
+}
+.text-gold-bright {
+  color: var(--gold-200);
+}
+.text-crimson {
+  color: var(--crimson-400);
+}
+.text-ember {
+  color: var(--ember);
+}
+
+/* Emergent frame + legacy game-panel class (WomPanel adds both) */
+.wom-game-panel.game-panel {
+  background-color: var(--bg-panel) !important;
+  background-image: none !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 225, 0.04),
+    inset 0 0 28px rgba(0, 0, 0, 0.5),
+    0 4px 18px rgba(0, 0, 0, 0.55) !important;
+}
+
+.wom-game-panel.game-panel::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") !important;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  opacity: 0.45;
+  z-index: -1;
+}
+
+.wom-game-panel.game-panel-hero {
+  border-color: var(--border-gold) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 225, 0.06),
+    inset 0 0 36px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(184, 151, 88, 0.35),
+    0 4px 22px rgba(0, 0, 0, 0.55) !important;
+}
+
+.wom-game-panel-glow {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 225, 0.04),
+    inset 0 0 30px rgba(0, 0, 0, 0.6),
+    0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.wom-glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  border: 1px solid rgba(245, 220, 138, 0.12);
+}
+
+.divider-ornate {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--gold-600) 20%,
+    var(--gold-400) 50%,
+    var(--gold-600) 80%,
+    transparent 100%
+  );
+  opacity: 0.65;
+}
+
+.btn-gold {
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #2a241a 0%, #14110c 100%);
+  color: var(--gold-200);
+  border: 1px solid var(--gold-600);
+  padding: 0.65rem 1.5rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 220ms ease-out;
+  box-shadow:
+    inset 0 1px 0 rgba(245, 220, 138, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.btn-gold:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3d3320 0%, #1a160e 100%);
+  border-color: var(--gold-400);
+  color: var(--gold-50);
+  box-shadow:
+    inset 0 1px 0 rgba(245, 220, 138, 0.25),
+    0 0 22px rgba(212, 169, 78, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.6);
+  transform: translateY(-1px);
+}
+
+.btn-gold:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn-gold:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-crimson {
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #3a0e0e 0%, #1a0606 100%);
+  color: #ffd9d9;
+  border: 1px solid var(--crimson-500);
+  padding: 0.65rem 1.5rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 220ms ease-out;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 100, 100, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.btn-crimson:hover:not(:disabled) {
+  background: linear-gradient(180deg, #5a1414 0%, #260808 100%);
+  border-color: var(--crimson-400);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 100, 100, 0.3),
+    0 0 24px rgba(208, 36, 36, 0.45),
+    0 4px 12px rgba(0, 0, 0, 0.6);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  padding: 0.55rem 1.2rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 200ms ease-out;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--gold-500);
+  color: var(--gold-200);
+  background: rgba(184, 151, 88, 0.06);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wom-slot {
+  aspect-ratio: 1 / 1;
+  background:
+    radial-gradient(ellipse at center, rgba(184, 151, 88, 0.04) 0%, transparent 70%),
+    linear-gradient(180deg, #14110c 0%, #0a0907 100%);
+  border: 1.5px solid var(--border-default);
+  position: relative;
+  transition: all 200ms ease-out;
+  overflow: hidden;
+}
+
+.wom-slot:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold-400);
+  box-shadow:
+    0 0 24px rgba(212, 169, 78, 0.35),
+    inset 0 0 12px rgba(212, 169, 78, 0.1);
+  z-index: 2;
+}
+
+.wom-slot[data-rarity="common"] {
+  border-color: rgba(168, 160, 152, 0.5);
+}
+.wom-slot[data-rarity="uncommon"] {
+  border-color: rgba(110, 227, 110, 0.7);
+  box-shadow: 0 0 12px rgba(110, 227, 110, 0.2);
+}
+.wom-slot[data-rarity="rare"] {
+  border-color: rgba(95, 168, 255, 0.7);
+  box-shadow: 0 0 12px rgba(95, 168, 255, 0.2);
+}
+.wom-slot[data-rarity="epic"] {
+  border-color: rgba(192, 132, 252, 0.7);
+  box-shadow: 0 0 14px rgba(192, 132, 252, 0.25);
+}
+.wom-slot[data-rarity="legendary"] {
+  border-color: rgba(251, 191, 36, 0.85);
+  box-shadow:
+    0 0 20px rgba(251, 191, 36, 0.35),
+    inset 0 0 18px rgba(251, 191, 36, 0.1);
+}
+.wom-slot[data-rarity="mythic"] {
+  border-color: rgba(255, 92, 92, 0.9);
+  box-shadow:
+    0 0 22px rgba(255, 92, 92, 0.4),
+    inset 0 0 20px rgba(255, 92, 92, 0.12);
+}
+
+.wom-slot[data-empty="true"] {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 6px,
+      rgba(255, 255, 255, 0.02) 6px,
+      rgba(255, 255, 255, 0.02) 12px
+    ),
+    linear-gradient(180deg, #0d0b08 0%, #060503 100%);
+}
+
+.wom-slot-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-family: "Cinzel", serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold-200);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.rar-common {
+  color: var(--rarity-common-hex);
+}
+.rar-uncommon {
+  color: var(--rarity-uncommon-hex);
+}
+.rar-rare {
+  color: var(--rarity-rare-hex);
+}
+.rar-epic {
+  color: var(--rarity-epic-hex);
+}
+.rar-legendary {
+  color: var(--rarity-legendary-hex);
+}
+.rar-mythic {
+  color: var(--rarity-mythic-hex);
+}
+
+.bar-track {
+  height: 8px;
+  background: linear-gradient(180deg, #060503, #0e0b07);
+  border: 1px solid var(--border-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 800ms cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+
+.bar-fill.gold {
+  background: linear-gradient(90deg, #8c6b34, #d4a94e, #fff8e1);
+  box-shadow:
+    0 0 10px rgba(212, 169, 78, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+.bar-fill.crimson {
+  background: linear-gradient(90deg, #7d0a0a, #d44848, #ff8a8a);
+  box-shadow:
+    0 0 10px rgba(208, 36, 36, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+.bar-fill.arcane {
+  background: linear-gradient(90deg, #2563eb, #5fa8ff, #c5dcff);
+  box-shadow:
+    0 0 10px rgba(95, 168, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+.bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  background-size: 200% 100%;
+  animation: wom-shimmer 3s linear infinite;
+}
+
+.diamond-divider {
+  width: 10px;
+  height: 10px;
+  background: var(--gold-400);
+  transform: rotate(45deg);
+  box-shadow: 0 0 12px rgba(212, 169, 78, 0.6);
+  flex-shrink: 0;
+}
+
+.tab-active-glow {
+  position: relative;
+}
+
+.tab-active-glow::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-400), transparent);
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+@keyframes wom-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wom-anim-fade-up {
+  animation: wom-fade-up 0.5s ease-out both;
+}
+
+@keyframes wom-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Global: align legacy game primary buttons with emergent gold CTA */
+.game-btn-primary {
+  font-family: "Cinzel", serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  background-image: linear-gradient(180deg, #2a241a 0%, #14110c 100%) !important;
+  color: var(--gold-200) !important;
+  border: 1px solid var(--gold-600) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(245, 220, 138, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.5) !important;
+  text-shadow: none !important;
+}
+
+.game-btn-primary:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, #3d3320 0%, #1a160e 100%) !important;
+  border-color: var(--gold-400) !important;
+  color: var(--gold-50) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(245, 220, 138, 0.25),
+    0 0 22px rgba(212, 169, 78, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.6) !important;
+}
+
+.game-btn-secondary {
+  font-family: "Cinzel", serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  background-image: linear-gradient(180deg, #1a1916 0%, #0e0d0b 100%) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-default) !important;
+}
+
+.game-btn-secondary:hover:not(:disabled) {
+  border-color: var(--gold-500) !important;
+  color: var(--gold-200) !important;
+}
+
+/* Tab bar — emergent tone */
+.tab-bar {
+  background-color: var(--bg-obsidian) !important;
+  background-image: linear-gradient(180deg, rgba(23, 23, 28, 0.95) 0%, rgba(10, 10, 12, 0.98) 100%) !important;
+  border-color: var(--border-default) !important;
+}
+
+.tab-btn {
+  font-family: "Chivo", ui-sans-serif, system-ui, sans-serif !important;
+  letter-spacing: 0.12em !important;
+  color: var(--text-muted) !important;
+}
+
+.tab-btn:hover {
+  color: var(--gold-400) !important;
+  background: rgba(184, 151, 88, 0.06) !important;
+}
+
+.tab-btn-active {
+  color: var(--gold-200) !important;
+  background: rgba(184, 151, 88, 0.1) !important;
+  text-shadow: 0 0 10px var(--gold-glow) !important;
+}
+
+.tab-btn-active.tab-active-glow::after {
+  display: none;
+}
+
+.wom-select {
+  width: 100%;
+  font-family: "Chivo", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  padding: 0.45rem 0.65rem;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, #14110c 0%, #0a0907 100%);
+  border: 1px solid var(--border-default);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.wom-select:focus {
+  outline: none;
+  border-color: var(--gold-600);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(212, 169, 78, 0.25);
+}

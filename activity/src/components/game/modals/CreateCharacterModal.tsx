@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ClassOptionRow } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
+import { WomPanel } from "@/components/wom/WomUi";
 
 type Props = {
   onCreated: () => void;
@@ -54,7 +55,7 @@ export function CreateCharacterModal({ onCreated, createCharacter }: Props) {
       aria-modal="true"
       aria-label="Create character"
     >
-      <div className="game-panel w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <WomPanel glow className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="game-panel-header">Create your hero</div>
         <p className="text-xs text-muted-foreground mb-4">
           New players can choose a name and class here. You can still use `/character create` in Discord if you prefer.
@@ -117,7 +118,7 @@ export function CreateCharacterModal({ onCreated, createCharacter }: Props) {
             </Button>
           </div>
         </form>
-      </div>
+      </WomPanel>
     </div>
   );
 }

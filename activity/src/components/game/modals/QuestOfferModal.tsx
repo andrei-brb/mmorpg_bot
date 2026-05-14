@@ -5,6 +5,7 @@ import { classIconUrl } from "@/lib/classAndSpecIconUrl";
 import { useTypewriter } from "@/hooks/useTypewriter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { WomPanel } from "@/components/wom/WomUi";
 
 const NPC_FALLBACK_EMOJI = "💬";
 
@@ -91,9 +92,10 @@ export function QuestOfferModal({
       aria-label="Quest offer"
       onClick={onClose}
     >
-      <div
+      <WomPanel
+        glow
         className={cn(
-          "game-panel my-2 flex w-full max-w-[min(96vw,860px)] max-h-[min(94dvh,780px)] flex-col sm:my-4",
+          "my-2 flex w-full max-w-[min(96vw,860px)] max-h-[min(94dvh,780px)] flex-col sm:my-4",
           offer.lore_main && "ring-2 ring-violet-500/45 shadow-[0_0_24px_hsl(270_50%_40%/0.25)]",
         )}
         onClick={(e) => e.stopPropagation()}
@@ -279,7 +281,7 @@ export function QuestOfferModal({
             </button>
           </div>
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

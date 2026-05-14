@@ -1,5 +1,6 @@
 import { Trophy, Skull, Minus, RotateCcw, ArrowLeft } from "lucide-react";
 import type { PvpMatchState } from "@/lib/pvpTypes";
+import { WomPanel } from "@/components/wom/WomUi";
 
 interface PvpResultProps {
   match: PvpMatchState;
@@ -17,7 +18,7 @@ export function PvpResult({ match, onRematch, onBackToHub }: PvpResultProps) {
 
   return (
     <div className="flex items-center justify-center min-h-[50vh]">
-      <div className="game-panel max-w-md w-full text-center">
+      <WomPanel glow className="max-w-md w-full text-center">
         <div className="p-8 space-y-5">
           <Icon className={`w-14 h-14 mx-auto ${titleColor}`} />
           <h2 className={`font-cinzel text-2xl font-black tracking-widest uppercase ${titleColor}`}>{title}</h2>
@@ -38,7 +39,7 @@ export function PvpResult({ match, onRematch, onBackToHub }: PvpResultProps) {
           )}
 
           {result_stats?.rating_delta != null && mode === "ranked" && (
-            <div className="game-panel p-3">
+            <WomPanel bracket={false} glow={false} className="p-3">
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-cinzel">Rating Change</p>
               <p
                 className={`text-xl font-cinzel font-bold ${
@@ -48,7 +49,7 @@ export function PvpResult({ match, onRematch, onBackToHub }: PvpResultProps) {
                 {result_stats.rating_delta > 0 ? "+" : ""}
                 {result_stats.rating_delta}
               </p>
-            </div>
+            </WomPanel>
           )}
 
           <div className="flex gap-3 justify-center pt-2 flex-wrap">
@@ -60,7 +61,7 @@ export function PvpResult({ match, onRematch, onBackToHub }: PvpResultProps) {
             </button>
           </div>
         </div>
-      </div>
+      </WomPanel>
     </div>
   );
 }

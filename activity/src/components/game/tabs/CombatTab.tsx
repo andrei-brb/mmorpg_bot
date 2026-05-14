@@ -8,6 +8,7 @@ import { enemyPortraitSrc, isBossKind } from "@/lib/enemyPortraitUrl";
 import { ZONES as ZONES_DATA } from "@/data/zones";
 import { cn } from "@/lib/utils";
 import * as api from "@/lib/gameApi";
+import { WomPanel } from "@/components/wom/WomUi";
 
 type CombatTabMode = "overworld" | "dungeon";
 type RichOutcome = NonNullable<api.CombatActionJson["outcome"]>;
@@ -706,7 +707,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     return (
       <div>
         {showSubModeToggle && modeSegment}
-        <div className="game-panel py-6 sm:py-7">
+        <WomPanel glow className="py-6 sm:py-7">
           <div className="mx-auto w-full max-w-3xl">
             <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
               <div className="rounded-sm border border-white/10 bg-black/20 p-3 sm:p-4">
@@ -811,7 +812,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
               </div>
             </div>
           </div>
-        </div>
+        </WomPanel>
       </div>
     );
   }
@@ -850,7 +851,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   return (
     <div>
       {showSubModeToggle && modeSegment}
-      <div className="game-panel">
+      <WomPanel glow>
       <div className="game-panel-header">Choose an Enemy</div>
       {previewingRemoteZone ? (
         <div className="mb-3 rounded-sm border border-amber-500/40 bg-amber-950/25 px-2 py-2 text-[10px] leading-snug text-amber-50">
@@ -1131,7 +1132,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           </div>
         </div>
       )}
-      </div>
+      </WomPanel>
     </div>
   );
 }

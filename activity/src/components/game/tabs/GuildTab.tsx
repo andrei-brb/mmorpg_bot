@@ -12,6 +12,7 @@ import {
 import * as api from "@/lib/gameApi";
 import type { GuildFeedMessage, GuildInviteCandidate, GuildMePayload, GuildTechDefinition } from "@/lib/apiTypes";
 import { toast } from "sonner";
+import { WomPanel } from "@/components/wom/WomUi";
 
 function isOfficer(rank?: string | null) {
   return rank === "officer" || rank === "guildmaster";
@@ -32,7 +33,7 @@ function raidStatusClass(status?: string) {
 function GuildHallSkeleton() {
   return (
     <div className="guild-hall flex flex-col gap-4 min-h-0 flex-1 overflow-y-auto pr-1" aria-busy="true" aria-label="Loading guild">
-      <div className="game-panel relative overflow-hidden">
+      <WomPanel bracket={false} glow={false} className="relative overflow-hidden">
         <div className="h-5 w-40 rounded-sm bg-muted/50 animate-pulse mb-4" />
         <div className="h-8 w-3/4 max-w-md rounded-sm bg-muted/40 animate-pulse" />
         <div className="h-4 w-full max-w-lg rounded-sm bg-muted/30 animate-pulse mt-3" />
@@ -41,16 +42,26 @@ function GuildHallSkeleton() {
             <div key={i} className="guild-hall-stat-chip h-14 w-24 animate-pulse bg-muted/30 border-transparent" />
           ))}
         </div>
-      </div>
+      </WomPanel>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="game-panel lg:col-span-7 min-h-[180px] animate-pulse bg-muted/20" />
-        <div className="game-panel lg:col-span-5 min-h-[180px] animate-pulse bg-muted/20" />
+        <WomPanel bracket={false} glow={false} className="lg:col-span-7 min-h-[180px] animate-pulse bg-muted/20">
+          {null}
+        </WomPanel>
+        <WomPanel bracket={false} glow={false} className="lg:col-span-5 min-h-[180px] animate-pulse bg-muted/20">
+          {null}
+        </WomPanel>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="game-panel min-h-[120px] animate-pulse bg-muted/20" />
-        <div className="game-panel min-h-[120px] animate-pulse bg-muted/20" />
+        <WomPanel bracket={false} glow={false} className="min-h-[120px] animate-pulse bg-muted/20">
+          {null}
+        </WomPanel>
+        <WomPanel bracket={false} glow={false} className="min-h-[120px] animate-pulse bg-muted/20">
+          {null}
+        </WomPanel>
       </div>
-      <div className="game-panel min-h-[200px] animate-pulse bg-muted/20" />
+      <WomPanel bracket={false} glow={false} className="min-h-[200px] animate-pulse bg-muted/20">
+        {null}
+      </WomPanel>
     </div>
   );
 }
@@ -83,7 +94,7 @@ function GuildBanner({
   onAddMember,
 }: GuildBannerProps) {
   return (
-    <section className="game-panel guild-hall-banner relative overflow-hidden">
+    <WomPanel glow className="guild-hall-banner relative overflow-hidden">
       <div className="game-panel-header">Guild hall</div>
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 relative z-[1]">
         <div className="min-w-0 flex-1">
@@ -140,7 +151,7 @@ function GuildBanner({
           </div>
         </div>
       </div>
-    </section>
+    </WomPanel>
   );
 }
 
@@ -381,7 +392,7 @@ export function GuildTab() {
   if (!data?.in_guild) {
     return (
       <div className="guild-hall max-w-lg mx-auto">
-        <section className="game-panel text-center">
+        <WomPanel glow className="text-center">
           <div className="game-panel-header justify-center">No guild yet</div>
           <div className="text-4xl my-3" aria-hidden>
             🏰
@@ -401,7 +412,7 @@ export function GuildTab() {
           <Button variant="secondary" size="sm" className="mt-5 font-cinzel" onClick={() => void loadMe()}>
             Refresh
           </Button>
-        </section>
+        </WomPanel>
       </div>
     );
   }
@@ -526,7 +537,7 @@ export function GuildTab() {
       </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <section className="game-panel lg:col-span-7 flex flex-col min-h-0">
+        <WomPanel glow className="lg:col-span-7 flex flex-col min-h-0">
           <div className="game-panel-header">War council</div>
           {bossActive ? (
             <>
@@ -576,9 +587,9 @@ export function GuildTab() {
               Summon Stone Siege Golem
             </Button>
           )}
-        </section>
+        </WomPanel>
 
-        <section className="game-panel lg:col-span-5 flex flex-col min-h-0">
+        <WomPanel glow className="lg:col-span-5 flex flex-col min-h-0">
           <div className="game-panel-header">Treasury</div>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Donations fund tech and campaigns. Officers may withdraw (per-guild daily cap on the server).
@@ -603,11 +614,11 @@ export function GuildTab() {
               </Button>
             </div>
           )}
-        </section>
+        </WomPanel>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="game-panel min-h-0">
+        <WomPanel glow className="min-h-0">
           <div className="game-panel-header">Guild tech</div>
           <p className="text-xs text-muted-foreground mb-3">Passive bonuses for all members (explore, combat, idle).</p>
           <div className="grid sm:grid-cols-1 gap-2 max-h-[min(48vh,420px)] overflow-y-auto pr-1 -mr-1">
@@ -656,9 +667,9 @@ export function GuildTab() {
               );
             })}
           </div>
-        </section>
+        </WomPanel>
 
-        <section className="game-panel min-h-0 flex flex-col">
+        <WomPanel glow className="min-h-0 flex flex-col">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div className="game-panel-header flex-1 min-w-0">Raids</div>
             {officer && (
@@ -704,10 +715,10 @@ export function GuildTab() {
               </li>
             ))}
           </ul>
-        </section>
+        </WomPanel>
       </div>
 
-      <section className="game-panel flex flex-col min-h-[min(52vh,440px)] max-h-[min(60vh,560px)] flex-1">
+      <WomPanel glow className="flex flex-col min-h-[min(52vh,440px)] max-h-[min(60vh,560px)] flex-1">
         <div className="game-panel-header">Hall chat</div>
         <div className="guild-hall-feed-scroll flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 -mr-1 mb-2">
           {feed.length === 0 && <p className="text-xs text-muted-foreground italic py-2">No messages yet — greet your guild.</p>}
@@ -750,7 +761,7 @@ export function GuildTab() {
             Send
           </Button>
         </div>
-      </section>
+      </WomPanel>
     </div>
   );
 }

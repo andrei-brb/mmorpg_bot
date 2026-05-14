@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import * as api from "@/lib/gameApi";
 import type { ShopCatalogItem, InvRow, MarketListingRow } from "@/lib/apiTypes";
+import { WomPanel } from "@/components/wom/WomUi";
 
 type MarketSection = "shop" | "marketplace";
 
@@ -139,7 +140,7 @@ export function MarketTab() {
   return (
     <div className="space-y-4">
       {/* Section toggle */}
-      <div className="game-panel p-0">
+      <WomPanel glow className="p-0 overflow-hidden">
         <div className="flex">
           <button
             onClick={() => setSection("shop")}
@@ -173,7 +174,7 @@ export function MarketTab() {
             🏛️ Player Market
           </button>
         </div>
-      </div>
+      </WomPanel>
 
       {/* ════════════ GAME SHOP ════════════ */}
       {section === "shop" && (
@@ -196,7 +197,7 @@ export function MarketTab() {
                     rarity: item.rarity,
                   };
                   return (
-                  <div key={item.id} className="game-panel p-3 flex items-start gap-3">
+                  <WomPanel key={item.id} bracket={false} glow={false} className="p-3 flex items-start gap-3">
                     <div className="shrink-0 w-12 h-12 rounded-sm flex items-center justify-center slot-filled"
                       style={{ background: RARITY_BG[item.rarity] || "hsl(0 0% 65% / 0.06)" }}>
                       <ItemIcon item={iconItem as InvRow} size={46} />
@@ -225,7 +226,7 @@ export function MarketTab() {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </WomPanel>
                   );
                 })}
               </div>
@@ -245,7 +246,7 @@ export function MarketTab() {
                   rarity: item.rarity,
                 };
                 return (
-                <div key={item.key} className="game-panel p-3 flex items-start gap-3">
+                <WomPanel key={item.key} bracket={false} glow={false} className="p-3 flex items-start gap-3">
                   <div className="shrink-0 w-12 h-12 rounded-sm flex items-center justify-center slot-filled"
                     style={{ background: RARITY_BG[item.rarity] }}>
                     <ItemIcon item={iconItem as InvRow} size={46} />
@@ -274,7 +275,7 @@ export function MarketTab() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </WomPanel>
                 );
               })}
             </div>
@@ -285,23 +286,23 @@ export function MarketTab() {
       {/* ════════════ PLAYER MARKETPLACE ════════════ */}
       {section === "marketplace" && (
         <>
-          <div className="game-panel p-3">
+          <WomPanel glow className="p-3">
             <p className="text-xs text-muted-foreground font-crimson text-center italic">
               Browse items listed by other players. Enhanced items keep their upgrades!
             </p>
-          </div>
+          </WomPanel>
 
           {loadingMarket ? (
             <div className="text-xs text-muted-foreground text-center py-8">Loading listings...</div>
           ) : marketListings.length === 0 ? (
-            <div className="game-panel p-8 text-center">
+            <WomPanel glow className="p-8 text-center">
               <p className="text-sm font-cinzel font-semibold text-foreground mb-2">
                 📭 No Listings Yet
               </p>
               <p className="text-xs text-muted-foreground font-crimson mb-4">
                 Be the first to sell an item! Use <span className="font-mono text-foreground">/market sell</span> in Discord to list an item.
               </p>
-            </div>
+            </WomPanel>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {marketListings.map((listing) => {
@@ -315,7 +316,7 @@ export function MarketTab() {
                   template_equip_slot: listing.template_equip_slot,
                 };
                 return (
-                <div key={listing.id} className="game-panel p-3 flex items-start gap-3">
+                <WomPanel key={listing.id} bracket={false} glow={false} className="p-3 flex items-start gap-3">
                   <div className="shrink-0 w-12 h-12 rounded-sm flex items-center justify-center slot-filled relative"
                     style={{ background: RARITY_BG[listing.rarity] || "hsl(0 0% 65% / 0.06)" }}>
                     <ItemIcon item={iconItem as InvRow} size={46} />
@@ -357,7 +358,7 @@ export function MarketTab() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </WomPanel>
                 );
               })}
             </div>
@@ -366,7 +367,7 @@ export function MarketTab() {
           <div className="ornament-divider" />
 
           {/* Sell your own items button */}
-          <div className="game-panel p-4 text-center">
+          <WomPanel glow className="p-4 text-center">
             <p className="text-sm font-cinzel font-semibold text-foreground mb-2">
               Want to sell your items?
             </p>
@@ -376,18 +377,18 @@ export function MarketTab() {
             <p className="text-[9px] text-muted-foreground font-crimson">
               Listings expire after 7 days. A 5% fee is charged when you sell.
             </p>
-          </div>
+          </WomPanel>
         </>
       )}
 
       {/* Gold display */}
-      <div className="game-panel p-3 text-center border-t border-border/40">
+      <WomPanel glow className="p-3 text-center border-t border-border/40">
         <p className="text-xs text-muted-foreground">Your Gold</p>
         <p className="text-lg font-cinzel font-bold text-primary mt-1"
           style={{ textShadow: '0 0 8px hsl(43 78% 50% / 0.3)' }}>
           {playerGold.toLocaleString()} 🪙
         </p>
-      </div>
+      </WomPanel>
     </div>
   );
 }

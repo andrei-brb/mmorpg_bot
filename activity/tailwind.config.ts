@@ -14,6 +14,10 @@ export default {
     },
     extend: {
       fontFamily: {
+        display: ["Cinzel", "serif"],
+        blackletter: ["Pirata One", "Cinzel", "serif"],
+        body: ["Chivo", "Helvetica Neue", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
         cinzel: ["Cinzel", "serif"],
         crimson: ["Crimson Text", "serif"],
         pixel: ["Press Start 2P", "cursive"],
@@ -56,7 +60,24 @@ export default {
         gold: {
           DEFAULT: "hsl(var(--gold))",
           dim: "hsl(var(--gold-dim))",
+          50: "#fff8e1",
+          200: "#f5dc8a",
+          400: "#d4a94e",
+          500: "#b89758",
+          600: "#8c6b34",
+          700: "#5d4720",
         },
+        crimson: {
+          400: "#d44848",
+          500: "#b02020",
+          600: "#7d0a0a",
+        },
+        ember: "#ff6b1a",
+        arcane: "#5fa8ff",
+        verdant: "#6ee36e",
+        "bg-void": "#050505",
+        "bg-panel": "#111114",
+        "bg-raised": "#17171c",
         panel: {
           bg: "oklch(0.155 0.01 260 / <alpha-value>)",
           border: "oklch(0.32 0.04 75 / <alpha-value>)",
@@ -100,8 +121,8 @@ export default {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "var(--radius)",
+        sm: "var(--radius)",
       },
       keyframes: {
         "accordion-down": {
