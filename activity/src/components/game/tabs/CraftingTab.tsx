@@ -20,6 +20,17 @@ function prettyMaterialKey(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function materialLabel(templateId: string, sample: InvRow | undefined): string {
+  const n = sample?.name?.trim();
+  if (n) return n;
+  const tid = String(templateId || "").trim();
+  if (UUID_RE.test(tid)) return `Reagent (${tid.slice(0, 8)}…)`;
+  return prettyMaterialKey(tid);
+}
+
 /** Sum bag quantities for rows whose `template_id` matches (e.g. `weapon_scrap`). */
 function ownedTemplateQty(items: InvRow[], templateKey: string): number {
   const k = templateKey.trim().toLowerCase();
@@ -47,50 +58,41 @@ function ForgeMaterialAudit({
 
   return (
     <div className="space-y-3">
-      <WomOrnateDivider label="Costs" />
-      <div className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-void)]/80">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-default)]/80 px-3 py-2.5">
-          <div className="flex items-center gap-2">
-            <WomGoldCoin size={18} />
-            <span className="text-xs font-semibold text-[var(--text-secondary)]">Gold</span>
-          </div>
-          <div className="wom-font-mono text-right text-xs tabular-nums">
-            <span className="text-[var(--text-muted)]">Need </span>
-            <span className="font-bold text-[var(--gold-200)]">{goldNeed.toLocaleString()}</span>
-            <span className="text-[var(--text-muted)]"> · You </span>
-            <span className={goldOk ? "text-[var(--verdant)]" : "text-[var(--crimson-400)]"}>{goldHave.toLocaleString()}</span>
-          </div>
-        </div>
+      <WomOrnateDivider label="Materials" />
+      <div className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-void)]/80 px-3 py-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+        <p className="mb-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+            <WomGoldCoin size={16} />
+            Gold
+          </span>
+          <span className="text-[var(--text-muted)]">—</span>
+          <span className="wom-font-mono tabular-nums">
+            need <span className="font-semibold text-[var(--gold-200)]">{goldNeed.toLocaleString()}</span>
+            <span className="text-[var(--text-muted)]">, you have </span>
+            <span className={goldOk ? "font-semibold text-[var(--verdant)]" : "font-semibold text-[var(--crimson-400)]"}>
+              {goldHave.toLocaleString()}
+            </span>
+          </span>
+        </p>
         {scrapRows.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-[var(--text-muted)]">No scrap or extra materials for this forge — gold only.</p>
+          <p className="text-xs text-[var(--text-muted)]">No extra scrap or reagents — gold covers this forge.</p>
         ) : (
-          <ul className="divide-y divide-[var(--border-default)]/60">
+          <ul className="mt-2 space-y-2 border-t border-[var(--border-default)]/60 pt-2">
             {scrapRows.map(([templateId, need]) => {
               const have = ownedTemplateQty(items, templateId);
               const ok = have >= need;
-              const sample = items.find((it) => String(it.template_id || "").trim().toLowerCase() === templateId.toLowerCase());
+              const sample = items.find(
+                (it) => String(it.template_id || "").trim().toLowerCase() === templateId.toLowerCase(),
+              );
               return (
-                <li key={templateId} className="flex items-center gap-3 px-3 py-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-[var(--border-default)] bg-[var(--bg-panel-raised)]">
-                    {sample ? (
-                      <ItemIcon item={sample} size={28} />
-                    ) : (
-                      <span className="text-[10px] uppercase tracking-wider text-[var(--text-disabled)]">?</span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-foreground">{prettyMaterialKey(templateId)}</div>
-                    <div className="wom-font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
-                      Need <span className="font-bold text-foreground">{need}</span>
-                      <span> · You </span>
-                      <span className={ok ? "text-[var(--verdant)]" : "text-amber-400"}>{have}</span>
-                    </div>
-                  </div>
-                  {ok ? (
-                    <WomPill tone="success">OK</WomPill>
-                  ) : (
-                    <WomPill tone="crimson">Short</WomPill>
-                  )}
+                <li key={templateId} className="text-xs sm:text-sm">
+                  <span className="font-semibold text-foreground">{materialLabel(templateId, sample)}</span>
+                  <span className="text-[var(--text-muted)]"> — </span>
+                  <span className="wom-font-mono tabular-nums text-[var(--text-muted)]">
+                    need <span className="font-semibold text-foreground">{need}</span>
+                    <span>, you have </span>
+                    <span className={ok ? "font-semibold text-[var(--verdant)]" : "font-semibold text-amber-400"}>{have}</span>
+                  </span>
                 </li>
               );
             })}
@@ -212,13 +214,6 @@ export function CraftingTab() {
       cancelled = true;
     };
   }, [accessToken, guildId, selectedId]);
-
-  useEffect(() => {
-    const pa = forgeOptions?.path_a;
-    const pb = forgeOptions?.path_b;
-    if (forgeMode === "a" && pa && !pa.ok && pb?.ok) setForgeMode("b");
-    if (forgeMode === "b" && pb && !pb.ok && pa?.ok) setForgeMode("a");
-  }, [forgeOptions, forgeMode]);
 
   const startForge = useCallback(async () => {
     if (!selectedId) {
