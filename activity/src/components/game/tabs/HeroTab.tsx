@@ -3,12 +3,11 @@ import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CharacterDerivedStatsPayload, EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
 import { classIconUrl } from "@/lib/classAndSpecIconUrl";
-import { getCharacterDerivedStats, getIdleRewards, postIdleClaim } from "@/lib/gameApi";
+import { getCharacterDerivedStats, getIdleRewards, postIdleClaim, publicBaseUrl } from "@/lib/gameApi";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const EQUIP_ORDER = [
   "head", "chest", "hands", "legs", "feet",
@@ -48,6 +47,10 @@ const RARITY_COLORS: Record<string, string> = {
 
 function rarityKey(rarity?: string | null) {
   return (rarity || "common").toLowerCase();
+}
+
+function normalizeClassKeyForHero(classKeyOrName: string): string {
+  return classKeyOrName.trim().toLowerCase().replace(/\s+/g, "_");
 }
 
 /** Template slot for icons / actions; `equip_slot` alone was overwritten by SQL before `template_equip_slot` existed. */
@@ -144,6 +147,16 @@ export function HeroTab() {
 
   const char = inventory?.character;
   const items = inventory?.items || [];
+  const heroPaperClassKey = normalizeClassKeyForHero(char?.class || "warrior");
+  const [paperPortraitPublicFailed, setPaperPortraitPublicFailed] = useState(false);
+
+  useEffect(() => {
+    setPaperPortraitPublicFailed(false);
+  }, [heroPaperClassKey]);
+
+  const paperPortraitSrc = paperPortraitPublicFailed
+    ? classIconUrl(char?.class || "warrior")
+    : `${publicBaseUrl()}classes/class_${encodeURIComponent(heroPaperClassKey)}.png?v=1`;
 
   useEffect(() => {
     if (!accessToken || !char) {
@@ -624,19 +637,13 @@ export function HeroTab() {
           <div className="hero-ref-paper-doll mt-2">
             <div className="hero-ref-paper-col">{PAPER_LEFT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
             <div className="hero-ref-paper-portrait">
-              <div
-                className="hero-ref-paper-portrait-classbg"
-                style={{ backgroundImage: `url(${classIconUrl(char?.class || "warrior")})` }}
-                aria-hidden
+              <img
+                src={paperPortraitSrc}
+                alt=""
+                className="hero-ref-paper-portrait-art"
+                decoding="async"
+                onError={() => setPaperPortraitPublicFailed(true)}
               />
-              {inventory?.discord?.avatar_url ? (
-                <Avatar className="hero-ref-paper-portrait-avatar">
-                  <AvatarImage src={String(inventory.discord.avatar_url)} alt="" className="object-cover" />
-                  <AvatarFallback className="bg-transparent text-[8px]">
-                    {(char?.name || "?").slice(0, 1).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              ) : null}
               <div className="hero-ref-paper-portrait-level">Lv.{char?.level ?? "—"}</div>
               <div className="hero-ref-paper-portrait-nameplate">
                 <div className="hero-ref-paper-name">{(char?.name || "Hero").toUpperCase()}</div>
