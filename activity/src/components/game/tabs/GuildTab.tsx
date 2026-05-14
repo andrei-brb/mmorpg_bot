@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Castle, Cpu, Crown, Flag, ShieldHalf, Sword } from "lucide-react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
@@ -131,18 +131,40 @@ export function GuildTab() {
   const [createName, setCreateName] = useState("");
   const [createTag, setCreateTag] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
+  /** Avoid full skeleton on every refetch after boss/bank actions (only first paint / not-in-guild). */
+  const hasLoadedGuildHubRef = useRef(false);
+
+  useEffect(() => {
+    hasLoadedGuildHubRef.current = false;
+  }, [guildId]);
 
   const loadMe = useCallback(async () => {
     if (!accessToken) return;
-    setLoading(true);
+    const showFullSpinner = !hasLoadedGuildHubRef.current;
+    if (showFullSpinner) setLoading(true);
     try {
       const j = await api.getGuildMe(accessToken, guildId);
+      if (j.in_guild && j.ok) {
+        hasLoadedGuildHubRef.current = true;
+      } else {
+        hasLoadedGuildHubRef.current = false;
+      }
       setData(j);
       if (j.in_guild && j.ok) {
-        const f = await api.getGuildFeed(accessToken, guildId);
-        if (f.ok && Array.isArray(f.messages)) {
-          setFeed(f.messages as GuildFeedMessage[]);
-          setFeedCursor(f.next_cursor ?? null);
+        try {
+          const f = await api.getGuildFeed(accessToken, guildId);
+          if (f.ok && Array.isArray(f.messages)) {
+            setFeed(f.messages as GuildFeedMessage[]);
+            setFeedCursor(f.next_cursor ?? null);
+          } else {
+            setFeed([]);
+            setFeedCursor(null);
+          }
+        } catch (feedErr) {
+          console.warn("guild feed load failed", feedErr);
+          setFeed([]);
+          setFeedCursor(null);
+          toast.message("Hall chat could not load — the rest of the guild hub is still available.", { duration: 4500 });
         }
       } else {
         setFeed([]);
@@ -150,7 +172,7 @@ export function GuildTab() {
       }
     } catch (e) {
       toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/me")));
-      setData({ ok: false });
+      setData((prev) => prev);
     } finally {
       setLoading(false);
     }

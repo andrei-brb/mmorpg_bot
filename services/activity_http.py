@@ -4003,7 +4003,20 @@ async def handle_guild_me(request: web.Request) -> web.Response:
     gid = _uuid_from_any(char["guild_id"])
     g = await db.fetchrow("SELECT * FROM guilds WHERE id=$1", gid)
     if not g:
-        return web.json_response(_json_safe({"ok": False, "error": "guild_missing"}), status=400)
+        # Character still pointed at a deleted guild — clear so Activity join/create works.
+        await db.execute(
+            "UPDATE characters SET guild_id=NULL, guild_rank=NULL WHERE id=$1",
+            _uuid_from_any(char["id"]),
+        )
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": True,
+                    "in_guild": False,
+                    "message": "Your previous guild no longer exists. Found a new hall here or use /guild join.",
+                }
+            )
+        )
     member_count = await db.fetchval(
         "SELECT COUNT(*)::int FROM characters WHERE guild_id=$1",
         gid,
@@ -4236,16 +4249,19 @@ async def handle_guild_boss_start(request: web.Request) -> web.Response:
     enc, err = await guild_boss_mod.start_encounter(db, gid, boss_key, char.get("guild_rank"), discord_bot=bot)
     if err:
         return web.json_response(_json_safe({"ok": False, "message": err}), status=400)
-    from services.guild.guild_feed import post_system
-
     tpl = guild_boss_mod.BOSS_TEMPLATES.get(boss_key, {})
-    await post_system(
-        db,
-        gid,
-        f"A guild boss has appeared: **{tpl.get('name', boss_key)}**! Strike together before time runs out.",
-        "system_boss",
-        {"boss_key": boss_key},
-    )
+    try:
+        from services.guild.guild_feed import post_system
+
+        await post_system(
+            db,
+            gid,
+            f"A guild boss has appeared: **{tpl.get('name', boss_key)}**! Strike together before time runs out.",
+            "system_boss",
+            {"boss_key": boss_key},
+        )
+    except Exception as e:
+        log.warning("guild boss spawn feed post failed: %s", e)
     if bot and enc:
         try:
             import discord
