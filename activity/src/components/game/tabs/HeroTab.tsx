@@ -156,7 +156,7 @@ export function HeroTab() {
 
   const paperPortraitSrc = paperPortraitPublicFailed
     ? classIconUrl(char?.class || "warrior")
-    : `${publicBaseUrl()}classes/class_${encodeURIComponent(heroPaperClassKey)}.png?v=1`;
+    : `${publicBaseUrl()}classes/class_${encodeURIComponent(heroPaperClassKey)}.png?v=2`;
 
   useEffect(() => {
     if (!accessToken || !char) {
