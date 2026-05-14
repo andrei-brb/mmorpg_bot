@@ -364,7 +364,11 @@ class InventoryService:
 
         if current_slots + needed_new_slots > max_slots:
             missing = current_slots + needed_new_slots - max_slots
-            return False, f"Not enough inventory space for quest rewards (need {missing} more slot(s))."
+            return (
+                False,
+                f"Bag is full for unequipped items ({current_slots}/{max_slots}). "
+                f"Free {missing} bag slot(s) to claim quest rewards (equipped gear does not count).",
+            )
         return True, "ok"
 
     # ── Add / remove items ────────────────────────────────────────────────────

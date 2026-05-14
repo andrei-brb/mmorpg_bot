@@ -707,6 +707,12 @@ export function HeroTab() {
               </div>
             </div>
             <p className="hero-panel-subtitle w-full max-w-full">Stashed gear, consumables &amp; crafting goods</p>
+            {bagSlotsMax > 0 && bagSlotsFree === 0 ? (
+              <p className="mt-0.5 text-[9px] leading-snug text-amber-200/85">
+                Bag is full. Capacity is shared across Gear, Consumables, and Materials — empty squares in one tab are
+                not free slots.
+              </p>
+            ) : null}
             {/* Row 2: filters + batch sell — ornate chrome */}
             <div className="hero-inventory-chrome min-w-0">
               <div className="flex flex-wrap items-center gap-1 shrink-0">
@@ -809,7 +815,7 @@ export function HeroTab() {
                       )}
                     </>
                   ) : (
-                    <span className="relative z-[1] text-[6px] leading-tight text-center opacity-35">Empty</span>
+                    <span className="relative z-[1] text-[7px] leading-tight text-center opacity-30 tabular-nums">—</span>
                   )}
                   {it && Number(it.quantity ?? 1) > 1 && (
                     <span className="absolute bottom-px right-px z-[4] text-[6px] font-bold text-foreground"
