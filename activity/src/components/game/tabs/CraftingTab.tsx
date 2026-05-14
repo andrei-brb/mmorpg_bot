@@ -14,11 +14,91 @@ import {
   WomStatBar,
 } from "@/components/wom/WomUi";
 
-function recipeCostLines(costs: Record<string, number> | undefined): string[] {
-  if (!costs) return [];
-  return Object.entries(costs)
-    .filter(([, n]) => (n || 0) > 0)
-    .map(([k, n]) => `${k.replace(/_/g, " ")} ×${n}`);
+function prettyMaterialKey(key: string): string {
+  return String(key || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Sum bag quantities for rows whose `template_id` matches (e.g. `weapon_scrap`). */
+function ownedTemplateQty(items: InvRow[], templateKey: string): number {
+  const k = templateKey.trim().toLowerCase();
+  let sum = 0;
+  for (const it of items) {
+    if (String(it.template_id || "").trim().toLowerCase() !== k) continue;
+    sum += Math.max(0, Math.floor(Number(it.quantity ?? 1)));
+  }
+  return sum;
+}
+
+function ForgeMaterialAudit({
+  costs,
+  goldNeed,
+  goldHave,
+  items,
+}: {
+  costs: Record<string, number> | undefined;
+  goldNeed: number;
+  goldHave: number;
+  items: InvRow[];
+}) {
+  const scrapRows = Object.entries(costs || {}).filter(([, n]) => (n || 0) > 0);
+  const goldOk = goldHave >= goldNeed;
+
+  return (
+    <div className="space-y-3">
+      <WomOrnateDivider label="Costs" />
+      <div className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-void)]/80">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-default)]/80 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <WomGoldCoin size={18} />
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">Gold</span>
+          </div>
+          <div className="wom-font-mono text-right text-xs tabular-nums">
+            <span className="text-[var(--text-muted)]">Need </span>
+            <span className="font-bold text-[var(--gold-200)]">{goldNeed.toLocaleString()}</span>
+            <span className="text-[var(--text-muted)]"> · You </span>
+            <span className={goldOk ? "text-[var(--verdant)]" : "text-[var(--crimson-400)]"}>{goldHave.toLocaleString()}</span>
+          </div>
+        </div>
+        {scrapRows.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-[var(--text-muted)]">No scrap or extra materials for this forge — gold only.</p>
+        ) : (
+          <ul className="divide-y divide-[var(--border-default)]/60">
+            {scrapRows.map(([templateId, need]) => {
+              const have = ownedTemplateQty(items, templateId);
+              const ok = have >= need;
+              const sample = items.find((it) => String(it.template_id || "").trim().toLowerCase() === templateId.toLowerCase());
+              return (
+                <li key={templateId} className="flex items-center gap-3 px-3 py-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-[var(--border-default)] bg-[var(--bg-panel-raised)]">
+                    {sample ? (
+                      <ItemIcon item={sample} size={28} />
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-wider text-[var(--text-disabled)]">?</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-foreground">{prettyMaterialKey(templateId)}</div>
+                    <div className="wom-font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
+                      Need <span className="font-bold text-foreground">{need}</span>
+                      <span> · You </span>
+                      <span className={ok ? "text-[var(--verdant)]" : "text-amber-400"}>{have}</span>
+                    </div>
+                  </div>
+                  {ok ? (
+                    <WomPill tone="success">OK</WomPill>
+                  ) : (
+                    <WomPill tone="crimson">Short</WomPill>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function normRarity(r?: string | null): "common" | "uncommon" | "rare" | "epic" | "legendary" | "mythic" {
@@ -228,6 +308,32 @@ export function CraftingTab() {
       active ? "!border-[var(--gold-600)] !bg-[rgba(184,151,88,0.12)] !text-[var(--gold-200)]" : ""
     }`;
 
+  const playerGold = useMemo(() => Math.max(0, Math.floor(Number(char?.gold ?? 0))), [char?.gold]);
+
+  const canAffordRarityPath = useMemo(() => {
+    if (!rule || !pathA?.ok) return false;
+    if (playerGold < (rule.gold_cost || 0)) return false;
+    for (const [key, need] of Object.entries(rule.costs || {})) {
+      if ((need || 0) <= 0) continue;
+      if (ownedTemplateQty(items, key) < need) return false;
+    }
+    return true;
+  }, [rule, pathA?.ok, playerGold, items]);
+
+  const canAffordUpgradePath = useMemo(() => {
+    if (!selectedBranch || !pathB?.ok) return false;
+    if (playerGold < (selectedBranch.gold_cost || 0)) return false;
+    for (const [key, need] of Object.entries(selectedBranch.costs || {})) {
+      if ((need || 0) <= 0) continue;
+      if (ownedTemplateQty(items, key) < need) return false;
+    }
+    return true;
+  }, [selectedBranch, pathB?.ok, playerGold, items]);
+
+  const meetsCraftingLevelRarity = !rule || craftLevel >= (rule.required_crafting_level || 1);
+  const meetsCraftingLevelUpgrade =
+    !selectedBranch || craftLevel >= (selectedBranch.required_crafting_level || 1);
+
   return (
     <div className="forge-tab-root wom-anim-fade-up space-y-4 px-0.5 pb-2 font-body">
       <WomPanel className="p-5 sm:p-6" glow>
@@ -372,31 +478,108 @@ export function CraftingTab() {
           </div>
         </div>
 
-        {selectedItem && !job && (
-          <div className="mt-6 space-y-5 border-t border-[var(--border-default)] pt-6">
-            {forgeMode === "a" && pathA && (
-              <div className="border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-4">
-                {!pathA.ok || !rule ? (
-                  <p className="text-sm text-[var(--crimson-400)]">{pathA.message || "Infusion unavailable."}</p>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="font-display text-lg uppercase tracking-wider text-[var(--gold-200)]">
-                        {pathA.from_rarity}
-                      </span>
-                      <span className="text-[var(--text-muted)]">→</span>
-                      <span className={`font-display text-lg uppercase tracking-wider rar-${normRarity(pathA.to_rarity || undefined)}`}>
-                        {pathA.to_rarity}
-                      </span>
+        <p className="mt-4 text-center text-xs text-[var(--text-muted)]">
+          Use the tabs above to switch workshops. After you pick gear here, the{" "}
+          <span className="text-[var(--gold-500)]">Rarity path</span> or <span className="text-[var(--gold-500)]">Upgrade</span>{" "}
+          panel opens below.
+        </p>
+      </WomPanel>
+
+      {selectedItem && !job ? (
+        <WomPanel key={forgeMode} className="min-h-[280px] p-5 sm:p-6" glow>
+          <WomSectionHeader
+            kicker={forgeMode === "a" ? "Safer infusion" : "Riskier re-shaping"}
+            title={forgeMode === "a" ? "Rarity path" : "Upgrade"}
+          />
+
+          {!forgeOptions ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading forge options…</p>
+          ) : forgeMode === "a" && pathA ? (
+            !pathA.ok || !rule ? (
+              <p className="text-sm text-[var(--crimson-400)]">{pathA.message || "Infusion unavailable."}</p>
+            ) : (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="font-display text-lg uppercase tracking-wider text-[var(--gold-200)]">{pathA.from_rarity}</span>
+                  <span className="text-[var(--text-muted)]">→</span>
+                  <span
+                    className={`font-display text-lg uppercase tracking-wider rar-${normRarity(pathA.to_rarity || undefined)}`}
+                  >
+                    {pathA.to_rarity}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                  {(
+                    [
+                      ["Time", `${rule.craft_seconds}s`],
+                      ["Gold", rule.gold_cost],
+                      ["Req.Lv", rule.required_crafting_level],
+                      ["Success", `${Math.round(Number(rule.success_chance) * 100)}%`],
+                      ["Forge XP", `+${rule.crafting_xp_reward}`],
+                    ] as const
+                  ).map(([label, val]) => (
+                    <div key={label} className="border border-[var(--border-default)] bg-[var(--bg-void)] px-2 py-2 text-center">
+                      <div className="text-label !text-[9px] !tracking-[0.2em] text-[var(--gold-600)]">{label}</div>
+                      <div className="wom-font-mono text-sm font-bold text-[var(--text-primary)]">{val}</div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                  ))}
+                </div>
+                {!meetsCraftingLevelRarity ? (
+                  <p className="text-xs text-amber-400/95">
+                    Your forging skill is Lv.{craftLevel}; this infusion requires Lv.{rule.required_crafting_level}.
+                  </p>
+                ) : null}
+                <ForgeMaterialAudit costs={rule.costs} goldNeed={rule.gold_cost || 0} goldHave={playerGold} items={items} />
+                <p className="text-xs text-[var(--text-muted)]">On failure the piece remains; spent gold and scrap are lost.</p>
+                <button
+                  type="button"
+                  className="btn-gold w-full !py-3.5 !tracking-[0.22em]"
+                  disabled={
+                    !pathA.ok ||
+                    !rule ||
+                    !meetsCraftingLevelRarity ||
+                    !canAffordRarityPath
+                  }
+                  title={
+                    !canAffordRarityPath || !meetsCraftingLevelRarity
+                      ? "Need higher forging level, more gold, or more materials in your bag."
+                      : undefined
+                  }
+                  onClick={() => void startForge()}
+                >
+                  Strike forge
+                </button>
+              </div>
+            )
+          ) : forgeMode === "b" && pathB ? (
+            !pathB.ok ? (
+              <p className="text-sm text-[var(--crimson-400)]">{pathB.message || "No upgrades."}</p>
+            ) : (
+              <div className="space-y-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--crimson-400)]">
+                  Risk: input consumed at start — failed claim destroys it. No refund.
+                </p>
+                <div>
+                  <div className="text-label mb-1.5">Upgrade target</div>
+                  <select className="wom-select" value={branchRecipeId} onChange={(e) => setBranchRecipeId(e.target.value)}>
+                    <option value="">Select upgrade…</option>
+                    {branchRecipes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({Math.round(Number(r.success_chance ?? 1) * 100)}%)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedBranch ? (
+                  <>
+                    <p className="text-sm text-[var(--text-secondary)]">{selectedBranch.description}</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {(
                         [
-                          ["Time", `${rule.craft_seconds}s`],
-                          ["Gold", rule.gold_cost],
-                          ["Req.Lv", rule.required_crafting_level],
-                          ["Success", `${Math.round(Number(rule.success_chance) * 100)}%`],
-                          ["Forge XP", `+${rule.crafting_xp_reward}`],
+                          ["Time", `${selectedBranch.craft_seconds}s`],
+                          ["Gold", selectedBranch.gold_cost],
+                          ["Req.Lv", selectedBranch.required_crafting_level],
+                          ["Success", `${Math.round(Number(selectedBranch.success_chance ?? 1) * 100)}%`],
                         ] as const
                       ).map(([label, val]) => (
                         <div key={label} className="border border-[var(--border-default)] bg-[var(--bg-void)] px-2 py-2 text-center">
@@ -405,77 +588,57 @@ export function CraftingTab() {
                         </div>
                       ))}
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--gold-200)]">
-                      <WomGoldCoin size={16} />
-                      <span>{recipeCostLines(rule.costs).join(" · ") || "No scrap cost"}</span>
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)]">On failure the piece remains; spent gold and scrap are lost.</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {forgeMode === "b" && pathB && (
-              <div className="border border-[var(--crimson-600)]/50 bg-[rgba(176,32,32,0.06)] p-4">
-                {!pathB.ok ? (
-                  <p className="text-sm text-[var(--crimson-400)]">{pathB.message || "No upgrades."}</p>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--crimson-400)]">
-                      Risk: input consumed at start — failed claim destroys it. No refund.
-                    </p>
-                    <select className="wom-select" value={branchRecipeId} onChange={(e) => setBranchRecipeId(e.target.value)}>
-                      <option value="">Select upgrade…</option>
-                      {branchRecipes.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ({Math.round(Number(r.success_chance ?? 1) * 100)}%)
-                        </option>
-                      ))}
-                    </select>
-                    {selectedBranch ? (
-                      <div className="space-y-3">
-                        <p className="text-sm text-[var(--text-secondary)]">{selectedBranch.description}</p>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          {(
-                            [
-                              ["Time", `${selectedBranch.craft_seconds}s`],
-                              ["Gold", selectedBranch.gold_cost],
-                              ["Req.Lv", selectedBranch.required_crafting_level],
-                              ["Success", `${Math.round(Number(selectedBranch.success_chance ?? 1) * 100)}%`],
-                            ] as const
-                          ).map(([label, val]) => (
-                            <div key={label} className="border border-[var(--border-default)] bg-[var(--bg-void)] px-2 py-2 text-center">
-                              <div className="text-label !text-[9px] !tracking-[0.2em] text-[var(--gold-600)]">{label}</div>
-                              <div className="wom-font-mono text-sm font-bold text-[var(--text-primary)]">{val}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--gold-200)]">
-                          <WomGoldCoin size={16} />
-                          <span>{recipeCostLines(selectedBranch.costs).join(" · ") || "No scrap cost"}</span>
-                        </div>
-                      </div>
+                    {!meetsCraftingLevelUpgrade ? (
+                      <p className="text-xs text-amber-400/95">
+                        Your forging skill is Lv.{craftLevel}; this upgrade requires Lv.{selectedBranch.required_crafting_level}.
+                      </p>
                     ) : null}
-                  </div>
+                    <ForgeMaterialAudit
+                      costs={selectedBranch.costs}
+                      goldNeed={selectedBranch.gold_cost || 0}
+                      goldHave={playerGold}
+                      items={items}
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)]">Pick an upgrade recipe to see timers, odds, and material checks.</p>
                 )}
+                <button
+                  type="button"
+                  className="btn-gold w-full !py-3.5 !tracking-[0.22em]"
+                  disabled={
+                    !pathB.ok ||
+                    !branchRecipeId ||
+                    !selectedBranch ||
+                    !meetsCraftingLevelUpgrade ||
+                    !canAffordUpgradePath
+                  }
+                  title={
+                    !branchRecipeId
+                      ? "Choose an upgrade recipe first."
+                      : !canAffordUpgradePath || !meetsCraftingLevelUpgrade
+                        ? "Need higher forging level, more gold, or more materials in your bag."
+                        : undefined
+                  }
+                  onClick={() => void startForge()}
+                >
+                  Strike forge
+                </button>
               </div>
-            )}
-
-            <button
-              type="button"
-              className="btn-gold w-full !py-3.5 !tracking-[0.22em]"
-              disabled={
-                job != null ||
-                (forgeMode === "a" && (!pathA?.ok || !rule)) ||
-                (forgeMode === "b" && (!pathB?.ok || !branchRecipeId))
-              }
-              onClick={() => void startForge()}
-            >
-              Strike forge
-            </button>
-          </div>
-        )}
-      </WomPanel>
+            )
+          ) : (
+            <p className="text-sm text-[var(--text-muted)]">No data for this path.</p>
+          )}
+        </WomPanel>
+      ) : (
+        <WomPanel className="p-4 sm:p-5" glow={false}>
+          <p className="text-center text-xs text-[var(--text-muted)]">
+            {job
+              ? "Clear or claim your active work order before starting another forge."
+              : "Choose unequipped bag gear in the Anvil to open the Rarity path or Upgrade workshop."}
+          </p>
+        </WomPanel>
+      )}
     </div>
   );
 }
