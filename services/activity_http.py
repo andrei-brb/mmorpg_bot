@@ -15,6 +15,7 @@ Endpoints:
   GET  /api/game/idle/rewards  — Bearer token → pending offline XP/gold (capped window; preview only)
   POST /api/game/idle/claim    — Bearer JSON { guild_id? } → award pending rewards, reset accrual timer
   GET  /api/game/guild/me           — Bearer → in-guild snapshot (bank, boss, tech, raids)
+  POST /api/game/guild/create      — JSON { name, tag?, guild_id? } — found a guild (needs X-Guild-Id / guild_id = Discord server)
   POST /api/game/guild/bank/deposit — JSON { amount }
   POST /api/game/guild/bank/withdraw — JSON { amount } (officer/guildmaster)
   GET  /api/game/guild/feed         — ?cursor=uuid
@@ -3877,6 +3878,111 @@ async def handle_buy_protection(request: web.Request) -> web.Response:
 # ── Guild hub (in-game UUID guild) ───────────────────────────────────────────
 
 
+async def handle_guild_create(request: web.Request) -> web.Response:
+    """POST — create a new in-game guild (same rules as ``/guild create``). Requires Discord server id (``X-Guild-Id`` or JSON ``guild_id``)."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "no_character", "message": "Create a character first."}),
+            status=400,
+        )
+    if char.get("guild_id"):
+        return web.json_response(
+            _json_safe({"ok": False, "error": "already_in_guild", "message": "You're already in a guild."}),
+            status=400,
+        )
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    server_id = _guild_id_from_request(request, body)
+    if not server_id:
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": False,
+                    "error": "missing_discord_guild",
+                    "message": "Open this Activity from your Discord server so we know which realm to register the hall under.",
+                }
+            ),
+            status=400,
+        )
+
+    raw_name = body.get("name")
+    raw_tag = body.get("tag")
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
+    tag = raw_tag.upper().strip() if isinstance(raw_tag, str) else ""
+
+    if not (2 <= len(tag) <= 8) or not tag.isalnum():
+        return web.json_response(
+            _json_safe({"ok": False, "error": "invalid_tag", "message": "Tag must be 2–8 alphanumeric characters."}),
+            status=400,
+        )
+    if not (3 <= len(name) <= 64):
+        return web.json_response(
+            _json_safe({"ok": False, "error": "invalid_name", "message": "Guild name must be 3–64 characters."}),
+            status=400,
+        )
+
+    exists = await db.fetchrow("SELECT id FROM guilds WHERE name ILIKE $1 OR tag=$2", name, tag)
+    if exists:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "taken", "message": "That name or tag is already taken."}),
+            status=400,
+        )
+
+    char_uuid = _uuid_from_any(char["id"])
+    try:
+        guild = await db.fetchrow(
+            "INSERT INTO guilds(name,tag,guildmaster_id,server_id) VALUES($1,$2,$3,$4) RETURNING *",
+            name,
+            tag,
+            char_uuid,
+            server_id,
+        )
+    except Exception as e:
+        log.warning("guild create insert failed: %s", e)
+        return web.json_response(
+            _json_safe(
+                {
+                    "ok": False,
+                    "error": "create_failed",
+                    "message": "Could not create guild (name or tag may be taken).",
+                }
+            ),
+            status=400,
+        )
+
+    await db.execute(
+        "UPDATE characters SET guild_id=$2, guild_rank='guildmaster' WHERE id=$1",
+        char_uuid,
+        guild["id"],
+    )
+
+    try:
+        ach_svc = AchievementService(db)
+        await ach_svc.check_and_award(char_uuid, "guild_create", {})
+    except Exception as e:
+        log.debug("guild create achievement: %s", e)
+
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "message": f"Founded **[{tag}] {name}**! You are guildmaster.",
+                "guild": {"id": str(guild["id"]), "name": guild["name"], "tag": guild["tag"]},
+            }
+        )
+    )
+
+
 async def handle_guild_me(request: web.Request) -> web.Response:
     try:
         _user, discord_id, char, db = await _authed_discord_user_and_char(request)
@@ -3890,7 +3996,7 @@ async def handle_guild_me(request: web.Request) -> web.Response:
                 {
                     "ok": True,
                     "in_guild": False,
-                    "message": "Create or join a guild with Discord /guild create or /guild join.",
+                    "message": "Found a hall from this tab, or use Discord /guild create or /guild join.",
                 }
             )
         )
@@ -4672,6 +4778,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/market/list-item", handle_list_item_on_market)
     app.router.add_post("/api/game/market/buy", handle_market_buy)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
+    app.router.add_post("/api/game/guild/create", handle_guild_create)
     app.router.add_get("/api/game/guild/me", handle_guild_me)
     app.router.add_get("/api/game/guild/invite/candidates", handle_guild_invite_candidates)
     app.router.add_post("/api/game/guild/invite/send", handle_guild_invite_send)

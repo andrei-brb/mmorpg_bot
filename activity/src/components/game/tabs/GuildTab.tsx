@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
-import { CalendarDays, Castle, Cpu, Crown, ShieldHalf, Sword } from "lucide-react";
+import { CalendarDays, Castle, Cpu, Crown, Flag, ShieldHalf, Sword } from "lucide-react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,6 +128,9 @@ export function GuildTab() {
   const [inviteResults, setInviteResults] = useState<GuildInviteCandidate[]>([]);
   const [inviteSearchLoading, setInviteSearchLoading] = useState(false);
   const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
+  const [createName, setCreateName] = useState("");
+  const [createTag, setCreateTag] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
 
   const loadMe = useCallback(async () => {
     if (!accessToken) return;
@@ -355,48 +358,138 @@ export function GuildTab() {
   }
 
   if (!data?.in_guild) {
+    const canSubmit =
+      Boolean(guildId) &&
+      createName.trim().length >= 3 &&
+      createName.trim().length <= 64 &&
+      createTag.length >= 2 &&
+      createTag.length <= 8 &&
+      !createBusy;
+
+    const onFoundHall = async () => {
+      if (!accessToken || !guildId || !canSubmit) return;
+      setCreateBusy(true);
+      try {
+        const r = await api.postGuildCreate(accessToken, { name: createName.trim(), tag: createTag }, guildId);
+        if (!r.ok) {
+          toast.error(r.message || r.error || "Could not create guild.");
+          return;
+        }
+        toast.success(r.message || "Guild founded!");
+        setCreateName("");
+        setCreateTag("");
+        await loadMe();
+      } catch (e) {
+        toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/create")));
+      } finally {
+        setCreateBusy(false);
+      }
+    };
+
     return (
       <div className="guild-root">
         <div className="guild-container">
-          <Panel>
-            <SectionHeader kicker="Recruitment" title="No guild yet" />
-            <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-              <div style={{ fontSize: "2.5rem", lineHeight: 1 }} aria-hidden>
-                🏰
+          <div className="grid">
+            {!guildId ? (
+              <Panel className="col-12">
+                <div className="kicker" style={{ color: "var(--crimson-400)" }}>
+                  Realm link
+                </div>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "8px 0 0", lineHeight: 1.55 }}>
+                  Discord did not send a server id for this session. Open the Activity from a channel inside your server,
+                  then return here to found a hall.
+                </p>
+              </Panel>
+            ) : null}
+
+            <Panel className="col-7">
+              <SectionHeader
+                kicker="For guildmasters"
+                title="Found a hall"
+                right={<Flag size={18} color="var(--gold-400)" strokeWidth={1.5} aria-hidden />}
+              />
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0, marginBottom: 20, lineHeight: 1.55 }}>
+                Register a new guild for <span style={{ color: "var(--gold-200)" }}>this Discord server</span>. You become
+                guildmaster; the name and tag must be unique across the realm.
+              </p>
+
+              <div className="divider" style={{ marginTop: 0 }} />
+
+              <div style={{ marginBottom: 16 }}>
+                <div className="text-label" style={{ marginBottom: 8 }}>
+                  Guild name
+                </div>
+                <input
+                  type="text"
+                  className="gold-input"
+                  value={createName}
+                  maxLength={64}
+                  placeholder="e.g. Obsidian Vanguard"
+                  autoComplete="off"
+                  disabled={createBusy || !guildId}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  aria-label="Guild name"
+                />
+                <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>3–64 characters.</p>
               </div>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 12, lineHeight: 1.5 }}>
-                Join the war effort with your Discord server:
+
+              <div style={{ marginBottom: 20 }}>
+                <div className="text-label" style={{ marginBottom: 8 }}>
+                  Guild tag
+                </div>
+                <input
+                  type="text"
+                  className="gold-input font-mono"
+                  style={{ letterSpacing: "0.12em" }}
+                  value={createTag}
+                  maxLength={8}
+                  placeholder="e.g. OV"
+                  disabled={createBusy || !guildId}
+                  onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+                  aria-label="Guild tag"
+                />
+                <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>2–8 letters or numbers (stored uppercase).</p>
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                <button type="button" className="btn-gold" disabled={!canSubmit} onClick={() => void onFoundHall()}>
+                  <Castle size={15} strokeWidth={2} /> Raise banner
+                </button>
+                <button type="button" className="btn-ghost" disabled={createBusy} onClick={() => void loadMe()}>
+                  Refresh
+                </button>
+              </div>
+            </Panel>
+
+            <Panel className="col-5">
+              <SectionHeader kicker="Recruitment desk" title="Discord commands" />
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55, marginTop: 0 }}>
+                Prefer typing in chat? Same rules apply:
               </p>
               <ul
                 style={{
                   textAlign: "left",
                   fontSize: 12,
-                  marginTop: 16,
+                  marginTop: 14,
                   padding: 12,
                   border: "1px solid var(--border-default)",
                   background: "var(--bg-panel-raised)",
-                  maxWidth: 360,
-                  marginLeft: "auto",
-                  marginRight: "auto",
                   listStyle: "disc",
-                  paddingLeft: 28,
+                  paddingLeft: 26,
                   color: "var(--text-primary)",
-                  fontFamily: '"JetBrains Mono", monospace',
+                  lineHeight: 1.6,
                 }}
               >
                 <li style={{ marginBottom: 8 }}>
-                  <span style={{ color: "var(--gold-400)" }}>/guild create</span> — found a guild (guildmaster)
+                  <span style={{ color: "var(--gold-400)" }}>/guild create</span> — same as this form
                 </li>
                 <li style={{ marginBottom: 8 }}>
                   <span style={{ color: "var(--gold-400)" }}>/guild join</span> — enlist by guild name
                 </li>
-                <li>Return here for treasury, boss, tech, raids, and hall chat.</li>
+                <li>Recruit members with invites once your hall stands.</li>
               </ul>
-              <button type="button" className="btn-ghost mt-4" onClick={() => void loadMe()}>
-                Refresh
-              </button>
-            </div>
-          </Panel>
+            </Panel>
+          </div>
         </div>
       </div>
     );

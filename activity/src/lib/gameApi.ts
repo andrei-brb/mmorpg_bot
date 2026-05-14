@@ -20,6 +20,7 @@ import type {
   SpecGatePayload,
   GuildMePayload,
   GuildInviteCandidate,
+  GuildCreateResponse,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -644,6 +645,19 @@ export async function parseCombatState(res: Response): Promise<{
 export async function getGuildMe(token: string, guildId?: string): Promise<GuildMePayload> {
   const res = await fetch(apiUrl("/api/game/guild/me"), { headers: authHeaders(token, guildId) });
   return res.json() as Promise<GuildMePayload>;
+}
+
+export async function postGuildCreate(
+  token: string,
+  payload: { name: string; tag: string },
+  discordGuildId?: string,
+): Promise<GuildCreateResponse> {
+  const res = await fetch(apiUrl("/api/game/guild/create"), {
+    method: "POST",
+    headers: { ...authHeaders(token, discordGuildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ name: payload.name.trim(), tag: payload.tag.trim() }),
+  });
+  return res.json() as Promise<GuildCreateResponse>;
 }
 
 export async function getGuildInviteCandidates(

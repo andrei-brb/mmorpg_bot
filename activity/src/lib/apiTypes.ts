@@ -630,6 +630,14 @@ export type GuildInviteCandidate = {
   username?: string | null;
 };
 
+/** POST /api/game/guild/create */
+export type GuildCreateResponse = {
+  ok: boolean;
+  message?: string;
+  error?: string;
+  guild?: { id: string; name: string; tag: string };
+};
+
 export type GuildMePayload = {
   ok: boolean;
   in_guild?: boolean;
