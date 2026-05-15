@@ -298,9 +298,12 @@ class EventsCog(commands.Cog, name="Events"):
                 embed.set_footer(text=f"Next claim: {result['next_claim']}")
             return await interaction.followup.send(embed=embed, ephemeral=True)
         
-        # Award rewards
-        await self.svc.award_xp(char["id"], result["xp"])
-        await self.svc.add_gold(char["id"], result["gold"], "daily_login")
+        await login_svc.apply_economy_rewards(self.svc, char["id"], result)
+        from services.battle_pass.battle_pass_service import BattlePassService
+
+        await BattlePassService(self.bot.db).on_daily_login_claimed(
+            char["id"], int(result.get("current_streak") or 0)
+        )
         
         # Build embed
         streak_emoji = "🔥" if result["current_streak"] >= 7 else "⭐" if result["current_streak"] >= 3 else "✨"

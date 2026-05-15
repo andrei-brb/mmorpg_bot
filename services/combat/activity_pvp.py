@@ -853,6 +853,14 @@ async def _finalize_pvp_match_casual_offline(
     did_win = winner_discord == human_did
 
     if did_win:
+        try:
+            from services.battle_pass.battle_pass_service import BattlePassService, XP_PVP_WIN
+
+            await BattlePassService(db).try_grant_xp(
+                hc["id"], f"pvp_win_{match_id}", XP_PVP_WIN, "pvp_win"
+            )
+        except Exception:
+            pass
         await db.execute(
             """
             UPDATE pvp_stats
@@ -1014,6 +1022,14 @@ async def _finalize_pvp_match(
         )
 
     duration = max(1, int(time.time() - rt.started_at))
+    try:
+        from services.battle_pass.battle_pass_service import BattlePassService, XP_PVP_WIN
+
+        await BattlePassService(db).try_grant_xp(
+            wc["id"], f"pvp_win_{match_id}", XP_PVP_WIN, "pvp_win"
+        )
+    except Exception:
+        pass
     await db.execute(
         """
         INSERT INTO pvp_match_history

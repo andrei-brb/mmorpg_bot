@@ -446,6 +446,53 @@ export async function postItem(
   });
 }
 
+export async function getBattlePass(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").BattlePassStatePayload> {
+  const res = await fetch(apiUrl("/api/game/battle-pass"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<import("./apiTypes").BattlePassStatePayload>;
+}
+
+export async function claimBattlePassTier(
+  token: string,
+  tier: number,
+  guildId?: string,
+  track = "free",
+): Promise<{ ok?: boolean; message?: string; delivery?: unknown }> {
+  const res = await fetch(apiUrl("/api/game/battle-pass/claim"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ tier, track }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; delivery?: unknown }>;
+}
+
+export async function claimDailyLogin(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").DailyLoginClaimPayload> {
+  const res = await fetch(apiUrl("/api/game/daily-login/claim"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  return res.json() as Promise<import("./apiTypes").DailyLoginClaimPayload>;
+}
+
+export async function postBattlePassPlaytime(
+  token: string,
+  minutes: number,
+  guildId?: string,
+): Promise<{ ok?: boolean; grant?: unknown }> {
+  const res = await fetch(apiUrl("/api/game/battle-pass/playtime"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ minutes }),
+  });
+  return res.json() as Promise<{ ok?: boolean; grant?: unknown }>;
+}
+
 export async function getForgeOptions(
   token: string,
   itemId: string,

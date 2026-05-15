@@ -11,6 +11,7 @@ import { CombatTab } from "./tabs/CombatTab";
 import { GuildTab } from "./tabs/GuildTab";
 import { MarketTab } from "./tabs/MarketTab";
 import { RealmTab } from "./tabs/RealmTab";
+import { BattlePassTab } from "./tabs/BattlePassTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
@@ -23,7 +24,7 @@ import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
 import { WomPanel } from "@/components/wom/WomUi";
 
-const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Realm"] as const;
+const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Pass", "Realm"] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabName, string> = {
@@ -35,6 +36,7 @@ const TAB_ICONS: Record<TabName, string> = {
   Guild: "🏰",
   Market: "🏪",
   Arena: "🏟️",
+  Pass: "🎫",
   Realm: "🌐",
 };
 
@@ -443,6 +445,7 @@ export function GameShell() {
                 {activeTab === "Guild" && <GuildTab />}
                 {activeTab === "Market" && <MarketTab />}
                 {activeTab === "Arena" && <PvpPage />}
+                {activeTab === "Pass" && <BattlePassTab />}
                 {activeTab === "Realm" && <RealmTab />}
               </div>
             </div>

@@ -679,3 +679,57 @@ export type GuildMePayload = {
   };
   checkin?: GuildCheckinPayload;
 };
+
+/** GET /api/game/battle-pass */
+export type BattlePassTierRow = {
+  tier: number;
+  track: string;
+  reward?: Record<string, unknown>;
+  unlocked?: boolean;
+  claimed?: boolean;
+  claimable?: boolean;
+};
+
+export type BattlePassStatePayload = {
+  ok?: boolean;
+  season?: {
+    id: number;
+    key?: string;
+    name?: string;
+    starts_at?: string;
+    ends_at?: string;
+    max_tier?: number;
+    xp_per_tier?: number;
+    weekend_multiplier?: number;
+    is_live?: boolean;
+  } | null;
+  progress?: {
+    xp: number;
+    tier: number;
+    xp_in_tier: number;
+    xp_needed_for_next: number;
+    premium_unlocked?: boolean;
+  } | null;
+  tiers?: BattlePassTierRow[];
+  daily_login?: {
+    current_streak: number;
+    longest_streak: number;
+    claimed_today: boolean;
+    weekend_double?: boolean;
+  };
+};
+
+export type DailyLoginClaimPayload = {
+  ok?: boolean;
+  message?: string;
+  login?: {
+    claimed?: boolean;
+    current_streak?: number;
+    longest_streak?: number;
+    gold?: number;
+    xp?: number;
+    next_claim?: string;
+  };
+  pass_xp_grants?: unknown[];
+  battle_pass?: BattlePassStatePayload;
+};

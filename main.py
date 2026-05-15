@@ -113,6 +113,7 @@ class MMORPGBot(commands.Bot):
             "cogs.guild.guild_cog",
             "cogs.economy.economy_cog",
             "cogs.events.events_cog",
+            "cogs.battlepass.battlepass_cog",
             "cogs.dungeon.dungeon_cog",
             "cogs.achievements.achievements_cog",
             "cogs.admin.admin_cog",

@@ -687,6 +687,98 @@ async def handle_forge_claim(request: web.Request) -> web.Response:
     return web.json_response({"ok": ok, "message": msg, "result": _json_safe(data)}, status=status)
 
 
+async def handle_battle_pass_get(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    from services.battle_pass.battle_pass_service import BattlePassService
+
+    bp = BattlePassService(db)
+    state = await bp.get_state(_uuid_from_any(char["id"]))
+    return web.json_response(_json_safe(state))
+
+
+async def handle_battle_pass_claim(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    tier = int(body.get("tier") or 0)
+    track = str(body.get("track") or "free")
+    from services.battle_pass.battle_pass_service import BattlePassService
+
+    bp = BattlePassService(db)
+    ok, msg, delivery = await bp.claim_tier(_uuid_from_any(char["id"]), tier, track)
+    status = 200 if ok else 400
+    return web.json_response(_json_safe({"ok": ok, "message": msg, "delivery": delivery}), status=status)
+
+
+async def handle_daily_login_claim(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    from services.daily.daily_login_service import DailyLoginService
+    from services.battle_pass.battle_pass_service import BattlePassService
+
+    char_svc = CharacterService(db)
+    char_id = _uuid_from_any(char["id"])
+    login_svc = DailyLoginService(db)
+    result = await login_svc.claim_daily_reward(char_id)
+    if not result.get("claimed"):
+        return web.json_response(_json_safe({"ok": False, "message": result.get("message"), **result}))
+
+    await login_svc.apply_economy_rewards(char_svc, char_id, result)
+    bp = BattlePassService(db)
+    pass_xp = await bp.on_daily_login_claimed(char_id, int(result.get("current_streak") or 0))
+    state = await bp.get_state(char_id)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "login": result,
+                "pass_xp_grants": pass_xp,
+                "battle_pass": state,
+            }
+        )
+    )
+
+
+async def handle_battle_pass_playtime(request: web.Request) -> web.Response:
+    """POST JSON { minutes } — grant capped playtime pass XP for Activity session."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    minutes = max(0, min(60, int(body.get("minutes") or 0)))
+    from services.battle_pass.battle_pass_service import BattlePassService
+
+    bp = BattlePassService(db)
+    grant = await bp.grant_playtime_xp(_uuid_from_any(char["id"]), minutes)
+    return web.json_response(_json_safe({"ok": True, "grant": grant}))
+
+
 async def handle_character_stats(request: web.Request) -> web.Response:
     """GET /api/game/character/stats — Derived combat stats (includes equipped item rolls)."""
     bot = request.app["bot"]
@@ -2976,6 +3068,10 @@ async def handle_npc_interact(request: web.Request) -> web.Response:
             "lore_main": is_main_story_quest(talk_result.get("quest_id")),
             "next_step_hint": next_step_hint,
         }
+        from services.battle_pass.battle_pass_service import BattlePassService, XP_QUEST_COMPLETE
+
+        bp = BattlePassService(db)
+        await bp.try_grant_xp(char_id, f"quest_{qid}", XP_QUEST_COMPLETE, "quest_complete")
         char_row = await char_svc.get_by_id(char_id)
         if char_row:
             char = dict(char_row)
@@ -4081,7 +4177,15 @@ async def handle_guild_checkin_post(request: web.Request) -> web.Response:
     from services.guild import guild_checkin as guild_checkin_mod
 
     char_svc = CharacterService(db)
-    ok, msg, st = await guild_checkin_mod.perform_checkin(db, char_svc, gid, _uuid_from_any(char["id"]))
+    char_id = _uuid_from_any(char["id"])
+    ok, msg, st = await guild_checkin_mod.perform_checkin(db, char_svc, gid, char_id)
+    if ok:
+        from services.battle_pass.battle_pass_service import BattlePassService
+        from services.battle_pass.battle_pass_service import XP_GUILD_CHECKIN
+
+        bp = BattlePassService(db)
+        today = guild_checkin_mod.utc_today().isoformat()
+        await bp.try_grant_xp(char_id, f"guild_checkin_{gid}_{today}", XP_GUILD_CHECKIN, "guild_checkin")
     return web.json_response(_json_safe({"ok": ok, "message": msg, "checkin": st}))
 
 
@@ -4808,6 +4912,10 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/forge/options", handle_forge_options)
     app.router.add_post("/api/game/forge/start", handle_forge_start)
     app.router.add_post("/api/game/forge/claim", handle_forge_claim)
+    app.router.add_get("/api/game/battle-pass", handle_battle_pass_get)
+    app.router.add_post("/api/game/battle-pass/claim", handle_battle_pass_claim)
+    app.router.add_post("/api/game/battle-pass/playtime", handle_battle_pass_playtime)
+    app.router.add_post("/api/game/daily-login/claim", handle_daily_login_claim)
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)

@@ -117,3 +117,14 @@ class DailyLoginService:
             "xp": xp_reward,
             "next_claim": (now + timedelta(days=1)).date(),
         }
+
+    async def apply_economy_rewards(self, char_svc, character_id: UUID, result: Dict) -> None:
+        """Award gold and character XP from a successful claim_daily_reward result."""
+        if not result.get("claimed"):
+            return
+        xp = int(result.get("xp") or 0)
+        gold = int(result.get("gold") or 0)
+        if xp > 0:
+            await char_svc.award_xp(character_id, xp, 1.0)
+        if gold > 0:
+            await char_svc.add_gold(character_id, gold, "daily_login")

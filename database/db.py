@@ -1188,6 +1188,65 @@ CREATE TABLE IF NOT EXISTS login_streaks (
 CREATE INDEX IF NOT EXISTS idx_login_streak ON login_streaks(current_streak DESC);
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- BATTLE PASS (seasonal progression + tier claims)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS battle_pass_seasons (
+    id                  SERIAL PRIMARY KEY,
+    key                 VARCHAR(64) NOT NULL UNIQUE,
+    name                VARCHAR(120) NOT NULL,
+    starts_at           TIMESTAMPTZ NOT NULL,
+    ends_at             TIMESTAMPTZ NOT NULL,
+    max_tier            SMALLINT NOT NULL DEFAULT 30,
+    xp_per_tier         INT NOT NULL DEFAULT 100,
+    weekend_multiplier  FLOAT NOT NULL DEFAULT 2.0,
+    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS battle_pass_tier_rewards (
+    season_id           INT NOT NULL REFERENCES battle_pass_seasons(id) ON DELETE CASCADE,
+    tier                SMALLINT NOT NULL,
+    track               VARCHAR(16) NOT NULL DEFAULT 'free',
+    reward              JSONB NOT NULL DEFAULT '{}',
+    PRIMARY KEY (season_id, tier, track)
+);
+
+CREATE TABLE IF NOT EXISTS character_battle_pass (
+    character_id        UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    season_id           INT NOT NULL REFERENCES battle_pass_seasons(id) ON DELETE CASCADE,
+    xp                  INT NOT NULL DEFAULT 0,
+    premium_unlocked_at TIMESTAMPTZ,
+    ladder_week_index   INT NOT NULL DEFAULT 0,
+    playtime_minutes_today INT NOT NULL DEFAULT 0,
+    playtime_day        DATE,
+    updated_at          TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (character_id, season_id)
+);
+
+CREATE TABLE IF NOT EXISTS battle_pass_claims (
+    character_id        UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    season_id           INT NOT NULL REFERENCES battle_pass_seasons(id) ON DELETE CASCADE,
+    tier                SMALLINT NOT NULL,
+    track               VARCHAR(16) NOT NULL DEFAULT 'free',
+    claimed_at          TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (character_id, season_id, tier, track)
+);
+
+CREATE TABLE IF NOT EXISTS battle_pass_xp_grants (
+    id                  BIGSERIAL PRIMARY KEY,
+    character_id        UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    season_id           INT NOT NULL REFERENCES battle_pass_seasons(id) ON DELETE CASCADE,
+    event_key           VARCHAR(128) NOT NULL,
+    xp_amount           INT NOT NULL,
+    source              VARCHAR(64) NOT NULL,
+    granted_at          TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (character_id, season_id, event_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bp_season_active ON battle_pass_seasons(is_active, starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_bp_progress_char ON character_battle_pass(character_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- SERVER CONFIG  (per Discord server settings + premium)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS server_config (
