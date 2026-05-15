@@ -479,7 +479,16 @@ class DungeonCog(commands.Cog, name="Dungeon"):
             if not p_char:
                 continue
             p_stats = await self.char_svc.total_stats(participant["id"])
-            p_combatant = _make_player(dict(p_char), p_stats)
+            from services.combat.activity_combat import _make_player as _make_player_with_talents
+            from services.talents.talent_combat import fetch_talent_effects
+
+            talent_fx = await fetch_talent_effects(
+                self.bot.db,
+                participant["id"],
+                str(p_char.get("class") or ""),
+                p_char.get("specialization"),
+            )
+            p_combatant = _make_player_with_talents(dict(p_char), p_stats, talent_fx)
             player_combatants.append(p_combatant)
             levels.append(p_char["level"])
         

@@ -28,6 +28,7 @@ class HelpCog(commands.Cog, name="Help"):
                 "`/character create` — Create your hero\n"
                 "`/character profile` — View stats and gear\n"
                 "`/character specialize` — Choose your spec (Lv 10)\n"
+                "`/talents summary` — Talent points and build (full tree in Activity)\n"
                 "`/character classes` — Browse all classes\n"
                 "`/character delete` — Delete your character"
             ),

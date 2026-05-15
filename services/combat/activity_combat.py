@@ -169,12 +169,13 @@ def _make_enemy(key: str, char_level: int, zone=None, party_size: int = 1) -> Co
     )
 
 
-def _make_player(char: dict, stats) -> Combatant:
+def _make_player(char: dict, stats, talent_effects=None) -> Combatant:
     from services.character.character_service import CharacterService
+    from services.talents.talent_combat import attach_talent_combat_fields
 
     char = CharacterService.normalize_resources(dict(char))
     cls = CLASSES[char["class"]]
-    return Combatant(
+    combatant = Combatant(
         id=str(char["id"]),
         name=char["name"],
         is_player=True,
@@ -198,6 +199,8 @@ def _make_player(char: dict, stats) -> Combatant:
         hit_rating=stats.get("hit_rating", 0.0),
         class_key=char.get("class"),
     )
+    attach_talent_combat_fields(combatant, talent_effects)
+    return combatant
 
 
 def _char_in_discord_channel_combat(char_id) -> bool:
@@ -635,7 +638,12 @@ async def start_activity_combat(
             return {"error": "no_character", "message": "Create a character with /character create in Discord."}
 
     stats = await char_svc.total_stats(char["id"])
-    player_c = _make_player(dict(char), stats)
+    from services.talents.talent_combat import fetch_talent_effects
+
+    talent_fx = await fetch_talent_effects(
+        db, char["id"], str(char.get("class") or ""), char.get("specialization")
+    )
+    player_c = _make_player(dict(char), stats, talent_fx)
     if dungeon_mode:
         enemy_c = _make_enemy(enemy_key, char["level"], None)
     else:
@@ -785,7 +793,12 @@ async def start_party_dungeon_combat(
                 "message": f"Everyone must be level {cfg.level_req}+ for this dungeon.",
             }
         st = await char_svc.total_stats(ch["id"])
-        pl = _make_player(dict(ch), st)
+        from services.talents.talent_combat import fetch_talent_effects
+
+        talent_fx = await fetch_talent_effects(
+            db, ch["id"], str(ch.get("class") or ""), ch.get("specialization")
+        )
+        pl = _make_player(dict(ch), st, talent_fx)
         players_c.append(pl)
         party_char_to_discord[str(ch["id"])] = did
 

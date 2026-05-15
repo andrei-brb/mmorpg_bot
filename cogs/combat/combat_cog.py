@@ -67,31 +67,10 @@ def _make_enemy(key: str, char_level: int, zone=None) -> Combatant:
     )
 
 
-def _make_player(char, stats) -> Combatant:
-    from services.character.character_service import CharacterService
+def _make_player(char, stats, talent_effects=None) -> Combatant:
+    from services.combat.activity_combat import _make_player as _make_player_activity
 
-    char = CharacterService.normalize_resources(dict(char))
-    cls = CLASSES[char["class"]]
-    return Combatant(
-        id=str(char["id"]), name=char["name"],
-        is_player=True, char_id=char["id"],
-        current_hp=char["current_hp"], max_hp=char["max_hp"],
-        current_res=char["current_res"], max_res=char["max_res"],
-        specialization=char.get("specialization"),
-        res_type=cls.resource,
-        attack_power=stats["attack_power"],
-        spell_power=stats["spell_power"],
-        dmg_min=stats.get("dmg_min", 8) or 8,
-        dmg_max=stats.get("dmg_max", 16) or 16,
-        armor=stats["armor"],
-        crit_chance=stats["crit_chance"],
-        dodge_chance=stats["dodge_chance"],
-        haste=stats.get("haste", 0.0),
-        lifesteal=stats.get("lifesteal", 0.0),
-        resistance=stats.get("resistance", 0),
-        hit_rating=stats.get("hit_rating", 0.0),
-        class_key=char.get("class"),
-    )
+    return _make_player_activity(char, stats, talent_effects)
 
 
 def _hp_bar(cur, mx, length=10):
@@ -478,8 +457,12 @@ class CombatCog(commands.Cog, name="Combat"):
         
         is_boss   = enemy_key in zone.bosses
         stats     = await self.char_svc.total_stats(char["id"])
+        from services.talents.talent_combat import fetch_talent_effects
 
-        player_c  = _make_player(dict(char), stats)
+        talent_fx = await fetch_talent_effects(
+            self.bot.db, char["id"], str(char.get("class") or ""), char.get("specialization")
+        )
+        player_c  = _make_player(dict(char), stats, talent_fx)
         enemy_c   = _make_enemy(enemy_key, char["level"], zone)
 
         session = CombatSession(

@@ -416,8 +416,13 @@ async def _start_pvp_match(
 
     stats_a = await char_svc.total_stats(ca["id"])
     stats_b = await char_svc.total_stats(cb["id"])
-    p1 = _make_player(dict(ca), stats_a)
-    p2 = _make_player(dict(cb), stats_b)
+    from services.talents.talent_combat import fetch_talent_effects
+
+    db = char_svc.db
+    talent_a = await fetch_talent_effects(db, ca["id"], str(ca.get("class") or ""), ca.get("specialization"))
+    talent_b = await fetch_talent_effects(db, cb["id"], str(cb.get("class") or ""), cb.get("specialization"))
+    p1 = _make_player(dict(ca), stats_a, talent_a)
+    p2 = _make_player(dict(cb), stats_b, talent_b)
     # Mark both as players for resource/rage rules on hit
     p1.is_player = True
     p2.is_player = True
