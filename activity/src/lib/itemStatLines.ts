@@ -13,6 +13,8 @@ const SLOT_LABEL: Record<string, string> = {
   trinket: "Trinket",
 };
 
+export type ItemStatRow = { label: string; value: string };
+
 function capitalizeWord(s: string): string {
   const t = s.trim();
   if (!t) return "";
@@ -27,57 +29,6 @@ export function itemTooltipSubtitle(item: InvRow): string {
   const slot = (item.template_equip_slot || item.equip_slot || "").trim();
   if (slot && SLOT_LABEL[slot]) parts.push(SLOT_LABEL[slot]);
   return parts.join(" · ");
-}
-
-/**
- * Lines shown in item hovers — equipment stats (with enhancement), consumable effects, level req.
- * Mirrors `legacy-main.ts` `itemStatLines` math (+10% stats per enhancement level).
- */
-export function itemTooltipLines(item: InvRow): string[] {
-  const out: string[] = [];
-  const lvl = Number(item.level_req ?? 0) || 0;
-  if (lvl > 0) out.push(`Requires Level ${lvl}`);
-
-  const type = (item.item_type || "").toLowerCase();
-  if (type === "consumable") {
-    out.push(...consumableEffectLines(item));
-    return out;
-  }
-
-  const enhLevel = Math.max(0, Math.min(10, Number(item.enhancement_level ?? 0) || 0));
-  const enhMult = 1 + enhLevel * 0.1;
-
-  const pushStat = (label: string, base?: number | null, bonus?: number | null): void => {
-    const b = Number(base ?? 0) || 0;
-    const r = Number(bonus ?? 0) || 0;
-    const preEnh = b + r;
-    const total = Math.floor(preEnh * enhMult);
-    if (!total) return;
-    const bonusTxt = r ? ` (${r > 0 ? "+" : ""}${r} bonus)` : "";
-    out.push(`${label}: ${total > 0 ? "+" : ""}${total}${bonusTxt}`);
-  };
-
-  const slot = (item.template_equip_slot || item.equip_slot || "").trim();
-  if (slot || hasEquipmentStats(item)) {
-    pushStat("STR", item.s_str, item.r_str);
-    pushStat("AGI", item.s_agi, item.r_agi);
-    pushStat("INT", item.s_int, item.r_int);
-    pushStat("SPI", item.s_spi, item.r_spi);
-    pushStat("STA", item.s_sta, item.r_sta);
-    pushStat("Haste", item.s_haste, item.r_haste);
-    pushStat("Lifesteal", item.s_lifesteal, item.r_lifesteal);
-    pushStat("Resistance", item.s_resistance, item.r_resistance);
-    pushStat("Hit", item.s_hit_rating, item.r_hit_rating);
-
-    const armor = Math.floor((Number(item.s_armor ?? 0) || 0) * enhMult);
-    if (armor) out.push(`Armor: +${armor}`);
-
-    const dMin = Math.floor((Number(item.s_dmg_min ?? 0) || 0) * enhMult);
-    const dMax = Math.floor((Number(item.s_dmg_max ?? 0) || 0) * enhMult);
-    if (dMin || dMax) out.push(`Damage: ${dMin}–${dMax}`);
-  }
-
-  return out;
 }
 
 function hasEquipmentStats(item: InvRow): boolean {
@@ -121,51 +72,92 @@ function consumableEffectLines(item: InvRow): string[] {
   }
 }
 
-/** Four summary rows for item hover popovers (game stats, not random rolls). */
-export function itemPopoverStatRows(item: InvRow): { label: string; value: string }[] {
+/**
+ * Structured rows for tooltips / popovers — same rules as historical `itemTooltipLines`
+ * (+10% per enhancement level on gear stats).
+ */
+export function itemPopoverDetailRows(item: InvRow): ItemStatRow[] {
+  const rows: ItemStatRow[] = [];
+  const lvl = Number(item.level_req ?? 0) || 0;
+  if (lvl > 0) {
+    rows.push({ label: "Requires Level", value: String(lvl) });
+  }
+
   const type = (item.item_type || "").toLowerCase();
   if (type === "consumable") {
-    const lines = itemTooltipLines(item).filter(Boolean);
+    const lines = consumableEffectLines(item);
     if (lines.length === 0) {
-      return [
-        { label: "Type", value: "Consumable" },
-        { label: "—", value: "—" },
-        { label: "—", value: "—" },
-        { label: "—", value: "—" },
-      ];
+      rows.push({ label: "Effect", value: "—" });
+    } else {
+      for (const line of lines) {
+        const idx = line.indexOf(": ");
+        if (idx > 0) {
+          rows.push({ label: line.slice(0, idx).trim(), value: line.slice(idx + 2).trim() });
+        } else {
+          rows.push({ label: "Effect", value: line });
+        }
+      }
     }
-    return lines.slice(0, 4).map((line) => {
-       const idx = line.indexOf(": ");
-       if (idx > 0) {
-         return { label: line.slice(0, idx).trim(), value: line.slice(idx + 2).trim() };
-       }
-       return { label: "Effect", value: line };
-     });
+    return rows;
   }
 
   const enhLevel = Math.max(0, Math.min(10, Number(item.enhancement_level ?? 0) || 0));
   const enhMult = 1 + enhLevel * 0.1;
-  const n = (v: unknown) => Number(v ?? 0) || 0;
-  const sum = (base: unknown, bonus: unknown) => n(base) + n(bonus);
 
-  const str = Math.floor(sum(item.s_str, item.r_str) * enhMult);
-  const agi = Math.floor(sum(item.s_agi, item.r_agi) * enhMult);
-  const int_ = Math.floor(sum(item.s_int, item.r_int) * enhMult);
-  const spi = Math.floor(sum(item.s_spi, item.r_spi) * enhMult);
-  const dmgMin = Math.floor(n(item.s_dmg_min) * enhMult);
-  const dmgMax = Math.floor(n(item.s_dmg_max) * enhMult);
-  const armor = Math.floor(n(item.s_armor) * enhMult);
-  const hit = Math.floor(sum(item.s_hit_rating, item.r_hit_rating) * enhMult);
-  const haste = Math.floor(sum(item.s_haste, item.r_haste) * enhMult);
+  const pushStat = (label: string, base?: number | null, bonus?: number | null): void => {
+    const b = Number(base ?? 0) || 0;
+    const r = Number(bonus ?? 0) || 0;
+    const preEnh = b + r;
+    const total = Math.floor(preEnh * enhMult);
+    if (!total) return;
+    const bonusTxt = r ? ` (${r > 0 ? "+" : ""}${r} bonus)` : "";
+    rows.push({
+      label,
+      value: `${total > 0 ? "+" : ""}${total}${bonusTxt}`,
+    });
+  };
 
-  let attack = 0;
-  if (dmgMin || dmgMax) attack = Math.round((dmgMin + dmgMax) / 2) || dmgMax || dmgMin;
-  else attack = str || agi || int_ || spi;
+  const slot = (item.template_equip_slot || item.equip_slot || "").trim();
+  if (slot || hasEquipmentStats(item)) {
+    pushStat("STR", item.s_str, item.r_str);
+    pushStat("AGI", item.s_agi, item.r_agi);
+    pushStat("INT", item.s_int, item.r_int);
+    pushStat("SPI", item.s_spi, item.r_spi);
+    pushStat("STA", item.s_sta, item.r_sta);
+    pushStat("Haste", item.s_haste, item.r_haste);
+    pushStat("Lifesteal", item.s_lifesteal, item.r_lifesteal);
+    pushStat("Resistance", item.s_resistance, item.r_resistance);
+    pushStat("Hit", item.s_hit_rating, item.r_hit_rating);
 
-  return [
-    { label: "Attack", value: attack ? `+${attack}` : "—" },
-    { label: "Defense", value: armor ? `+${armor}` : "—" },
-    { label: "Hit", value: hit ? `+${hit}` : "—" },
-    { label: "Haste", value: haste ? `+${haste}` : "—" },
-  ];
+    const armor = Math.floor((Number(item.s_armor ?? 0) || 0) * enhMult);
+    if (armor) {
+      rows.push({ label: "Armor", value: `+${armor}` });
+    }
+
+    const dMin = Math.floor((Number(item.s_dmg_min ?? 0) || 0) * enhMult);
+    const dMax = Math.floor((Number(item.s_dmg_max ?? 0) || 0) * enhMult);
+    if (dMin || dMax) {
+      rows.push({ label: "Damage", value: `${dMin}–${dMax}` });
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Lines shown in item hovers — equipment stats (with enhancement), consumable effects, level req.
+ * Mirrors `legacy-main.ts` `itemStatLines` math (+10% stats per enhancement level).
+ */
+export function itemTooltipLines(item: InvRow): string[] {
+  const rows = itemPopoverDetailRows(item);
+  const type = (item.item_type || "").toLowerCase();
+  return rows.map((row) => {
+    if (row.label === "Requires Level") {
+      return `Requires Level ${row.value}`;
+    }
+    if (type === "consumable" && row.label === "Effect") {
+      return row.value;
+    }
+    return `${row.label}: ${row.value}`;
+  });
 }

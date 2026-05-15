@@ -3,10 +3,12 @@ import { useRef, useState, type ReactNode } from "react";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import type { InvRow } from "@/lib/apiTypes";
-import { itemPopoverStatRows, itemTooltipSubtitle } from "@/lib/itemStatLines";
+import { itemPopoverDetailRows, itemTooltipSubtitle } from "@/lib/itemStatLines";
 import { cn } from "@/lib/utils";
 
 type PopoverRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+type PopSide = "top" | "right" | "bottom" | "left";
+type PopAlign = "start" | "center" | "end";
 
 const RARITY_STYLES: Record<
   PopoverRarity,
@@ -53,6 +55,18 @@ function normalizeRarity(r?: string | null): PopoverRarity {
   return "common";
 }
 
+/** Open toward viewport center from anchor; Radix still flips on collision. */
+function pickPlacement(el: HTMLElement): { side: PopSide; align: PopAlign } {
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const side: PopSide = cx < vw / 2 ? "right" : "left";
+  const align: PopAlign = cy < vh / 2 ? "start" : "end";
+  return { side, align };
+}
+
 function ActionBtn({
   label,
   accent,
@@ -70,7 +84,7 @@ function ActionBtn({
         onClick?.();
       }}
       className={cn(
-        "relative min-h-[2.5rem] flex-1 py-2 text-[10px] font-display tracking-[0.22em] transition-colors",
+        "relative min-h-0 flex-1 py-1.5 text-[9px] font-display tracking-[0.15em] transition-colors",
         "border-r border-[color:var(--gold)]/20 last:border-r-0",
         accent
           ? "text-[color:var(--gold-bright)] hover:bg-[color:var(--gold)]/10"
@@ -87,8 +101,9 @@ export type ItemPopoverProps = {
   children: ReactNode;
   /** When true, render children only (e.g. salvage selection mode). */
   disabled?: boolean;
-  side?: "top" | "right" | "bottom" | "left";
-  align?: "start" | "center" | "end";
+  /** Fixed placement; omit for viewport-aware default. */
+  side?: PopSide;
+  align?: PopAlign;
   equipped?: boolean;
   compare?: ReactNode;
   onEquip?: () => void;
@@ -103,8 +118,8 @@ export function ItemPopover({
   item,
   children,
   disabled = false,
-  side = "right",
-  align = "center",
+  side: sideProp,
+  align: alignProp,
   equipped = false,
   compare,
   onEquip,
@@ -117,11 +132,25 @@ export function ItemPopover({
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [autoSide, setAutoSide] = useState<PopSide>("right");
+  const [autoAlign, setAutoAlign] = useState<PopAlign>("start");
 
   const rarity = normalizeRarity(item.rarity);
   const r = RARITY_STYLES[rarity];
-  const stats = itemPopoverStatRows(item);
+  const stats = itemPopoverDetailRows(item);
   const enh = Number(item.enhancement_level ?? 0) || 0;
+
+  const effectiveSide = sideProp ?? autoSide;
+  const effectiveAlign = alignProp ?? autoAlign;
+
+  const refreshPlacement = () => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const p = pickPlacement(el);
+    if (sideProp == null) setAutoSide(p.side);
+    if (alignProp == null) setAutoAlign(p.align);
+  };
 
   const cancel = () => {
     if (closeTimer.current) {
@@ -132,6 +161,7 @@ export function ItemPopover({
 
   const onEnter = () => {
     cancel();
+    refreshPlacement();
     setOpen(true);
   };
 
@@ -172,11 +202,13 @@ export function ItemPopover({
     >
       <PopoverAnchor asChild>
         <div
+          ref={anchorRef}
           className="block"
           onMouseEnter={onEnter}
           onMouseLeave={onLeave}
           onClick={(e) => {
             e.stopPropagation();
+            refreshPlacement();
             if (pinned) {
               setPinned(false);
               setOpen(false);
@@ -192,51 +224,66 @@ export function ItemPopover({
         </div>
       </PopoverAnchor>
       <PopoverContent
-        side={side}
-        align={align}
-        sideOffset={6}
-        collisionPadding={8}
+        side={effectiveSide}
+        align={effectiveAlign}
+        sideOffset={4}
+        collisionPadding={10}
+        avoidCollisions
+        sticky="partial"
+        hideWhenDetached={false}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-          "w-72 p-0 rounded-md",
+          "w-[14.5rem] max-w-[min(15rem,85vw)] p-0 rounded-md",
           "border border-[color:var(--gold)]/45 bg-black/95 backdrop-blur-md shadow-2xl",
           "text-foreground",
         )}
       >
-        <div className="flex items-center gap-3 border-b border-[color:var(--gold)]/25 bg-gradient-to-b from-black/90 to-black/95 px-3 py-2.5">
+        <div className="flex items-center gap-2 border-b border-[color:var(--gold)]/25 bg-gradient-to-b from-black/90 to-black/95 px-2.5 py-2">
           <div
             className={cn(
-              "relative flex h-12 w-12 shrink-0 items-center justify-center bg-black/60 ring-1",
+              "relative flex h-10 w-10 shrink-0 items-center justify-center bg-black/60 ring-1",
               r.ring,
               r.glow,
             )}
           >
-            <ItemIcon item={item} size={36} />
+            <ItemIcon item={item} size={28} />
             {enh > 0 ? (
-              <span className="absolute -right-1.5 -top-1.5 border border-[color:var(--gold)]/60 bg-background px-1 py-px font-display text-[9px] tracking-wider text-[color:var(--gold-bright)]">
+              <span className="absolute -right-1 -top-1 border border-[color:var(--gold)]/60 bg-background px-0.5 py-px font-display text-[8px] tracking-wider text-[color:var(--gold-bright)]">
                 +{enh}
               </span>
             ) : null}
           </div>
           <div className="min-w-0">
-            <div className={cn("truncate font-display text-sm leading-tight tracking-[0.12em]", r.chip)}>{item.name}</div>
-            <div className="mt-1 text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
+            <div className={cn("truncate font-display text-xs leading-tight tracking-[0.1em]", r.chip)}>{item.name}</div>
+            <div className="mt-0.5 text-[9px] uppercase tracking-[0.22em] text-muted-foreground">
               {RARITY_LABEL[rarity]}
               {equipped ? " · Equipped" : ""}
             </div>
           </div>
         </div>
 
-        <div className="divide-y divide-[color:var(--gold)]/15 px-3">
-          {stats.map((s) => (
+        <div
+          className={cn(
+            "divide-y divide-[color:var(--gold)]/15 px-2.5",
+            "max-h-[min(38vh,220px)] overflow-y-auto overscroll-contain",
+          )}
+        >
+          {stats.map((s, i) => (
             <div
-              key={`${s.label}-${s.value}`}
-              className="flex min-h-[1.75rem] items-baseline justify-between gap-3 py-2 text-[11px] first:pt-3 last:pb-3"
+              key={`${s.label}-${i}-${s.value}`}
+              className="flex items-baseline justify-between gap-2 py-1 text-[10px] first:pt-2 last:pb-2"
             >
-              <span className="shrink-0 uppercase tracking-[0.18em] text-muted-foreground">{s.label}</span>
-              <span className="min-w-0 text-right font-display tabular-nums text-[color:var(--gold-bright)]">
+              <span
+                className={cn(
+                  "min-w-0 shrink text-muted-foreground",
+                  /^[A-Z]{2,4}$/.test(s.label) ? "uppercase tracking-[0.14em]" : "tracking-wide",
+                )}
+              >
+                {s.label}
+              </span>
+              <span className="max-w-[55%] text-right font-display tabular-nums text-[color:var(--gold-bright)]">
                 {s.value}
               </span>
             </div>
@@ -244,14 +291,14 @@ export function ItemPopover({
         </div>
 
         {compare ? (
-          <div className="border-t border-[color:var(--gold)]/25 bg-black/25 px-3 py-2.5 text-[10px] leading-snug text-muted-foreground">
+          <div className="border-t border-[color:var(--gold)]/25 bg-black/25 px-2.5 py-2 text-[9px] leading-snug text-muted-foreground">
             {compare}
           </div>
         ) : null}
 
-        <div className="px-3 pb-3">
+        <div className="px-2.5 pb-2">
           <div className="h-px bg-gradient-to-r from-transparent via-[color:var(--gold)]/35 to-transparent" />
-          <p className="mt-2 text-center text-[10px] italic leading-relaxed text-muted-foreground">{flavor}</p>
+          <p className="mt-1.5 line-clamp-2 text-center text-[9px] italic leading-snug text-muted-foreground">{flavor}</p>
         </div>
 
         {visible.length > 0 ? (

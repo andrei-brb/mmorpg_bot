@@ -585,7 +585,6 @@ export function HeroTab() {
         {it ? (
           <ItemPopover
             item={it}
-            side="top"
             equipped
             onUnequip={() => void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped")}
             onEnhance={isEnhanceableGear(it) ? () => setEnhanceItemId(it.id) : undefined}
@@ -651,7 +650,6 @@ export function HeroTab() {
           {it ? (
             <ItemPopover
               item={it}
-              side="top"
               equipped
               onUnequip={() => void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped")}
               onEnhance={isEnhanceableGear(it) ? () => setEnhanceItemId(it.id) : undefined}
@@ -949,7 +947,6 @@ export function HeroTab() {
                         {it && !salvageMode ? (
                           <ItemPopover
                             item={it}
-                            side="top"
                             equipped={Boolean(it.is_equipped)}
                             compare={compareForItem(it) ?? undefined}
                             onUse={
