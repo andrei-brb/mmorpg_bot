@@ -518,6 +518,7 @@ class InventoryService:
     async def get_all(self, char_id: UUID) -> List[dict]:
         rows = await self.db.fetch(
             """SELECT i.*, t.name, t.description, t.item_type,
+                     t.tradeable,
                      t.equip_slot AS template_equip_slot, t.icon, t.vendor_sell, t.soulbound, t.level_req,
                      t.effect_type, t.effect_value, t.effect_duration,
                      t.s_str,t.s_agi,t.s_int,t.s_spi,t.s_sta,t.s_armor,

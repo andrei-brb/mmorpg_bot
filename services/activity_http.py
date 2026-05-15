@@ -4104,9 +4104,10 @@ async def handle_market_listings(request: web.Request) -> web.Response:
 
     try:
         rows = await db.fetch(
-            """SELECT ml.id, ml.price, ml.quantity, ml.listed_at,
+            """SELECT ml.id, ml.seller_id, ml.price, ml.quantity, ml.listed_at,
                       i.template_id,
                       it.equip_slot AS template_equip_slot,
+                      it.item_type,
                       it.name, it.icon, it.description,
                       i.rarity, i.enhancement_level,
                       c.name AS seller_name

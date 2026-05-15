@@ -38,6 +38,8 @@ export type InvRow = {
   enhancement_level?: number | null;
   locked?: boolean | null;
   soulbound?: boolean | null;
+  /** From item_templates; false = cannot list on market. */
+  tradeable?: boolean | null;
   vendor_sell?: number | null;
   effect_type?: string | null;
   effect_value?: number | null;
@@ -112,6 +114,8 @@ export type CraftJobRow = {
 export type InventoryPayload = {
   discord?: { id?: string; username?: string; global_name?: string | null; avatar?: string | null; avatar_url?: string | null };
   character: {
+    /** Character UUID; used for market "my listings" detection. */
+    id?: string;
     name?: string;
     level?: number;
     class?: string;
@@ -589,9 +593,11 @@ export type ShopCatalogItem = {
 /** Player market listing from GET /api/game/market/listings. */
 export type MarketListingRow = {
   id: string;
+  seller_id?: string | null;
   /** Inventory row template id (item_templates.id), not the listing id. */
   template_id?: string | null;
   template_equip_slot?: string | null;
+  item_type?: string | null;
   price: number;
   quantity: number;
   listed_at: string;
