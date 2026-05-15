@@ -154,7 +154,6 @@ export function RealmTab() {
   }, [accessToken, guildId]);
 
   const c = progress?.character ?? inventory?.character ?? undefined;
-  const s = progress?.stats;
   const ach = progress?.achievements || [];
   const hist = progress?.history || [];
 
@@ -167,26 +166,6 @@ export function RealmTab() {
     setGoals((g) => [...g, { id: crypto.randomUUID(), text: t, done: false }]);
     setGoalDraft("");
   };
-
-  const statTiles = useMemo(
-    () => [
-      { label: "Level", value: c?.level ?? "—", icon: "⭐" },
-      { label: "Specialization", value: c?.specialization_name || c?.specialization || "—", icon: "🗡️" },
-      { label: "Gold", value: c?.gold != null ? Number(c.gold).toLocaleString() : "—", icon: "🪙" },
-      {
-        label: "Win rate",
-        value: s?.win_rate != null ? `${Math.round(s.win_rate * 10000) / 100}%` : "—",
-        icon: "📈",
-      },
-      { label: "Combats", value: s?.total_combats != null ? s.total_combats : "—", icon: "⚔️" },
-      {
-        label: "Record",
-        value: s?.wins != null || s?.losses != null ? `${s?.wins ?? 0}W / ${s?.losses ?? 0}L` : "—",
-        icon: "🏆",
-      },
-    ],
-    [c, s],
-  );
 
   return (
     <div className="flex flex-col gap-3 min-h-0 flex-1 overflow-hidden pr-0.5">
@@ -219,21 +198,7 @@ export function RealmTab() {
         </TabsList>
 
         <TabsContent value="social" className="flex-1 min-h-0 overflow-y-auto mt-3 space-y-3 pr-1 pb-2">
-          <SocialPanel accessToken={accessToken} guildId={guildId} />
-
-          {liveEvents.length > 0 ? (
-            <WomPanel glow>
-              <WomSectionHeader kicker="Server" title="Live events" />
-              <ul className="text-xs space-y-2 text-muted-foreground">
-                {liveEvents.map((ev) => (
-                  <li key={ev.slug || ev.title || String(ev.ends_at)}>
-                    <span className="text-foreground font-medium">{ev.title || ev.slug || "Event"}</span>
-                    {ev.description ? <span> — {ev.description}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </WomPanel>
-          ) : null}
+          <SocialPanel accessToken={accessToken} guildId={guildId} liveEvents={liveEvents} />
         </TabsContent>
 
         <TabsContent value="world" className="flex-1 min-h-0 overflow-y-auto mt-3 space-y-3 pr-1 pb-2">
@@ -296,75 +261,10 @@ export function RealmTab() {
           </WomPanel>
         </TabsContent>
 
-        <TabsContent value="power" className="flex-1 min-h-0 overflow-y-auto mt-3 space-y-3 pr-1 pb-2">
-          <WomPanel glow>
-            <div className="game-panel-header">Combat snapshot</div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {statTiles.map((st) => (
-                <div key={st.label} className="stat-card">
-                  <div className="text-2xl mb-1.5" style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.5))" }}>
-                    {st.icon}
-                  </div>
-                  <div
-                    className="text-lg font-cinzel font-bold text-foreground tabular-nums"
-                    style={{ textShadow: "0 1px 2px hsl(0 0% 0% / 0.4)" }}
-                  >
-                    {st.value}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground font-cinzel uppercase tracking-wider mt-0.5">
-                    {st.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {s ? (
-                <>
-                  Combats: {s.total_combats ?? 0} · W {s.wins ?? 0} / L {s.losses ?? 0} / Fled {s.fled ?? 0}
-                </>
-              ) : (
-                <>Loading combat stats…</>
-              )}
-            </p>
-          </WomPanel>
-
-          <WomPanel glow>
-            <div className="game-panel-header">Derived combat stats</div>
-            {!derived ? (
-              <p className="text-xs text-muted-foreground">Loading…</p>
-            ) : !derived.ok ? (
-              <p className="text-xs text-muted-foreground">Could not load derived stats.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[
-                  ["Damage", `${derived.dmg_min}–${derived.dmg_max}`],
-                  ["Armor", String(derived.armor)],
-                  ["Crit", `${derived.crit_chance.toFixed(1)}%`],
-                  ["Dodge", `${derived.dodge_chance.toFixed(1)}%`],
-                  ["Haste", `${derived.haste.toFixed(1)}%`],
-                  ["Lifesteal", `${derived.lifesteal.toFixed(1)}%`],
-                  ["Resistance", String(derived.resistance)],
-                  ["Hit", `${derived.hit_rating.toFixed(0)}`],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-2 border border-border/40 rounded-sm px-2 py-1.5 bg-muted/20">
-                    <span className="text-muted-foreground font-cinzel">{k}</span>
-                    <span className="text-foreground font-mono tabular-nums">{v}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {derived?.class_mastery?.level != null ? (
-              <p className="text-xs text-muted-foreground mt-3">
-                Mastery from combat: class Lv {derived.class_mastery.level}
-                {derived.class_mastery.xp != null ? ` · ${derived.class_mastery.xp} XP` : ""}
-              </p>
-            ) : null}
-          </WomPanel>
-
+        <TabsContent value="power" className="flex-1 min-h-0 overflow-y-auto mt-0 pr-0 pb-0">
           <TalentForgeView
             characterLevel={c?.level}
             characterClass={c?.class}
-            characterName={c?.name}
             onStatsRefresh={refreshDerivedStats}
           />
         </TabsContent>

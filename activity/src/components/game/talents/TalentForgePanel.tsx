@@ -37,8 +37,8 @@ export function TalentForgePanel({
   const Icon = tree.icon;
 
   const { width, height } = useMemo(() => {
-    const cols = Math.max(1, ...tree.talents.map((t) => t.col)) + 1;
-    const rows = Math.max(1, ...tree.talents.map((t) => t.row)) + 1;
+    const cols = Math.max(0, ...tree.talents.map((t) => t.col)) + 1;
+    const rows = Math.max(0, ...tree.talents.map((t) => t.row)) + 1;
     return {
       width: cols * COL_W + PAD_X * 2,
       height: rows * ROW_H + PAD_Y * 2,
@@ -78,30 +78,30 @@ export function TalentForgePanel({
   };
 
   return (
-    <section className={cn("ornate-frame rounded-md p-4 sm:p-6 relative", !active && "opacity-80")}>
+    <section className={cn("tf-ornate-frame rounded-md p-6 relative", !active && "opacity-80")}>
       <span className="corner-ornament corner-tl" aria-hidden />
       <span className="corner-ornament corner-tr" aria-hidden />
       <span className="corner-ornament corner-bl" aria-hidden />
       <span className="corner-ornament corner-br" aria-hidden />
 
-      <header className="relative flex items-end justify-between gap-4 mb-2">
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+      <header className="relative flex items-end justify-between gap-6 mb-2">
+        <div className="flex items-center gap-4">
           <div
             className={cn(
-              "h-12 w-12 sm:h-14 sm:w-14 grid place-items-center rounded border-2 shrink-0",
+              "h-14 w-14 grid place-items-center rounded border-2",
               active ? "border-gold shadow-gold" : "border-border",
             )}
-            style={{ background: active ? "var(--gradient-node-active)" : "var(--gradient-node-locked)" }}
+            style={{ background: active ? "var(--tf-gradient-node-active)" : "var(--tf-gradient-node-locked)" }}
           >
-            <Icon className={cn("h-6 w-6 sm:h-7 sm:w-7", active ? "text-background" : "text-muted-foreground")} strokeWidth={2.2} />
+            <Icon className={cn("h-7 w-7", active ? "text-[var(--tf-bg)]" : "text-muted-foreground")} strokeWidth={2.2} />
           </div>
-          <div className="min-w-0">
-            <h3 className="font-cinzel text-xl sm:text-2xl text-gold-bright tracking-widest uppercase truncate">{tree.name}</h3>
-            <p className="text-xs text-muted-foreground italic line-clamp-2">{tree.flavor}</p>
+          <div>
+            <h3 className="font-display text-2xl text-gold-bright tracking-widest uppercase">{tree.name}</h3>
+            <p className="text-xs text-muted-foreground italic max-w-xl">{tree.flavor}</p>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <div className="font-cinzel text-lg sm:text-xl text-gold">
+        <div className="text-right">
+          <div className="font-display text-xl text-gold">
             {pointsInTree}
             <span className="text-muted-foreground"> spent</span>
           </div>
@@ -117,6 +117,7 @@ export function TalentForgePanel({
           style={{
             width,
             height,
+            minWidth: "100%",
             backgroundImage: "radial-gradient(circle, oklch(0.78 0.14 78 / 0.05) 1px, transparent 1px)",
             backgroundSize: "22px 22px",
           }}
@@ -167,7 +168,8 @@ export function TalentForgePanel({
                   status={status}
                   reason={reason}
                   disabled={busy}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     if (status === "available" || status === "active") onInvest(talent.id);
                   }}
                 />
@@ -179,8 +181,8 @@ export function TalentForgePanel({
 
       {!active && lockedReason ? (
         <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-[2px] rounded-md pointer-events-none">
-          <div className="ornate-frame px-6 py-3 rounded">
-            <p className="font-cinzel text-gold tracking-widest uppercase text-sm text-center">{lockedReason}</p>
+          <div className="tf-ornate-frame px-6 py-3 rounded">
+            <p className="font-display text-gold tracking-widest uppercase text-sm text-center">{lockedReason}</p>
           </div>
         </div>
       ) : null}
