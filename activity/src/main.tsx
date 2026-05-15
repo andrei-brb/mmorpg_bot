@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import "./styles/wom-emergent.css";
+import "./style.css";
 
 const queryClient = new QueryClient();
 
