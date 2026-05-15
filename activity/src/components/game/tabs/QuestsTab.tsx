@@ -59,7 +59,7 @@ function StoryBeacon({ ptr }: { ptr: MainQuestPointerPayload }) {
   return (
     <WomPanel
       glow
-      className="quest-card--main-story"
+      className="quest-card--main-story w-full min-w-0"
       style={{
         borderColor: "hsl(270 45% 45% / 0.55)",
         background: "linear-gradient(180deg, hsl(270 28% 14% / 0.5) 0%, hsl(228 20% 10% / 0.4) 100%)",
@@ -165,11 +165,11 @@ export function QuestsTab() {
       : null;
 
   return (
-    <>
-    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto">
-    <div className="w-full min-w-0 space-y-4 pb-4 px-1">
-      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,min(380px,38vw))]">
-        <div className="min-w-0 space-y-4">
+    <div className="flex min-h-0 h-full w-full min-w-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="w-full min-w-0 space-y-4 px-1 pb-4">
+          <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,min(380px,45%))]">
+            <div className="min-w-0 space-y-4">
           <WomPanel
             glow
             className="w-full min-w-0 overflow-hidden"
@@ -474,9 +474,9 @@ export function QuestsTab() {
               ) : null}
             </div>
           </WomPanel>
-        </div>
+            </div>
 
-        <div className="min-w-0 space-y-4">
+            <div className="min-w-0 space-y-4">
           <WomPanel
             glow
             className="w-full min-w-0"
@@ -604,12 +604,12 @@ export function QuestsTab() {
               </div>
             </div>
           </WomPanel>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    </div>
 
-    <Dialog
+      <Dialog
       open={travelFightPrompt !== null}
       onOpenChange={(open) => {
         if (!open && !travelFightBusy) setTravelFightPrompt(null);
@@ -673,7 +673,7 @@ export function QuestsTab() {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
-    </>
+      </Dialog>
+    </div>
   );
 }
