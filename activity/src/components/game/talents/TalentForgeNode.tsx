@@ -44,9 +44,7 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={(e) => {
-            if (canClick) onClick(e);
-          }}
+          onClick={onClick}
           disabled={!canClick}
           className={cn(
             "relative grid place-items-center border-2 transition-[transform,box-shadow,border-color] duration-200",
@@ -60,10 +58,10 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
           )}
           style={{
             background: isActive
-              ? "var(--gradient-node-active)"
+              ? "var(--tf-gradient-node-active)"
               : status === "available"
-                ? "var(--gradient-node-available)"
-                : "var(--gradient-node-locked)",
+                ? "var(--tf-gradient-node-available)"
+                : "var(--tf-gradient-node-locked)",
           }}
         >
           <div className={cn("grid place-items-center w-full h-full", iconWrap[talent.tier])}>
@@ -71,7 +69,7 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
               className={cn(
                 "transition-colors",
                 talent.tier === "keystone" ? "h-9 w-9" : talent.tier === "major" ? "h-7 w-7" : "h-6 w-6",
-                isActive ? "text-background" : status === "available" ? "text-gold" : "text-muted-foreground",
+                isActive ? "text-[var(--tf-bg)]" : status === "available" ? "text-[var(--tf-gold)]" : "text-muted-foreground",
               )}
               strokeWidth={2.2}
             />
@@ -79,7 +77,7 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
           {!talent.autoGrant ? (
             <span
               className={cn(
-                "absolute -bottom-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] font-bold font-cinzel rounded border bg-background",
+                "absolute -bottom-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] font-bold font-display rounded border bg-[var(--tf-bg)]",
                 talent.tier === "major" || talent.tier === "keystone" ? "rotate-[-45deg] -bottom-3" : "",
                 isActive ? "border-gold-bright text-gold-bright" : "border-border text-muted-foreground",
               )}
@@ -92,12 +90,12 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
       <TooltipContent
         side="top"
         sideOffset={14}
-        className="max-w-72 ornate-frame !bg-popover/95 backdrop-blur-md p-0 border-gold/40"
+        className="max-w-72 tf-ornate-frame !bg-popover/95 backdrop-blur-md p-0 border-gold/40"
       >
         <div className="relative px-4 py-3">
           <div className="flex items-start justify-between gap-3">
-            <h4 className="font-cinzel text-base text-gold-bright leading-tight">{talent.name}</h4>
-            <span className="text-[10px] font-cinzel uppercase tracking-widest text-gold-dim">{talent.tier}</span>
+            <h4 className="font-display text-base text-gold-bright leading-tight">{talent.name}</h4>
+            <span className="text-[10px] font-display uppercase tracking-widest text-gold-dim">{talent.tier}</span>
           </div>
           <p className="mt-1 text-xs text-foreground/80">{talent.description}</p>
           <div className="mt-3 space-y-1">
@@ -109,7 +107,7 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
                   i < rank ? "text-gold-bright" : i === rank ? "text-foreground" : "text-muted-foreground/70",
                 )}
               >
-                <span className="font-cinzel w-10 shrink-0">RANK {i + 1}</span>
+                <span className="font-display w-10 shrink-0">RANK {i + 1}</span>
                 <span>{r}</span>
               </div>
             ))}
@@ -118,7 +116,7 @@ export function TalentForgeNode({ talent, rank, status, reason, disabled, onClic
             <p className="mt-3 pt-2 border-t border-border/60 text-[11px] text-destructive/90">{reason}</p>
           ) : null}
           {canClick ? (
-            <p className="mt-2 text-[10px] text-muted-foreground/70 font-cinzel tracking-wider">CLICK to invest</p>
+            <p className="mt-2 text-[10px] text-muted-foreground/70 font-display tracking-wider">CLICK to invest</p>
           ) : null}
         </div>
       </TooltipContent>

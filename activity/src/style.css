@@ -2710,6 +2710,8 @@ code {
   --gold: oklch(0.78 0.14 78);
   --gold-bright: oklch(0.88 0.16 88);
   --gold-dim: oklch(0.55 0.1 75);
+  --arcane: oklch(0.65 0.22 295);
+  --blood: oklch(0.5 0.22 20);
   --gradient-frame: linear-gradient(180deg, oklch(0.22 0.02 60), oklch(0.12 0.012 60));
   --gradient-node-active: radial-gradient(circle at 30% 30%, oklch(0.92 0.18 88), oklch(0.55 0.14 65) 70%, oklch(0.3 0.06 60));
   --gradient-node-available: radial-gradient(circle at 30% 30%, oklch(0.42 0.04 70), oklch(0.22 0.02 60) 80%);
@@ -2860,4 +2862,153 @@ code {
   background-clip: text;
   color: transparent;
   animation: shimmer 4s linear infinite;
+}
+
+/* Scoped Talent Forge page (Lovable reference) */
+.talent-forge-page {
+  --tf-bg: oklch(0.14 0.012 60);
+  --tf-foreground: oklch(0.92 0.02 80);
+  --tf-muted-foreground: oklch(0.62 0.03 70);
+  --tf-border: oklch(0.32 0.04 70);
+  --tf-gold: oklch(0.78 0.14 78);
+  --tf-gold-bright: oklch(0.88 0.16 88);
+  --tf-gold-dim: oklch(0.55 0.1 75);
+  --tf-gradient-frame: linear-gradient(180deg, oklch(0.22 0.02 60), oklch(0.12 0.012 60));
+  --tf-gradient-node-active: radial-gradient(circle at 30% 30%, oklch(0.92 0.18 88), oklch(0.55 0.14 65) 70%, oklch(0.3 0.06 60));
+  --tf-gradient-node-available: radial-gradient(circle at 30% 30%, oklch(0.42 0.04 70), oklch(0.22 0.02 60) 80%);
+  --tf-gradient-node-locked: radial-gradient(circle at 30% 30%, oklch(0.24 0.015 60), oklch(0.14 0.01 60));
+  --tf-shadow-gold: 0 0 24px oklch(0.78 0.14 78 / 0.45), 0 0 6px oklch(0.88 0.16 88 / 0.6);
+  --tf-shadow-frame: 0 30px 80px -20px oklch(0 0 0 / 0.7), inset 0 1px 0 oklch(0.78 0.14 78 / 0.18);
+  --tf-shadow-inset: inset 0 0 60px oklch(0 0 0 / 0.55);
+  color: var(--tf-foreground);
+  background-color: var(--tf-bg);
+  background-image:
+    radial-gradient(ellipse at top, oklch(0.22 0.04 60 / 0.6), transparent 60%),
+    radial-gradient(ellipse at bottom, oklch(0.18 0.05 30 / 0.4), transparent 70%);
+  padding: 0.75rem 0.5rem 1rem;
+}
+
+.talent-forge-page .font-display,
+.talent-forge-page h2,
+.talent-forge-page h3,
+.talent-forge-page h4 {
+  font-family: "Cinzel", "Trajan Pro", serif;
+  letter-spacing: 0.04em;
+}
+
+.talent-forge-page .text-muted-foreground {
+  color: var(--tf-muted-foreground);
+}
+
+.talent-forge-page .border-border {
+  border-color: var(--tf-border);
+}
+
+.talent-forge-page .text-gold {
+  color: var(--tf-gold);
+}
+.talent-forge-page .text-gold-bright {
+  color: var(--tf-gold-bright);
+}
+.talent-forge-page .text-gold-dim {
+  color: var(--tf-gold-dim);
+}
+.talent-forge-page .border-gold {
+  border-color: var(--tf-gold);
+}
+.talent-forge-page .border-gold-bright {
+  border-color: var(--tf-gold-bright);
+}
+.talent-forge-page .border-gold\/50 {
+  border-color: oklch(0.78 0.14 78 / 0.5);
+}
+.talent-forge-page .border-gold\/40 {
+  border-color: oklch(0.78 0.14 78 / 0.4);
+}
+.talent-forge-page .border-gold\/70 {
+  border-color: oklch(0.78 0.14 78 / 0.7);
+}
+.talent-forge-page .bg-gold {
+  background-color: var(--tf-gold);
+}
+.talent-forge-page .bg-gold\/5 {
+  background-color: oklch(0.78 0.14 78 / 0.05);
+}
+.talent-forge-page .bg-gold\/10 {
+  background-color: oklch(0.78 0.14 78 / 0.1);
+}
+.talent-forge-page .hover\:bg-gold\/10:hover {
+  background-color: oklch(0.78 0.14 78 / 0.1);
+}
+.talent-forge-page .hover\:border-gold:hover {
+  border-color: var(--tf-gold);
+}
+.talent-forge-page .shadow-gold {
+  box-shadow: var(--tf-shadow-gold);
+}
+
+.talent-forge-page .tf-ornate-frame,
+.talent-forge-page .ornate-frame {
+  position: relative;
+  background: var(--tf-gradient-frame);
+  border: 1px solid oklch(0.4 0.06 70 / 0.5);
+  box-shadow: var(--tf-shadow-frame), var(--tf-shadow-inset);
+}
+
+.talent-forge-page .tf-ornate-frame::before,
+.talent-forge-page .tf-ornate-frame::after,
+.talent-forge-page .ornate-frame::before,
+.talent-forge-page .ornate-frame::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  border: 1px solid oklch(0.78 0.14 78 / 0.25);
+}
+
+.talent-forge-page .tf-ornate-frame::after,
+.talent-forge-page .ornate-frame::after {
+  inset: 10px;
+  border: 1px solid oklch(0.78 0.14 78 / 0.08);
+}
+
+.talent-forge-page .corner-ornament {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--tf-gold);
+  opacity: 0.85;
+  z-index: 1;
+}
+
+.talent-forge-page .divider-ornate {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--tf-gold) 20%, var(--tf-gold) 80%, transparent);
+  opacity: 0.5;
+  position: relative;
+}
+
+.talent-forge-page .divider-ornate::before {
+  content: "✦";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--tf-bg);
+  color: var(--tf-gold);
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.talent-forge-page .text-shimmer {
+  background: linear-gradient(90deg, var(--tf-gold-dim) 0%, var(--tf-gold-bright) 50%, var(--tf-gold-dim) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+.talent-forge-page .animate-pulse-gold {
+  animation: pulse-gold 2.4s ease-in-out infinite;
 }
