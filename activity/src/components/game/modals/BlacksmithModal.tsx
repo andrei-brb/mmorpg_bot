@@ -125,7 +125,7 @@ export function BlacksmithModal({
     >
       <WomPanel
         glow
-        className="my-4 flex w-full max-w-[540px] max-h-[min(92dvh,680px)] flex-col"
+        className="my-4 flex max-h-[min(92dvh,720px)] w-full max-w-[min(94vw,820px)] min-w-0 flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="game-panel-header shrink-0">🔨 Blacksmith — Enhance</div>
@@ -139,8 +139,8 @@ export function BlacksmithModal({
         )}
 
         {!infoLoading && !loadError && (
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 [-webkit-overflow-scrolling:touch]">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-contain px-0.5 [-webkit-overflow-scrolling:touch]">
+            <div className="mb-4 flex min-w-0 items-center gap-3">
               <div
                 className="slot-filled w-12 h-12 text-2xl shrink-0"
                 style={{ filter: "drop-shadow(0 1px 3px hsl(0 0% 0% / 0.5))" }}
@@ -164,7 +164,7 @@ export function BlacksmithModal({
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-cinzel font-semibold text-foreground">
+                <div className="truncate font-cinzel font-semibold text-foreground">
                   {item.name} {curLevel > 0 && <span className="text-primary">+{curLevel}</span>}
                 </div>
                 {!isMaxed && nextLevel != null && (
@@ -221,14 +221,14 @@ export function BlacksmithModal({
 
                 <div className="ornament-divider mb-4" />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  <div>
+                <div className="mb-4 grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
+                  <div className="min-w-0">
                     <div className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
                       Protection
                     </div>
-                    <div className="space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <label
-                        className={`flex items-start gap-2 p-2 rounded-sm cursor-pointer transition-all ${protection === "none" ? "bg-muted/60" : ""}`}
+                        className={`flex min-w-0 items-start gap-2 rounded-sm p-2 cursor-pointer transition-all ${protection === "none" ? "bg-muted/60" : ""}`}
                         style={{
                           border: `1px solid ${protection === "none" ? "hsl(43 50% 35% / 0.5)" : "hsl(228 16% 20%)"}`,
                         }}
@@ -240,14 +240,14 @@ export function BlacksmithModal({
                           onChange={() => setProtection("none")}
                           className="mt-0.5 accent-[hsl(43,78%,50%)]"
                         />
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-xs text-foreground font-semibold">None</div>
                           <div className="text-[10px] text-muted-foreground">No protection applied</div>
                         </div>
                       </label>
 
                       <label
-                        className={`flex items-start gap-2 p-2 rounded-sm cursor-pointer transition-all ${protection === "blessing" ? "bg-muted/60" : ""} ${blessingStock === 0 ? "opacity-50" : ""}`}
+                        className={`flex min-w-0 items-start gap-2 rounded-sm p-2 cursor-pointer transition-all ${protection === "blessing" ? "bg-muted/60" : ""} ${blessingStock === 0 ? "opacity-50" : ""}`}
                         style={{
                           border: `1px solid ${protection === "blessing" ? "hsl(43 50% 35% / 0.5)" : "hsl(228 16% 20%)"}`,
                         }}
@@ -260,7 +260,7 @@ export function BlacksmithModal({
                           disabled={blessingStock === 0}
                           className="mt-0.5 accent-[hsl(43,78%,50%)]"
                         />
-                        <div className="flex-1">
+                        <div className="min-w-0 flex-1">
                           <div className="text-xs text-foreground font-semibold">📜 Blessing Scroll</div>
                           <div className="text-[10px] text-muted-foreground">On fail when item can break → downgrade by 1 instead</div>
                           <div className="flex items-center gap-2 mt-1">
@@ -285,7 +285,7 @@ export function BlacksmithModal({
                       </label>
 
                       <label
-                        className={`flex items-start gap-2 p-2 rounded-sm cursor-pointer transition-all ${protection === "charm" ? "bg-muted/60" : ""} ${!charmUsable || charmStock === 0 ? "opacity-50" : ""}`}
+                        className={`flex min-w-0 items-start gap-2 rounded-sm p-2 cursor-pointer transition-all ${protection === "charm" ? "bg-muted/60" : ""} ${!charmUsable || charmStock === 0 ? "opacity-50" : ""}`}
                         style={{
                           border: `1px solid ${protection === "charm" ? "hsl(43 50% 35% / 0.5)" : "hsl(228 16% 20%)"}`,
                         }}
@@ -298,7 +298,7 @@ export function BlacksmithModal({
                           disabled={!charmUsable || charmStock === 0}
                           className="mt-0.5 accent-[hsl(43,78%,50%)]"
                         />
-                        <div className="flex-1">
+                        <div className="min-w-0 flex-1">
                           <div className="text-xs text-foreground font-semibold">🛡️ Safety Charm</div>
                           <div className="text-[10px] text-muted-foreground">Guarantees success (tiers +1–+5 only)</div>
                           {!charmUsable && <div className="text-[10px] text-destructive mt-0.5">Not usable at this tier</div>}
@@ -325,11 +325,11 @@ export function BlacksmithModal({
                     </div>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground mb-2">
                       Enhancement Fragments
                     </div>
-                    <WomPanel bracket={false} glow={false} className="p-3">
+                    <WomPanel bracket={false} glow={false} className="w-full min-w-0 p-3">
                       <div className="text-xs text-muted-foreground mb-2">
                         Each fragment adds <span className="text-primary font-semibold">+10%</span> success (max {MAX_STACK_FRAGMENTS}).
                       </div>
