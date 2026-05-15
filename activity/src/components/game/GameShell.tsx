@@ -10,7 +10,7 @@ import { QuestsTab } from "./tabs/QuestsTab";
 import { CombatTab } from "./tabs/CombatTab";
 import { GuildTab } from "./tabs/GuildTab";
 import { MarketTab } from "./tabs/MarketTab";
-import { ProgressTab } from "./tabs/ProgressTab";
+import { RealmTab } from "./tabs/RealmTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
@@ -23,7 +23,7 @@ import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
 import { WomPanel } from "@/components/wom/WomUi";
 
-const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Progress"] as const;
+const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Realm"] as const;
 type TabName = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabName, string> = {
@@ -35,7 +35,7 @@ const TAB_ICONS: Record<TabName, string> = {
   Guild: "🏰",
   Market: "🏪",
   Arena: "🏟️",
-  Progress: "📊",
+  Realm: "🌐",
 };
 
 export function GameShell() {
@@ -74,7 +74,9 @@ export function GameShell() {
     const onSetTab = (ev: Event) => {
       const tab = (ev as CustomEvent).detail;
       if (typeof tab !== "string") return;
-      if ((TABS as readonly string[]).includes(tab)) setActiveTab(tab as TabName);
+      const norm =
+        tab === "Progress" || tab === "progress" || tab === "realm" ? "Realm" : tab;
+      if ((TABS as readonly string[]).includes(norm)) setActiveTab(norm as TabName);
     };
     window.addEventListener("game:setActiveTab", onSetTab);
     return () => window.removeEventListener("game:setActiveTab", onSetTab);
@@ -441,7 +443,7 @@ export function GameShell() {
                 {activeTab === "Guild" && <GuildTab />}
                 {activeTab === "Market" && <MarketTab />}
                 {activeTab === "Arena" && <PvpPage />}
-                {activeTab === "Progress" && <ProgressTab />}
+                {activeTab === "Realm" && <RealmTab />}
               </div>
             </div>
           </div>

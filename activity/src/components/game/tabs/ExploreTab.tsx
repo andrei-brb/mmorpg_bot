@@ -26,7 +26,7 @@ import {
 
 type Faction = "alliance" | "horde" | "neutral" | "hostile";
 type OutcomeType = "enemy" | "boss" | "loot" | "safe" | "npc";
-type AppTab = "Hero" | "Explore" | "Quests" | "Combat" | "Market" | "Arena" | "Progress";
+type AppTab = "Hero" | "Explore" | "Quests" | "Combat" | "Market" | "Arena" | "Realm";
 
 type Zone = {
   id: string;
@@ -195,7 +195,7 @@ function resolveTab(tab: string): AppTab | null {
   if (t === "combat") return "Combat";
   if (t === "market") return "Market";
   if (t === "arena") return "Arena";
-  if (t === "progress") return "Progress";
+  if (t === "progress" || t === "realm") return "Realm";
   return null;
 }
 
