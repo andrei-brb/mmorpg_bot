@@ -763,8 +763,9 @@ export function HeroTab() {
           <span className="corner-ornament corner-bl" aria-hidden />
           <span className="corner-ornament corner-br" aria-hidden />
 
-          <div className="relative grid min-h-0 flex-1 grid-cols-12 gap-px border border-gold/30 bg-black/60 sm:[grid-template-rows:minmax(0,1fr)]">
-            <section className="relative col-span-12 flex min-h-0 flex-col overflow-hidden tex-leather sm:col-span-6 md:col-span-5">
+          {/* Always row: Activity iframe is often under 640px wide, so Tailwind sm/md never split columns. */}
+          <div className="relative flex min-h-0 flex-1 flex-row gap-px border border-gold/30 bg-black/60">
+            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto tex-leather">
               <div className="flex items-center justify-between px-5 pt-4">
                 <div className="hero-forge-clip-tag border border-gold/40 bg-gold/15 px-3 py-1">
                   <span className="font-display text-[10px] tracking-[0.3em] text-gold-200">
@@ -779,7 +780,7 @@ export function HeroTab() {
               </div>
 
               <div className="px-5 pt-4">
-                <h2 className="font-display text-4xl leading-none tracking-[0.18em] text-gold-200 sm:text-5xl">
+                <h2 className="font-display text-3xl leading-none tracking-[0.18em] text-gold-200 sm:text-4xl lg:text-5xl">
                   {(char?.name || "Hero").toUpperCase()}
                 </h2>
                 <p className="mt-1 text-[11px] uppercase tracking-[0.4em] text-gold-dim">
@@ -795,7 +796,7 @@ export function HeroTab() {
                 <div className="divider-ornate mb-2 mt-4" />
               </div>
 
-              <div className="relative mx-auto mt-2 w-full max-w-[460px] aspect-[4/5] max-h-[min(520px,calc(100dvh-16rem))] shrink-0 md:max-h-[min(480px,calc(100dvh-18rem))]">
+              <div className="relative mx-auto mt-2 w-full max-w-[min(460px,100%)] aspect-[4/5] max-h-[min(420px,calc(100dvh-14rem))] shrink-0 sm:max-h-[min(480px,calc(100dvh-16rem))]">
                 <div className="absolute inset-x-10 inset-y-6 bg-[radial-gradient(circle_at_50%_40%,oklch(0.78_0.14_78/0.35),transparent_65%)] blur-2xl" />
                 <div className="absolute inset-x-14 top-2 bottom-16 sm:inset-x-20">
                   <div className="relative h-full w-full overflow-hidden border border-gold/40 tex-parchment hero-forge-clip-blade hero-forge-edge-gold">
@@ -845,7 +846,7 @@ export function HeroTab() {
               </div>
             </section>
 
-            <section className="relative col-span-12 flex min-h-0 flex-col bg-background sm:col-span-6 md:col-span-7">
+            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
               {accessToken && char ? (
                 <div className="relative">
                   <div className="hero-forge-clip-banner flex items-center justify-between bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim px-6 py-2.5 text-background sm:px-8">
