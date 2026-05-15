@@ -526,15 +526,15 @@ export function HeroTab() {
       if (deltas.length === 0) return null;
 
       return (
-        <div className="mt-1.5">
+        <div>
           <div className="text-[10px] text-muted-foreground">
             Equipped: <span className="text-foreground/90">{eq.name}</span>
           </div>
-          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
+          <div className="mt-1.5 flex flex-col gap-1">
             {deltas.slice(0, 10).map(({ k, v }) => (
-              <div key={k} className="flex items-center justify-between text-[10px] tabular-nums">
-                <span className="text-muted-foreground">{statLabel(k)}</span>
-                <span className={v > 0 ? "text-emerald-400" : "text-destructive"}>
+              <div key={k} className="flex items-center justify-between gap-3 text-[10px] tabular-nums">
+                <span className="min-w-0 shrink text-muted-foreground">{statLabel(k)}</span>
+                <span className={`shrink-0 font-medium ${v > 0 ? "text-emerald-400" : "text-destructive"}`}>
                   {v > 0 ? `+${v}` : String(v)}
                 </span>
               </div>

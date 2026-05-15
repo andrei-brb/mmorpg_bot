@@ -229,16 +229,25 @@ export function ItemPopover({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-3 py-3">
+        <div className="divide-y divide-[color:var(--gold)]/15 px-3">
           {stats.map((s) => (
-            <div key={`${s.label}-${s.value}`} className="flex items-baseline justify-between gap-2 text-[11px]">
-              <span className="uppercase tracking-[0.18em] text-muted-foreground">{s.label}</span>
-              <span className="font-display tabular-nums text-[color:var(--gold-bright)]">{s.value}</span>
+            <div
+              key={`${s.label}-${s.value}`}
+              className="flex min-h-[1.75rem] items-baseline justify-between gap-3 py-2 text-[11px] first:pt-3 last:pb-3"
+            >
+              <span className="shrink-0 uppercase tracking-[0.18em] text-muted-foreground">{s.label}</span>
+              <span className="min-w-0 text-right font-display tabular-nums text-[color:var(--gold-bright)]">
+                {s.value}
+              </span>
             </div>
           ))}
         </div>
 
-        {compare ? <div className="px-3 pb-2 text-[10px] leading-snug text-muted-foreground">{compare}</div> : null}
+        {compare ? (
+          <div className="border-t border-[color:var(--gold)]/25 bg-black/25 px-3 py-2.5 text-[10px] leading-snug text-muted-foreground">
+            {compare}
+          </div>
+        ) : null}
 
         <div className="px-3 pb-3">
           <div className="h-px bg-gradient-to-r from-transparent via-[color:var(--gold)]/35 to-transparent" />
