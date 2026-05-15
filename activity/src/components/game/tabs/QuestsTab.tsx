@@ -168,11 +168,11 @@ export function QuestsTab() {
     <>
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto">
     <div className="w-full min-w-0 space-y-4 pb-4 px-1">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px] items-start">
-        <div className="space-y-4 min-w-0">
+      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,min(380px,38vw))]">
+        <div className="min-w-0 space-y-4">
           <WomPanel
             glow
-            className="overflow-hidden"
+            className="w-full min-w-0 overflow-hidden"
             style={{
               background: "linear-gradient(180deg, hsl(226 30% 14% / 0.9) 0%, hsl(230 32% 10% / 0.92) 100%)",
               border: "1px solid hsl(43 50% 35% / 0.35)",
@@ -476,9 +476,10 @@ export function QuestsTab() {
           </WomPanel>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <WomPanel
             glow
+            className="w-full min-w-0"
             style={{
               background: "linear-gradient(180deg, hsl(226 28% 14% / 0.85) 0%, hsl(230 32% 10% / 0.9) 100%)",
               border: "1px solid hsl(43 50% 35% / 0.3)",
@@ -570,6 +571,7 @@ export function QuestsTab() {
 
           <WomPanel
             glow
+            className="w-full min-w-0"
             style={{
               background: "linear-gradient(180deg, hsl(226 28% 14% / 0.85) 0%, hsl(230 32% 10% / 0.9) 100%)",
               border: "1px solid hsl(43 50% 35% / 0.3)",

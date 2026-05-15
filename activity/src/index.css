@@ -130,6 +130,8 @@
 
   body {
     @apply bg-background text-foreground;
+    width: 100%;
+    min-width: 0;
     font-family: "Chivo", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
     background-color: hsl(var(--background));
     background-image:
@@ -140,6 +142,17 @@
     background-repeat: no-repeat, no-repeat, repeat;
     background-attachment: fixed;
     background-blend-mode: normal, normal, soft-light;
+  }
+
+  html {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #root {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {

@@ -606,7 +606,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   const modeSegment = (
     <div
-      className="flex rounded-sm mb-3 p-0.5"
+      className="mb-3 flex w-full min-w-0 rounded-sm p-0.5"
       style={{
         background: "hsl(228 20% 10%)",
         border: "1px solid hsl(43 45% 35% / 0.35)",
@@ -705,12 +705,12 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       void refresh();
     };
     return (
-      <div className="w-full min-w-0">
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
         {showSubModeToggle && modeSegment}
-        <WomPanel glow className="w-full py-6 sm:py-7">
-          <div className="mx-auto w-full max-w-3xl">
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
-              <div className="rounded-sm border border-white/10 bg-black/20 p-3 sm:p-4">
+        <WomPanel glow className="min-h-0 w-full min-w-0 flex-1 py-6 sm:py-7">
+          <div className="w-full min-w-0">
+            <div className="flex w-full min-w-0 flex-col gap-3 md:flex-row md:items-stretch md:gap-4">
+              <div className="min-w-0 rounded-sm border border-white/10 bg-black/20 p-3 sm:p-4 md:basis-0 md:flex-[0.92]">
                 <OutcomeBadgeIcon kind={isVictory ? "victory" : isDefeat ? "defeat" : "neutral"} />
                 <h2
                   className="mt-3 font-cinzel text-lg font-bold text-foreground"
@@ -789,11 +789,11 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                 </div>
               </div>
 
-              <div className="rounded-sm border border-white/10 bg-black/15 p-3 sm:p-4">
+              <div className="flex min-h-0 min-w-0 flex-col rounded-sm border border-white/10 bg-black/15 p-3 sm:p-4 md:min-h-[280px] md:basis-0 md:flex-[1.08]">
                 <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
                   Combat log
                 </div>
-                <div className="mt-2 max-h-[42vh] overflow-y-auto overscroll-contain rounded-sm border border-white/10 bg-black/25 p-2 sm:p-2.5">
+                <div className="mt-2 min-h-0 min-w-0 flex-1 max-h-[42vh] overflow-y-auto overscroll-contain rounded-sm border border-white/10 bg-black/25 p-2 sm:p-2.5">
                   {logLines.length ? (
                     <ul className="space-y-2 text-[12.5px] leading-relaxed text-foreground/85 sm:text-[13px]">
                       {logLines.map((l, i) => (

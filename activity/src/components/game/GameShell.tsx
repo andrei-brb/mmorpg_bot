@@ -310,7 +310,7 @@ export function GameShell() {
         }`}
       >
         <div
-          className={`game-frame rounded-sm flex flex-col flex-1 min-h-0 ${
+          className={`game-frame rounded-sm flex w-full min-w-0 flex-col flex-1 min-h-0 ${
             shellChromeHidden ? "p-2 sm:p-3" : "p-3 sm:p-4"
           }`}
         >
