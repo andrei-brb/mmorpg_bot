@@ -2143,9 +2143,223 @@ async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
     discord_id = int(user["id"])
+    from services.social.social_service import SocialService
+
+    await SocialService(db).touch_presence(discord_id)
     char_svc = CharacterService(db)
     char = await char_svc.get_character(discord_id)
     return user, discord_id, dict(char) if char else None, db
+
+
+async def _json_body(request: web.Request) -> dict:
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    return body if isinstance(body, dict) else {}
+
+
+async def handle_social_roster(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "friends": []}), status=400)
+    from services.social.social_service import SocialService
+
+    friends = await SocialService(db).get_roster(discord_id)
+    return web.json_response(_json_safe({"ok": True, "friends": friends}))
+
+
+async def handle_social_requests(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "no_character", "incoming": [], "outgoing": []}),
+            status=400,
+        )
+    from services.social.social_service import SocialService
+
+    data = await SocialService(db).get_requests(discord_id)
+    return web.json_response(_json_safe({"ok": True, **data}))
+
+
+async def handle_social_players_search(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "players": []}), status=400)
+    q = str((request.query.get("q") or request.query.get("prefix") or "")).strip()
+    purpose = str(request.query.get("purpose") or "friend").strip().lower()
+    if purpose not in ("friend", "ignore"):
+        purpose = "friend"
+    from services.social.social_service import SocialService
+
+    players = await SocialService(db).search_players(discord_id, q, purpose=purpose)
+    return web.json_response(_json_safe({"ok": True, "players": players}))
+
+
+async def handle_social_friend_request(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    from services.social.social_service import SocialService
+
+    svc = SocialService(db)
+    target_user_id = body.get("target_user_id")
+    tid = int(target_user_id) if target_user_id else None
+    ok, msg, data = await svc.send_friend_request(
+        discord_id,
+        username=str(body.get("username") or "") or None,
+        target_user_id=tid,
+    )
+    return web.json_response(_json_safe({"ok": ok, "message": msg, **(data or {})}), status=200 if ok else 400)
+
+
+async def handle_social_friend_accept(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    request_id = body.get("request_id")
+    if not request_id:
+        return web.json_response(_json_safe({"ok": False, "message": "request_id required"}), status=400)
+    from services.social.social_service import SocialService
+
+    ok, msg = await SocialService(db).accept_friend_request(discord_id, str(request_id))
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=200 if ok else 400)
+
+
+async def handle_social_friend_decline(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    request_id = body.get("request_id")
+    if not request_id:
+        return web.json_response(_json_safe({"ok": False, "message": "request_id required"}), status=400)
+    from services.social.social_service import SocialService
+
+    ok, msg = await SocialService(db).decline_friend_request(discord_id, str(request_id))
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=200 if ok else 400)
+
+
+async def handle_social_friend_delete(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    friend_user_id = body.get("friend_user_id")
+    if not friend_user_id:
+        return web.json_response(_json_safe({"ok": False, "message": "friend_user_id required"}), status=400)
+    from services.social.social_service import SocialService
+
+    ok, msg = await SocialService(db).unfriend(discord_id, int(friend_user_id))
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=200 if ok else 400)
+
+
+async def handle_social_ignore_list(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "ignored": []}), status=400)
+    from services.social.social_service import SocialService
+
+    ignored = await SocialService(db).list_ignores(discord_id)
+    return web.json_response(_json_safe({"ok": True, "ignored": ignored}))
+
+
+async def handle_social_ignore_add(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    from services.social.social_service import SocialService
+
+    svc = SocialService(db)
+    blocked_user_id = body.get("blocked_user_id")
+    bid = int(blocked_user_id) if blocked_user_id else None
+    ok, msg = await svc.add_ignore(
+        discord_id,
+        username=str(body.get("username") or "") or None,
+        blocked_user_id=bid,
+    )
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=200 if ok else 400)
+
+
+async def handle_social_ignore_delete(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    blocked_user_id = body.get("blocked_user_id")
+    if not blocked_user_id:
+        return web.json_response(_json_safe({"ok": False, "message": "blocked_user_id required"}), status=400)
+    from services.social.social_service import SocialService
+
+    ok, msg = await SocialService(db).remove_ignore(discord_id, int(blocked_user_id))
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=200 if ok else 400)
+
+
+async def handle_social_whispers_get(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "messages": []}), status=400)
+    with_user = request.query.get("with")
+    if not with_user:
+        return web.json_response(_json_safe({"ok": False, "message": "with query required"}), status=400)
+    from services.social.social_service import SocialService
+
+    messages = await SocialService(db).get_whispers(discord_id, int(with_user))
+    return web.json_response(_json_safe({"ok": True, "messages": messages}))
+
+
+async def handle_social_whisper_post(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    to_user_id = body.get("to_user_id")
+    text = body.get("body")
+    if not to_user_id:
+        return web.json_response(_json_safe({"ok": False, "message": "to_user_id required"}), status=400)
+    from services.social.social_service import SocialService
+
+    ok, msg, data = await SocialService(db).send_whisper(discord_id, int(to_user_id), str(text or ""))
+    return web.json_response(_json_safe({"ok": ok, "message": msg, **(data or {})}), status=200 if ok else 400)
 
 
 async def handle_rest(request: web.Request) -> web.Response:
@@ -4966,6 +5180,18 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_delete("/api/game/pvp/queue", handle_pvp_queue_delete)
     app.router.add_post("/api/game/pvp/challenge", handle_pvp_challenge)
     app.router.add_get("/api/game/pvp/players", handle_pvp_player_search)
+    app.router.add_get("/api/game/social/roster", handle_social_roster)
+    app.router.add_get("/api/game/social/requests", handle_social_requests)
+    app.router.add_get("/api/game/social/players", handle_social_players_search)
+    app.router.add_post("/api/game/social/friend/request", handle_social_friend_request)
+    app.router.add_post("/api/game/social/friend/accept", handle_social_friend_accept)
+    app.router.add_post("/api/game/social/friend/decline", handle_social_friend_decline)
+    app.router.add_delete("/api/game/social/friend", handle_social_friend_delete)
+    app.router.add_get("/api/game/social/ignore", handle_social_ignore_list)
+    app.router.add_post("/api/game/social/ignore", handle_social_ignore_add)
+    app.router.add_delete("/api/game/social/ignore", handle_social_ignore_delete)
+    app.router.add_get("/api/game/social/whispers", handle_social_whispers_get)
+    app.router.add_post("/api/game/social/whisper", handle_social_whisper_post)
     app.router.add_post("/api/game/pvp/accept", handle_pvp_accept)
     app.router.add_post("/api/game/pvp/action", handle_pvp_action)
     app.router.add_get("/api/game/pvp/history", handle_pvp_history)

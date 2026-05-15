@@ -7,6 +7,7 @@ import { WomPanel, WomSectionHeader } from "@/components/wom/WomUi";
 import type { CharacterDerivedStatsPayload, GuildMePayload, ProgressPayload } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import { cn } from "@/lib/utils";
+import { SocialPanel } from "@/components/game/panels/SocialPanel";
 
 const GOALS_STORAGE_KEY = "realm_player_goals_v1";
 
@@ -21,7 +22,7 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 const ROADMAP: { bucket: string; title: string; blurb: string }[] = [
-  { bucket: "Social", title: "In-game friends & ignore lists", blurb: "Beyond Discord — requests, presence, and privacy controls." },
+  { bucket: "Social", title: "Social privacy & richer presence", blurb: "Appear offline, block party/PvP, offline whispers." },
   { bucket: "World", title: "Territory & faction campaigns", blurb: "Server-wide objectives, war phases, and map control." },
   { bucket: "Economy", title: "Direct player trade", blurb: "Secure trade window alongside the market." },
   { bucket: "Economy", title: "Auction dynamics", blurb: "Bids, buy orders, and listing depth." },
@@ -270,13 +271,7 @@ export function RealmTab() {
             )}
           </WomPanel>
 
-          <WomPanel glow>
-            <WomSectionHeader kicker="Friends" title="Social roster" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              In-game friends lists, requests, and presence are not wired yet — you already play with your Discord server
-              here. We will add cross-guild friends and privacy controls later.
-            </p>
-          </WomPanel>
+          <SocialPanel accessToken={accessToken} guildId={guildId} />
 
           {liveEvents.length > 0 ? (
             <WomPanel glow>

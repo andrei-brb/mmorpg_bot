@@ -733,3 +733,80 @@ export type DailyLoginClaimPayload = {
   pass_xp_grants?: unknown[];
   battle_pass?: BattlePassStatePayload;
 };
+
+/** GET /api/game/social/roster */
+export type SocialFriendRow = {
+  user_id: string;
+  username: string;
+  character_name?: string | null;
+  level?: number | null;
+  class?: string | null;
+  online?: boolean;
+  last_seen?: string | null;
+  zone_hint?: string | null;
+};
+
+export type SocialRosterPayload = {
+  ok?: boolean;
+  error?: string;
+  friends?: SocialFriendRow[];
+};
+
+/** GET /api/game/social/requests */
+export type SocialRequestRow = {
+  request_id: string;
+  user_id: string;
+  username: string;
+  character_name?: string | null;
+  level?: number | null;
+  class?: string | null;
+  created_at?: string | null;
+};
+
+export type SocialRequestsPayload = {
+  ok?: boolean;
+  error?: string;
+  incoming?: SocialRequestRow[];
+  outgoing?: SocialRequestRow[];
+};
+
+/** GET /api/game/social/players */
+export type SocialPlayerSearchRow = {
+  id: string;
+  username: string;
+  level?: number;
+  class?: string;
+  character_name?: string;
+};
+
+export type SocialPlayersSearchPayload = {
+  ok?: boolean;
+  players?: SocialPlayerSearchRow[];
+};
+
+/** GET /api/game/social/ignore */
+export type SocialIgnoreRow = {
+  user_id: string;
+  username: string;
+  created_at?: string | null;
+};
+
+export type SocialIgnorePayload = {
+  ok?: boolean;
+  ignored?: SocialIgnoreRow[];
+};
+
+/** GET /api/game/social/whispers */
+export type SocialWhisperMessage = {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  body: string;
+  created_at?: string | null;
+  mine?: boolean;
+};
+
+export type SocialWhispersPayload = {
+  ok?: boolean;
+  messages?: SocialWhisperMessage[];
+};

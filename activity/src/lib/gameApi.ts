@@ -22,6 +22,11 @@ import type {
   GuildInviteCandidate,
   GuildCreateResponse,
   GuildCheckinPayload,
+  SocialRosterPayload,
+  SocialRequestsPayload,
+  SocialPlayersSearchPayload,
+  SocialIgnorePayload,
+  SocialWhispersPayload,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -894,4 +899,136 @@ export async function postGuildRaidComplete(
     body: JSON.stringify({ run_id: runId }),
   });
   return res.json() as Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }>;
+}
+
+export async function getSocialRoster(token: string, guildId?: string): Promise<SocialRosterPayload> {
+  const res = await fetch(apiUrl("/api/game/social/roster"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<SocialRosterPayload>;
+}
+
+export async function getSocialRequests(token: string, guildId?: string): Promise<SocialRequestsPayload> {
+  const res = await fetch(apiUrl("/api/game/social/requests"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<SocialRequestsPayload>;
+}
+
+export async function getSocialPlayersSearch(
+  token: string,
+  query: string,
+  guildId?: string,
+  purpose: "friend" | "ignore" = "friend",
+): Promise<SocialPlayersSearchPayload> {
+  const res = await fetch(
+    apiUrl(`/api/game/social/players?q=${encodeURIComponent(query)}&purpose=${purpose}`),
+    { headers: authHeaders(token, guildId) },
+  );
+  return res.json() as Promise<SocialPlayersSearchPayload>;
+}
+
+export async function postSocialFriendRequest(
+  token: string,
+  opts: { username?: string; target_user_id?: string },
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; request_id?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/friend/request"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; request_id?: string }>;
+}
+
+export async function postSocialFriendAccept(
+  token: string,
+  requestId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/friend/accept"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ request_id: requestId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function postSocialFriendDecline(
+  token: string,
+  requestId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/friend/decline"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ request_id: requestId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function deleteSocialFriend(
+  token: string,
+  friendUserId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/friend"), {
+    method: "DELETE",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ friend_user_id: friendUserId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function getSocialIgnore(token: string, guildId?: string): Promise<SocialIgnorePayload> {
+  const res = await fetch(apiUrl("/api/game/social/ignore"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<SocialIgnorePayload>;
+}
+
+export async function postSocialIgnore(
+  token: string,
+  opts: { username?: string; blocked_user_id?: string },
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/ignore"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function deleteSocialIgnore(
+  token: string,
+  blockedUserId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/ignore"), {
+    method: "DELETE",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ blocked_user_id: blockedUserId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function getSocialWhispers(
+  token: string,
+  withUserId: string,
+  guildId?: string,
+): Promise<SocialWhispersPayload> {
+  const res = await fetch(
+    apiUrl(`/api/game/social/whispers?with=${encodeURIComponent(withUserId)}`),
+    { headers: authHeaders(token, guildId) },
+  );
+  return res.json() as Promise<SocialWhispersPayload>;
+}
+
+export async function postSocialWhisper(
+  token: string,
+  toUserId: string,
+  body: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/whisper"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ to_user_id: toUserId, body }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
 }

@@ -700,6 +700,73 @@ class Database:
                 ON guild_checkins(guild_id, checkin_day DESC);
             """)
 
+            # Social (friends, ignore, whispers)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS player_friend_requests (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    from_player_id  BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    to_player_id    BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    status          VARCHAR(16) NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'declined')),
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    responded_at    TIMESTAMPTZ,
+                    CHECK (from_player_id != to_player_id)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_friend_requests_to
+                ON player_friend_requests(to_player_id, status);
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_friend_requests_from
+                ON player_friend_requests(from_player_id, status);
+            """)
+            await c.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_requests_pending_pair
+                ON player_friend_requests(from_player_id, to_player_id) WHERE (status = 'pending');
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS player_friendships (
+                    player_a_id     BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    player_b_id     BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (player_a_id, player_b_id),
+                    CHECK (player_a_id < player_b_id)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_friendships_a ON player_friendships(player_a_id);
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_friendships_b ON player_friendships(player_b_id);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS player_ignores (
+                    blocker_id      BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    blocked_id      BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (blocker_id, blocked_id),
+                    CHECK (blocker_id != blocked_id)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_player_ignores_blocked ON player_ignores(blocked_id);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS player_whispers (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    from_player_id  BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    to_player_id    BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    body            VARCHAR(500) NOT NULL,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    read_at         TIMESTAMPTZ
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_whispers_to
+                ON player_whispers(to_player_id, created_at DESC);
+            """)
+
             # Load additional items migration (500 items: 10 per rarity per slot)
             try:
                 import os
@@ -1061,6 +1128,53 @@ CREATE TABLE IF NOT EXISTS dungeon_party_invites (
 );
 CREATE INDEX IF NOT EXISTS idx_dungeon_invites_invitee ON dungeon_party_invites(invitee_id, status);
 CREATE INDEX IF NOT EXISTS idx_dungeon_invites_run ON dungeon_party_invites(run_id, status);
+
+-- In-game social (friends, ignore, whispers)
+CREATE TABLE IF NOT EXISTS player_friend_requests (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    from_player_id  BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    to_player_id    BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'declined')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    responded_at    TIMESTAMPTZ,
+    CHECK (from_player_id != to_player_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON player_friend_requests(to_player_id, status);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_from ON player_friend_requests(from_player_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_requests_pending_pair
+    ON player_friend_requests(from_player_id, to_player_id) WHERE (status = 'pending');
+
+CREATE TABLE IF NOT EXISTS player_friendships (
+    player_a_id     BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    player_b_id     BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (player_a_id, player_b_id),
+    CHECK (player_a_id < player_b_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friendships_a ON player_friendships(player_a_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_b ON player_friendships(player_b_id);
+
+CREATE TABLE IF NOT EXISTS player_ignores (
+    blocker_id      BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    blocked_id      BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (blocker_id, blocked_id),
+    CHECK (blocker_id != blocked_id)
+);
+CREATE INDEX IF NOT EXISTS idx_player_ignores_blocked ON player_ignores(blocked_id);
+
+CREATE TABLE IF NOT EXISTS player_whispers (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    from_player_id  BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    to_player_id    BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    body            VARCHAR(500) NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_at         TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_whispers_to ON player_whispers(to_player_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_whispers_thread ON player_whispers(
+    LEAST(from_player_id, to_player_id), GREATEST(from_player_id, to_player_id), created_at DESC);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- QUESTS
