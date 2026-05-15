@@ -1,0 +1,24 @@
+---
+description: When implementation finishes here, commit and push unless the user opts out
+alwaysApply: true
+---
+
+# Git — commit and push for this repo
+
+For **this project**, when you finish a coding task and there are **real changes** to include (not empty or secret-bearing), **commit and push** to the current branch’s remote unless the user clearly asked for **no commit** or **no push** only.
+
+## Workflow
+
+1. `git status` and `git diff` — know what you’re committing; never stage secrets (e.g. `.env`, credentials).
+2. Stage the right paths, then commit with a clear message (use a HEREDOC for multi-line messages if needed).
+3. **Push** so `origin` stays current (see `railway-deploy.mdc` — Railway deploys from GitHub).
+
+## Git safety
+
+Follow the user’s global git rules: do not change `git config`, avoid destructive commands and force-push to `main`/`master`, respect hooks, don’t use `commit --amend` after push unless they ask.
+
+## Exceptions
+
+- No changes, or only changes the user said to discard.
+- User explicitly wants a **local-only** commit or **no push**.
+- Commit blocked by hooks — fix and make a **new** commit, then push.
