@@ -1,25 +1,50 @@
-# Smaller build context + image → faster push/pull on Railway (fewer registry timeouts).
+# Smaller build context + image → faster Railway uploads and fewer registry timeouts.
+# Keep anything the bot loads at runtime or the Vite stage needs under `activity/`.
 
+# VCS / CI
 .git
 .github
 
-# Python
+# Python — local + caches (image installs deps via requirements.txt)
 __pycache__/
 **/__pycache__/
 *.py[cod]
 *$py.class
 .venv/
+venv/
 .pytest_cache/
 *.egg-info/
 .mypy_cache/
 .ruff_cache/
 
-# Discord Activity — Vite build runs in Dockerfile stage 1; do not copy dev tree into final image
+# Discord Activity — deps and output are produced inside the Dockerfile
 activity/node_modules/
 activity/dist/
 activity/.env
 activity/.vite/
 **/*.tsbuildinfo
+activity/playwright-report/
+activity/test-results/
+# Design references / vendored samples — not imported by the app
+activity/realm-whispers-client-main/
+activity/explore tab v2/
+
+# Icon & asset **pipelines** (outputs live in `activity/public/` and ship in `activity/dist/`)
+items_processed/
+mobs_processed/
+bestiary_reprocessed/
+bestiary_reprocessed_v2/
+bestiary_grid.png
+items_gridpng.png
+# Tooling output tree — runtime uses `assets/items` + Activity `dist` URLs
+icons/
+
+# Dev / docs — not loaded by `python main.py`
+tests/
+scripts/
+v0/
+.claude/
+**/*.md
 
 # OS / editor
 .DS_Store
@@ -29,3 +54,6 @@ activity/.vite/
 # Logs & local artifacts
 *.log
 world-of-discord-activity-ui.zip
+bot_run.log
+bot_restart.log
+bot_output.log

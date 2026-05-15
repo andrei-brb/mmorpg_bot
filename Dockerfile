@@ -1,10 +1,12 @@
+# syntax=docker/dockerfile:1
 # ── World of Discord — Docker Image ──────────────────────────────────────────
 # Stage 1: build Discord Activity (Vite). Set build-arg VITE_DISCORD_CLIENT_ID (Application ID).
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS activity-build
 WORKDIR /app/activity
 COPY activity/package.json activity/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 COPY activity/ ./
 # Must be passed at docker build time (same as Discord Application ID).
 # Railway: add variable VITE_DISCORD_CLIENT_ID and enable it for **Build**,
@@ -15,10 +17,12 @@ ENV VITE_DISCORD_CLIENT_ID=$VITE_DISCORD_CLIENT_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # Rollup ships platform-specific optional deps; `npm ci` in Linux sometimes skips the right
 # binary when the lockfile was generated on another OS (npm/cli#4828). Install explicitly.
-RUN ARCH=$(uname -m) && \
+RUN --mount=type=cache,target=/root/.npm \
+    ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then npm install @rollup/rollup-linux-arm64-gnu --no-save; \
     else npm install @rollup/rollup-linux-x64-gnu --no-save; fi
-RUN if [ -z "$VITE_DISCORD_CLIENT_ID" ]; then \
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -z "$VITE_DISCORD_CLIENT_ID" ]; then \
       echo "ERROR: Docker build-arg VITE_DISCORD_CLIENT_ID is required (your Discord Application ID)." >&2; \
       echo "Railway: Service → Variables → add VITE_DISCORD_CLIENT_ID → enable for **Build**, redeploy." >&2; \
       exit 1; \
@@ -36,9 +40,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps first (cache layer)
+# Install Python deps first (BuildKit cache speeds rebuilds; does not bloat final layers)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Copy application code
 COPY . .
