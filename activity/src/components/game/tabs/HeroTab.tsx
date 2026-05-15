@@ -755,14 +755,14 @@ export function HeroTab() {
               </div>
 
               <div className="relative mx-3 mb-4 mt-4 min-w-0 border border-gold/25 tex-forge px-3 py-3.5 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-start sm:gap-0 sm:divide-x sm:divide-gold/25">
-                  <div className="flex min-w-0 flex-col items-center gap-1 text-center sm:px-4 md:px-5">
+                <div className="grid min-w-0 grid-cols-2 divide-x divide-gold/25">
+                  <div className="flex min-w-0 flex-col items-center justify-center gap-1 px-2 py-0.5 text-center sm:px-4 md:px-5">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Combat power</p>
                     <p className="font-display text-2xl tabular-nums leading-none text-gold-200 sm:text-3xl md:text-[2rem]">
                       {combatPowerDisplay}
                     </p>
                   </div>
-                  <div className="flex min-w-0 flex-col items-center gap-1 border-t border-gold/20 pt-4 text-center sm:border-t-0 sm:px-4 sm:pt-0 md:px-5">
+                  <div className="flex min-w-0 flex-col items-center justify-center gap-1 px-2 py-0.5 text-center sm:px-4 md:px-5">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Treasury</p>
                     <p className="flex flex-wrap items-center justify-center gap-1.5 font-display text-2xl tabular-nums leading-none text-gold sm:gap-2 sm:text-3xl md:text-[2rem]">
                       <span>{Number(char?.gold ?? 0).toLocaleString()}</span>
