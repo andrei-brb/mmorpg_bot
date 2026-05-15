@@ -755,20 +755,22 @@ export function HeroTab() {
               </div>
 
               <div className="relative mx-3 mb-4 mt-4 min-w-0 border border-gold/25 tex-forge px-3 py-3 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
-                <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
-                  <div className="flex min-w-0 flex-col items-center justify-center border-r border-gold/20 pr-2 text-center sm:pr-4">
+                <div className="grid min-w-0 grid-cols-2 divide-x divide-gold/25">
+                  <div className="flex min-w-0 flex-col items-center justify-center px-3 py-0.5 text-center sm:px-5 md:px-7">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Combat power</p>
-                    <p className="mt-1 min-w-0 max-w-full truncate font-display text-xl tabular-nums leading-tight text-gold-200 sm:text-2xl sm:max-w-none md:text-3xl">
+                    <p className="mt-1 min-w-0 w-full max-w-full truncate px-0.5 font-display text-xl tabular-nums leading-tight text-gold-200 sm:text-2xl sm:max-w-[min(100%,11rem)] md:text-3xl md:max-w-[min(100%,13rem)]">
                       {combatPowerDisplay}
                     </p>
                   </div>
-                  <div className="flex min-w-0 flex-col items-center justify-center pl-2 text-center sm:pl-4">
+                  <div className="flex min-w-0 flex-col items-center justify-center px-3 py-0.5 text-center sm:px-5 md:px-7">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Treasury</p>
                     <p
-                      className="mt-1 flex min-w-0 max-w-full items-center justify-center gap-1 font-display text-xl tabular-nums leading-tight text-gold sm:text-2xl sm:max-w-none md:text-3xl"
+                      className="mt-1 flex min-w-0 w-full max-w-full items-center justify-center gap-1.5 px-0.5 font-display text-xl tabular-nums leading-tight text-gold sm:gap-2 sm:text-2xl md:text-3xl"
                       title={`${Number(char?.gold ?? 0).toLocaleString()} gold`}
                     >
-                      <span className="min-w-0 truncate">{Number(char?.gold ?? 0).toLocaleString()}</span>
+                      <span className="min-w-0 max-w-[min(100%,10rem)] truncate sm:max-w-[min(100%,12rem)] md:max-w-[min(100%,14rem)]">
+                        {Number(char?.gold ?? 0).toLocaleString()}
+                      </span>
                       <span className="shrink-0 text-lg sm:text-xl" aria-hidden>
                         🪙
                       </span>
