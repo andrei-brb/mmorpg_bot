@@ -30,6 +30,7 @@ import type {
   SocialSettingsPayload,
   SocialSuggestionsPayload,
   SocialWhisperInboxPayload,
+  AuctionListingRow,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -621,6 +622,71 @@ export async function postMarketBuy(
     body: JSON.stringify({ listing_id: listingId }),
   });
   return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; item_name?: string; price?: number }>;
+}
+
+export async function getAuctionListings(token: string, guildId?: string) {
+  const res = await fetch(apiUrl("/api/game/auction/listings"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`auction-listings ${res.status}`);
+  return res.json() as Promise<{ ok?: boolean; listings?: Array<AuctionListingRow>; message?: string }>;
+}
+
+export async function postAuctionCreate(
+  token: string,
+  body: { item_id: string; starting_bid: number; duration_hours: number; buyout_price?: number | null },
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/auction/create"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string }>;
+}
+
+export async function postAuctionBid(
+  token: string,
+  listingId: string,
+  amount: number,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string; min_bid?: number; buyout_price?: number }> {
+  const res = await fetch(apiUrl("/api/game/auction/bid"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ listing_id: listingId, amount }),
+  });
+  return res.json() as Promise<{
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    min_bid?: number;
+    buyout_price?: number;
+  }>;
+}
+
+export async function postAuctionBuyout(
+  token: string,
+  listingId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string; item_name?: string; price?: number }> {
+  const res = await fetch(apiUrl("/api/game/auction/buyout"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ listing_id: listingId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; item_name?: string; price?: number }>;
+}
+
+export async function postAuctionCancel(
+  token: string,
+  listingId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/auction/cancel"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ listing_id: listingId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string }>;
 }
 
 export function calculateMarketPrice(item: InvRow, vendorBuy?: number): number {

@@ -804,6 +804,22 @@ class Database:
             except Exception as e:
                 log.warning("Warrior resource repair skipped: %s", e)
 
+            # Player market: timed auctions share `market_listings` with fixed-price rows.
+            await c.execute("""
+                ALTER TABLE market_listings
+                    ADD COLUMN IF NOT EXISTS listing_kind VARCHAR(16) NOT NULL DEFAULT 'fixed',
+                    ADD COLUMN IF NOT EXISTS current_bid INT,
+                    ADD COLUMN IF NOT EXISTS bid_count INT NOT NULL DEFAULT 0,
+                    ADD COLUMN IF NOT EXISTS current_bidder_id UUID REFERENCES characters(id),
+                    ADD COLUMN IF NOT EXISTS buyout_price INT,
+                    ADD COLUMN IF NOT EXISTS auction_ends_at TIMESTAMPTZ;
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_market_auction_end
+                ON market_listings(auction_ends_at)
+                WHERE is_active = TRUE AND COALESCE(listing_kind, 'fixed') = 'auction';
+            """)
+
         log.info("Schema initialized.")
 
 
@@ -1214,10 +1230,20 @@ CREATE TABLE IF NOT EXISTS market_listings (
     expires_at  TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days',
     is_active   BOOLEAN DEFAULT TRUE,
     sold_at     TIMESTAMPTZ,
-    buyer_id    UUID REFERENCES characters(id)
+    buyer_id    UUID REFERENCES characters(id),
+    listing_kind        VARCHAR(16) NOT NULL DEFAULT 'fixed',
+    current_bid         INT,
+    bid_count           INT NOT NULL DEFAULT 0,
+    current_bidder_id   UUID REFERENCES characters(id),
+    buyout_price        INT,
+    auction_ends_at     TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_market_active ON market_listings(is_active, expires_at) WHERE is_active;
+
+CREATE INDEX IF NOT EXISTS idx_market_auction_end
+    ON market_listings(auction_ends_at)
+    WHERE is_active = TRUE AND COALESCE(listing_kind, 'fixed') = 'auction';
 
 CREATE TABLE IF NOT EXISTS gold_log (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -660,7 +660,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   if (combatTabMode === "dungeon") {
     return (
-      <div className={dungeonInFight ? "-mt-2 sm:-mt-3" : undefined}>
+      <div className={cn("w-full min-w-0", dungeonInFight && "-mt-2 sm:-mt-3")}>
         {showSubModeToggle && modeSegment}
         <DungeonPanel
           playerLevel={inventory?.character?.level ?? 1}
@@ -672,7 +672,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   if (loading && mode === "pick" && !enemies.length) {
     return (
-      <div>
+      <div className="w-full min-w-0">
         {showSubModeToggle && modeSegment}
         <p className="text-sm text-muted-foreground">Loading combat…</p>
       </div>
@@ -705,9 +705,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       void refresh();
     };
     return (
-      <div>
+      <div className="w-full min-w-0">
         {showSubModeToggle && modeSegment}
-        <WomPanel glow className="py-6 sm:py-7">
+        <WomPanel glow className="w-full py-6 sm:py-7">
           <div className="mx-auto w-full max-w-3xl">
             <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-stretch">
               <div className="rounded-sm border border-white/10 bg-black/20 p-3 sm:p-4">
@@ -821,11 +821,10 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   if (mode === "fight" && state) {
     return (
       <div
-        className={
-          focusMode
-            ? "flex h-full min-h-0 flex-col gap-2 -mt-2 pt-0 sm:-mt-3"
-            : "space-y-4"
-        }
+        className={cn(
+          "w-full min-w-0",
+          focusMode ? "flex h-full min-h-0 flex-col gap-2 -mt-2 pt-0 sm:-mt-3" : "space-y-4",
+        )}
       >
         {showSubModeToggle && modeSegment}
         <CombatEncounterView
@@ -849,9 +848,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   // Idle / pick screen (Lovable style)
   return (
-    <div>
+    <div className="w-full min-w-0">
       {showSubModeToggle && modeSegment}
-      <WomPanel glow>
+      <WomPanel glow className="w-full">
       <div className="game-panel-header">Choose an Enemy</div>
       {previewingRemoteZone ? (
         <div className="mb-3 rounded-sm border border-amber-500/40 bg-amber-950/25 px-2 py-2 text-[10px] leading-snug text-amber-50">

@@ -52,7 +52,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlencode
@@ -65,6 +65,11 @@ import random
 
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
+from services.market_auction import (
+    auction_min_bid,
+    maybe_extend_auction_end,
+    settle_expired_auctions,
+)
 from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.achievement.achievement_service import AchievementService
@@ -4116,6 +4121,7 @@ async def handle_market_listings(request: web.Request) -> web.Response:
                JOIN item_templates it ON i.template_id = it.id
                JOIN characters c ON ml.seller_id = c.id
                WHERE ml.is_active = TRUE AND ml.expires_at > NOW()
+               AND COALESCE(ml.listing_kind, 'fixed') = 'fixed'
                ORDER BY ml.listed_at DESC
                LIMIT 50"""
         )
@@ -4211,8 +4217,8 @@ async def handle_list_item_on_market(request: web.Request) -> web.Response:
     # Insert listing
     try:
         listing_id = await db.fetchval(
-            """INSERT INTO market_listings (seller_id, item_id, price, quantity, is_active, listed_at, expires_at)
-               VALUES ($1, $2, $3, 1, TRUE, NOW(), NOW() + INTERVAL '7 days')
+            """INSERT INTO market_listings (seller_id, item_id, price, quantity, is_active, listed_at, expires_at, listing_kind)
+               VALUES ($1, $2, $3, 1, TRUE, NOW(), NOW() + INTERVAL '7 days', 'fixed')
                RETURNING id""",
             char["id"], uid, price
         )
@@ -4278,7 +4284,8 @@ async def handle_market_buy(request: web.Request) -> web.Response:
            FROM market_listings ml
            JOIN inventory i ON ml.item_id = i.id
            JOIN item_templates t ON i.template_id = t.id
-           WHERE ml.id = $1 AND ml.is_active = TRUE AND ml.expires_at > NOW()""",
+           WHERE ml.id = $1 AND ml.is_active = TRUE AND ml.expires_at > NOW()
+           AND COALESCE(ml.listing_kind, 'fixed') = 'fixed'""",
         uid,
     )
     if not listing:
@@ -4349,6 +4356,606 @@ async def handle_market_buy(request: web.Request) -> web.Response:
             }
         )
     )
+
+
+async def _tx_deduct_gold(conn, char_id: UUID, amount: int, reason: str) -> bool:
+    row = await conn.fetchrow(
+        """UPDATE characters SET gold = gold - $2
+           WHERE id = $1 AND gold >= $2
+           RETURNING gold""",
+        char_id,
+        amount,
+    )
+    if not row:
+        return False
+    await conn.execute(
+        """INSERT INTO gold_log(character_id, amount, balance_after, reason)
+           VALUES ($1, $2, $3, $4)""",
+        char_id,
+        -amount,
+        row["gold"],
+        reason,
+    )
+    return True
+
+
+async def _tx_add_gold(conn, char_id: UUID, amount: int, reason: str) -> None:
+    row = await conn.fetchrow(
+        """UPDATE characters SET gold = gold + $2 WHERE id = $1 RETURNING gold""",
+        char_id,
+        amount,
+    )
+    if not row:
+        return
+    await conn.execute(
+        """INSERT INTO gold_log(character_id, amount, balance_after, reason)
+           VALUES ($1, $2, $3, $4)""",
+        char_id,
+        amount,
+        row["gold"],
+        reason,
+    )
+
+
+async def handle_auction_listings(request: web.Request) -> web.Response:
+    """GET active timed auctions."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        await settle_expired_auctions(db, limit=80)
+        rows = await db.fetch(
+            """SELECT ml.id, ml.seller_id, ml.price, ml.quantity, ml.listed_at,
+                      ml.buyout_price, ml.current_bid, ml.bid_count,
+                      ml.auction_ends_at, ml.current_bidder_id,
+                      i.template_id,
+                      it.equip_slot AS template_equip_slot,
+                      it.item_type,
+                      it.name, it.icon, it.description,
+                      i.rarity, i.enhancement_level,
+                      c.name AS seller_name
+               FROM market_listings ml
+               JOIN inventory i ON ml.item_id = i.id
+               JOIN item_templates it ON i.template_id = it.id
+               JOIN characters c ON ml.seller_id = c.id
+               WHERE ml.is_active = TRUE
+                 AND COALESCE(ml.listing_kind, 'fixed') = 'auction'
+                 AND ml.auction_ends_at IS NOT NULL
+                 AND ml.auction_ends_at > NOW()
+               ORDER BY ml.auction_ends_at ASC
+               LIMIT 50"""
+        )
+        listings = []
+        for row in rows:
+            d = dict(row)
+            start = int(d.get("price") or 0)
+            cur = d.get("current_bid")
+            cur_int = int(cur) if cur is not None else None
+            d["min_bid"] = auction_min_bid(start, cur_int)
+            listings.append(d)
+        return web.json_response({"ok": True, "listings": _json_safe(listings)})
+    except Exception as e:
+        return web.json_response(
+            {"ok": False, "error": str(e), "message": "Failed to fetch auction listings."},
+            status=500,
+        )
+
+
+async def handle_auction_create(request: web.Request) -> web.Response:
+    """POST create timed auction listing."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    item_id_raw = (body.get("item_id") or "").strip()
+    starting_bid = int(body.get("starting_bid") or body.get("price") or 0)
+    duration_hours = int(body.get("duration_hours") or 72)
+    buyout_raw = body.get("buyout_price")
+    buyout_price: Optional[int] = None
+    if buyout_raw is not None and str(buyout_raw).strip() != "":
+        buyout_price = int(buyout_raw)
+
+    if not item_id_raw or starting_bid <= 0:
+        return web.json_response(
+            {"ok": False, "error": "invalid_params", "message": "Missing or invalid item_id/starting_bid."},
+            status=400,
+        )
+
+    duration_hours = max(24, min(168, duration_hours))
+
+    if buyout_price is not None:
+        if buyout_price < starting_bid:
+            return web.json_response(
+                {"ok": False, "error": "invalid_buyout", "message": "Buyout must be at least the starting bid."},
+                status=400,
+            )
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    try:
+        uid = UUID(item_id_raw)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_item_id", "message": "Invalid item id."}, status=400)
+
+    active_count = await db.fetchval(
+        "SELECT COUNT(*) FROM market_listings WHERE seller_id=$1 AND is_active=TRUE",
+        char["id"],
+    )
+    if active_count >= 10:
+        return web.json_response(
+            {"ok": False, "error": "listing_cap_reached", "message": "You have reached the maximum of 10 active listings."},
+            status=400,
+        )
+
+    inv_row = await db.fetchrow(
+        """SELECT i.*, it.soulbound, it.tradeable, it.item_type
+           FROM inventory i
+           JOIN item_templates it ON i.template_id = it.id
+           WHERE i.id=$1 AND i.character_id=$2""",
+        uid,
+        char["id"],
+    )
+    if not inv_row:
+        return web.json_response({"ok": False, "error": "item_not_found", "message": "Item not found in your inventory."}, status=400)
+    if inv_row["is_equipped"]:
+        return web.json_response({"ok": False, "error": "item_equipped", "message": "Cannot list equipped items."}, status=400)
+    if inv_row["soulbound"]:
+        return web.json_response({"ok": False, "error": "item_soulbound", "message": "Cannot list soulbound items."}, status=400)
+    if not inv_row["tradeable"]:
+        return web.json_response({"ok": False, "error": "item_not_tradeable", "message": "This item cannot be traded."}, status=400)
+    item_type = (inv_row["item_type"] or "").lower()
+    if item_type not in ("weapon", "armor", "accessory", "material", "gear"):
+        return web.json_response(
+            {"ok": False, "error": "item_type_not_listable", "message": f"Items of type '{item_type}' cannot be listed."},
+            status=400,
+        )
+
+    try:
+        listing_id = await db.fetchval(
+            """INSERT INTO market_listings (
+                   seller_id, item_id, price, quantity, is_active, listed_at, expires_at,
+                   listing_kind, buyout_price, auction_ends_at, bid_count, current_bid, current_bidder_id
+               )
+               VALUES (
+                   $1, $2, $3, 1, TRUE, NOW(), NOW() + make_interval(hours => $4::int),
+                   'auction', $5, NOW() + make_interval(hours => $4::int), 0, NULL, NULL
+               )
+               RETURNING id""",
+            char["id"],
+            uid,
+            starting_bid,
+            str(duration_hours),
+            buyout_price,
+        )
+        return web.json_response(
+            {"ok": True, "listing_id": str(listing_id), "message": f"Auction started (opens at {starting_bid}g)."},
+            status=200,
+        )
+    except Exception as e:
+        return web.json_response(
+            {"ok": False, "error": "listing_failed", "message": f"Failed to create auction: {str(e)}"},
+            status=500,
+        )
+
+
+async def handle_auction_bid(request: web.Request) -> web.Response:
+    """POST place gold bid on auction."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    listing_id_raw = (body.get("listing_id") or body.get("id") or "").strip()
+    amount = int(body.get("amount") or 0)
+    if not listing_id_raw or amount <= 0:
+        return web.json_response(
+            {"ok": False, "error": "invalid_params", "message": "Missing listing id or invalid bid amount."},
+            status=400,
+        )
+
+    try:
+        lid = UUID(listing_id_raw)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_listing_id", "message": "Invalid listing id."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    await settle_expired_auctions(db, limit=40)
+
+    try:
+        async with db.pool.acquire() as conn:
+            async with conn.transaction():
+                ml = await conn.fetchrow(
+                    """SELECT * FROM market_listings WHERE id = $1 FOR UPDATE""",
+                    lid,
+                )
+                if not ml or not ml["is_active"]:
+                    return web.json_response(
+                        {"ok": False, "error": "listing_not_found", "message": "Listing not found or closed."},
+                        status=404,
+                    )
+                if (ml.get("listing_kind") or "fixed") != "auction":
+                    return web.json_response(
+                        {"ok": False, "error": "not_auction", "message": "This is not an auction listing."},
+                        status=400,
+                    )
+                if ml["seller_id"] == char["id"]:
+                    return web.json_response(
+                        {"ok": False, "error": "own_listing", "message": "You cannot bid on your own auction."},
+                        status=400,
+                    )
+                ends_at = ml["auction_ends_at"]
+                if ends_at is None:
+                    return web.json_response(
+                        {"ok": False, "error": "invalid_listing", "message": "Auction has no end time."},
+                        status=400,
+                    )
+                now = datetime.now(timezone.utc)
+                if ends_at.tzinfo is None:
+                    ends_at = ends_at.replace(tzinfo=timezone.utc)
+                if ends_at <= now:
+                    return web.json_response(
+                        {"ok": False, "error": "auction_ended", "message": "This auction has ended."},
+                        status=400,
+                    )
+
+                start = int(ml["price"] or 0)
+                cur = ml["current_bid"]
+                cur_int = int(cur) if cur is not None else None
+                min_bid = auction_min_bid(start, cur_int)
+                if amount < min_bid:
+                    return web.json_response(
+                        {
+                            "ok": False,
+                            "error": "bid_too_low",
+                            "message": f"Minimum bid is {min_bid:,} gold.",
+                            "min_bid": min_bid,
+                        },
+                        status=400,
+                    )
+
+                bo = ml["buyout_price"]
+                if bo is not None and int(bo) > 0 and amount >= int(bo):
+                    return web.json_response(
+                        {
+                            "ok": False,
+                            "error": "use_buyout",
+                            "message": "That amount meets or exceeds buyout — use buyout instead.",
+                            "buyout_price": int(bo),
+                        },
+                        status=400,
+                    )
+
+                prev_bidder = ml["current_bidder_id"]
+                prev_amt = ml["current_bid"]
+                prev_amt_int = int(prev_amt) if prev_amt is not None else None
+
+                if prev_bidder is None:
+                    ok = await _tx_deduct_gold(conn, char["id"], amount, "auction bid")
+                    if not ok:
+                        return web.json_response(
+                            {"ok": False, "error": "insufficient_gold", "message": f"You need at least {amount:,} gold."},
+                            status=400,
+                        )
+                elif prev_bidder == char["id"]:
+                    if prev_amt_int is None:
+                        return web.json_response({"ok": False, "error": "invalid_state", "message": "Invalid auction state."}, status=400)
+                    delta = amount - prev_amt_int
+                    if delta <= 0:
+                        return web.json_response(
+                            {"ok": False, "error": "bid_too_low", "message": "Your new bid must be higher than your current bid."},
+                            status=400,
+                        )
+                    ok = await _tx_deduct_gold(conn, char["id"], delta, "auction bid raise")
+                    if not ok:
+                        return web.json_response(
+                            {"ok": False, "error": "insufficient_gold", "message": f"You need at least {delta:,} more gold."},
+                            status=400,
+                        )
+                else:
+                    ok = await _tx_deduct_gold(conn, char["id"], amount, "auction bid")
+                    if not ok:
+                        return web.json_response(
+                            {"ok": False, "error": "insufficient_gold", "message": f"You need at least {amount:,} gold."},
+                            status=400,
+                        )
+                    if prev_bidder is not None and prev_amt_int is not None:
+                        await _tx_add_gold(conn, prev_bidder, prev_amt_int, "auction outbid refund")
+
+                new_ends = maybe_extend_auction_end(ends_at, now)
+                await conn.execute(
+                    """UPDATE market_listings SET
+                           current_bid = $1,
+                           current_bidder_id = $2,
+                           bid_count = bid_count + 1,
+                           auction_ends_at = $3,
+                           expires_at = $3
+                       WHERE id = $4""",
+                    amount,
+                    char["id"],
+                    new_ends,
+                    lid,
+                )
+
+        return web.json_response(
+            {
+                "ok": True,
+                "message": f"Bid placed: {amount:,} gold.",
+                "bid": amount,
+            }
+        )
+    except Exception as e:
+        return web.json_response(
+            {"ok": False, "error": str(e), "message": "Failed to place bid."},
+            status=500,
+        )
+
+
+async def _transfer_listing_item_to_buyer(
+    db,
+    listing_row: dict,
+    buyer_char_id: UUID,
+    template_id: str,
+    rarity: str,
+    bonus: dict,
+    enhancement_level: int,
+    from_: str,
+) -> tuple[bool, str]:
+    """Give listed item copy to buyer and delete listed inventory row (auction buyout)."""
+    inv = InventoryService(db)
+    char_svc = CharacterService(db)
+    seller_id = listing_row["seller_id"]
+    pay = int(listing_row["pay_seller"])
+    await char_svc.add_gold(seller_id, pay, "market sale")
+    add_ok, add_msg = await inv.add_item(
+        buyer_char_id,
+        template_id,
+        rarity=rarity,
+        from_=from_,
+        bonus=bonus,
+        enhancement_level=enhancement_level,
+    )
+    if not add_ok:
+        await char_svc.deduct_gold(seller_id, pay, "revert: market transfer failed")
+        return False, add_msg or "Could not add item to inventory."
+    await db.execute("DELETE FROM inventory WHERE id=$1", listing_row["item_id"])
+    await db.execute(
+        "UPDATE market_listings SET is_active=FALSE, sold_at=NOW(), buyer_id=$2 WHERE id=$1",
+        listing_row["id"],
+        buyer_char_id,
+    )
+    return True, "ok"
+
+
+async def handle_auction_buyout(request: web.Request) -> web.Response:
+    """POST instant purchase at buyout price."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    listing_id_raw = (body.get("listing_id") or body.get("id") or "").strip()
+    if not listing_id_raw:
+        return web.json_response({"ok": False, "error": "missing_listing_id", "message": "Missing listing id."}, status=400)
+
+    try:
+        lid = UUID(listing_id_raw)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_listing_id", "message": "Invalid listing id."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    await settle_expired_auctions(db, limit=40)
+
+    listing = await db.fetchrow(
+        """SELECT ml.*, t.name, i.template_id,
+                  i.rarity, i.r_str, i.r_agi, i.r_int, i.r_spi, i.r_sta,
+                  i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating,
+                  COALESCE(i.enhancement_level, 0) AS enhancement_level
+           FROM market_listings ml
+           JOIN inventory i ON ml.item_id = i.id
+           JOIN item_templates t ON i.template_id = t.id
+           WHERE ml.id = $1 AND ml.is_active = TRUE
+             AND COALESCE(ml.listing_kind, 'fixed') = 'auction'
+             AND ml.auction_ends_at IS NOT NULL AND ml.auction_ends_at > NOW()""",
+        lid,
+    )
+    if not listing:
+        return web.json_response(
+            {"ok": False, "error": "listing_not_found", "message": "Listing not found, expired, or not an auction."},
+            status=404,
+        )
+    if listing["seller_id"] == char["id"]:
+        return web.json_response(
+            {"ok": False, "error": "own_listing", "message": "You cannot buy out your own auction."},
+            status=400,
+        )
+    bp = listing["buyout_price"]
+    if bp is None or int(bp) <= 0:
+        return web.json_response(
+            {"ok": False, "error": "no_buyout", "message": "This auction has no buyout price."},
+            status=400,
+        )
+    buyout = int(bp)
+
+    prev_bidder = listing["current_bidder_id"]
+    prev_amt = int(listing["current_bid"]) if listing["current_bid"] is not None else None
+
+    if prev_bidder is not None and prev_amt is not None:
+        await char_svc.add_gold(prev_bidder, prev_amt, "auction outbid refund")
+
+    paid = await char_svc.deduct_gold(char["id"], buyout, "auction buyout")
+    if not paid:
+        if prev_bidder is not None and prev_amt is not None:
+            await char_svc.deduct_gold(prev_bidder, prev_amt, "revert: buyout could not be paid")
+        return web.json_response(
+            {"ok": False, "error": "insufficient_gold", "message": f"You need {buyout:,} gold."},
+            status=400,
+        )
+
+    rarity = listing.get("rarity") or "common"
+    bonus = {
+        "r_str": listing.get("r_str", 0) or 0,
+        "r_agi": listing.get("r_agi", 0) or 0,
+        "r_int": listing.get("r_int", 0) or 0,
+        "r_spi": listing.get("r_spi", 0) or 0,
+        "r_sta": listing.get("r_sta", 0) or 0,
+        "r_haste": listing.get("r_haste", 0) or 0,
+        "r_lifesteal": listing.get("r_lifesteal", 0) or 0,
+        "r_resistance": listing.get("r_resistance", 0) or 0,
+        "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
+    }
+    enhancement_level = listing.get("enhancement_level", 0) or 0
+
+    row = dict(listing)
+    row["pay_seller"] = buyout
+    ok, msg = await _transfer_listing_item_to_buyer(
+        db,
+        row,
+        char["id"],
+        listing["template_id"],
+        rarity,
+        bonus,
+        enhancement_level,
+        "auction",
+    )
+    if not ok:
+        await char_svc.add_gold(char["id"], buyout, "refund: auction buyout failed")
+        if prev_bidder is not None and prev_amt is not None:
+            await char_svc.deduct_gold(prev_bidder, prev_amt, "revert: buyout refund after transfer failure")
+        return web.json_response({"ok": False, "error": "transfer_failed", "message": msg}, status=400)
+
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "message": f"Buyout: {listing['name']} for {buyout:,} gold.",
+                "item_name": listing["name"],
+                "price": buyout,
+            }
+        )
+    )
+
+
+async def handle_auction_cancel(request: web.Request) -> web.Response:
+    """POST cancel auction with no bids (seller only)."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    listing_id_raw = (body.get("listing_id") or body.get("id") or "").strip()
+    if not listing_id_raw:
+        return web.json_response({"ok": False, "error": "missing_listing_id", "message": "Missing listing id."}, status=400)
+
+    try:
+        lid = UUID(listing_id_raw)
+    except ValueError:
+        return web.json_response({"ok": False, "error": "invalid_listing_id", "message": "Invalid listing id."}, status=400)
+
+    discord_id = int(user["id"])
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(discord_id)
+    if not char:
+        return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
+
+    res = await db.execute(
+        """UPDATE market_listings SET is_active = FALSE
+           WHERE id = $1 AND seller_id = $2 AND is_active = TRUE
+             AND COALESCE(listing_kind, 'fixed') = 'auction'
+             AND bid_count = 0""",
+        lid,
+        char["id"],
+    )
+    if res == "UPDATE 0":
+        return web.json_response(
+            {"ok": False, "error": "cannot_cancel", "message": "Cannot cancel (not your auction, has bids, or already closed)."},
+            status=400,
+        )
+    return web.json_response({"ok": True, "message": "Auction cancelled. Item is available in your inventory again."})
 
 
 async def handle_buy_protection(request: web.Request) -> web.Response:
@@ -5345,6 +5952,11 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/market/listings", handle_market_listings)
     app.router.add_post("/api/game/market/list-item", handle_list_item_on_market)
     app.router.add_post("/api/game/market/buy", handle_market_buy)
+    app.router.add_get("/api/game/auction/listings", handle_auction_listings)
+    app.router.add_post("/api/game/auction/create", handle_auction_create)
+    app.router.add_post("/api/game/auction/bid", handle_auction_bid)
+    app.router.add_post("/api/game/auction/buyout", handle_auction_buyout)
+    app.router.add_post("/api/game/auction/cancel", handle_auction_cancel)
     app.router.add_post("/api/game/blacksmith/buy-protection", handle_buy_protection)
     app.router.add_post("/api/game/guild/create", handle_guild_create)
     app.router.add_post("/api/game/guild/checkin", handle_guild_checkin_post)

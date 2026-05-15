@@ -157,27 +157,15 @@ class MMORPGBot(commands.Bot):
             return
 
         try:
-            # Find expired active listings (7 days old, not sold)
-            expired = await self.db.fetch(
-                """SELECT id, seller_id, item_id, expires_at
-                   FROM market_listings
-                   WHERE is_active=TRUE AND sold_at IS NULL AND expires_at <= NOW()"""
+            from services.market_auction import settle_expired_auctions
+
+            await settle_expired_auctions(self.db, limit=200)
+            # Expired fixed-price listings: hide from browse; items become visible again (same row).
+            await self.db.execute(
+                """UPDATE market_listings SET is_active = FALSE
+                   WHERE is_active = TRUE AND sold_at IS NULL AND expires_at <= NOW()
+                     AND COALESCE(listing_kind, 'fixed') = 'fixed'"""
             )
-
-            if not expired:
-                return
-
-            log.info(f"Cleaning up {len(expired)} expired market listings...")
-
-            for listing in expired:
-                # Mark listing as inactive
-                await self.db.execute(
-                    "UPDATE market_listings SET is_active=FALSE WHERE id=$1",
-                    listing["id"]
-                )
-                # Log the expiration
-                log.debug(f"  Expired listing {listing['id']} for item {listing['item_id']}")
-
         except Exception as e:
             log.error(f"Market listing cleanup failed: {e}", exc_info=True)
 

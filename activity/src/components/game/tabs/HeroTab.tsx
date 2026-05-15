@@ -755,16 +755,16 @@ export function HeroTab() {
       : "—";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="relative w-full px-1 pb-6 hero-tab-ref">
-        <div className="relative tex-forge hero-forge-edge-gold-strong p-[2px]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 flex-col px-1 pb-2 hero-tab-ref">
+        <div className="relative flex min-h-0 flex-1 flex-col tex-forge hero-forge-edge-gold-strong p-[2px]">
           <span className="corner-ornament corner-tl" aria-hidden />
           <span className="corner-ornament corner-tr" aria-hidden />
           <span className="corner-ornament corner-bl" aria-hidden />
           <span className="corner-ornament corner-br" aria-hidden />
 
-          <div className="relative grid grid-cols-12 gap-px border border-gold/30 bg-black/60">
-            <section className="relative col-span-12 overflow-hidden tex-leather min-h-[560px] lg:col-span-5">
+          <div className="relative grid min-h-0 flex-1 grid-cols-12 gap-px border border-gold/30 bg-black/60 md:[grid-template-rows:minmax(0,1fr)]">
+            <section className="relative col-span-12 flex min-h-0 flex-col overflow-hidden tex-leather md:col-span-5">
               <div className="flex items-center justify-between px-5 pt-4">
                 <div className="hero-forge-clip-tag border border-gold/40 bg-gold/15 px-3 py-1">
                   <span className="font-display text-[10px] tracking-[0.3em] text-gold-200">
@@ -795,7 +795,7 @@ export function HeroTab() {
                 <div className="divider-ornate mb-2 mt-4" />
               </div>
 
-              <div className="relative mx-auto mt-2 w-full max-w-[460px] aspect-[4/5]">
+              <div className="relative mx-auto mt-2 w-full max-w-[460px] aspect-[4/5] max-h-[min(520px,calc(100dvh-16rem))] shrink-0 md:max-h-[min(480px,calc(100dvh-18rem))]">
                 <div className="absolute inset-x-10 inset-y-6 bg-[radial-gradient(circle_at_50%_40%,oklch(0.78_0.14_78/0.35),transparent_65%)] blur-2xl" />
                 <div className="absolute inset-x-14 top-2 bottom-16 sm:inset-x-20">
                   <div className="relative h-full w-full overflow-hidden border border-gold/40 tex-parchment hero-forge-clip-blade hero-forge-edge-gold">
@@ -845,7 +845,7 @@ export function HeroTab() {
               </div>
             </section>
 
-            <section className="relative col-span-12 flex flex-col bg-background lg:col-span-7">
+            <section className="relative col-span-12 flex min-h-0 flex-col bg-background md:col-span-7">
               {accessToken && char ? (
                 <div className="relative">
                   <div className="hero-forge-clip-banner flex items-center justify-between bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim px-6 py-2.5 text-background sm:px-8">
@@ -934,7 +934,8 @@ export function HeroTab() {
                 </button>
               </div>
 
-              <div className="flex flex-1 flex-col p-4 sm:p-6">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[10px] uppercase tracking-[0.3em] text-gold-dim">
                     BAG · {bagSlotsUsed}/{bagSlotsMax || "—"}{" "}
@@ -1189,9 +1190,9 @@ export function HeroTab() {
                     </p>
                   </div>
                 ) : null}
-              </div>
+                </div>
 
-              <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+              <div className="shrink-0 px-4 pb-4 sm:px-6 sm:pb-6">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {(
                     [
@@ -1212,7 +1213,7 @@ export function HeroTab() {
                 </div>
               </div>
 
-              <div className="p-4 pt-0 sm:p-6 sm:pt-0">
+              <div className="shrink-0 p-4 pt-0 sm:p-6 sm:pt-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -1232,6 +1233,7 @@ export function HeroTab() {
                   </div>
                   <div className="absolute top-0 -left-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-[300%]" />
                 </button>
+              </div>
               </div>
             </section>
           </div>

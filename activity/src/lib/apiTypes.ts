@@ -609,6 +609,32 @@ export type MarketListingRow = {
   seller_name: string;
 };
 
+/** Player auction from GET /api/game/auction/listings. */
+export type AuctionListingRow = {
+  id: string;
+  seller_id?: string | null;
+  template_id?: string | null;
+  template_equip_slot?: string | null;
+  item_type?: string | null;
+  /** Opening / minimum first bid. */
+  price: number;
+  quantity: number;
+  listed_at: string;
+  name: string;
+  icon?: string | null;
+  description?: string | null;
+  rarity: string;
+  enhancement_level?: number | null;
+  seller_name: string;
+  buyout_price?: number | null;
+  current_bid?: number | null;
+  bid_count?: number | null;
+  auction_ends_at: string;
+  current_bidder_id?: string | null;
+  /** Server-computed next minimum bid. */
+  min_bid: number;
+};
+
 /** GET /api/game/guild/me + related guild hub payloads */
 export type GuildTechDefinition = {
   id: string;

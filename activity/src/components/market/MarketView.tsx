@@ -36,7 +36,7 @@ import {
 import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import * as api from "@/lib/gameApi";
-import type { InvRow, MarketListingRow, ShopCatalogItem } from "@/lib/apiTypes";
+import type { InvRow, MarketListingRow, ShopCatalogItem, AuctionListingRow } from "@/lib/apiTypes";
 
 const RULES = {
   MAX_LISTINGS_PER_HERO: 10,
@@ -64,6 +64,31 @@ type MarketListingUI = {
   is_own?: boolean;
   icon?: string | null;
   template_id?: string | null;
+};
+
+type AuctionListingUI = {
+  id: string;
+  kind: "auction";
+  name: string;
+  description: string;
+  rarity: Rarity;
+  type: ItemType;
+  enhancement_level: number;
+  template_equip_slot?: string;
+  seller_name: string;
+  listed_at_label: string;
+  listed_at_iso: string;
+  starting_bid: number;
+  current_bid: number | null;
+  min_bid: number;
+  bid_count: number;
+  buyout_price: number | null;
+  auction_ends_at: string;
+  is_own?: boolean;
+  icon?: string | null;
+  template_id?: string | null;
+  /** For sorting: current bid or opening bid. */
+  effective_bid: number;
 };
 
 interface FilterState {
@@ -171,6 +196,47 @@ function formatListedAt(iso: string): string {
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
+function formatTimeRemaining(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "—";
+  const sec = Math.max(0, Math.round((t - Date.now()) / 1000));
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+  return `${Math.floor(sec / 86400)}d ${Math.floor((sec % 86400) / 3600)}h`;
+}
+
+function rowToAuctionUI(row: AuctionListingRow, selfId: string | undefined, selfName: string | undefined): AuctionListingUI {
+  const sid = row.seller_id != null ? String(row.seller_id) : undefined;
+  const is_own =
+    (!!selfId && sid && selfId === sid) || (!!selfName && row.seller_name === selfName);
+  const cur = row.current_bid != null ? Number(row.current_bid) : null;
+  const start = Number(row.price || 0);
+  return {
+    id: row.id,
+    kind: "auction",
+    name: row.name,
+    description: (row.description || "").trim() || "—",
+    rarity: normalizeRarity(row.rarity),
+    type: normalizeItemType(row.item_type),
+    enhancement_level: row.enhancement_level ?? 0,
+    template_equip_slot: row.template_equip_slot ?? undefined,
+    seller_name: row.seller_name,
+    listed_at_label: formatListedAt(row.listed_at),
+    listed_at_iso: row.listed_at,
+    starting_bid: start,
+    current_bid: cur,
+    min_bid: Number(row.min_bid ?? start),
+    bid_count: row.bid_count ?? 0,
+    buyout_price: row.buyout_price != null ? Number(row.buyout_price) : null,
+    auction_ends_at: row.auction_ends_at,
+    is_own,
+    icon: row.icon,
+    template_id: row.template_id,
+    effective_bid: cur ?? start,
+  };
+}
+
 function rowToMarketUI(row: MarketListingRow, selfId: string | undefined, selfName: string | undefined): MarketListingUI {
   const sid = row.seller_id != null ? String(row.seller_id) : undefined;
   const is_own =
@@ -229,6 +295,34 @@ function filterAndSortMarket(items: MarketListingUI[], f: FilterState): MarketLi
       break;
     case "newest":
     default:
+      break;
+  }
+  return out;
+}
+
+function filterAndSortAuction(items: AuctionListingUI[], f: FilterState): AuctionListingUI[] {
+  let out = items.filter((i) => {
+    if (f.rarity !== "all" && i.rarity !== f.rarity) return false;
+    if (f.type !== "all" && i.type !== f.type) return false;
+    if (f.q) {
+      const q = f.q.toLowerCase();
+      if (!i.name.toLowerCase().includes(q) && !i.seller_name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+  switch (f.sort) {
+    case "price-asc":
+      out = [...out].sort((a, b) => a.effective_bid - b.effective_bid);
+      break;
+    case "price-desc":
+      out = [...out].sort((a, b) => b.effective_bid - a.effective_bid);
+      break;
+    case "ending-soon":
+      out = [...out].sort((a, b) => new Date(a.auction_ends_at).getTime() - new Date(b.auction_ends_at).getTime());
+      break;
+    case "newest":
+    default:
+      out = [...out].sort((a, b) => new Date(b.listed_at_iso).getTime() - new Date(a.listed_at_iso).getTime());
       break;
   }
   return out;
@@ -343,10 +437,15 @@ function FiltersBar({ state, onChange, mode }: { state: FilterState; onChange: (
       />
       <SelectChip
         label="Sort"
-        value={state.sort === "ending-soon" ? "newest" : state.sort}
+        value={state.sort}
         options={
           mode === "auction"
-            ? [{ v: "newest", l: "Coming soon" }]
+            ? [
+                { v: "ending-soon", l: "Ending soon" },
+                { v: "newest", l: "Newest listed" },
+                { v: "price-asc", l: "Opening bid ↑" },
+                { v: "price-desc", l: "Opening bid ↓" },
+              ]
             : [
                 { v: "newest", l: "Newest" },
                 { v: "price-asc", l: "Price Low → High" },
@@ -461,6 +560,456 @@ function MarketCard({
           </AlertDialogContent>
         </AlertDialog>
       </div>
+    </div>
+  );
+}
+
+function AuctionBidModal({
+  item,
+  gold,
+  onClose,
+  onPlaced,
+}: {
+  item: AuctionListingUI;
+  gold: number;
+  onClose: () => void;
+  onPlaced: () => void;
+}) {
+  const { accessToken, guildId } = useGameSession();
+  const [amount, setAmount] = useState(item.min_bid);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setAmount(item.min_bid);
+  }, [item.id, item.min_bid]);
+
+  const invalid = amount < item.min_bid || amount > gold;
+
+  const submit = async () => {
+    if (!accessToken || invalid || submitting) return;
+    setSubmitting(true);
+    try {
+      const j = await api.postAuctionBid(accessToken, item.id, amount, guildId);
+      if (j.ok) {
+        toast.success(j.message || "Bid placed", { description: `${fmtGold(amount)} 🪙` });
+        onPlaced();
+        onClose();
+      } else {
+        if (j.error === "use_buyout" && j.buyout_price != null) {
+          toast.error(j.message || "Use buyout", { description: `${fmtGold(j.buyout_price)} 🪙 buyout` });
+        } else {
+          toast.error(j.message || "Bid failed", { description: j.min_bid != null ? `Min ${fmtGold(j.min_bid)} 🪙` : undefined });
+        }
+      }
+    } catch (e) {
+      toast.error("Bid failed", { description: String(e) });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalShell title={`Bid — ${item.name}`} onClose={onClose}>
+      <div className="rounded-md border border-[color:var(--gold)]/20 bg-black/30 p-3 text-xs space-y-2 text-muted-foreground">
+        <div className="flex justify-between">
+          <span>Current high</span>
+          <span className="font-display text-foreground tabular-nums">
+            {item.current_bid != null ? `${fmtGold(item.current_bid)} 🪙` : "No bids yet"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Minimum bid</span>
+          <span className="font-display text-[color:var(--gold-bright)] tabular-nums">{fmtGold(item.min_bid)} 🪙</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Your gold</span>
+          <span className="font-display text-foreground tabular-nums">{fmtGold(gold)} 🪙</span>
+        </div>
+      </div>
+      <div className="mt-4 relative">
+        <Coins className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--gold-bright)]" />
+        <Input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(Number(e.target.value || 0))}
+          className="pl-8 bg-black/40 border-[color:var(--gold)]/30 font-display text-base tabular-nums"
+        />
+      </div>
+      <p className="mt-2 text-[10px] text-muted-foreground italic">
+        Bids escalate by ~5% over the current high. Late bids extend the timer by up to 5 minutes (anti-snipe).
+      </p>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} className="border-[color:var(--gold)]/30">
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void submit()}
+          disabled={invalid || submitting}
+          className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display"
+        >
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gavel className="h-4 w-4" />}
+          Place bid
+        </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function CreateAuctionModal({
+  onClose,
+  items,
+  totalActiveListings,
+  onCreated,
+}: {
+  onClose: () => void;
+  items: InvRow[];
+  totalActiveListings: number;
+  onCreated: () => void;
+}) {
+  const { accessToken, guildId } = useGameSession();
+  const eligible = useMemo(() => items.filter(isListableItem), [items]);
+  const [selectedId, setSelectedId] = useState<string>(eligible[0]?.id ?? "");
+  const sel = eligible.find((i) => i.id === selectedId);
+  const suggested = sel ? api.calculateMarketPrice(sel, sel.vendor_sell ?? undefined) : 100;
+  const [startingBid, setStartingBid] = useState(Math.max(1, suggested));
+  const [buyout, setBuyout] = useState<number | "">("");
+  const [durationHours, setDurationHours] = useState(72);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (eligible.length && !eligible.some((e) => e.id === selectedId)) {
+      setSelectedId(eligible[0].id);
+    }
+  }, [eligible, selectedId]);
+
+  useEffect(() => {
+    setStartingBid(Math.max(1, suggested));
+  }, [suggested, sel?.id]);
+
+  const overCap = totalActiveListings >= RULES.MAX_LISTINGS_PER_HERO;
+  const buyoutNum = buyout === "" ? null : Number(buyout);
+  const buyoutInvalid = buyoutNum != null && buyoutNum < startingBid;
+  const invalid = !sel || startingBid < 1 || overCap || buyoutInvalid;
+
+  const handleCreate = async () => {
+    if (!accessToken || !sel || invalid || submitting) return;
+    setSubmitting(true);
+    try {
+      const j = await api.postAuctionCreate(
+        accessToken,
+        {
+          item_id: sel.id,
+          starting_bid: startingBid,
+          duration_hours: durationHours,
+          buyout_price: buyoutNum != null && buyoutNum > 0 ? buyoutNum : null,
+        },
+        guildId,
+      );
+      if (j.ok !== false) {
+        toast.success("Auction created!", { description: j.message || `Opens at ${fmtGold(startingBid)} 🪙` });
+        onCreated();
+        onClose();
+      } else {
+        toast.error("Could not create auction", { description: j.message });
+      }
+    } catch (e) {
+      toast.error("Auction failed", { description: String(e) });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalShell title="Start an auction" onClose={onClose}>
+      {overCap ? (
+        <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-300 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Limit of {RULES.MAX_LISTINGS_PER_HERO} active listings (market + auctions combined).
+        </div>
+      ) : null}
+
+      <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Item</label>
+      <div className="mt-1.5 grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+        {eligible.length === 0 ? (
+          <div className="col-span-2 rounded-md border border-dashed border-[color:var(--gold)]/30 p-4 text-center text-xs text-muted-foreground">
+            Nothing to auction — same trade rules as Player Market listings.
+          </div>
+        ) : (
+          eligible.map((it) => {
+            const active = it.id === selectedId;
+            const r = normalizeRarity(it.rarity || "common");
+            return (
+              <button
+                type="button"
+                key={it.id}
+                onClick={() => setSelectedId(it.id)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border p-2 text-left transition cursor-pointer",
+                  active
+                    ? "border-[color:var(--gold)] bg-[color:var(--gold)]/10 shadow-gold"
+                    : "border-[color:var(--gold)]/20 bg-black/30 hover:border-[color:var(--gold)]/50",
+                )}
+              >
+                <div className={cn("h-11 w-11 shrink-0 rounded ring-1 grid place-items-center", RARITY_STYLES[r].ring)}>
+                  <ItemIcon item={it} size={40} />
+                </div>
+                <div className="min-w-0">
+                  <div className={cn("text-xs font-display font-semibold truncate", RARITY_STYLES[r].text)}>{it.name}</div>
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Opening bid</label>
+          <Input
+            type="number"
+            className="mt-1 bg-black/40 border-[color:var(--gold)]/30 font-display tabular-nums"
+            value={startingBid}
+            onChange={(e) => setStartingBid(Number(e.target.value || 0))}
+          />
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Duration (hours)</label>
+          <Input
+            type="number"
+            className="mt-1 bg-black/40 border-[color:var(--gold)]/30 font-display tabular-nums"
+            min={24}
+            max={168}
+            value={durationHours}
+            onChange={(e) => setDurationHours(Math.min(168, Math.max(24, Number(e.target.value || 72))))}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Buyout (optional)</label>
+        <Input
+          type="number"
+          placeholder="Instant purchase price"
+          className="mt-1 bg-black/40 border-[color:var(--gold)]/30 font-display tabular-nums"
+          value={buyout}
+          onChange={(e) => {
+            const v = e.target.value;
+            setBuyout(v === "" ? "" : Number(v));
+          }}
+        />
+        {buyoutInvalid ? <p className="text-[10px] text-amber-400 mt-1">Buyout must be ≥ opening bid.</p> : null}
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} className="border-[color:var(--gold)]/30">
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void handleCreate()}
+          disabled={invalid || submitting}
+          className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display"
+        >
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gavel className="h-4 w-4" />}
+          Start auction
+        </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function AuctionCard({
+  item,
+  gold,
+  onRefresh,
+}: {
+  item: AuctionListingUI;
+  gold: number;
+  onRefresh: () => void;
+}) {
+  const { accessToken, guildId } = useGameSession();
+  const [bidOpen, setBidOpen] = useState(false);
+  const [buyConfirm, setBuyConfirm] = useState(false);
+
+  const iconItem: Partial<InvRow> = {
+    id: item.id,
+    template_id: item.template_id ?? undefined,
+    name: item.name,
+    icon: item.icon,
+    rarity: item.rarity,
+    enhancement_level: item.enhancement_level,
+    template_equip_slot: item.template_equip_slot,
+    item_type: item.type,
+  };
+
+  const canBid = !item.is_own && gold >= item.min_bid;
+  const buyout = item.buyout_price;
+  const canBuyout = !item.is_own && buyout != null && buyout > 0 && gold >= buyout;
+
+  const cancelMine = async () => {
+    if (!accessToken || !item.is_own) return;
+    try {
+      const j = await api.postAuctionCancel(accessToken, item.id, guildId);
+      if (j.ok) {
+        toast.success(j.message || "Auction cancelled");
+        onRefresh();
+      } else {
+        toast.error(j.message || "Cannot cancel");
+      }
+    } catch (e) {
+      toast.error("Cancel failed", { description: String(e) });
+    }
+  };
+
+  const doBuyout = async () => {
+    if (!accessToken || buyout == null) return;
+    try {
+      const j = await api.postAuctionBuyout(accessToken, item.id, guildId);
+      if (j.ok) {
+        toast.success(j.message || "Purchased!", { description: j.item_name });
+        onRefresh();
+        setBuyConfirm(false);
+      } else {
+        toast.error(j.message || "Buyout failed");
+      }
+    } catch (e) {
+      toast.error("Buyout failed", { description: String(e) });
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        "group relative rounded-lg border border-[color:var(--gold)]/20 bg-gradient-to-b from-black/40 to-black/20 p-3 transition hover:border-[color:var(--gold)]/60 hover:-translate-y-0.5",
+        RARITY_STYLES[item.rarity].glow,
+      )}
+    >
+      <div className="flex gap-3">
+        <div
+          className={cn(
+            "relative h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-md ring-2 grid place-items-center bg-gradient-to-br from-black/60 to-black/20",
+            RARITY_STYLES[item.rarity].ring,
+          )}
+        >
+          <ItemIcon item={iconItem as InvRow} size={52} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className={cn("font-display text-sm sm:text-base font-semibold leading-tight truncate", RARITY_STYLES[item.rarity].text)}>
+              {item.name}
+            </h4>
+            <RarityChip rarity={item.rarity} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.description}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {item.template_equip_slot ? (
+              <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-[color:var(--gold)]/30 text-muted-foreground">
+                {item.template_equip_slot}
+              </Badge>
+            ) : null}
+            <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-200 font-display">
+              {formatTimeRemaining(item.auction_ends_at)} left
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">
+              by <span className="text-foreground/80 font-medium">{item.seller_name}</span> · {item.listed_at_label}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 border-t border-[color:var(--gold)]/15 pt-3 text-xs">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+          <span>
+            Opening <span className="text-[color:var(--gold-bright)] font-display tabular-nums">{fmtGold(item.starting_bid)}</span>
+          </span>
+          <span>
+            High bid{" "}
+            <span className="text-foreground font-display tabular-nums">
+              {item.current_bid != null ? fmtGold(item.current_bid) : "—"}
+            </span>
+          </span>
+          <span>
+            Next min <span className="text-emerald-300/90 font-display tabular-nums">{fmtGold(item.min_bid)}</span>
+          </span>
+          <span>{item.bid_count} bid{item.bid_count === 1 ? "" : "s"}</span>
+        </div>
+        {buyout != null && buyout > 0 ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Tag className="h-3.5 w-3.5 text-[color:var(--gold-bright)]" />
+            Buyout <span className="text-[color:var(--gold-bright)] font-display font-semibold tabular-nums">{fmtGold(buyout)} 🪙</span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 justify-end">
+        {item.is_own ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={item.bid_count > 0}
+            onClick={() => void cancelMine()}
+            className="border-[color:var(--gold)]/30 font-display text-[10px]"
+          >
+            Cancel auction
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canBid}
+              onClick={() => setBidOpen(true)}
+              className="border-[color:var(--gold)]/40 font-display text-[10px]"
+            >
+              <Gavel className="h-3 w-3" /> Bid
+            </Button>
+            {buyout != null && buyout > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canBuyout}
+                onClick={() => setBuyConfirm(true)}
+                className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display text-[10px]"
+              >
+                Buyout
+              </Button>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      {!item.is_own && !canBid && gold < item.min_bid ? (
+        <p className="mt-2 text-[10px] text-amber-400 text-right">Not enough gold for minimum bid.</p>
+      ) : null}
+      {bidOpen ? (
+        <AuctionBidModal item={item} gold={gold} onClose={() => setBidOpen(false)} onPlaced={() => onRefresh()} />
+      ) : null}
+
+      <AlertDialog open={buyConfirm} onOpenChange={setBuyConfirm}>
+        <AlertDialogContent className="ornate-frame border-[color:var(--gold)]/40 max-w-[min(100vw-2rem,28rem)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display tracking-wider text-[color:var(--gold-bright)]">Confirm buyout</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Pay <span className="text-[color:var(--gold-bright)] font-display">{buyout != null ? fmtGold(buyout) : "—"} 🪙</span> for{" "}
+                <span className={cn("font-display", RARITY_STYLES[item.rarity].text)}>{item.name}</span> now?
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[color:var(--gold)]/30">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void doBuyout()}
+              className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display tracking-wider"
+            >
+              Buy now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -763,12 +1312,12 @@ function SuppliesPanel({ playerGold }: { playerGold: number }) {
 function ListMarketModal({
   onClose,
   items,
-  currentListCount,
+  totalActiveListings,
   onListed,
 }: {
   onClose: () => void;
   items: InvRow[];
-  currentListCount: number;
+  totalActiveListings: number;
   onListed: () => void;
 }) {
   const { listItemOnMarket } = useGameSession();
@@ -789,7 +1338,7 @@ function ListMarketModal({
     setPrice(suggested);
   }, [suggested, sel?.id]);
 
-  const overCap = currentListCount >= RULES.MAX_LISTINGS_PER_HERO;
+  const overCap = totalActiveListings >= RULES.MAX_LISTINGS_PER_HERO;
   const tooLow = price < suggested * 0.5;
   const tooHigh = price > suggested * 3;
   const invalid = !sel || price < 1 || overCap;
@@ -910,7 +1459,7 @@ function ListMarketModal({
         <div className="flex justify-between">
           <span>Active listings</span>
           <span className="font-display tabular-nums text-foreground">
-            {currentListCount}/{RULES.MAX_LISTINGS_PER_HERO}
+            {totalActiveListings}/{RULES.MAX_LISTINGS_PER_HERO}
           </span>
         </div>
         <p className="text-[10px] italic pt-1 border-t border-[color:var(--gold)]/10">
@@ -955,13 +1504,17 @@ export function MarketView() {
 
   const [mode, setMode] = useState<Mode>("market");
   const [marketViewTab, setMarketViewTab] = useState<"browse" | "mine">("browse");
+  const [auctionViewTab, setAuctionViewTab] = useState<"browse" | "mine">("browse");
   const [filters, setFilters] = useState<FilterState>({ q: "", rarity: "all", type: "all", sort: "newest" });
   const debouncedQ = useDebounced(filters.q, 200);
   const effectiveFilters = useMemo(() => ({ ...filters, q: debouncedQ }), [filters, debouncedQ]);
 
   const [showListModal, setShowListModal] = useState(false);
+  const [showAuctionModal, setShowAuctionModal] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [historyTab, setHistoryTab] = useState(false);
+  const [auctionListingsRaw, setAuctionListingsRaw] = useState<AuctionListingRow[]>([]);
+  const [auctionLoading, setAuctionLoading] = useState(false);
 
   useEffect(() => {
     if (mode !== "market") setHistoryTab(false);
@@ -981,6 +1534,15 @@ export function MarketView() {
 
   const myMarketCount = useMemo(() => mappedMarket.filter((m) => m.is_own).length, [mappedMarket]);
 
+  const mappedAuction = useMemo(
+    () => auctionListingsRaw.map((row) => rowToAuctionUI(row, charId, charName)),
+    [auctionListingsRaw, charId, charName],
+  );
+
+  const myAuctionCount = useMemo(() => mappedAuction.filter((a) => a.is_own).length, [mappedAuction]);
+
+  const totalActiveListings = myMarketCount + myAuctionCount;
+
   const filteredMarketBase = useMemo(() => {
     if (marketViewTab === "browse") return mappedMarket.filter((m) => !m.is_own);
     return mappedMarket.filter((m) => m.is_own);
@@ -988,15 +1550,46 @@ export function MarketView() {
 
   const visibleMarket = useMemo(() => filterAndSortMarket(filteredMarketBase, effectiveFilters), [filteredMarketBase, effectiveFilters]);
 
+  const filteredAuctionBase = useMemo(() => {
+    if (auctionViewTab === "browse") return mappedAuction.filter((a) => !a.is_own);
+    return mappedAuction.filter((a) => a.is_own);
+  }, [mappedAuction, auctionViewTab]);
+
+  const visibleAuction = useMemo(() => filterAndSortAuction(filteredAuctionBase, effectiveFilters), [filteredAuctionBase, effectiveFilters]);
+
   const refreshAll = useCallback(async () => {
     await refreshMarketListings();
     await refreshInventory();
   }, [refreshMarketListings, refreshInventory]);
 
+  const refreshAuctions = useCallback(async () => {
+    if (!accessToken) return;
+    setAuctionLoading(true);
+    try {
+      const j = await api.getAuctionListings(accessToken, guildId);
+      setAuctionListingsRaw(j.listings || []);
+    } catch (e) {
+      console.warn(e);
+      toast.error("Failed to load auctions");
+    } finally {
+      setAuctionLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  const refreshAuctionAndInv = useCallback(async () => {
+    await refreshAuctions();
+    await refreshInventory();
+  }, [refreshAuctions, refreshInventory]);
+
   useEffect(() => {
     if (!accessToken) return;
     void refreshMarketListings();
   }, [accessToken, refreshMarketListings]);
+
+  useEffect(() => {
+    if (mode !== "auction" || !accessToken) return;
+    void refreshAuctions();
+  }, [mode, accessToken, refreshAuctions]);
 
   const handleBuy = useCallback(
     async (item: MarketListingUI) => {
@@ -1019,7 +1612,9 @@ export function MarketView() {
   const setModeSafe = (m: Mode) => {
     setMode(m);
     if (m === "auction") {
-      setFilters((f) => ({ ...f, sort: "newest" }));
+      setFilters((f) => ({ ...f, sort: "ending-soon" }));
+    } else if (m === "market") {
+      setFilters((f) => (f.sort === "ending-soon" ? { ...f, sort: "newest" } : f));
     }
   };
 
@@ -1047,7 +1642,7 @@ export function MarketView() {
             onClick={() => setModeSafe("auction")}
             icon={<Gavel className="h-4 w-4" />}
             title="Auction House"
-            tag="Coming soon — timed bids"
+            tag="Bids · buyouts · anti-snipe"
           />
           <SegmentBtn
             active={mode === "market"}
@@ -1093,6 +1688,22 @@ export function MarketView() {
               label="History"
             />
           </div>
+        ) : mode === "auction" ? (
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-md border border-[color:var(--gold)]/20 bg-black/30 p-1">
+            <SubTabBtn
+              active={auctionViewTab === "browse"}
+              onClick={() => setAuctionViewTab("browse")}
+              icon={<Search className="h-3.5 w-3.5" />}
+              label="Browse"
+            />
+            <SubTabBtn
+              active={auctionViewTab === "mine"}
+              onClick={() => setAuctionViewTab("mine")}
+              icon={<ScrollText className="h-3.5 w-3.5" />}
+              label="My auctions"
+              count={myAuctionCount}
+            />
+          </div>
         ) : null}
       </OrnateFrame>
 
@@ -1103,20 +1714,73 @@ export function MarketView() {
           </div>
         </ScrollArea>
       ) : mode === "auction" ? (
-        <EmptyState
-          title="Auction House — in development"
-          hint="Timed auctions, bids, and buyouts require new server APIs. Use Player Market for listings or Supplies for the NPC shop."
-          cta={
-            <div className="flex flex-wrap gap-2 justify-center">
-              <Button type="button" onClick={() => setModeSafe("market")} className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display">
-                <Store className="h-4 w-4" /> Player Market
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setModeSafe("supplies")} className="border-[color:var(--gold)]/40 font-display">
-                <Package className="h-4 w-4" /> Supplies
+        <>
+          <OrnateFrame>
+            <FiltersBar state={filters} onChange={setFilters} mode={mode} />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[11px] text-muted-foreground">
+                Showing <span className="text-foreground font-semibold">{visibleAuction.length}</span> auctions ·{" "}
+                <span className="italic">Gold held from bids until outbid or won.</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setShowAuctionModal(true)}
+                disabled={totalActiveListings >= RULES.MAX_LISTINGS_PER_HERO}
+                className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display tracking-wider"
+              >
+                <Gavel className="h-3.5 w-3.5" /> New auction
+                <Badge className="ml-1 bg-black/30 text-[color:var(--gold-bright)] border-0">
+                  {totalActiveListings}/{RULES.MAX_LISTINGS_PER_HERO}
+                </Badge>
               </Button>
             </div>
-          }
-        />
+          </OrnateFrame>
+
+          <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
+            {auctionLoading ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground text-xs">
+                <Loader2 className="h-8 w-8 animate-spin text-[color:var(--gold-bright)]" />
+                Loading auctions…
+              </div>
+            ) : visibleAuction.length === 0 ? (
+              <EmptyState
+                title={auctionViewTab === "mine" ? "No auctions" : "No auctions match"}
+                hint={
+                  auctionViewTab === "mine"
+                    ? "Start an auction from tradeable gear (24–168h duration, optional buyout)."
+                    : "Try filters — or open New auction to list timed bidding."
+                }
+                cta={
+                  auctionViewTab === "mine" ? (
+                    <Button
+                      type="button"
+                      onClick={() => setShowAuctionModal(true)}
+                      className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display"
+                    >
+                      <Gavel className="h-4 w-4" /> New auction
+                    </Button>
+                  ) : null
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+                {visibleAuction.map((it) => (
+                  <AuctionCard key={it.id} item={it} gold={gold} onRefresh={() => void refreshAuctionAndInv()} />
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+
+          {showAuctionModal ? (
+            <CreateAuctionModal
+              onClose={() => setShowAuctionModal(false)}
+              items={inventory?.items ?? []}
+              totalActiveListings={totalActiveListings}
+              onCreated={() => void refreshAuctionAndInv()}
+            />
+          ) : null}
+        </>
       ) : view === "history" ? (
         <EmptyState
           title="Trade history"
@@ -1136,11 +1800,13 @@ export function MarketView() {
                 type="button"
                 size="sm"
                 onClick={() => setShowListModal(true)}
-                disabled={myMarketCount >= RULES.MAX_LISTINGS_PER_HERO}
+                disabled={totalActiveListings >= RULES.MAX_LISTINGS_PER_HERO}
                 className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display tracking-wider"
               >
                 <Plus className="h-3.5 w-3.5" /> Sell / List
-                <Badge className="ml-1 bg-black/30 text-[color:var(--gold-bright)] border-0">{myMarketCount}/{RULES.MAX_LISTINGS_PER_HERO}</Badge>
+                <Badge className="ml-1 bg-black/30 text-[color:var(--gold-bright)] border-0">
+                  {totalActiveListings}/{RULES.MAX_LISTINGS_PER_HERO}
+                </Badge>
               </Button>
             </div>
           </OrnateFrame>
@@ -1186,7 +1852,7 @@ export function MarketView() {
             <Rule
               icon={<Store className="h-3.5 w-3.5" />}
               title="Player Market"
-              body={`Fixed-price, instant purchase. Up to ${RULES.MAX_LISTINGS_PER_HERO} active listings each. Soulbound / equipped gear cannot be listed. Activity listing has no upfront fee.`}
+              body={`Fixed-price, instant purchase. Up to ${RULES.MAX_LISTINGS_PER_HERO} active listings total (market + auctions). Soulbound / equipped gear cannot be listed. Activity listing has no upfront fee.`}
             />
             <Rule
               icon={<Package className="h-3.5 w-3.5" />}
@@ -1196,7 +1862,7 @@ export function MarketView() {
             <Rule
               icon={<Gavel className="h-3.5 w-3.5" />}
               title="Auction House"
-              body="Scheduled for a future update — bidding, escrow, and anti-sniping need new API endpoints."
+              body="Timed listings (24–168h): opening bid, optional buyout, ~5% minimum raises, and 5-minute anti-snipe extensions. Winning bids settle automatically; gold returns to outbid players."
             />
           </div>
         ) : null}
@@ -1206,7 +1872,7 @@ export function MarketView() {
         <ListMarketModal
           onClose={() => setShowListModal(false)}
           items={inventory?.items ?? []}
-          currentListCount={myMarketCount}
+          totalActiveListings={totalActiveListings}
           onListed={() => void refreshAll()}
         />
       )}

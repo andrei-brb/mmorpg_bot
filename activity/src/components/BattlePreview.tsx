@@ -930,7 +930,10 @@ export default function BattlePreview({
           />
         </div>
 
-        <div className="relative z-10 grid h-full w-full gap-0 p-3 sm:p-4" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
+        <div
+          className="relative z-10 grid h-full w-full gap-0 p-3 sm:p-4"
+          style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1.35fr) minmax(0,1fr)" }}
+        >
           <div className="flex min-h-0 flex-col items-center justify-end gap-1 overflow-hidden">
             <div className="flex min-h-0 w-full flex-1 items-end justify-center px-1">
               <div

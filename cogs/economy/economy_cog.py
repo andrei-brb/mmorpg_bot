@@ -30,6 +30,7 @@ class EconomyCog(commands.Cog, name="Economy"):
                JOIN item_templates t ON i.template_id=t.id
                JOIN characters c ON ml.seller_id=c.id
                WHERE ml.is_active=TRUE AND ml.expires_at>NOW()
+               AND COALESCE(ml.listing_kind, 'fixed') = 'fixed'
                ORDER BY ml.listed_at DESC LIMIT 20"""
         )
         if not rows:
@@ -93,7 +94,8 @@ class EconomyCog(commands.Cog, name="Economy"):
                       COALESCE(i.enhancement_level, 0) as enhancement_level
                FROM market_listings ml JOIN inventory i ON ml.item_id=i.id
                JOIN item_templates t ON i.template_id=t.id
-               WHERE ml.id=$1 AND ml.is_active=TRUE AND ml.expires_at>NOW()""", uid
+               WHERE ml.id=$1 AND ml.is_active=TRUE AND ml.expires_at>NOW()
+               AND COALESCE(ml.listing_kind, 'fixed') = 'fixed'""", uid
         )
         if not listing: return await interaction.followup.send("❌ Listing not found or expired.")
         if listing["seller_id"] == char["id"]: return await interaction.followup.send("❌ Can't buy your own listing.")

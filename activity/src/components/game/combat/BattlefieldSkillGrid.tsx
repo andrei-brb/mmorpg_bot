@@ -48,18 +48,13 @@ export function BattlefieldSkillGrid({
 }) {
   const reservePotionSlot = Boolean(showPotionButton && canPotion);
   const cells = buildCells(abilities, { reservePotionSlot });
-  const cellRem = 4.5;
 
   return (
     <div
       className={cn(
-        "grid gap-1 overflow-visible",
+        "mx-auto grid w-full max-w-md gap-1.5 overflow-visible sm:max-w-lg sm:gap-2",
         "[grid-template-columns:repeat(3,minmax(0,1fr))]",
       )}
-      style={{
-        width: `${COLS * cellRem}rem`,
-        maxWidth: "100%",
-      }}
     >
       {cells.map((cell, i) => (
         <div

@@ -11,6 +11,7 @@ import { BattleFighter } from "@/components/game/combat/BattleFighter";
 import { DamageNumbers, type DamageEvent } from "@/components/game/combat/DamageNumber";
 import { TurnOrder } from "@/components/game/combat/TurnOrder";
 import { WomPanel } from "@/components/wom/WomUi";
+import { cn } from "@/lib/utils";
 
 function stripMd(s: string): string {
   return s.replace(/\*\*/g, "").trim();
@@ -349,7 +350,12 @@ export function CombatEncounterView({
   const potionInBattleGrid = useBattlePreview && showPotionButton && state.can_potion;
 
   return (
-    <div className={focusMode ? "flex h-full min-h-0 flex-col gap-2 sm:gap-3" : "space-y-4"}>
+    <div
+      className={cn(
+        "w-full min-w-0",
+        focusMode ? "flex h-full min-h-0 flex-col gap-2 sm:gap-3" : "space-y-4",
+      )}
+    >
       {topBar != null ? topBar : null}
 
       {state.lore_blocked ? (
