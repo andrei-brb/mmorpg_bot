@@ -2704,3 +2704,160 @@ code {
 .quest-actions .mini-btn {
   align-self: flex-start;
 }
+
+/* ═══ Talent Forge (ornate tree UI) ═══ */
+:root {
+  --gold: oklch(0.78 0.14 78);
+  --gold-bright: oklch(0.88 0.16 88);
+  --gold-dim: oklch(0.55 0.1 75);
+  --gradient-frame: linear-gradient(180deg, oklch(0.22 0.02 60), oklch(0.12 0.012 60));
+  --gradient-node-active: radial-gradient(circle at 30% 30%, oklch(0.92 0.18 88), oklch(0.55 0.14 65) 70%, oklch(0.3 0.06 60));
+  --gradient-node-available: radial-gradient(circle at 30% 30%, oklch(0.42 0.04 70), oklch(0.22 0.02 60) 80%);
+  --gradient-node-locked: radial-gradient(circle at 30% 30%, oklch(0.24 0.015 60), oklch(0.14 0.01 60));
+  --shadow-gold: 0 0 24px oklch(0.78 0.14 78 / 0.45), 0 0 6px oklch(0.88 0.16 88 / 0.6);
+  --shadow-frame: 0 30px 80px -20px oklch(0 0 0 / 0.7), inset 0 1px 0 oklch(0.78 0.14 78 / 0.18);
+  --shadow-inset: inset 0 0 60px oklch(0 0 0 / 0.55);
+}
+
+.text-gold {
+  color: var(--gold);
+}
+.text-gold-bright {
+  color: var(--gold-bright);
+}
+.text-gold-dim {
+  color: var(--gold-dim);
+}
+.border-gold {
+  border-color: var(--gold);
+}
+.border-gold-bright {
+  border-color: var(--gold-bright);
+}
+.border-gold\/50 {
+  border-color: oklch(0.78 0.14 78 / 0.5);
+}
+.border-gold\/40 {
+  border-color: oklch(0.78 0.14 78 / 0.4);
+}
+.border-gold\/70 {
+  border-color: oklch(0.78 0.14 78 / 0.7);
+}
+.bg-gold {
+  background-color: var(--gold);
+}
+.bg-gold\/5 {
+  background-color: oklch(0.78 0.14 78 / 0.05);
+}
+.bg-gold\/10 {
+  background-color: oklch(0.78 0.14 78 / 0.1);
+}
+.hover\:bg-gold\/10:hover {
+  background-color: oklch(0.78 0.14 78 / 0.1);
+}
+.hover\:border-gold:hover {
+  border-color: var(--gold);
+}
+.shadow-gold {
+  box-shadow: var(--shadow-gold);
+}
+
+.ornate-frame {
+  position: relative;
+  background: var(--gradient-frame);
+  border: 1px solid oklch(0.4 0.06 70 / 0.5);
+  box-shadow: var(--shadow-frame), var(--shadow-inset);
+}
+.ornate-frame::before,
+.ornate-frame::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  border: 1px solid oklch(0.78 0.14 78 / 0.25);
+}
+.ornate-frame::after {
+  inset: 10px;
+  border: 1px solid oklch(0.78 0.14 78 / 0.08);
+}
+
+.corner-ornament {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--gold);
+  opacity: 0.85;
+  z-index: 1;
+}
+.corner-tl {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.corner-tr {
+  top: -1px;
+  right: -1px;
+  border-left: 0;
+  border-bottom: 0;
+}
+.corner-bl {
+  bottom: -1px;
+  left: -1px;
+  border-right: 0;
+  border-top: 0;
+}
+.corner-br {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+
+.divider-ornate {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
+  opacity: 0.5;
+  position: relative;
+}
+.divider-ornate::before {
+  content: "✦";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: hsl(var(--background));
+  color: var(--gold);
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+@keyframes pulse-gold {
+  0%,
+  100% {
+    box-shadow: 0 0 12px oklch(0.78 0.14 78 / 0.4), 0 0 24px oklch(0.78 0.14 78 / 0.2);
+  }
+  50% {
+    box-shadow: 0 0 24px oklch(0.88 0.16 88 / 0.7), 0 0 48px oklch(0.78 0.14 78 / 0.4);
+  }
+}
+.animate-pulse-gold {
+  animation: pulse-gold 2.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.text-shimmer {
+  background: linear-gradient(90deg, var(--gold-dim) 0%, var(--gold-bright) 50%, var(--gold-dim) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 4s linear infinite;
+}
