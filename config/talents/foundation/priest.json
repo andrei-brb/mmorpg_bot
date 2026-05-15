@@ -1,0 +1,72 @@
+{
+  "class_key": "priest",
+  "nodes": [
+    {
+      "id": "priest_starter",
+      "name": "Foundation",
+      "column": 2,
+      "tier": 0,
+      "max_ranks": 1,
+      "node_type": "starter",
+      "layer": "starter",
+      "spec_key": null,
+      "prereqs": [],
+      "auto_grant": true,
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA \u2014 every journey starts here."
+      ]
+    },
+    {
+      "id": "priest_preview_holy_priest",
+      "name": "Holy Aptitude",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "holy_priest",
+      "prereqs": [
+        "priest_starter"
+      ],
+      "effects": [
+        {
+          "stat": "INT",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Holy (+1 INT per rank)",
+        "Lean toward Holy (+2 INT per rank)"
+      ]
+    },
+    {
+      "id": "priest_preview_shadow",
+      "name": "Shadow Aptitude",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "shadow",
+      "prereqs": [
+        "priest_starter"
+      ],
+      "effects": [
+        {
+          "stat": "INT",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Shadow (+1 INT per rank)",
+        "Lean toward Shadow (+2 INT per rank)"
+      ]
+    }
+  ]
+}

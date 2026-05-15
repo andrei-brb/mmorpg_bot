@@ -1,0 +1,342 @@
+{
+  "spec_key": "marksmanship",
+  "class_key": "hunter",
+  "role": "dps",
+  "passive_name": "Trueshot",
+  "nodes": [
+    {
+      "id": "marksmanship_t0_c0",
+      "name": "Precision",
+      "column": 0,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "hunter_preview_marksmanship"
+      ],
+      "effects": [
+        {
+          "stat": "agility",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 AGI",
+        "+6 AGI",
+        "+9 AGI"
+      ]
+    },
+    {
+      "id": "marksmanship_t0_c1",
+      "name": "Ferocity",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "hunter_preview_marksmanship"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 1.5
+        }
+      ],
+      "descriptions": [
+        "+1.5 Crit",
+        "+3 Crit",
+        "+4.5 Crit"
+      ]
+    },
+    {
+      "id": "marksmanship_t0_c2",
+      "name": "Killer Instinct",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "hunter_preview_marksmanship"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA",
+        "+4 STA",
+        "+6 STA"
+      ]
+    },
+    {
+      "id": "marksmanship_t0_c3",
+      "name": "Quick Hands",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "hunter_preview_marksmanship"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 1.5
+        }
+      ],
+      "descriptions": [
+        "+1.5 Haste",
+        "+3 Haste",
+        "+4.5 Haste"
+      ]
+    },
+    {
+      "id": "marksmanship_t0_c4",
+      "name": "Bloodlust",
+      "column": 4,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "hunter_preview_marksmanship"
+      ],
+      "effects": [
+        {
+          "stat": "lifesteal_pct",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "+1 Lifesteal",
+        "+2 Lifesteal",
+        "+3 Lifesteal"
+      ]
+    },
+    {
+      "id": "marksmanship_t1_c2",
+      "name": "Trueshot",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "spec_passive",
+      "prereqs": [
+        "marksmanship_t0_c1",
+        "marksmanship_t0_c2"
+      ],
+      "effects": [
+        {
+          "passive_key": "marksmanship",
+          "potency_per_rank": 0.12
+        }
+      ],
+      "descriptions": [
+        "Improves Trueshot (12% stronger)",
+        "Improves Trueshot (24% stronger)",
+        "Improves Trueshot (36% stronger)"
+      ]
+    },
+    {
+      "id": "marksmanship_t1_c0",
+      "name": "Opportunist",
+      "column": 0,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "marksmanship_t0_c1",
+        "marksmanship_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_crit",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Opportunist: +4% proc chance",
+        "Opportunist: +8% proc chance",
+        "Opportunist: +12% proc chance"
+      ]
+    },
+    {
+      "id": "marksmanship_t1_c4",
+      "name": "Executioner",
+      "column": 4,
+      "tier": 3,
+      "max_ranks": 2,
+      "node_type": "proc",
+      "prereqs": [
+        "marksmanship_t0_c1",
+        "marksmanship_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_low_hp",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Executioner: +4% proc chance",
+        "Executioner: +8% proc chance"
+      ]
+    },
+    {
+      "id": "marksmanship_t2_c1",
+      "name": "Overpower",
+      "column": 1,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "marksmanship_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "agility",
+          "per_rank": 4
+        }
+      ],
+      "descriptions": [
+        "+4 AGI",
+        "+8 AGI",
+        "+12 AGI"
+      ]
+    },
+    {
+      "id": "marksmanship_t2_c3",
+      "name": "Relentless",
+      "column": 3,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "marksmanship_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Haste",
+        "+4 Haste",
+        "+6 Haste"
+      ]
+    },
+    {
+      "id": "marksmanship_t2_c0",
+      "name": "Treasure Sense",
+      "column": 0,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "marksmanship_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "gold_find",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Treasure Sense: +5%",
+        "Treasure Sense: +10%"
+      ]
+    },
+    {
+      "id": "marksmanship_t2_c4",
+      "name": "Forge Student",
+      "column": 4,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "marksmanship_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "craft_xp",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Forge Student: +5%",
+        "Forge Student: +10%"
+      ]
+    },
+    {
+      "id": "marksmanship_t3_c2",
+      "name": "Flurry",
+      "column": 2,
+      "tier": 5,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "marksmanship_t2_c1",
+        "marksmanship_t2_c3"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_hit",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Flurry: +4% proc chance",
+        "Flurry: +8% proc chance",
+        "Flurry: +12% proc chance"
+      ]
+    },
+    {
+      "id": "marksmanship_t3_c0",
+      "name": "Deadly Focus",
+      "column": 0,
+      "tier": 5,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "marksmanship_t2_c1",
+        "marksmanship_t2_c3"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Crit",
+        "+4 Crit"
+      ]
+    },
+    {
+      "id": "marksmanship_capstone",
+      "name": "Marksmanship Mastery",
+      "column": 2,
+      "tier": 6,
+      "max_ranks": 1,
+      "node_type": "capstone",
+      "prereqs": [
+        "marksmanship_t3_c2",
+        "marksmanship_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "agility",
+          "flat": 10
+        },
+        {
+          "stat": "crit_pct",
+          "flat": 3
+        }
+      ],
+      "descriptions": [
+        "Marksmanship Mastery"
+      ]
+    }
+  ]
+}

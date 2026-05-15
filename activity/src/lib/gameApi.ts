@@ -501,6 +501,39 @@ export async function postBattlePassPlaytime(
   return res.json() as Promise<{ ok?: boolean; grant?: unknown }>;
 }
 
+export async function getTalents(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").TalentsStatePayload> {
+  const res = await fetch(apiUrl("/api/game/talents"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<import("./apiTypes").TalentsStatePayload>;
+}
+
+export async function allocateTalent(
+  token: string,
+  nodeId: string,
+  guildId?: string,
+): Promise<import("./apiTypes").TalentsStatePayload & { message?: string }> {
+  const res = await fetch(apiUrl("/api/game/talents/allocate"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId, delta: 1 }),
+  });
+  return res.json() as Promise<import("./apiTypes").TalentsStatePayload & { message?: string }>;
+}
+
+export async function respecTalents(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").TalentsStatePayload & { message?: string }> {
+  const res = await fetch(apiUrl("/api/game/talents/respec"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  return res.json() as Promise<import("./apiTypes").TalentsStatePayload & { message?: string }>;
+}
+
 export async function getForgeOptions(
   token: string,
   itemId: string,

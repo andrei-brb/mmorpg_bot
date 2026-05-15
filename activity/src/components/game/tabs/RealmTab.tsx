@@ -4,10 +4,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WomPanel, WomSectionHeader } from "@/components/wom/WomUi";
-import type { CharacterDerivedStatsPayload, ProgressPayload } from "@/lib/apiTypes";
+import type { CharacterDerivedStatsPayload, ProgressPayload, TalentsStatePayload } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import { cn } from "@/lib/utils";
 import { SocialPanel } from "@/components/game/panels/SocialPanel";
+import { TalentTreeCanvas } from "@/components/game/talents/TalentTreeCanvas";
 
 const GOALS_STORAGE_KEY = "realm_player_goals_v1";
 
@@ -28,7 +29,7 @@ const ROADMAP: { bucket: string; title: string; blurb: string }[] = [
   { bucket: "Economy", title: "Auction dynamics", blurb: "Bids, buy orders, and listing depth." },
   { bucket: "PvE", title: "Dungeon finder & large raids", blurb: "Automated LFG and multi-phase raid tiers." },
   { bucket: "PvE", title: "Mythic+ style scaling", blurb: "Affixes, keystones, and seasonal dungeon ladders." },
-  { bucket: "Character", title: "Talent trees & full respec meta", blurb: "Point-based builds beyond specializations." },
+  { bucket: "Character", title: "Build templates & loadouts", blurb: "Save and share talent layouts across characters." },
   { bucket: "Character", title: "Cosmetics & transmog", blurb: "Wardrobe, dyes, and fashion endgame." },
   { bucket: "World", title: "Housing & guild hall spaces", blurb: "Instanced spaces with decoration progression." },
   { bucket: "Life sim", title: "Mounts, pets, minigames", blurb: "Collections that feed into combat or social hooks." },
@@ -102,6 +103,9 @@ export function RealmTab() {
   } = useGameSession();
 
   const [derived, setDerived] = useState<CharacterDerivedStatsPayload | null>(null);
+  const [talents, setTalents] = useState<TalentsStatePayload | null>(null);
+  const [talentMsg, setTalentMsg] = useState<string | null>(null);
+  const [talentBusy, setTalentBusy] = useState(false);
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [goalDraft, setGoalDraft] = useState("");
 
@@ -144,6 +148,73 @@ export function RealmTab() {
       cancelled = true;
     };
   }, [accessToken, guildId, derivedStatsKey]);
+
+  const loadTalents = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const j = await api.getTalents(accessToken, guildId);
+      if (j.ok !== false) setTalents(j);
+    } catch {
+      setTalents(null);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    void loadTalents();
+  }, [loadTalents, derivedStatsKey]);
+
+  const onAllocateTalent = useCallback(
+    async (nodeId: string) => {
+      if (!accessToken || talentBusy) return;
+      setTalentBusy(true);
+      setTalentMsg(null);
+      try {
+        const j = await api.allocateTalent(accessToken, nodeId, guildId);
+        if (j.ok) {
+          setTalents(j);
+          setTalentMsg(j.message || "Point spent.");
+          const stats = await api.getCharacterDerivedStats(accessToken, guildId);
+          if (stats.ok) setDerived(stats);
+        } else {
+          setTalentMsg(j.message || "Could not allocate.");
+        }
+      } catch {
+        setTalentMsg("Network error.");
+      } finally {
+        setTalentBusy(false);
+      }
+    },
+    [accessToken, guildId, talentBusy],
+  );
+
+  const onRespecTalents = useCallback(async () => {
+    if (!accessToken || talentBusy) return;
+    const cost = talents?.respec_gold_cost ?? 0;
+    const free = (talents?.respec_count ?? 0) === 0;
+    const ok = window.confirm(
+      free
+        ? "Reset all talent points? First respec is free."
+        : `Reset all talent points for ${cost.toLocaleString()} gold?`,
+    );
+    if (!ok) return;
+    setTalentBusy(true);
+    setTalentMsg(null);
+    try {
+      const j = await api.respecTalents(accessToken, guildId);
+      if (j.ok) {
+        setTalents(j);
+        setTalentMsg(j.message || "Talents reset.");
+        const stats = await api.getCharacterDerivedStats(accessToken, guildId);
+        if (stats.ok) setDerived(stats);
+      } else {
+        setTalentMsg(j.message || "Respec failed.");
+      }
+    } catch {
+      setTalentMsg("Network error.");
+    } finally {
+      setTalentBusy(false);
+    }
+  }, [accessToken, guildId, talentBusy, talents?.respec_count, talents?.respec_gold_cost]);
 
   const c = progress?.character ?? inventory?.character ?? undefined;
   const s = progress?.stats;
@@ -347,26 +418,67 @@ export function RealmTab() {
             )}
             {derived?.class_mastery?.level != null ? (
               <p className="text-xs text-muted-foreground mt-3">
-                Class mastery: Lv {derived.class_mastery.level}
-                {derived.class_mastery.xp != null ? ` (${derived.class_mastery.xp} XP)` : ""}
+                Mastery from combat: class Lv {derived.class_mastery.level}
+                {derived.class_mastery.xp != null ? ` · ${derived.class_mastery.xp} XP` : ""}
               </p>
             ) : null}
-            {derived?.top_ability_mastery && derived.top_ability_mastery.length > 0 ? (
-              <div className="mt-2 space-y-1">
-                <p className="text-[10px] font-cinzel uppercase tracking-wider text-muted-foreground">Top abilities</p>
-                <ul className="text-xs text-foreground/90 space-y-0.5">
-                  {derived.top_ability_mastery.slice(0, 6).map((ab) => (
-                    <li key={ab.ability_key || "?"} className="flex justify-between gap-2 font-mono">
-                      <span className="truncate">{ab.ability_key}</span>
-                      <span className="shrink-0 text-muted-foreground">
-                        Lv {ab.level ?? 1}
-                        {ab.xp != null ? ` · ${ab.xp} xp` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+          </WomPanel>
+
+          <WomPanel glow>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="game-panel-header mb-0">Talent trees</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono tabular-nums text-primary">
+                  {talents?.points?.unspent ?? "—"} / {talents?.points?.earned ?? "—"} unspent
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[10px] font-cinzel uppercase"
+                  disabled={talentBusy}
+                  onClick={() => void onRespecTalents()}
+                >
+                  Respec
+                  {(talents?.respec_count ?? 0) > 0 && talents?.respec_gold_cost
+                    ? ` (${talents.respec_gold_cost.toLocaleString()}g)`
+                    : " (free)"}
+                </Button>
               </div>
-            ) : null}
+            </div>
+            <p className="text-[10px] text-muted-foreground mb-2">
+              +1 point every 2 levels. Preview both specs before level 10; your profession tree opens after you choose.
+            </p>
+            {talentMsg ? <p className="text-xs text-primary mb-2">{talentMsg}</p> : null}
+            {!talents ? (
+              <p className="text-xs text-muted-foreground">Loading talent trees…</p>
+            ) : (
+              <div className="space-y-3">
+                {talents.foundation ? (
+                  <TalentTreeCanvas
+                    tree={talents.foundation}
+                    title="Class foundation"
+                    onAllocate={(id) => void onAllocateTalent(id)}
+                  />
+                ) : null}
+                {(talents.spec_trees || []).map((tree) => {
+                  const sk = tree.spec_key || "";
+                  const active = talents.specialization === sk;
+                  const preview = !talents.specialization;
+                  const dimmed = Boolean(talents.specialization && !active);
+                  const label = sk.replace(/_/g, " ");
+                  return (
+                    <TalentTreeCanvas
+                      key={sk}
+                      tree={tree}
+                      title={`${label}${active ? " (active)" : preview ? " (preview)" : ""}`}
+                      dimmed={dimmed}
+                      onAllocate={(id) => void onAllocateTalent(id)}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </WomPanel>
         </TabsContent>
 
@@ -484,8 +596,7 @@ export function RealmTab() {
           <WomPanel glow>
             <WomSectionHeader kicker="Builds" title="Talent trees" />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Full talent grids, path respec costs, and build templates are planned — specializations already gate your
-              class fantasy today.
+              Spend points in Realm → Power. First respec is free; later respecs cost gold based on your level.
             </p>
           </WomPanel>
         </TabsContent>

@@ -1,0 +1,72 @@
+{
+  "class_key": "hunter",
+  "nodes": [
+    {
+      "id": "hunter_starter",
+      "name": "Foundation",
+      "column": 2,
+      "tier": 0,
+      "max_ranks": 1,
+      "node_type": "starter",
+      "layer": "starter",
+      "spec_key": null,
+      "prereqs": [],
+      "auto_grant": true,
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA \u2014 every journey starts here."
+      ]
+    },
+    {
+      "id": "hunter_preview_marksmanship",
+      "name": "Marksmanship Aptitude",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "marksmanship",
+      "prereqs": [
+        "hunter_starter"
+      ],
+      "effects": [
+        {
+          "stat": "AGI",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Marksmanship (+1 AGI per rank)",
+        "Lean toward Marksmanship (+2 AGI per rank)"
+      ]
+    },
+    {
+      "id": "hunter_preview_beast_mastery",
+      "name": "Beast Mastery Aptitude",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "beast_mastery",
+      "prereqs": [
+        "hunter_starter"
+      ],
+      "effects": [
+        {
+          "stat": "AGI",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Beast Mastery (+1 AGI per rank)",
+        "Lean toward Beast Mastery (+2 AGI per rank)"
+      ]
+    }
+  ]
+}

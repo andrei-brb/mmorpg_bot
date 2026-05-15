@@ -734,6 +734,50 @@ export type DailyLoginClaimPayload = {
   battle_pass?: BattlePassStatePayload;
 };
 
+export type TalentNodeState = {
+  id?: string;
+  name?: string;
+  column?: number;
+  tier?: number;
+  max_ranks?: number;
+  node_type?: string;
+  layer?: string;
+  spec_key?: string | null;
+  prereqs?: string[];
+  auto_grant?: boolean;
+  descriptions?: string[];
+  ranks?: number;
+  allocated?: boolean;
+  can_allocate?: boolean;
+  locked_reason?: string | null;
+  glow?: boolean;
+};
+
+export type TalentTreeSection = {
+  class_key?: string;
+  spec_key?: string;
+  passive_name?: string;
+  role?: string;
+  nodes?: TalentNodeState[];
+};
+
+/** GET /api/game/talents */
+export type TalentsStatePayload = {
+  ok?: boolean;
+  class_key?: string;
+  specialization?: string | null;
+  level?: number;
+  points?: { earned?: number; spent?: number; unspent?: number };
+  foundation_locked?: boolean;
+  respec_count?: number;
+  respec_gold_cost?: number;
+  foundation?: TalentTreeSection;
+  spec_trees?: TalentTreeSection[];
+  allocations?: Record<string, number>;
+  class_mastery?: { class_key?: string; xp?: number; level?: number } | null;
+  message?: string;
+};
+
 /** GET /api/game/social/roster */
 export type SocialFriendRow = {
   user_id: string;

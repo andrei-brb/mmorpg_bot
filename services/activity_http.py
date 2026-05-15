@@ -779,6 +779,63 @@ async def handle_battle_pass_playtime(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"ok": True, "grant": grant}))
 
 
+async def handle_talents_get(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    from services.talents.talent_service import TalentService
+
+    char_svc = CharacterService(db)
+    fresh = await char_svc.get_by_id(_uuid_from_any(char["id"]))
+    state = await TalentService(db).get_tree_state(dict(fresh) if fresh else char)
+    mastery = await char_svc.get_class_mastery(_uuid_from_any(char["id"]), char.get("class") or "")
+    state["class_mastery"] = mastery
+    return web.json_response(_json_safe(state))
+
+
+async def handle_talents_allocate(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    node_id = str(body.get("node_id") or "").strip()
+    delta = int(body.get("delta") or body.get("ranks") or 1)
+    from services.talents.talent_service import TalentService
+
+    char_svc = CharacterService(db)
+    fresh = await char_svc.get_by_id(_uuid_from_any(char["id"]))
+    ok, msg, state = await TalentService(db).allocate(dict(fresh) if fresh else char, node_id, delta)
+    status = 200 if ok else 400
+    return web.json_response(_json_safe({"ok": ok, "message": msg, **(state or {})}), status=status)
+
+
+async def handle_talents_respec(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    from services.talents.talent_service import TalentService
+
+    char_svc = CharacterService(db)
+    fresh = await char_svc.get_by_id(_uuid_from_any(char["id"]))
+    ok, msg, state = await TalentService(db).respec(dict(fresh) if fresh else char, char_svc)
+    status = 200 if ok else 400
+    return web.json_response(_json_safe({"ok": ok, "message": msg, **(state or {})}), status=status)
+
+
 async def handle_character_stats(request: web.Request) -> web.Response:
     """GET /api/game/character/stats — Derived combat stats (includes equipped item rolls)."""
     bot = request.app["bot"]
@@ -2137,7 +2194,16 @@ async def handle_specialization_choose(request: web.Request) -> web.Response:
     ok, msg = await char_svc.choose_spec(_uuid_from_any(char["id"]), spec_key)
     if not ok:
         return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
-    return web.json_response(_json_safe({"ok": True, "message": msg, "spec_key": spec_key}))
+    from services.talents.talent_service import TalentService
+
+    talent_svc = TalentService(db)
+    refund_info = await talent_svc.on_spec_chosen(
+        _uuid_from_any(char["id"]), str(char.get("class") or ""), spec_key
+    )
+    state = await talent_svc.get_tree_state(await char_svc.get_by_id(char["id"]))
+    return web.json_response(
+        _json_safe({"ok": True, "message": msg, "spec_key": spec_key, "talents": state, **refund_info})
+    )
 
 
 async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int, dict, Any]:
@@ -5252,6 +5318,9 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/battle-pass/claim", handle_battle_pass_claim)
     app.router.add_post("/api/game/battle-pass/playtime", handle_battle_pass_playtime)
     app.router.add_post("/api/game/daily-login/claim", handle_daily_login_claim)
+    app.router.add_get("/api/game/talents", handle_talents_get)
+    app.router.add_post("/api/game/talents/allocate", handle_talents_allocate)
+    app.router.add_post("/api/game/talents/respec", handle_talents_respec)
     app.router.add_post("/api/game/item/use", handle_item_use)
     app.router.add_post("/api/game/item/enhance", handle_item_enhance)
     app.router.add_get("/api/game/item/enhance/info", handle_item_enhance_info)

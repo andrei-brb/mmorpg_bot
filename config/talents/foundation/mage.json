@@ -1,0 +1,72 @@
+{
+  "class_key": "mage",
+  "nodes": [
+    {
+      "id": "mage_starter",
+      "name": "Foundation",
+      "column": 2,
+      "tier": 0,
+      "max_ranks": 1,
+      "node_type": "starter",
+      "layer": "starter",
+      "spec_key": null,
+      "prereqs": [],
+      "auto_grant": true,
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA \u2014 every journey starts here."
+      ]
+    },
+    {
+      "id": "mage_preview_fire",
+      "name": "Fire Aptitude",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "fire",
+      "prereqs": [
+        "mage_starter"
+      ],
+      "effects": [
+        {
+          "stat": "INT",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Fire (+1 INT per rank)",
+        "Lean toward Fire (+2 INT per rank)"
+      ]
+    },
+    {
+      "id": "mage_preview_frost",
+      "name": "Frost Aptitude",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "frost",
+      "prereqs": [
+        "mage_starter"
+      ],
+      "effects": [
+        {
+          "stat": "INT",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Frost (+1 INT per rank)",
+        "Lean toward Frost (+2 INT per rank)"
+      ]
+    }
+  ]
+}

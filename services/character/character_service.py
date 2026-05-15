@@ -74,6 +74,13 @@ class CharacterService:
             cls.base_stats["stamina"],
             max_hp, start_res,
         )
+        if char:
+            try:
+                from services.talents.talent_service import TalentService
+
+                await TalentService(self.db).ensure_starter_granted(char["id"], class_key)
+            except Exception:
+                pass
         return True, f"Character **{name}** created!", char
 
     @staticmethod
@@ -166,6 +173,16 @@ class CharacterService:
                 "UPDATE characters SET xp=$2, xp_rested=$3 WHERE id=$1",
                 char_id, new_total, new_rested,
             )
+
+        if gained > 0:
+            try:
+                from services.talents.talent_service import TalentService
+
+                await TalentService(self.db).sync_points_for_level(
+                    char_id, new_level, str(char.get("class") or "")
+                )
+            except Exception:
+                pass
 
         return {
             "xp_gained":    effective,
@@ -387,6 +404,44 @@ class CharacterService:
             stats["spell_power"] += max(0, m_lvl - 1) * 2
         else:
             stats["attack_power"] += max(0, m_lvl - 1) * 2
+
+        # Talent tree stat bonuses
+        try:
+            from services.talents.talent_service import TalentService
+
+            effects = await TalentService(self.db).aggregate_effects(
+                char_id, str(char.get("class") or ""), char.get("specialization")
+            )
+            tstats = effects.get("stats") or {}
+            stat_map = {
+                "strength": "strength",
+                "agility": "agility",
+                "intellect": "intellect",
+                "spirit": "spirit",
+                "stamina": "stamina",
+                "armor": "armor",
+                "resistance": "resistance",
+            }
+            for tk, sk in stat_map.items():
+                if tk in tstats:
+                    stats[sk] = stats.get(sk, 0) + int(tstats[tk])
+            if tstats.get("crit_pct"):
+                stats["crit_chance"] = self._apply_stat_caps(
+                    "crit_chance", float(stats["crit_chance"]) + float(tstats["crit_pct"])
+                )
+            if tstats.get("haste_pct"):
+                stats["haste"] = self._apply_stat_caps(
+                    "haste", float(stats["haste"]) + float(tstats["haste_pct"])
+                )
+            if tstats.get("lifesteal_pct"):
+                stats["lifesteal"] = self._apply_stat_caps(
+                    "lifesteal", float(stats["lifesteal"]) + float(tstats["lifesteal_pct"])
+                )
+            primary = stats[cls.primary_stat]
+            stats["attack_power"] = stats["strength"] * 2 + primary
+            stats["spell_power"] = stats["intellect"] * 2
+        except Exception:
+            pass
 
         # Temporary resistance potion buffs (stored in cooldowns as action_key).
         try:

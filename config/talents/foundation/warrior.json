@@ -1,0 +1,72 @@
+{
+  "class_key": "warrior",
+  "nodes": [
+    {
+      "id": "warrior_starter",
+      "name": "Foundation",
+      "column": 2,
+      "tier": 0,
+      "max_ranks": 1,
+      "node_type": "starter",
+      "layer": "starter",
+      "spec_key": null,
+      "prereqs": [],
+      "auto_grant": true,
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA \u2014 every journey starts here."
+      ]
+    },
+    {
+      "id": "warrior_preview_arms",
+      "name": "Arms Aptitude",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "arms",
+      "prereqs": [
+        "warrior_starter"
+      ],
+      "effects": [
+        {
+          "stat": "STR",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Arms (+1 STR per rank)",
+        "Lean toward Arms (+2 STR per rank)"
+      ]
+    },
+    {
+      "id": "warrior_preview_protection",
+      "name": "Protection Aptitude",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "protection",
+      "prereqs": [
+        "warrior_starter"
+      ],
+      "effects": [
+        {
+          "stat": "STR",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Protection (+1 STR per rank)",
+        "Lean toward Protection (+2 STR per rank)"
+      ]
+    }
+  ]
+}

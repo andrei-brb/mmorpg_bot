@@ -1401,6 +1401,27 @@ CREATE TABLE IF NOT EXISTS character_ability_mastery (
 CREATE INDEX IF NOT EXISTS idx_ability_mastery_char ON character_ability_mastery(character_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- TALENT TREES (spendable points + allocations)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS character_talent_meta (
+    character_id        UUID PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+    unspent_points      SMALLINT NOT NULL DEFAULT 0,
+    respec_count        SMALLINT NOT NULL DEFAULT 0,
+    foundation_locked   BOOLEAN NOT NULL DEFAULT FALSE,
+    last_respec_at      TIMESTAMPTZ,
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS character_talent_allocations (
+    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    node_id         VARCHAR(96) NOT NULL,
+    ranks           SMALLINT NOT NULL DEFAULT 1,
+    PRIMARY KEY (character_id, node_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_talent_alloc_char ON character_talent_allocations(character_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────
 INSERT INTO zone_state (zone_key) VALUES

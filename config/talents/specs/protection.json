@@ -1,0 +1,345 @@
+{
+  "spec_key": "protection",
+  "class_key": "warrior",
+  "role": "tank",
+  "passive_name": "Shield Block",
+  "nodes": [
+    {
+      "id": "protection_t0_c0",
+      "name": "Fortitude",
+      "column": 0,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "warrior_preview_protection"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 STA",
+        "+6 STA",
+        "+9 STA"
+      ]
+    },
+    {
+      "id": "protection_t0_c1",
+      "name": "Bulwark",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "warrior_preview_protection"
+      ],
+      "effects": [
+        {
+          "stat": "armor",
+          "per_rank": 8
+        }
+      ],
+      "descriptions": [
+        "+8 Armor",
+        "+16 Armor",
+        "+24 Armor"
+      ]
+    },
+    {
+      "id": "protection_t0_c2",
+      "name": "Steadfast",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "warrior_preview_protection"
+      ],
+      "effects": [
+        {
+          "stat": "strength",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STR",
+        "+4 STR",
+        "+6 STR"
+      ]
+    },
+    {
+      "id": "protection_t0_c3",
+      "name": "Thick Hide",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "warrior_preview_protection"
+      ],
+      "effects": [
+        {
+          "stat": "resistance",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 Resistance",
+        "+6 Resistance",
+        "+9 Resistance"
+      ]
+    },
+    {
+      "id": "protection_t0_c4",
+      "name": "Guardian's Spirit",
+      "column": 4,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "warrior_preview_protection"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 SPI",
+        "+4 SPI",
+        "+6 SPI"
+      ]
+    },
+    {
+      "id": "protection_t1_c2",
+      "name": "Shield Block",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "spec_passive",
+      "prereqs": [
+        "protection_t0_c0",
+        "protection_t0_c1",
+        "protection_t0_c2"
+      ],
+      "effects": [
+        {
+          "passive_key": "protection",
+          "potency_per_rank": 0.12
+        }
+      ],
+      "descriptions": [
+        "Improves Shield Block (12% stronger)",
+        "Improves Shield Block (24% stronger)",
+        "Improves Shield Block (36% stronger)"
+      ]
+    },
+    {
+      "id": "protection_t1_c0",
+      "name": "Retaliation",
+      "column": 0,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "protection_t0_c0",
+        "protection_t0_c1",
+        "protection_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_block",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Retaliation: +4% proc chance",
+        "Retaliation: +8% proc chance",
+        "Retaliation: +12% proc chance"
+      ]
+    },
+    {
+      "id": "protection_t1_c4",
+      "name": "Last Gasp",
+      "column": 4,
+      "tier": 3,
+      "max_ranks": 2,
+      "node_type": "proc",
+      "prereqs": [
+        "protection_t0_c0",
+        "protection_t0_c1",
+        "protection_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "low_hp_save",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Last Gasp: +4% proc chance",
+        "Last Gasp: +8% proc chance"
+      ]
+    },
+    {
+      "id": "protection_t2_c1",
+      "name": "Iron Will",
+      "column": 1,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "protection_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 4
+        }
+      ],
+      "descriptions": [
+        "+4 STA",
+        "+8 STA",
+        "+12 STA"
+      ]
+    },
+    {
+      "id": "protection_t2_c3",
+      "name": "Shield Training",
+      "column": 3,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "protection_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "armor",
+          "per_rank": 12
+        }
+      ],
+      "descriptions": [
+        "+12 Armor",
+        "+24 Armor",
+        "+36 Armor"
+      ]
+    },
+    {
+      "id": "protection_t2_c0",
+      "name": "Field Repairs",
+      "column": 0,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "protection_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "rest_cd",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Field Repairs: +5%",
+        "Field Repairs: +10%"
+      ]
+    },
+    {
+      "id": "protection_t2_c4",
+      "name": "Guild Patron",
+      "column": 4,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "protection_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "craft_xp",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Guild Patron: +5%",
+        "Guild Patron: +10%"
+      ]
+    },
+    {
+      "id": "protection_t3_c2",
+      "name": "Thunder Clap",
+      "column": 2,
+      "tier": 5,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "protection_t2_c1",
+        "protection_t2_c3"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_hit_slow",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Thunder Clap: +4% proc chance",
+        "Thunder Clap: +8% proc chance",
+        "Thunder Clap: +12% proc chance"
+      ]
+    },
+    {
+      "id": "protection_t3_c0",
+      "name": "Unyielding",
+      "column": 0,
+      "tier": 5,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "protection_t2_c1",
+        "protection_t2_c3"
+      ],
+      "effects": [
+        {
+          "stat": "resistance",
+          "per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "+5 Resistance",
+        "+10 Resistance"
+      ]
+    },
+    {
+      "id": "protection_capstone",
+      "name": "Protection Bastion",
+      "column": 2,
+      "tier": 6,
+      "max_ranks": 1,
+      "node_type": "capstone",
+      "prereqs": [
+        "protection_t3_c2",
+        "protection_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "flat": 15
+        },
+        {
+          "stat": "armor",
+          "flat": 40
+        }
+      ],
+      "descriptions": [
+        "Protection Bastion"
+      ]
+    }
+  ]
+}

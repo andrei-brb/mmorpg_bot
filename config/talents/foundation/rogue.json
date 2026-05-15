@@ -1,0 +1,72 @@
+{
+  "class_key": "rogue",
+  "nodes": [
+    {
+      "id": "rogue_starter",
+      "name": "Foundation",
+      "column": 2,
+      "tier": 0,
+      "max_ranks": 1,
+      "node_type": "starter",
+      "layer": "starter",
+      "spec_key": null,
+      "prereqs": [],
+      "auto_grant": true,
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA \u2014 every journey starts here."
+      ]
+    },
+    {
+      "id": "rogue_preview_assassination",
+      "name": "Assassination Aptitude",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "assassination",
+      "prereqs": [
+        "rogue_starter"
+      ],
+      "effects": [
+        {
+          "stat": "AGI",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Assassination (+1 AGI per rank)",
+        "Lean toward Assassination (+2 AGI per rank)"
+      ]
+    },
+    {
+      "id": "rogue_preview_subtlety",
+      "name": "Subtlety Aptitude",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "preview",
+      "layer": "preview",
+      "spec_key": "subtlety",
+      "prereqs": [
+        "rogue_starter"
+      ],
+      "effects": [
+        {
+          "stat": "AGI",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "Lean toward Subtlety (+1 AGI per rank)",
+        "Lean toward Subtlety (+2 AGI per rank)"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,342 @@
+{
+  "spec_key": "frost",
+  "class_key": "mage",
+  "role": "dps",
+  "passive_name": "Shatter",
+  "nodes": [
+    {
+      "id": "frost_t0_c0",
+      "name": "Precision",
+      "column": 0,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_preview_frost"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 INT",
+        "+6 INT",
+        "+9 INT"
+      ]
+    },
+    {
+      "id": "frost_t0_c1",
+      "name": "Ferocity",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_preview_frost"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 1.5
+        }
+      ],
+      "descriptions": [
+        "+1.5 Crit",
+        "+3 Crit",
+        "+4.5 Crit"
+      ]
+    },
+    {
+      "id": "frost_t0_c2",
+      "name": "Killer Instinct",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_preview_frost"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA",
+        "+4 STA",
+        "+6 STA"
+      ]
+    },
+    {
+      "id": "frost_t0_c3",
+      "name": "Quick Hands",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_preview_frost"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 1.5
+        }
+      ],
+      "descriptions": [
+        "+1.5 Haste",
+        "+3 Haste",
+        "+4.5 Haste"
+      ]
+    },
+    {
+      "id": "frost_t0_c4",
+      "name": "Bloodlust",
+      "column": 4,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_preview_frost"
+      ],
+      "effects": [
+        {
+          "stat": "lifesteal_pct",
+          "per_rank": 1
+        }
+      ],
+      "descriptions": [
+        "+1 Lifesteal",
+        "+2 Lifesteal",
+        "+3 Lifesteal"
+      ]
+    },
+    {
+      "id": "frost_t1_c2",
+      "name": "Shatter",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "spec_passive",
+      "prereqs": [
+        "frost_t0_c1",
+        "frost_t0_c2"
+      ],
+      "effects": [
+        {
+          "passive_key": "frost",
+          "potency_per_rank": 0.12
+        }
+      ],
+      "descriptions": [
+        "Improves Shatter (12% stronger)",
+        "Improves Shatter (24% stronger)",
+        "Improves Shatter (36% stronger)"
+      ]
+    },
+    {
+      "id": "frost_t1_c0",
+      "name": "Opportunist",
+      "column": 0,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "frost_t0_c1",
+        "frost_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_crit",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Opportunist: +4% proc chance",
+        "Opportunist: +8% proc chance",
+        "Opportunist: +12% proc chance"
+      ]
+    },
+    {
+      "id": "frost_t1_c4",
+      "name": "Executioner",
+      "column": 4,
+      "tier": 3,
+      "max_ranks": 2,
+      "node_type": "proc",
+      "prereqs": [
+        "frost_t0_c1",
+        "frost_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_low_hp",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Executioner: +4% proc chance",
+        "Executioner: +8% proc chance"
+      ]
+    },
+    {
+      "id": "frost_t2_c1",
+      "name": "Overpower",
+      "column": 1,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "frost_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 4
+        }
+      ],
+      "descriptions": [
+        "+4 INT",
+        "+8 INT",
+        "+12 INT"
+      ]
+    },
+    {
+      "id": "frost_t2_c3",
+      "name": "Relentless",
+      "column": 3,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "frost_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Haste",
+        "+4 Haste",
+        "+6 Haste"
+      ]
+    },
+    {
+      "id": "frost_t2_c0",
+      "name": "Treasure Sense",
+      "column": 0,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "frost_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "gold_find",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Treasure Sense: +5%",
+        "Treasure Sense: +10%"
+      ]
+    },
+    {
+      "id": "frost_t2_c4",
+      "name": "Forge Student",
+      "column": 4,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "frost_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "craft_xp",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Forge Student: +5%",
+        "Forge Student: +10%"
+      ]
+    },
+    {
+      "id": "frost_t3_c2",
+      "name": "Flurry",
+      "column": 2,
+      "tier": 5,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "frost_t2_c1",
+        "frost_t2_c3"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_hit",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Flurry: +4% proc chance",
+        "Flurry: +8% proc chance",
+        "Flurry: +12% proc chance"
+      ]
+    },
+    {
+      "id": "frost_t3_c0",
+      "name": "Deadly Focus",
+      "column": 0,
+      "tier": 5,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "frost_t2_c1",
+        "frost_t2_c3"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Crit",
+        "+4 Crit"
+      ]
+    },
+    {
+      "id": "frost_capstone",
+      "name": "Frost Mastery",
+      "column": 2,
+      "tier": 6,
+      "max_ranks": 1,
+      "node_type": "capstone",
+      "prereqs": [
+        "frost_t3_c2",
+        "frost_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "flat": 10
+        },
+        {
+          "stat": "crit_pct",
+          "flat": 3
+        }
+      ],
+      "descriptions": [
+        "Frost Mastery"
+      ]
+    }
+  ]
+}

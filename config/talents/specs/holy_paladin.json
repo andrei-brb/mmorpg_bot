@@ -1,0 +1,341 @@
+{
+  "spec_key": "holy_paladin",
+  "class_key": "paladin",
+  "role": "healer",
+  "passive_name": "Illumination",
+  "nodes": [
+    {
+      "id": "holy_paladin_t0_c0",
+      "name": "Devotion",
+      "column": 0,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_preview_holy_paladin"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 SPI",
+        "+6 SPI",
+        "+9 SPI"
+      ]
+    },
+    {
+      "id": "holy_paladin_t0_c1",
+      "name": "Clarity",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_preview_holy_paladin"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 INT",
+        "+6 INT",
+        "+9 INT"
+      ]
+    },
+    {
+      "id": "holy_paladin_t0_c2",
+      "name": "Sanctuary",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_preview_holy_paladin"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA",
+        "+4 STA",
+        "+6 STA"
+      ]
+    },
+    {
+      "id": "holy_paladin_t0_c3",
+      "name": "Mending",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_preview_holy_paladin"
+      ],
+      "effects": [
+        {
+          "stat": "strength",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STR",
+        "+4 STR",
+        "+6 STR"
+      ]
+    },
+    {
+      "id": "holy_paladin_t0_c4",
+      "name": "Offering",
+      "column": 4,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "paladin_preview_holy_paladin"
+      ],
+      "effects": [
+        {
+          "utility": "craft_xp",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Offering: +5%",
+        "Offering: +10%"
+      ]
+    },
+    {
+      "id": "holy_paladin_t1_c2",
+      "name": "Illumination",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "spec_passive",
+      "prereqs": [
+        "holy_paladin_t0_c0",
+        "holy_paladin_t0_c2"
+      ],
+      "effects": [
+        {
+          "passive_key": "holy_paladin",
+          "potency_per_rank": 0.12
+        }
+      ],
+      "descriptions": [
+        "Improves Illumination (12% stronger)",
+        "Improves Illumination (24% stronger)",
+        "Improves Illumination (36% stronger)"
+      ]
+    },
+    {
+      "id": "holy_paladin_t1_c1",
+      "name": "Renewing Light",
+      "column": 1,
+      "tier": 3,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "holy_paladin_t0_c0",
+        "holy_paladin_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_heal",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Renewing Light: +4% proc chance",
+        "Renewing Light: +8% proc chance",
+        "Renewing Light: +12% proc chance"
+      ]
+    },
+    {
+      "id": "holy_paladin_t1_c3",
+      "name": "Blessed Crit",
+      "column": 3,
+      "tier": 3,
+      "max_ranks": 2,
+      "node_type": "proc",
+      "prereqs": [
+        "holy_paladin_t0_c0",
+        "holy_paladin_t0_c2"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_crit",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Blessed Crit: +4% proc chance",
+        "Blessed Crit: +8% proc chance"
+      ]
+    },
+    {
+      "id": "holy_paladin_t2_c0",
+      "name": "Spirit Well",
+      "column": 0,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "holy_paladin_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "per_rank": 4
+        }
+      ],
+      "descriptions": [
+        "+4 SPI",
+        "+8 SPI",
+        "+12 SPI"
+      ]
+    },
+    {
+      "id": "holy_paladin_t2_c4",
+      "name": "Inner Focus",
+      "column": 4,
+      "tier": 4,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "holy_paladin_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 INT",
+        "+6 INT",
+        "+9 INT"
+      ]
+    },
+    {
+      "id": "holy_paladin_t2_c1",
+      "name": "Restful Hours",
+      "column": 1,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "utility",
+      "prereqs": [
+        "holy_paladin_t1_c2"
+      ],
+      "effects": [
+        {
+          "utility": "rest_cd",
+          "pct_per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "Restful Hours: +5%",
+        "Restful Hours: +10%"
+      ]
+    },
+    {
+      "id": "holy_paladin_t2_c3",
+      "name": "Resilience",
+      "column": 3,
+      "tier": 4,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "holy_paladin_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "resistance",
+          "per_rank": 4
+        }
+      ],
+      "descriptions": [
+        "+4 Resistance",
+        "+8 Resistance"
+      ]
+    },
+    {
+      "id": "holy_paladin_t3_c2",
+      "name": "Echo of Light",
+      "column": 2,
+      "tier": 5,
+      "max_ranks": 3,
+      "node_type": "proc",
+      "prereqs": [
+        "holy_paladin_t2_c0",
+        "holy_paladin_t2_c4"
+      ],
+      "effects": [
+        {
+          "proc_id": "on_heal_hot",
+          "chance_per_rank": 0.04
+        }
+      ],
+      "descriptions": [
+        "Echo of Light: +4% proc chance",
+        "Echo of Light: +8% proc chance",
+        "Echo of Light: +12% proc chance"
+      ]
+    },
+    {
+      "id": "holy_paladin_t3_c1",
+      "name": "Hastened Prayers",
+      "column": 1,
+      "tier": 5,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "holy_paladin_t2_c0",
+        "holy_paladin_t2_c4"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Haste",
+        "+4 Haste"
+      ]
+    },
+    {
+      "id": "holy_paladin_capstone",
+      "name": "Holy Beacon",
+      "column": 2,
+      "tier": 6,
+      "max_ranks": 1,
+      "node_type": "capstone",
+      "prereqs": [
+        "holy_paladin_t3_c2",
+        "holy_paladin_t1_c2"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "flat": 12
+        },
+        {
+          "utility": "heal_power",
+          "pct": 8
+        }
+      ],
+      "descriptions": [
+        "Holy Beacon"
+      ]
+    }
+  ]
+}
