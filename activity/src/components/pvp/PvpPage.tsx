@@ -5,12 +5,11 @@ import { PvpHub } from "@/components/pvp/PvpHub";
 import { PvpMatch } from "@/components/pvp/PvpMatch";
 import { PvpResult } from "@/components/pvp/PvpResult";
 import { PvpHistory } from "@/components/pvp/PvpHistory";
-import { Loader2, AlertTriangle, Swords, ScrollText } from "lucide-react";
-
-type ArenaTab = "arena" | "history";
+import { Loader2, AlertTriangle } from "lucide-react";
+import { ArenaLayout, type ArenaHubSubTab } from "@/components/arena/ArenaLayout";
 
 export function PvpPage() {
-  const [activeTab, setActiveTab] = useState<ArenaTab>("arena");
+  const [arenaSub, setArenaSub] = useState<ArenaHubSubTab>("stats");
   const { setArenaFocusActive } = useGameSession();
   const {
     status,
@@ -38,9 +37,9 @@ export function PvpPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto" />
-          <p className="text-muted-foreground font-crimson text-sm">Loading Arena…</p>
+        <div className="space-y-3 text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-gold" />
+          <p className="font-crimson text-sm text-muted-foreground">Loading Arena…</p>
         </div>
       </div>
     );
@@ -49,10 +48,10 @@ export function PvpPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="text-center space-y-3 max-w-sm">
-          <AlertTriangle className="w-8 h-8 text-destructive mx-auto" />
-          <p className="text-foreground font-cinzel text-sm uppercase tracking-wider">Could not connect to Arena</p>
-          <p className="text-xs text-muted-foreground font-crimson">{error}</p>
+        <div className="max-w-sm space-y-3 text-center">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+          <p className="font-cinzel text-sm uppercase tracking-wider text-foreground">Could not connect to Arena</p>
+          <p className="font-crimson text-xs text-muted-foreground">{error}</p>
         </div>
       </div>
     );
@@ -75,31 +74,8 @@ export function PvpPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="tab-bar flex overflow-x-auto rounded-sm">
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === "arena" ? "tab-btn-active" : ""}`}
-          onClick={() => setActiveTab("arena")}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Swords className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline">Arena</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`tab-btn ${activeTab === "history" ? "tab-btn-active" : ""}`}
-          onClick={() => setActiveTab("history")}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <ScrollText className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline">History</span>
-          </span>
-        </button>
-      </div>
-
-      {activeTab === "arena" && status && (
+    <ArenaLayout activeSub={arenaSub} onSubChange={setArenaSub}>
+      {arenaSub === "stats" && status && (
         <PvpHub
           status={status}
           onJoinQueue={joinQueue}
@@ -110,10 +86,12 @@ export function PvpPage() {
           onSearchPlayers={searchPlayers}
         />
       )}
-
-      {activeTab === "history" && history && (
-        <PvpHistory history={history} onLoadMore={() => fetchHistory(history.page + 1)} />
-      )}
-    </div>
+      {arenaSub === "history" &&
+        (history ? (
+          <PvpHistory history={history} onLoadMore={() => fetchHistory(history.page + 1)} />
+        ) : (
+          <div className="flex justify-center py-12 font-crimson text-sm text-muted-foreground">Loading history…</div>
+        ))}
+    </ArenaLayout>
   );
 }
