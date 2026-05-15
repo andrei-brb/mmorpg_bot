@@ -1220,6 +1220,17 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
             status=400,
         )
 
+    if not await social_svc.is_friend(discord_id, target_discord_id):
+        if not await social_svc.allows_party_invites_from_strangers(target_discord_id):
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": "party_invites_disabled",
+                    "message": "That player is not accepting party invites from non-friends.",
+                },
+                status=400,
+            )
+
     run = await dungeon_svc.get_active_run(char["id"])
     if not run:
         return web.json_response({"error": "not_in_dungeon", "message": "You're not in a dungeon party.", "status": 400})
@@ -2463,9 +2474,13 @@ async def handle_social_settings_post(request: web.Request) -> web.Response:
     from services.social.social_service import SocialService
 
     appear = body.get("appear_offline")
+    allow_whispers = body.get("allow_whispers_from_strangers")
+    allow_party = body.get("allow_party_invites_from_strangers")
     settings = await SocialService(db).set_settings(
         discord_id,
         appear_offline=bool(appear) if appear is not None else None,
+        allow_whispers_from_strangers=bool(allow_whispers) if allow_whispers is not None else None,
+        allow_party_invites_from_strangers=bool(allow_party) if allow_party is not None else None,
     )
     return web.json_response(_json_safe({"ok": True, **settings}))
 

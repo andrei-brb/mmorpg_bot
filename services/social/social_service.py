@@ -64,13 +64,36 @@ class SocialService:
         settings = await self._player_settings(player_id)
         return bool(settings.get("social_appear_offline"))
 
-    async def get_settings(self, player_id: int) -> dict:
-        return {"appear_offline": await self.appears_offline(player_id)}
+    async def allows_whispers_from_strangers(self, player_id: int) -> bool:
+        settings = await self._player_settings(player_id)
+        return bool(settings.get("social_allow_whispers_from_strangers"))
 
-    async def set_settings(self, player_id: int, *, appear_offline: bool | None = None) -> dict:
+    async def allows_party_invites_from_strangers(self, player_id: int) -> bool:
+        settings = await self._player_settings(player_id)
+        return bool(settings.get("social_allow_party_invites_from_strangers"))
+
+    async def get_settings(self, player_id: int) -> dict:
+        return {
+            "appear_offline": await self.appears_offline(player_id),
+            "allow_whispers_from_strangers": await self.allows_whispers_from_strangers(player_id),
+            "allow_party_invites_from_strangers": await self.allows_party_invites_from_strangers(player_id),
+        }
+
+    async def set_settings(
+        self,
+        player_id: int,
+        *,
+        appear_offline: bool | None = None,
+        allow_whispers_from_strangers: bool | None = None,
+        allow_party_invites_from_strangers: bool | None = None,
+    ) -> dict:
         settings = await self._player_settings(player_id)
         if appear_offline is not None:
             settings["social_appear_offline"] = bool(appear_offline)
+        if allow_whispers_from_strangers is not None:
+            settings["social_allow_whispers_from_strangers"] = bool(allow_whispers_from_strangers)
+        if allow_party_invites_from_strangers is not None:
+            settings["social_allow_party_invites_from_strangers"] = bool(allow_party_invites_from_strangers)
         await self.db.execute(
             "UPDATE players SET settings = $2::jsonb WHERE id = $1",
             int(player_id),
@@ -189,7 +212,12 @@ class SocialService:
 
     def _presence_from_row(self, row: dict, *, mask_offline: bool = False) -> dict:
         if mask_offline:
-            return {"online": False, "last_seen": None, "zone_hint": None}
+            return {
+                "online": False,
+                "last_seen": None,
+                "zone_hint": None,
+                "presence_status": "offline",
+            }
         last_seen = row.get("last_seen")
         now = datetime.now(timezone.utc)
         online = False
@@ -200,19 +228,31 @@ class SocialService:
             last_seen_iso = last_seen.isoformat()
             online = (now - last_seen) <= ONLINE_THRESHOLD
 
+        if not online:
+            return {
+                "online": False,
+                "last_seen": last_seen_iso,
+                "zone_hint": None,
+                "presence_status": "offline",
+            }
+
         zone_hint = None
+        presence_status = "online"
         combat_status = str(row.get("combat_status") or "idle")
         if row.get("in_dungeon"):
             zone_hint = "In dungeon"
+            presence_status = "in-dungeon"
         elif combat_status == "in_combat":
             zone_hint = "In combat"
+            presence_status = "in-combat"
         else:
             zone_hint = _zone_display(row.get("current_zone"))
 
         return {
-            "online": online,
+            "online": True,
             "last_seen": last_seen_iso,
             "zone_hint": zone_hint,
+            "presence_status": presence_status,
         }
 
     async def get_unread_counts(self, viewer_id: int) -> dict[str, int]:
@@ -594,7 +634,8 @@ class SocialService:
         if len(body) > WHISPER_MAX_LEN:
             return False, f"Message too long (max {WHISPER_MAX_LEN} characters).", None
         if not await self.is_friend(from_id, to_id):
-            return False, "You can only whisper friends.", None
+            if not await self.allows_whispers_from_strangers(to_id):
+                return False, "You can only whisper friends.", None
         if not await self._whisper_rate_ok(from_id):
             return False, "Whisper rate limit reached. Try again shortly.", None
 

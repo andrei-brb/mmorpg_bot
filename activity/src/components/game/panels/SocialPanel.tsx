@@ -1,152 +1,73 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { WomPanel, WomSectionHeader } from "@/components/wom/WomUi";
+import { SocialView, type SocialTabId } from "@/components/social/SocialView";
+import {
+  formatUsername,
+  mapBlocked,
+  mapFriend,
+  mapLiveEvent,
+  mapRequest,
+  mapWhisper,
+} from "@/components/social/socialMappers";
 import type {
-  SocialFriendRow,
-  SocialIgnoreRow,
-  SocialPlayerSearchRow,
-  SocialRequestRow,
-  SocialWhisperMessage,
-} from "@/lib/apiTypes";
+  BlockedPlayer,
+  Friend,
+  FriendRequest,
+  LiveEventDisplay,
+  PlayerSearchHit,
+} from "@/components/social/socialTypes";
+import type { LiveEventRow, SocialPlayerSearchRow, SocialWhisperMessage } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
-import { cn } from "@/lib/utils";
-
-function formatLastSeen(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const sec = Math.round((Date.now() - d.getTime()) / 1000);
-  if (sec < 60) return "just now";
-  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
-  return d.toLocaleDateString();
-}
-
-function FriendAvatar({ username, online }: { username: string; online?: boolean }) {
-  const initial = (username || "?").charAt(0).toUpperCase();
-  return (
-    <div className="relative shrink-0">
-      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-muted/40 font-cinzel text-sm font-bold text-primary">
-        {initial}
-      </div>
-      <span
-        className={cn(
-          "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background",
-          online ? "bg-emerald-500" : "bg-muted-foreground/50",
-        )}
-        aria-hidden
-      />
-    </div>
-  );
-}
-
-function PresenceLine({ friend }: { friend: SocialFriendRow }) {
-  if (friend.online) {
-    return (
-      <p className="text-[10px] text-emerald-400/90 truncate">
-        Online{friend.zone_hint ? ` · ${friend.zone_hint}` : ""}
-      </p>
-    );
-  }
-  if (friend.last_seen) {
-    return (
-      <p className="text-[10px] text-muted-foreground truncate">
-        Last seen {formatLastSeen(friend.last_seen)}
-      </p>
-    );
-  }
-  return <p className="text-[10px] text-muted-foreground truncate">Offline</p>;
-}
-
-function UsernameSearch({
-  value,
-  onChange,
-  suggestions,
-  showSuggestions,
-  onShowSuggestions,
-  placeholder,
-  onPick,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  suggestions: SocialPlayerSearchRow[];
-  showSuggestions: boolean;
-  onShowSuggestions: (v: boolean) => void;
-  placeholder: string;
-  onPick: (username: string) => void;
-}) {
-  return (
-    <div className="relative">
-      <Input
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          onShowSuggestions(true);
-        }}
-        onFocus={() => onShowSuggestions(true)}
-        onBlur={() => setTimeout(() => onShowSuggestions(false), 150)}
-        placeholder={placeholder}
-        className="text-xs h-9"
-      />
-      {showSuggestions && suggestions.length > 0 ? (
-        <ul className="absolute z-20 mt-1 w-full rounded-md border border-border/80 bg-background/95 shadow-lg text-xs max-h-36 overflow-y-auto backdrop-blur-sm">
-          {suggestions.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                className="w-full text-left px-3 py-2 hover:bg-muted/80 transition-colors"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onPick(p.username)}
-              >
-                <span className="font-medium text-foreground">@{p.username}</span>
-                {p.character_name ? (
-                  <span className="text-muted-foreground"> · {p.character_name}</span>
-                ) : null}
-                {p.level != null ? <span className="text-muted-foreground"> · Lv {p.level}</span> : null}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
 
 type SocialPanelProps = {
   accessToken: string | null;
   guildId?: string;
+  liveEvents?: LiveEventRow[];
 };
 
-type SocialSubTab = "friends" | "requests" | "find" | "messages" | "privacy";
+function mapSearchHit(p: SocialPlayerSearchRow): PlayerSearchHit {
+  return {
+    id: p.id,
+    username: formatUsername(p.username),
+    display: p.character_name || p.username,
+    level: p.level,
+    className: p.class,
+  };
+}
 
-export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
-  const [subTab, setSubTab] = useState<SocialSubTab>("friends");
-  const [friends, setFriends] = useState<SocialFriendRow[]>([]);
-  const [incoming, setIncoming] = useState<SocialRequestRow[]>([]);
-  const [outgoing, setOutgoing] = useState<SocialRequestRow[]>([]);
-  const [ignored, setIgnored] = useState<SocialIgnoreRow[]>([]);
+export function SocialPanel({ accessToken, guildId, liveEvents = [] }: SocialPanelProps) {
+  const [activeTab, setActiveTab] = useState<SocialTabId>("friends");
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [incoming, setIncoming] = useState<FriendRequest[]>([]);
+  const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
+  const [ignored, setIgnored] = useState<BlockedPlayer[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
   const [appearOffline, setAppearOffline] = useState(false);
+  const [allowWhispersFromStrangers, setAllowWhispersFromStrangers] = useState(false);
+  const [allowPartyInvitesFromStrangers, setAllowPartyInvitesFromStrangers] = useState(false);
   const [loading, setLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [addQuery, setAddQuery] = useState("");
-  const [addSuggestions, setAddSuggestions] = useState<SocialPlayerSearchRow[]>([]);
+  const [addSuggestions, setAddSuggestions] = useState<PlayerSearchHit[]>([]);
   const [showAddSuggestions, setShowAddSuggestions] = useState(false);
 
   const [ignoreQuery, setIgnoreQuery] = useState("");
-  const [ignoreSuggestions, setIgnoreSuggestions] = useState<SocialPlayerSearchRow[]>([]);
+  const [ignoreSuggestions, setIgnoreSuggestions] = useState<PlayerSearchHit[]>([]);
   const [showIgnoreSuggestions, setShowIgnoreSuggestions] = useState(false);
 
-  const [whisperFriend, setWhisperFriend] = useState<SocialFriendRow | null>(null);
+  const [whisperFriendId, setWhisperFriendId] = useState<string | null>(null);
   const [whispers, setWhispers] = useState<SocialWhisperMessage[]>([]);
-  const [whisperDraft, setWhisperDraft] = useState("");
-  const whisperEndRef = useRef<HTMLDivElement>(null);
 
-  const requestCount = incoming.length + outgoing.length;
+  const requests = useMemo(() => [...incoming, ...outgoing], [incoming, outgoing]);
+
+  const threads = useMemo(() => {
+    const map: Record<string, ReturnType<typeof mapWhisper>[]> = {};
+    if (whisperFriendId) {
+      map[whisperFriendId] = whispers.map(mapWhisper);
+    }
+    return map;
+  }, [whisperFriendId, whispers]);
 
   const refreshAll = useCallback(async () => {
     if (!accessToken) return;
@@ -161,7 +82,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
       ]);
 
       if (rosterR.status === "fulfilled") {
-        setFriends(rosterR.value.friends || []);
+        setFriends((rosterR.value.friends || []).map(mapFriend));
         setTotalUnread(rosterR.value.total_unread ?? 0);
       } else {
         hadCriticalFailure = true;
@@ -170,8 +91,8 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
       }
 
       if (reqsR.status === "fulfilled") {
-        setIncoming(reqsR.value.incoming || []);
-        setOutgoing(reqsR.value.outgoing || []);
+        setIncoming((reqsR.value.incoming || []).map((r) => mapRequest(r, "incoming")));
+        setOutgoing((reqsR.value.outgoing || []).map((r) => mapRequest(r, "outgoing")));
       } else {
         hadCriticalFailure = true;
         setIncoming([]);
@@ -179,13 +100,15 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
       }
 
       if (ignR.status === "fulfilled") {
-        setIgnored(ignR.value.ignored || []);
+        setIgnored((ignR.value.ignored || []).map(mapBlocked));
       } else {
         setIgnored([]);
       }
 
       if (settingsR.status === "fulfilled") {
         setAppearOffline(Boolean(settingsR.value.appear_offline));
+        setAllowWhispersFromStrangers(Boolean(settingsR.value.allow_whispers_from_strangers));
+        setAllowPartyInvitesFromStrangers(Boolean(settingsR.value.allow_party_invites_from_strangers));
       }
 
       if (hadCriticalFailure) {
@@ -208,19 +131,15 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     return () => clearInterval(id);
   }, [accessToken, refreshAll]);
 
-  const fetchSuggestions = useCallback(
-    async (
-      query: string,
-      setter: (rows: SocialPlayerSearchRow[]) => void,
-      purpose: "friend" | "ignore",
-    ) => {
+  const fetchPlayerSearch = useCallback(
+    async (query: string, purpose: "friend" | "ignore", setter: (rows: PlayerSearchHit[]) => void) => {
       if (!accessToken || query.trim().length < 1) {
         setter([]);
         return;
       }
       try {
         const data = await api.getSocialPlayersSearch(accessToken, query.trim(), guildId, purpose);
-        setter(data.players || []);
+        setter((data.players || []).map(mapSearchHit));
       } catch {
         setter([]);
       }
@@ -229,58 +148,50 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
   );
 
   useEffect(() => {
-    const t = setTimeout(() => void fetchSuggestions(addQuery, setAddSuggestions, "friend"), 250);
+    const t = setTimeout(() => void fetchPlayerSearch(addQuery, "friend", setAddSuggestions), 250);
     return () => clearTimeout(t);
-  }, [addQuery, fetchSuggestions]);
+  }, [addQuery, fetchPlayerSearch]);
 
   useEffect(() => {
-    const t = setTimeout(() => void fetchSuggestions(ignoreQuery, setIgnoreSuggestions, "ignore"), 250);
+    const t = setTimeout(() => void fetchPlayerSearch(ignoreQuery, "ignore", setIgnoreSuggestions), 250);
     return () => clearTimeout(t);
-  }, [ignoreQuery, fetchSuggestions]);
+  }, [ignoreQuery, fetchPlayerSearch]);
 
   const loadWhispers = useCallback(async () => {
-    if (!accessToken || !whisperFriend) return;
+    if (!accessToken || !whisperFriendId) return;
     try {
-      const data = await api.getSocialWhispers(accessToken, whisperFriend.user_id, guildId);
+      const data = await api.getSocialWhispers(accessToken, whisperFriendId, guildId);
       setWhispers(data.messages || []);
     } catch {
       setWhispers([]);
     }
-  }, [accessToken, guildId, whisperFriend]);
+  }, [accessToken, guildId, whisperFriendId]);
 
   useEffect(() => {
-    if (!whisperFriend) {
+    if (!whisperFriendId) {
       setWhispers([]);
       return;
     }
     void loadWhispers();
     const id = setInterval(() => void loadWhispers(), 8_000);
     return () => clearInterval(id);
-  }, [whisperFriend, loadWhispers]);
+  }, [whisperFriendId, loadWhispers]);
 
   useEffect(() => {
-    whisperEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [whispers]);
-
-  useEffect(() => {
-    if (subTab === "messages" && friends.length > 0 && !whisperFriend) {
-      setWhisperFriend(friends[0]);
+    if (activeTab === "chat" && friends.length > 0 && !whisperFriendId) {
+      setWhisperFriendId(friends[0].id);
     }
-  }, [subTab, friends, whisperFriend]);
-
-  const openWhisper = (friend: SocialFriendRow) => {
-    setWhisperFriend(friend);
-    setSubTab("messages");
-  };
+  }, [activeTab, friends, whisperFriendId]);
 
   const sendFriendRequest = async (username: string) => {
     if (!accessToken) return;
-    const res = await api.postSocialFriendRequest(accessToken, { username }, guildId);
+    const u = username.replace(/^@/, "").trim();
+    const res = await api.postSocialFriendRequest(accessToken, { username: u }, guildId);
     if (res.ok) {
       toast.success(res.message || "Request sent.");
       setAddQuery("");
       setShowAddSuggestions(false);
-      setSubTab("requests");
+      setActiveTab("requests");
       void refreshAll();
     } else toast.error(res.message || "Could not send request.");
   };
@@ -305,18 +216,19 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
 
   const unfriend = async (userId: string, username: string) => {
     if (!accessToken) return;
-    if (!window.confirm(`Remove @${username} from your friends?`)) return;
+    if (!window.confirm(`Remove ${username} from your friends?`)) return;
     const res = await api.deleteSocialFriend(accessToken, userId, guildId);
     if (res.ok) {
       toast.info(res.message || "Unfriended.");
-      if (whisperFriend?.user_id === userId) setWhisperFriend(null);
+      if (whisperFriendId === userId) setWhisperFriendId(null);
       void refreshAll();
     } else toast.error(res.message || "Failed.");
   };
 
   const addIgnore = async (username: string) => {
     if (!accessToken) return;
-    const res = await api.postSocialIgnore(accessToken, { username }, guildId);
+    const u = username.replace(/^@/, "").trim();
+    const res = await api.postSocialIgnore(accessToken, { username: u }, guildId);
     if (res.ok) {
       toast.success(res.message || "Ignored.");
       setIgnoreQuery("");
@@ -334,13 +246,10 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     } else toast.error(res.message || "Failed.");
   };
 
-  const sendWhisper = async () => {
-    if (!accessToken || !whisperFriend) return;
-    const body = whisperDraft.trim();
-    if (!body) return;
-    const res = await api.postSocialWhisper(accessToken, whisperFriend.user_id, body, guildId);
+  const sendWhisper = async (body: string) => {
+    if (!accessToken || !whisperFriendId) return;
+    const res = await api.postSocialWhisper(accessToken, whisperFriendId, body, guildId);
     if (res.ok) {
-      setWhisperDraft("");
       void loadWhispers().then(() => refreshAll());
     } else toast.error(res.message || "Could not send whisper.");
   };
@@ -370,15 +279,20 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     } else toast.error(res.message || "Failed.");
   };
 
-  const toggleAppearOffline = async () => {
+  const applySettings = async (patch: api.SocialSettingsInput, successMessage?: string) => {
     if (!accessToken || settingsSaving) return;
     setSettingsSaving(true);
     try {
-      const next = !appearOffline;
-      const res = await api.postSocialSettings(accessToken, next, guildId);
+      const res = await api.postSocialSettings(accessToken, patch, guildId);
       if (res.ok !== false) {
-        setAppearOffline(Boolean(res.appear_offline));
-        toast.success(next ? "You appear offline to friends." : "Friends can see your presence.");
+        if (res.appear_offline !== undefined) setAppearOffline(Boolean(res.appear_offline));
+        if (res.allow_whispers_from_strangers !== undefined) {
+          setAllowWhispersFromStrangers(Boolean(res.allow_whispers_from_strangers));
+        }
+        if (res.allow_party_invites_from_strangers !== undefined) {
+          setAllowPartyInvitesFromStrangers(Boolean(res.allow_party_invites_from_strangers));
+        }
+        if (successMessage) toast.success(successMessage);
         void refreshAll();
       }
     } finally {
@@ -386,376 +300,89 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     }
   };
 
+  const toggleAppearOffline = () => {
+    const next = !appearOffline;
+    void applySettings(
+      { appear_offline: next },
+      next ? "You appear offline to friends." : "Friends can see your presence.",
+    );
+  };
+
+  const toggleAllowWhispers = () => {
+    const next = !allowWhispersFromStrangers;
+    void applySettings(
+      { allow_whispers_from_strangers: next },
+      next ? "Strangers can whisper you." : "Only friends can whisper you.",
+    );
+  };
+
+  const toggleAllowPartyInvites = () => {
+    const next = !allowPartyInvitesFromStrangers;
+    void applySettings(
+      { allow_party_invites_from_strangers: next },
+      next ? "Non-friends can invite you to parties." : "Only friends can send party invites.",
+    );
+  };
+
+  const joinLiveEvent = (event: LiveEventDisplay) => {
+    window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: event.joinTab }));
+    toast.info(`Head to ${event.joinTab} — ${event.title} is active.`);
+  };
+
   if (!accessToken) {
     return <p className="text-xs text-muted-foreground">Sign in to use social features.</p>;
   }
 
+  const mappedEvents = liveEvents.map(mapLiveEvent);
+
   return (
-    <WomPanel glow className="flex flex-col min-h-0 flex-1">
-      <WomSectionHeader kicker="Realm" title="Friends & chat" />
-      <Tabs
-        value={subTab}
-        onValueChange={(v) => setSubTab(v as SocialSubTab)}
-        className="flex flex-col flex-1 min-h-0"
-      >
-        <TabsList
-          className={cn(
-            "h-auto w-full shrink-0 grid grid-cols-5 gap-1 p-1.5",
-            "bg-muted/40 border border-border/40 rounded-sm",
-          )}
-        >
-          <TabsTrigger
-            value="friends"
-            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
-          >
-            Friends{friends.length > 0 ? ` (${friends.length})` : ""}
-          </TabsTrigger>
-          <TabsTrigger
-            value="requests"
-            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
-          >
-            Requests
-            {incoming.length > 0 ? (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
-                {incoming.length}
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger
-            value="find"
-            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
-          >
-            Find
-          </TabsTrigger>
-          <TabsTrigger
-            value="messages"
-            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
-          >
-            Chat
-            {totalUnread > 0 ? (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
-                {totalUnread > 9 ? "9+" : totalUnread}
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger
-            value="privacy"
-            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
-          >
-            Privacy
-          </TabsTrigger>
-        </TabsList>
-
-        {loading ? (
-          <p className="text-xs text-muted-foreground mt-3 px-1">Loading…</p>
-        ) : null}
-
-        <TabsContent value="friends" className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-2 pr-0.5 pb-1 data-[state=inactive]:hidden">
-          {friends.length === 0 ? (
-            <div className="rounded-sm border border-dashed border-border/50 p-4 text-center">
-              <p className="text-xs text-muted-foreground mb-2">No friends yet.</p>
-              <Button type="button" size="sm" variant="secondary" className="font-cinzel text-xs" onClick={() => setSubTab("find")}>
-                Find players
-              </Button>
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {friends.map((f) => (
-                <li
-                  key={f.user_id}
-                  className="flex gap-3 rounded-sm border border-border/40 bg-muted/20 p-3 hover:border-border/70 transition-colors"
-                >
-                  <FriendAvatar username={f.username} online={f.online} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      @{f.username}
-                    </p>
-                    {f.character_name || f.level != null ? (
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {f.character_name}
-                        {f.level != null ? ` · Lv ${f.level}` : ""}
-                        {f.class ? ` ${f.class}` : ""}
-                      </p>
-                    ) : null}
-                    <PresenceLine friend={f} />
-                    {(f.unread_count ?? 0) > 0 ? (
-                      <p className="text-[10px] text-primary mt-0.5">{f.unread_count} unread</p>
-                    ) : null}
-                    <div className="grid grid-cols-4 gap-1 mt-2.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-[10px] font-cinzel px-1"
-                        onClick={() => openWhisper(f)}
-                      >
-                        Message
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-[10px] font-cinzel px-1"
-                        onClick={() => void inviteToParty(f.user_id)}
-                      >
-                        Party
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-[10px] font-cinzel px-1"
-                        onClick={() => void challengePvp(f.user_id)}
-                      >
-                        Arena
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-[10px] text-muted-foreground px-1 border-l border-border/30 rounded-l-none"
-                        onClick={() => void unfriend(f.user_id, f.username)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </TabsContent>
-
-        <TabsContent value="requests" className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-3 pr-0.5 pb-1 data-[state=inactive]:hidden">
-          {requestCount === 0 ? (
-            <p className="text-xs text-muted-foreground px-1">No pending friend requests.</p>
-          ) : (
-            <>
-              {incoming.length > 0 ? (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">
-                    Incoming ({incoming.length})
-                  </p>
-                  <ul className="space-y-2">
-                    {incoming.map((r) => (
-                      <li
-                        key={r.request_id}
-                        className="flex flex-wrap items-center gap-2 rounded-sm border border-border/40 bg-muted/20 p-3"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">@{r.username}</p>
-                          {r.character_name ? (
-                            <p className="text-[10px] text-muted-foreground">{r.character_name}</p>
-                          ) : null}
-                        </div>
-                        <Button size="sm" className="h-8 text-[10px] font-cinzel" onClick={() => void acceptRequest(r.request_id)}>
-                          Accept
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-[10px] font-cinzel"
-                          onClick={() => void declineRequest(r.request_id)}
-                        >
-                          Decline
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {outgoing.length > 0 ? (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">
-                    Sent ({outgoing.length})
-                  </p>
-                  <ul className="space-y-1.5">
-                    {outgoing.map((r) => (
-                      <li
-                        key={r.request_id}
-                        className="flex items-center justify-between gap-2 rounded-sm border border-border/40 bg-muted/20 p-3 text-xs"
-                      >
-                        <span className="text-foreground font-medium">@{r.username}</span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-[10px]"
-                          onClick={() => void cancelOutgoing(r.request_id)}
-                        >
-                          Cancel
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="find" className="flex-1 min-h-0 overflow-y-auto mt-2 pr-0.5 pb-1 data-[state=inactive]:hidden">
-          <p className="text-xs text-muted-foreground mb-3 px-1 leading-relaxed">
-            Search any player globally by Discord username. They must accept your request before you can chat.
-          </p>
-          <UsernameSearch
-            value={addQuery}
-            onChange={setAddQuery}
-            suggestions={addSuggestions}
-            showSuggestions={showAddSuggestions}
-            onShowSuggestions={setShowAddSuggestions}
-            placeholder="@username"
-            onPick={(u) => void sendFriendRequest(u)}
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="messages"
-          className="flex-1 min-h-0 mt-2 flex flex-col gap-2 pb-1 data-[state=inactive]:hidden"
-        >
-          {friends.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-1">Add friends to send whispers.</p>
-          ) : (
-            <>
-              {totalUnread > 0 ? (
-                <p className="text-[10px] text-primary px-1 shrink-0">
-                  {totalUnread} unread — messages saved while you were away.
-                </p>
-              ) : null}
-              <div className="flex gap-1 overflow-x-auto pb-1 shrink-0">
-                {friends.map((f) => (
-                  <button
-                    key={f.user_id}
-                    type="button"
-                    onClick={() => {
-                      setWhisperFriend(f);
-                      void loadWhispers();
-                    }}
-                    className={cn(
-                      "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-cinzel transition-colors relative",
-                      whisperFriend?.user_id === f.user_id
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border/50 text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    @{f.username}
-                    {(f.unread_count ?? 0) > 0 ? (
-                      <span className="absolute -top-1 -right-1 h-3.5 min-w-[14px] px-0.5 rounded-full bg-primary text-[8px] text-primary-foreground">
-                        {f.unread_count}
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-              {whisperFriend ? (
-                <div className="flex flex-col flex-1 min-h-0 rounded-sm border border-border/50 bg-muted/10">
-                  <div className="border-b border-border/40 px-3 py-2.5 shrink-0 bg-muted/20">
-                    <p className="text-sm font-cinzel text-primary">@{whisperFriend.username}</p>
-                    <PresenceLine friend={whisperFriend} />
-                  </div>
-                  <div className="flex-1 min-h-[120px] max-h-44 overflow-y-auto p-3 space-y-2 text-xs">
-                    {whispers.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">Say hello.</p>
-                    ) : (
-                      whispers.map((m) => (
-                        <div
-                          key={m.id}
-                          className={cn(
-                            "rounded-md px-3 py-2 max-w-[85%] break-words",
-                            m.mine
-                              ? "ml-auto bg-primary/25 text-foreground border border-primary/20"
-                              : "bg-muted/60 text-foreground border border-border/30",
-                          )}
-                        >
-                          {m.body}
-                        </div>
-                      ))
-                    )}
-                    <div ref={whisperEndRef} />
-                  </div>
-                  <div className="flex gap-2 p-2 border-t border-border/40 shrink-0">
-                    <Input
-                      value={whisperDraft}
-                      onChange={(e) => setWhisperDraft(e.target.value)}
-                      placeholder="Type a whisper…"
-                      className="text-xs h-8 flex-1"
-                      maxLength={500}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void sendWhisper();
-                        }
-                      }}
-                    />
-                    <Button type="button" size="sm" className="font-cinzel shrink-0 h-8" onClick={() => void sendWhisper()}>
-                      Send
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground text-center py-6">Select a friend above to chat.</p>
-              )}
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="privacy" className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-3 pr-0.5 pb-1 data-[state=inactive]:hidden">
-          <div className="rounded-sm border border-border/40 bg-muted/20 p-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-foreground">Appear offline</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Friends see you as offline; party and PvP invites from blocked players are rejected.
-              </p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant={appearOffline ? "default" : "outline"}
-              className="font-cinzel text-[10px] shrink-0 h-8"
-              disabled={settingsSaving}
-              onClick={() => void toggleAppearOffline()}
-            >
-              {appearOffline ? "On" : "Off"}
-            </Button>
-          </div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-1">Blocked players</p>
-          <p className="text-xs text-muted-foreground px-1 leading-relaxed -mt-2">
-            Blocked players cannot friend you, invite you to parties, or challenge you in Arena.
-          </p>
-          <UsernameSearch
-            value={ignoreQuery}
-            onChange={setIgnoreQuery}
-            suggestions={ignoreSuggestions}
-            showSuggestions={showIgnoreSuggestions}
-            onShowSuggestions={setShowIgnoreSuggestions}
-            placeholder="@username to block"
-            onPick={(u) => void addIgnore(u)}
-          />
-          {ignored.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-1">Nobody blocked.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {ignored.map((row) => (
-                <li
-                  key={row.user_id}
-                  className="flex items-center justify-between rounded-sm border border-border/40 bg-muted/20 p-3 text-xs"
-                >
-                  <span className="font-medium">@{row.username}</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-[10px]"
-                    onClick={() => void removeIgnore(row.user_id)}
-                  >
-                    Unblock
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </TabsContent>
-      </Tabs>
-    </WomPanel>
+    <SocialView
+      loading={loading}
+      friends={friends}
+      requests={requests}
+      threads={threads}
+      activeThreadId={whisperFriendId}
+      appearOffline={appearOffline}
+      allowWhispersFromStrangers={allowWhispersFromStrangers}
+      allowPartyInvitesFromStrangers={allowPartyInvitesFromStrangers}
+      settingsSaving={settingsSaving}
+      blocked={ignored}
+      liveEvents={mappedEvents}
+      totalUnread={totalUnread}
+      findQuery={addQuery}
+      findSuggestions={addSuggestions}
+      showFindSuggestions={showAddSuggestions}
+      ignoreQuery={ignoreQuery}
+      ignoreSuggestions={ignoreSuggestions}
+      showIgnoreSuggestions={showIgnoreSuggestions}
+      activeTab={activeTab}
+      onActiveTabChange={setActiveTab}
+      onFindQueryChange={setAddQuery}
+      onShowFindSuggestions={setShowAddSuggestions}
+      onIgnoreQueryChange={setIgnoreQuery}
+      onShowIgnoreSuggestions={setShowIgnoreSuggestions}
+      onMessage={(f) => {
+        setWhisperFriendId(f.id);
+        setActiveTab("chat");
+      }}
+      onParty={(f) => void inviteToParty(f.id)}
+      onArena={(f) => void challengePvp(f.id)}
+      onRemove={(f) => void unfriend(f.id, f.username)}
+      onAccept={(r) => void acceptRequest(r.id)}
+      onDecline={(r) => void declineRequest(r.id)}
+      onCancel={(r) => void cancelOutgoing(r.id)}
+      onSendRequest={(u) => void sendFriendRequest(u)}
+      onPickFindSuggestion={(u) => void sendFriendRequest(u)}
+      onOpenThread={setWhisperFriendId}
+      onCloseThread={() => setWhisperFriendId(null)}
+      onSendWhisper={(text) => void sendWhisper(text)}
+      onToggleAppearOffline={() => void toggleAppearOffline()}
+      onToggleAllowWhispers={() => void toggleAllowWhispers()}
+      onToggleAllowPartyInvites={() => void toggleAllowPartyInvites()}
+      onJoinLiveEvent={joinLiveEvent}
+      onBlock={(u) => void addIgnore(u)}
+      onUnblock={(id) => void removeIgnore(id)}
+      onGoToFind={() => setActiveTab("find")}
+    />
   );
 }

@@ -1074,15 +1074,21 @@ export async function getSocialSettings(token: string, guildId?: string): Promis
   return res.json() as Promise<SocialSettingsPayload>;
 }
 
+export type SocialSettingsInput = {
+  appear_offline?: boolean;
+  allow_whispers_from_strangers?: boolean;
+  allow_party_invites_from_strangers?: boolean;
+};
+
 export async function postSocialSettings(
   token: string,
-  appearOffline: boolean,
+  settings: SocialSettingsInput,
   guildId?: string,
 ): Promise<SocialSettingsPayload> {
   const res = await fetch(apiUrl("/api/game/social/settings"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
-    body: JSON.stringify({ appear_offline: appearOffline }),
+    body: JSON.stringify(settings),
   });
   return res.json() as Promise<SocialSettingsPayload>;
 }

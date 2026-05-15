@@ -793,6 +793,7 @@ export type SocialFriendRow = {
   online?: boolean;
   last_seen?: string | null;
   zone_hint?: string | null;
+  presence_status?: "online" | "offline" | "in-combat" | "in-dungeon";
   unread_count?: number;
   last_whisper_preview?: string | null;
 };
@@ -807,6 +808,8 @@ export type SocialRosterPayload = {
 export type SocialSettingsPayload = {
   ok?: boolean;
   appear_offline?: boolean;
+  allow_whispers_from_strangers?: boolean;
+  allow_party_invites_from_strangers?: boolean;
 };
 
 export type SocialSuggestionRow = {
