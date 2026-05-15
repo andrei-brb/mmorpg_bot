@@ -1,0 +1,41 @@
+---
+description: After git commits, always push to GitHub so Railway auto-deploys
+alwaysApply: true
+---
+
+# Railway deploy — always push
+
+Railway deploys from the **remote** GitHub repo, not local commits. Unpushed commits never appear in production.
+
+## After every commit
+
+When you create a git commit in this repo (and the user did not say "do not push"):
+
+1. Finish the commit on the current branch (usually `main`).
+2. **Immediately push** to the tracked remote:
+   ```bash
+   git push origin HEAD
+   ```
+   If the branch has no upstream yet:
+   ```bash
+   git push -u origin HEAD
+   ```
+3. Confirm push succeeded (`git status` should not show "ahead of origin").
+4. Tell the user the commit hash and that Railway should redeploy shortly.
+
+## Do not skip push because
+
+- The user said "commit" without saying "push" — pushing is implied for deploy.
+- You assume they will push later — they want Railway updated automatically.
+
+## Still do not push when
+
+- The user explicitly says not to push, or only wants a local commit.
+- Push would require force-push to `main`/`master` — warn and ask first.
+- Commit failed or was rejected by a hook — fix and make a new commit, then push.
+
+## Railway checklist (mention if deploy looks stale)
+
+- Service watches **`main`** (or the branch you pushed).
+- Correct service (activity vs bot) if the monorepo has multiple Railway services.
+- Hard-refresh the Discord Activity after deploy (bundle cache).
