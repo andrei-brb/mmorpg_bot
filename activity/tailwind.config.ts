@@ -75,6 +75,11 @@ export default {
         ember: "#ff6b1a",
         arcane: "#5fa8ff",
         verdant: "#6ee36e",
+        /** Hero forge / icy rare accent */
+        frost: "#7ec8ff",
+        /** Enhance warning tone */
+        blood: "#d44848",
+        parchment: "hsl(var(--parchment))",
         "bg-void": "#050505",
         "bg-panel": "#111114",
         "bg-raised": "#17171c",

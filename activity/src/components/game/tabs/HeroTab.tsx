@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Sword, Hammer, Recycle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CharacterDerivedStatsPayload, EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
@@ -11,14 +12,14 @@ import { ItemIcon } from "../ItemIcon";
 import { ItemTooltipPanel } from "../ItemTooltipPanel";
 import { WomPanel } from "@/components/wom/WomUi";
 
+/** Flanking portrait (hero-blacksmith visual); weapons sit in hex row below */
+const FORGE_LEFT_SLOTS = ["head", "neck", "chest", "legs"] as const;
+const FORGE_RIGHT_SLOTS = ["hands", "ring", "trinket", "feet"] as const;
+
 const EQUIP_ORDER = [
   "head", "chest", "hands", "legs", "feet",
   "main_hand", "off_hand", "neck", "ring", "trinket",
 ] as const;
-
-/** Left column (top → bottom): armor block. Right: weapons & accessories. */
-const PAPER_LEFT_SLOTS = ["head", "chest", "hands", "legs", "feet"] as const;
-const PAPER_RIGHT_SLOTS = ["main_hand", "off_hand", "neck", "ring", "trinket"] as const;
 
 const SLOT_LABELS: Record<string, string> = {
   head: "Head", chest: "Chest", hands: "Hands", legs: "Legs", feet: "Feet",
@@ -46,6 +47,41 @@ const RARITY_COLORS: Record<string, string> = {
   epic: "text-rarity-epic border-rarity-epic/40",
   legendary: "text-rarity-legendary border-rarity-legendary/40",
 };
+
+function forgeFrameAccent(rawRarity?: string | null): { ring: string; glow: string; chipText: string } {
+  switch (rarityKey(rawRarity)) {
+    case "legendary":
+      return {
+        ring: "ring-gold/90",
+        glow: "shadow-[inset_0_0_26px_oklch(0.88_0.16_88/0.32)] animate-pulse-gold",
+        chipText: "text-gold-200",
+      };
+    case "epic":
+      return {
+        ring: "ring-arcane/70",
+        glow: "shadow-[inset_0_0_22px_oklch(0.65_0.22_295/0.28)]",
+        chipText: "text-purple-300",
+      };
+    case "rare":
+      return {
+        ring: "ring-frost/60",
+        glow: "shadow-[inset_0_0_22px_oklch(0.78_0.14_220/0.25)]",
+        chipText: "text-frost",
+      };
+    case "uncommon":
+      return {
+        ring: "ring-verdant/55",
+        glow: "shadow-[inset_0_0_18px_oklch(0.55_0.14_150/0.22)]",
+        chipText: "text-verdant",
+      };
+    default:
+      return {
+        ring: "ring-gold/30",
+        glow: "shadow-[inset_0_0_18px_oklch(0_0_0/0.55)]",
+        chipText: "text-gold-600",
+      };
+  }
+}
 
 function rarityKey(rarity?: string | null) {
   return (rarity || "common").toLowerCase();
@@ -525,53 +561,25 @@ export function HeroTab() {
     [equipped],
   );
 
-  function renderEquipSlotCell(slotId: string) {
-    const it = equipped[slotId] || null;
-    const rc = it ? RARITY_COLORS[rarityKey(it.rarity)] || "" : "";
+  function forgeChipShell(
+    slotId: string,
+    it: InvRow | null,
+    tone: ReturnType<typeof forgeFrameAccent>,
+    rc: string,
+    compactIcon: boolean,
+  ) {
     const showHoverTip = it && hoveredKey === slotId && pinnedKey !== slotId;
     const showPinned = it && pinnedKey === slotId;
-    return (
-      <div
-        key={slotId}
-        data-item-slot={slotId}
-        className={`hero-ref-equip-slot relative aspect-square w-full ${
-          it ? `slot-filled slot-hero-filled ${rc} cursor-pointer` : "slot-empty slot-hero-empty"
-        }`}
-        onMouseEnter={() => it && setHoveredKey(slotId)}
-        onMouseLeave={() => setHoveredKey(null)}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!it) return;
-          setPinnedKey((p) => (p === slotId ? null : slotId));
-        }}
-      >
-        {it ? (
-          <div className="absolute inset-0 z-[1] flex items-center justify-center p-1">
-            <ItemIcon item={it} size={HERO_ITEM_ICON} />
-            {Number(it.enhancement_level ?? 0) > 0 && (
-              <span
-                className="pointer-events-none absolute bottom-0.5 right-0.5 text-[7px] font-bold leading-none text-primary"
-                style={{ textShadow: "0 0 4px hsl(43 78% 50% / 0.4)" }}
-              >
-                +{it.enhancement_level}
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="relative z-[1] flex flex-col items-center justify-center gap-0.5 text-[7px] leading-tight text-center opacity-60 font-cinzel select-none">
-            <span className="text-[11px] leading-none opacity-80" aria-hidden>
-              {SLOT_ICONS[slotId] ?? "◇"}
-            </span>
-            <span className="hidden sm:inline text-[5px] uppercase tracking-tighter">{SLOT_LABELS[slotId]}</span>
-          </span>
-        )}
-        {showHoverTip && (
-          <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
+    const px = compactIcon ? 36 : HERO_ITEM_ICON;
+    const tip = (
+      <>
+        {showHoverTip && it ? (
+          <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left">
             <ItemTooltipPanel item={it} rarityClass={rc} />
           </div>
-        )}
-        {showPinned && (
-          <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
+        ) : null}
+        {showPinned && it ? (
+          <div className="game-tooltip bottom-full left-1/2 z-40 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left shadow-lg">
             <ItemTooltipPanel item={it} rarityClass={rc}>
               <div className="flex flex-wrap gap-1">
                 <button
@@ -581,7 +589,7 @@ export function HeroTab() {
                     setPinnedKey(null);
                     setEnhanceItemId(it.id);
                   }}
-                  className="game-btn-primary text-[9px] px-2 py-0.5"
+                  className="game-btn-primary px-2 py-0.5 text-[9px]"
                 >
                   🔨 Enhance
                 </button>
@@ -591,453 +599,643 @@ export function HeroTab() {
                     e.stopPropagation();
                     void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped");
                   }}
-                  className="game-btn-secondary text-[9px] px-2 py-0.5"
+                  className="game-btn-secondary px-2 py-0.5 text-[9px]"
                 >
                   Unequip
                 </button>
               </div>
             </ItemTooltipPanel>
           </div>
-        )}
+        ) : null}
+      </>
+    );
+    return (
+      <div className="relative z-[6] shrink-0" data-item-slot={slotId}>
+        <div
+          className={`hero-forge-clip-blade-sm relative flex aspect-square h-14 w-14 items-center justify-center ring-1 sm:h-16 sm:w-16 ${
+            it ? `${tone.ring} ${tone.glow} cursor-pointer hover:scale-105 ${rc}` : "tex-forge ring-gold/10 opacity-95"
+          } transition-transform`}
+          onMouseEnter={() => it != null && setHoveredKey(slotId)}
+          onMouseLeave={() => setHoveredKey(null)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!it) return;
+            setPinnedKey((p) => (p === slotId ? null : slotId));
+          }}
+        >
+          {it ? (
+            <>
+              <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
+                <ItemIcon item={it} size={compactIcon ? px : HERO_ITEM_ICON} />
+              </div>
+              {Number(it.enhancement_level ?? 0) > 0 ? (
+                <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-[8] rounded-sm border border-gold/60 bg-background px-1 py-px font-display text-[9px] font-semibold tracking-wider text-gold-200">
+                  +{it.enhancement_level}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="relative z-[1] flex flex-col items-center justify-center opacity-65">
+              <span className="text-lg leading-none" aria-hidden>
+                {SLOT_ICONS[slotId] ?? "◇"}
+              </span>
+            </span>
+          )}
+        </div>
+        {tip}
+      </div>
+    );
+  }
+
+  function renderForgeEquipChip(slotId: string, side: "left" | "right") {
+    const it = equipped[slotId] || null;
+    const rk = rarityKey(it?.rarity);
+    const tone = forgeFrameAccent(rk);
+    const rc = RARITY_COLORS[rk] || "";
+    const chip = forgeChipShell(slotId, it, tone, rc, true);
+    return (
+      <div
+        key={slotId}
+        className={`group relative flex items-center gap-2 ${side === "left" ? "flex-row-reverse" : "flex-row"}`}
+      >
+        {chip}
+        <span className="pointer-events-none whitespace-nowrap font-display text-[10px] uppercase tracking-[0.25em] text-gold-dim opacity-0 transition-opacity group-hover:opacity-100">
+          {SLOT_LABELS[slotId] ?? slotId}
+        </span>
+      </div>
+    );
+  }
+
+  function renderForgeWeaponHex(slotId: string, subtitle: string) {
+    const it = equipped[slotId] || null;
+    const rk = rarityKey(it?.rarity);
+    const tone = forgeFrameAccent(rk);
+    const rc = RARITY_COLORS[rk] || "";
+    return (
+      <div className="flex flex-col items-center">
+        <div className="relative z-[6]" data-item-slot={slotId}>
+          <div
+            className={`relative flex h-16 w-16 items-center justify-center hero-forge-clip-rhombus tex-forge hero-forge-edge-gold ring-1 sm:h-[4.75rem] sm:w-[4.75rem] ${
+              it ? `${tone.ring} ${tone.glow} cursor-pointer hover:brightness-105 ${rc}` : "ring-gold/25"
+            }`}
+            onMouseEnter={() => it != null && setHoveredKey(slotId)}
+            onMouseLeave={() => setHoveredKey(null)}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!it) return;
+              setPinnedKey((p) => (p === slotId ? null : slotId));
+            }}
+          >
+            {it ? (
+              <div className="absolute inset-[3px] z-[2] flex items-center justify-center">
+                <ItemIcon item={it} size={40} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-gold-dim">
+                <Sword className="h-8 w-8 -rotate-45 text-gold-200 opacity-55" aria-hidden />
+              </div>
+            )}
+            {it && Number(it.enhancement_level ?? 0) > 0 ? (
+              <span className="pointer-events-none absolute -right-1 -top-0.5 z-[8] rounded-sm border border-gold/60 bg-background px-1 py-px font-display text-[9px] text-gold-200">
+                +{it.enhancement_level}
+              </span>
+            ) : null}
+            {it && hoveredKey === slotId && pinnedKey !== slotId ? (
+              <div className="pointer-events-none game-tooltip absolute bottom-[104%] left-1/2 z-30 mb-0 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left">
+                <ItemTooltipPanel item={it} rarityClass={rc} />
+              </div>
+            ) : null}
+            {it && pinnedKey === slotId ? (
+              <div className="game-tooltip absolute bottom-[104%] left-1/2 z-40 mb-0 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left shadow-lg">
+                <ItemTooltipPanel item={it} rarityClass={rc}>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPinnedKey(null);
+                        setEnhanceItemId(it.id);
+                      }}
+                      className="game-btn-primary px-2 py-0.5 text-[9px]"
+                    >
+                      🔨 Enhance
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped");
+                      }}
+                      className="game-btn-secondary px-2 py-0.5 text-[9px]"
+                    >
+                      Unequip
+                    </button>
+                  </div>
+                </ItemTooltipPanel>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <span className="mt-1 text-center font-display text-[10px] tracking-[0.3em] text-gold-dim">{subtitle}</span>
       </div>
     );
   }
 
   const combatStats = derivedStats?.ok !== false && derivedStats ? derivedStats : null;
+  const combatPowerDisplay =
+    combatStats != null
+      ? Math.round(
+          combatStats.attack_power +
+            combatStats.spell_power +
+            combatStats.armor * 2 +
+            combatStats.hit_rating * 12 +
+            combatStats.haste * 15 +
+            combatStats.crit_chance * 180,
+        ).toLocaleString()
+      : "—";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-    <div className="space-y-2.5 hero-tab-ref w-full pb-4 px-1">
-      {accessToken && char ? (
-        <WomPanel glow className="game-panel-hero">
-          <div className="game-panel-header game-panel-header-hero">Offline earnings</div>
-          <p className="hero-panel-subtitle">
-            Accrues while you&apos;re away (up to {idleRewards?.max_hours ?? 24}h per claim).
-          </p>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-muted-foreground">
-              {idleLoading ? (
-                <span>Checking…</span>
-              ) : idleRewards?.ok === false ? (
-                <span className="text-destructive">Could not load offline earnings.</span>
-              ) : (
-                <>
-                  Pending{" "}
-                  <span className="font-medium tabular-nums text-foreground">{idleRewards?.pending_xp ?? 0}</span> XP ·{" "}
-                  <span className="font-medium tabular-nums text-foreground">{idleRewards?.pending_gold ?? 0}</span>{" "}
-                  🪙
-                  {typeof idleRewards?.effective_hours === "number" && idleRewards.effective_hours > 0 && (
-                    <span className="ml-1.5 text-[11px] opacity-80">
-                      (~{idleRewards.effective_hours.toFixed(1)} h accrued)
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              disabled={
-                idleClaiming ||
-                idleLoading ||
-                idleRewards?.ok === false ||
-                ((idleRewards?.pending_xp ?? 0) === 0 && (idleRewards?.pending_gold ?? 0) === 0)
-              }
-              onClick={() => void claimIdleRewards()}
-              className="game-btn-primary text-xs px-3 py-1.5 shrink-0"
-            >
-              {idleClaiming ? "Collecting…" : "Collect"}
-            </button>
-          </div>
-        </WomPanel>
-      ) : null}
-      {/* Two columns */}
-      <div className="hero-ref-hero-columns grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 md:gap-3">
-        {/* Equipment — paper doll + combat stats */}
-        <WomPanel glow className="game-panel-hero hero-ref-equip-panel min-w-0">
-          <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-            <div className="min-w-0">
-              <div className="game-panel-header game-panel-header-hero !mb-0 hero-ref-equip-title">Equipment</div>
-              <p className="hero-panel-subtitle !mb-0 !mt-1">Worn gear and weapons</p>
-            </div>
-            <div className="hero-ref-set-bonus shrink-0 text-right leading-tight">
-              <div className="hero-ref-set-bonus-label">Set bonus</div>
-              <div className="hero-ref-set-bonus-value tabular-nums">{setBonusDisplay}</div>
-            </div>
-          </div>
+      <div className="relative w-full px-1 pb-6 hero-tab-ref">
+        <div className="relative tex-forge hero-forge-edge-gold-strong p-[2px]">
+          <span className="corner-ornament corner-tl" aria-hidden />
+          <span className="corner-ornament corner-tr" aria-hidden />
+          <span className="corner-ornament corner-bl" aria-hidden />
+          <span className="corner-ornament corner-br" aria-hidden />
 
-          <div className="hero-ref-paper-doll mt-2">
-            <div className="hero-ref-paper-col">{PAPER_LEFT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
-            <div className="hero-ref-paper-portrait">
-              <img
-                src={paperPortraitSrc}
-                alt=""
-                className="hero-ref-paper-portrait-art"
-                decoding="async"
-                onError={() => {
-                  setPaperPortraitStep((prev) => {
-                    if (prev === "spec") return "class";
-                    if (prev === "class") return "bundled";
-                    return prev;
-                  });
-                }}
-              />
-              <div className="hero-ref-paper-portrait-level">Lv.{char?.level ?? "—"}</div>
-              <div className="hero-ref-paper-portrait-nameplate">
-                <div className="hero-ref-paper-name">{(char?.name || "Hero").toUpperCase()}</div>
-                <div className="hero-ref-paper-classline">
+          <div className="relative grid grid-cols-12 gap-px border border-gold/30 bg-black/60">
+            <section className="relative col-span-12 overflow-hidden tex-leather min-h-[560px] lg:col-span-5">
+              <div className="flex items-center justify-between px-5 pt-4">
+                <div className="hero-forge-clip-tag border border-gold/40 bg-gold/15 px-3 py-1">
+                  <span className="font-display text-[10px] tracking-[0.3em] text-gold-200">
+                    HERO · LV.{char?.level ?? "—"}
+                  </span>
+                </div>
+                <div className="hero-forge-clip-tag border border-gold/25 bg-black/50 px-3 py-1">
+                  <span className="font-display text-[10px] tracking-[0.3em] text-gold-600">
+                    SET BONUS · {setBonusDisplay}
+                  </span>
+                </div>
+              </div>
+
+              <div className="px-5 pt-4">
+                <h2 className="font-display text-4xl leading-none tracking-[0.18em] text-gold-200 sm:text-5xl">
+                  {(char?.name || "Hero").toUpperCase()}
+                </h2>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.4em] text-gold-dim">
                   {(char?.class || "—").toString().replace(/_/g, " ").toUpperCase()}
-                  {(char?.specialization_name || char?.specialization) && (
+                  {char?.specialization_name || char?.specialization ? (
                     <>
                       {" "}
-                      <span className="opacity-60">—</span>{" "}
+                      <span className="opacity-50">·</span>{" "}
                       {(char.specialization_name || String(char.specialization || "").replace(/_/g, " ")).toUpperCase()}
                     </>
-                  )}
-                </div>
+                  ) : null}
+                </p>
+                <div className="divider-ornate mb-2 mt-4" />
               </div>
-            </div>
-            <div className="hero-ref-paper-col">{PAPER_RIGHT_SLOTS.map((s) => renderEquipSlotCell(s))}</div>
-          </div>
 
-          <div className="ornament-divider my-2" />
-
-          <div className="hero-ref-combat-stats">
-            {(
-              [
-                ["Attack", combatStats ? Math.round(combatStats.attack_power) : "—"],
-                ["Defense", combatStats ? Math.round(combatStats.armor) : "—"],
-                ["Accuracy", combatStats ? Math.round(combatStats.hit_rating) : "—"],
-                ["Critical", combatStats ? Math.round(combatStats.crit_chance) : "—"],
-                ["Speed", combatStats ? Math.round(combatStats.haste) : "—"],
-              ] as const
-            ).map(([label, val]) => (
-              <div key={label} className="hero-ref-combat-stat-cell">
-                <div className="hero-ref-combat-stat-label">{label}</div>
-                <div className="hero-ref-combat-stat-value tabular-nums">{val}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="ornament-divider my-2" />
-          <button
-            type="button"
-            onClick={() => {
-              const list = blacksmithCandidates;
-              if (list.length === 0) toast("No gear to enhance");
-              else if (list.length === 1) setEnhanceItemId(list[0].id);
-              else setBlacksmithPickerOpen(true);
-            }}
-            className="game-btn-primary hero-btn-jewel hero-ref-blacksmith-btn w-full uppercase tracking-widest font-cinzel font-semibold"
-          >
-            🔨 Open Blacksmith
-          </button>
-        </WomPanel>
-
-        {/* Inventory */}
-        <WomPanel glow className="game-panel-hero min-w-0 hero-ref-inventory-panel">
-          <div className="game-panel-header game-panel-header-hero flex flex-col gap-1 min-w-0">
-            {/* Row 1: title + gold/bag — keeps currency inside the panel */}
-            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 min-w-0">
-              <span className="hero-inventory-title shrink-0 hero-ref-inventory-title">Inventory</span>
-              <div className="text-right shrink-0 min-w-0">
-                <div className="hero-stat-gold tabular-nums whitespace-nowrap">
-                  {Number(char?.gold ?? 0).toLocaleString()} 🪙
-                </div>
-                {bagSlotsMax > 0 && (
-                  <div className="hero-stat-muted tabular-nums whitespace-nowrap uppercase tracking-wide text-[8px]">
-                    Bag: {bagSlotsUsed}/{bagSlotsMax} · Free: {bagSlotsFree}
+              <div className="relative mx-auto mt-2 w-full max-w-[460px] aspect-[4/5]">
+                <div className="absolute inset-x-10 inset-y-6 bg-[radial-gradient(circle_at_50%_40%,oklch(0.78_0.14_78/0.35),transparent_65%)] blur-2xl" />
+                <div className="absolute inset-x-14 top-2 bottom-16 sm:inset-x-20">
+                  <div className="relative h-full w-full overflow-hidden border border-gold/40 tex-parchment hero-forge-clip-blade hero-forge-edge-gold">
+                    <img
+                      src={paperPortraitSrc}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      decoding="async"
+                      onError={() => {
+                        setPaperPortraitStep((prev) => {
+                          if (prev === "spec") return "class";
+                          if (prev === "class") return "bundled";
+                          return prev;
+                        });
+                      }}
+                    />
+                    <div className="pointer-events-none absolute inset-1 border border-gold/15" />
                   </div>
-                )}
+                </div>
+
+                <div className="absolute left-1 top-1/2 flex -translate-y-1/2 flex-col gap-2.5 sm:left-2 sm:gap-3">
+                  {FORGE_LEFT_SLOTS.map((s) => renderForgeEquipChip(s, "left"))}
+                </div>
+                <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col gap-2.5 sm:right-2 sm:gap-3">
+                  {FORGE_RIGHT_SLOTS.map((s) => renderForgeEquipChip(s, "right"))}
+                </div>
+
+                <div className="absolute bottom-6 left-1/2 flex w-[88%] max-w-[360px] -translate-x-1/2 justify-center gap-4 sm:-bottom-1 sm:w-full">
+                  {renderForgeWeaponHex("main_hand", "MAIN")}
+                  {renderForgeWeaponHex("off_hand", "OFF")}
+                </div>
               </div>
-            </div>
-            <p className="hero-panel-subtitle w-full max-w-full">Stashed gear, consumables &amp; crafting goods</p>
-            {bagSlotsMax > 0 && bagSlotsFree === 0 ? (
-              <p className="mt-0.5 text-[9px] leading-snug text-amber-200/85">
-                Bag is full. Capacity is shared across Gear, Consumables, and Materials — empty squares in one tab are
-                not free slots.
-              </p>
-            ) : null}
-            {/* Row 2: filters + salvage — ornate chrome */}
-            <div className="hero-inventory-chrome min-w-0">
-              <div className="flex flex-wrap items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setInventoryView("gear")}
-                  className={`hero-inventory-segment ${inventoryView === "gear" ? "hero-inventory-segment-active" : ""}`}
-                >
-                  Gear
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSalvageMode(false);
-                    setSalvageIds(new Set());
-                    setInventoryView("consumables");
-                  }}
-                  className={`hero-inventory-segment ${
-                    inventoryView === "consumables" ? "hero-inventory-segment-active" : ""
-                  }`}
-                >
-                  Consumables
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSalvageMode(false);
-                    setSalvageIds(new Set());
-                    setInventoryView("materials");
-                  }}
-                  className={`hero-inventory-segment ${
-                    inventoryView === "materials" ? "hero-inventory-segment-active" : ""
-                  }`}
-                >
-                  Materials
-                </button>
+
+              <div className="relative mx-4 mb-4 mt-4 border border-gold/25 tex-forge px-4 py-3 hero-forge-edge-gold hero-forge-clip-blade">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="border-r border-gold/15 pr-4 text-center">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-gold-dim">Combat power</p>
+                    <p className="font-display text-3xl leading-tight text-gold-200">{combatPowerDisplay}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-gold-dim">Treasury</p>
+                    <p className="font-display text-3xl leading-tight text-gold">
+                      {Number(char?.gold ?? 0).toLocaleString()} 🪙
+                    </p>
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setPinnedKey(null);
-                  setSalvageMode((v) => !v);
-                  setSalvageIds(new Set());
-                }}
-                className={`hero-batch-toggle hero-ref-batch-sell shrink-0 ${salvageMode ? "hero-batch-toggle-active" : ""}`}
-                title="Select multiple weapons, armor, or accessories to salvage for scrap"
-              >
-                Salvage
-              </button>
-            </div>
-          </div>
-          <div className="hero-equip-grid hero-ref-bag-grid">
-            {invSlots.map((inv) => {
-              const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
-              const invKey = `inv-${inv.id}`;
-              const it = inv.item;
-              const showHoverTip = it && hoveredKey === invKey && pinnedKey !== invKey;
-              const showPinned = it && pinnedKey === invKey;
-              const isSelected = it ? salvageIds.has(it.id) : false;
-              return (
-                <div
-                  key={inv.id}
-                  data-item-slot={invKey}
-                  className={`hero-ref-bag-slot relative aspect-square ${
-                    inv.name
-                      ? `slot-filled slot-hero-filled ${rc} ${it ? "cursor-pointer" : ""}`
-                      : "slot-empty slot-hero-empty"
-                  }`}
-                  onMouseEnter={() => inv.name && setHoveredKey(invKey)}
-                  onMouseLeave={() => setHoveredKey(null)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!it) return;
-                    if (salvageMode) {
-                      if (it && canSalvage(it)) toggleSalvageId(it.id);
-                      return;
-                    }
-                    setPinnedKey((p) => (p === invKey ? null : invKey));
-                  }}
-                >
-                  {salvageMode && it && canSalvage(it) && (
+            </section>
+
+            <section className="relative col-span-12 flex flex-col bg-background lg:col-span-7">
+              {accessToken && char ? (
+                <div className="relative">
+                  <div className="hero-forge-clip-banner flex items-center justify-between bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim px-6 py-2.5 text-background sm:px-8">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-background" />
+                      <span className="truncate font-display text-[10px] tracking-[0.22em] sm:text-xs sm:tracking-[0.25em]">
+                        OFFLINE EARNINGS ·{" "}
+                        {idleLoading ? (
+                          <span className="font-bold">…</span>
+                        ) : idleRewards?.ok === false ? (
+                          <span className="font-bold">UNAVAILABLE</span>
+                        ) : (
+                          <span className="font-bold">
+                            +{idleRewards?.pending_xp ?? 0} XP · {idleRewards?.pending_gold ?? 0} GOLD
+                          </span>
+                        )}
+                      </span>
+                      {typeof idleRewards?.effective_hours === "number" && idleRewards.effective_hours > 0 ? (
+                        <span className="hidden text-[10px] tracking-[0.3em] opacity-70 sm:inline">
+                          ~{idleRewards.effective_hours.toFixed(1)}H ACCRUED
+                        </span>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSalvageId(it.id);
-                      }}
-                      className={`absolute top-0.5 left-0.5 z-20 h-3 w-3 rounded-sm border text-[8px] leading-none ${
-                        isSelected ? "bg-primary/90 border-primary text-primary-foreground" : "bg-background/70 border-border text-foreground"
-                      }`}
-                      title={isSelected ? "Unselect" : "Select for salvage"}
+                      disabled={
+                        idleClaiming ||
+                        idleLoading ||
+                        idleRewards?.ok === false ||
+                        ((idleRewards?.pending_xp ?? 0) === 0 && (idleRewards?.pending_gold ?? 0) === 0)
+                      }
+                      onClick={() => void claimIdleRewards()}
+                      className="hero-forge-clip-tag shrink-0 bg-background/90 px-3 py-1 font-display text-[10px] tracking-[0.3em] text-gold-200 transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {isSelected ? "✓" : ""}
+                      {idleClaiming ? "…" : "COLLECT"}
                     </button>
-                  )}
-                  {it ? (
-                    <>
-                      <div className="hero-ref-bag-icon absolute inset-0 z-[1] overflow-hidden rounded-[1px]">
-                        <ItemIcon item={it} variant="tile" size={HERO_BAG_ITEM_ICON} />
-                      </div>
-                      {Number(it.enhancement_level ?? 0) > 0 && (
-                        <span
-                          className="pointer-events-none absolute bottom-px right-px z-[3] text-[6px] font-bold leading-none text-primary"
-                          style={{ textShadow: "0 0 3px hsl(43 78% 50% / 0.5)" }}
+                  </div>
+                  <p className="mx-6 mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground sm:mx-8">
+                    Accrues while you&apos;re away (cap {idleRewards?.max_hours ?? 24}h per claim).
+                  </p>
+                </div>
+              ) : (
+                <div className="border-b border-gold/20 px-6 py-3 text-[11px] text-muted-foreground">
+                  Sign in through Discord to view inventory and progression.
+                </div>
+              )}
+
+              <div className="flex items-stretch border-b border-gold/20 tex-forge">
+                {(["gear", "consumables", "materials"] as const).map((v) => {
+                  const labels = { gear: "Gear", consumables: "Consumables", materials: "Materials" } as const;
+                  const active = inventoryView === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        setPinnedKey(null);
+                        if (v !== "gear") setSalvageMode(false);
+                        setSalvageIds(new Set());
+                        setInventoryView(v === "consumables" ? "consumables" : v === "materials" ? "materials" : "gear");
+                      }}
+                      className={`relative flex-1 py-3 font-display text-xs tracking-[0.28em] transition-colors sm:py-4 sm:text-sm ${active ? "text-gold-200" : "text-gold-600 hover:text-gold"} `}
+                    >
+                      {labels[v].toUpperCase()}
+                      {active ? (
+                        <>
+                          <span className="absolute inset-x-4 -bottom-px h-[2px] bg-gradient-to-r from-transparent via-gold-200 to-transparent sm:inset-x-6" />
+                          <span className="absolute inset-x-0 top-0 h-px bg-gold/30" />
+                        </>
+                      ) : null}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  title="Salvage mode — select gear to dismantle"
+                  onClick={() => {
+                    setPinnedKey(null);
+                    setSalvageMode((m) => !m);
+                    setSalvageIds(new Set());
+                  }}
+                  className={`flex items-center gap-2 border-l border-gold/20 px-3 font-display text-[10px] tracking-[0.25em] transition-colors sm:px-5 sm:text-xs ${salvageMode ? "text-gold-200" : "text-gold-600 hover:text-gold-200"}`}
+                >
+                  <Recycle className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">SALVAGE</span>
+                </button>
+              </div>
+
+              <div className="flex flex-1 flex-col p-4 sm:p-6">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-[0.3em] text-gold-dim">
+                    BAG · {bagSlotsUsed}/{bagSlotsMax || "—"}{" "}
+                    {bagSlotsMax > 0 ? <span className="opacity-50">·</span> : null}{" "}
+                    {bagSlotsMax > 0 ? <span className="uppercase">FREE {bagSlotsFree}</span> : null}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPinnedKey(null);
+                      setSalvageMode(true);
+                      setSalvageIds(new Set());
+                    }}
+                    className="text-[10px] uppercase tracking-[0.3em] text-gold hover:text-gold-200"
+                  >
+                    Mass salvage →
+                  </button>
+                </div>
+                {bagSlotsMax > 0 && bagSlotsFree === 0 ? (
+                  <p className="mb-2 text-[9px] leading-snug text-amber-200/85">
+                    Bag is full — capacity is shared across Gear, Consumables, and Materials.
+                  </p>
+                ) : null}
+
+                <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
+                  {invSlots.map((inv) => {
+                    const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
+                    const invKey = `inv-${inv.id}`;
+                    const it = inv.item;
+                    const showHoverTip = it && hoveredKey === invKey && pinnedKey !== invKey;
+                    const showPinned = it && pinnedKey === invKey;
+                    const isSelected = it ? salvageIds.has(it.id) : false;
+                    const tone = forgeFrameAccent(rarityKey(it?.rarity));
+                    return (
+                      <div key={inv.id} className="relative z-[2]" data-item-slot={invKey}>
+                        <div
+                          className={`hero-forge-clip-blade-sm relative flex aspect-square items-center justify-center ring-1 ${
+                            it
+                              ? `tex-leather cursor-pointer transition-transform hover:scale-[1.03] ${tone.ring} ${tone.glow} ${rc}`
+                              : "bg-black/40 [background-image:repeating-linear-gradient(45deg,oklch(0_0_0/0.4)_0_2px,transparent_2px_6px)] ring-gold/10"
+                          }`}
+                          onMouseEnter={() => inv.name && setHoveredKey(invKey)}
+                          onMouseLeave={() => setHoveredKey(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!it) return;
+                            if (salvageMode) {
+                              if (canSalvage(it)) toggleSalvageId(it.id);
+                              return;
+                            }
+                            setPinnedKey((p) => (p === invKey ? null : invKey));
+                          }}
                         >
-                          +{it.enhancement_level}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="relative z-[1] text-[7px] leading-tight text-center opacity-30 tabular-nums">—</span>
-                  )}
-                  {it && Number(it.quantity ?? 1) > 1 && (
-                    <span className="absolute bottom-px right-px z-[4] text-[6px] font-bold text-foreground"
-                      style={{ textShadow: '0 1px 2px hsl(0 0% 0% / 0.8)' }}>×{it.quantity}</span>
-                  )}
-                  {showHoverTip && (
-                    <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left">
-                      <ItemTooltipPanel item={it} rarityClass={rc} />
-                    </div>
-                  )}
-                  {showPinned && (
-                    <div className="game-tooltip bottom-full left-1/2 z-40 -translate-x-1/2 mb-2 max-w-[min(92vw,280px)] whitespace-normal text-left shadow-lg">
-                      <ItemTooltipPanel item={it} rarityClass={rc}>
-                        <div className="space-y-2">
-                          {compareForItem(it)}
-                          <div className="flex flex-wrap gap-1.5">
-                          {(it.item_type || "").toLowerCase() === "consumable" && (
+                          {salvageMode && it && canSalvage(it) ? (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void runAction("/api/game/item/use", { item_id: it.id }, "Used");
+                                toggleSalvageId(it.id);
                               }}
-                              className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                              className={`absolute left-0.5 top-0.5 z-20 h-3.5 w-3.5 rounded-sm border text-[9px] leading-none ${
+                                isSelected
+                                  ? "border-primary bg-primary/90 text-primary-foreground"
+                                  : "border-border bg-background/80 text-foreground"
+                              }`}
+                              title={isSelected ? "Unselect" : "Select for salvage"}
                             >
-                              Use
+                              {isSelected ? "✓" : ""}
                             </button>
-                          )}
-                          {gearSlot(it) && (
+                          ) : null}
+                          {it ? (
                             <>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPinnedKey(null);
-                                  setEnhanceItemId(it.id);
-                                }}
-                                className="game-btn-primary px-2 py-0.5 text-[10px]"
-                              >
-                                🔨 Enhance
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped");
-                                }}
-                                className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                              >
-                                Equip
-                              </button>
+                              <div className="absolute inset-0 z-[1] flex items-center justify-center overflow-hidden p-0.5">
+                                <ItemIcon item={it} variant="tile" size={HERO_BAG_ITEM_ICON} />
+                              </div>
+                              {Number(it.enhancement_level ?? 0) > 0 ? (
+                                <span className="pointer-events-none absolute left-0.5 top-0.5 z-[3] font-display text-[9px] font-semibold tracking-wider text-gold-200">
+                                  +{it.enhancement_level}
+                                </span>
+                              ) : null}
                             </>
+                          ) : (
+                            <span className="relative z-[1] text-[9px] tabular-nums text-gold-600/50">—</span>
                           )}
-                          {gearSlot(it) && !it.is_equipped && (it.item_type || "").toLowerCase() !== "consumable" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPinnedKey(null);
-                                setListItemId(it.id);
-                              }}
-                              className="game-btn-primary px-2 py-0.5 text-[10px]"
+                          {it && Number(it.quantity ?? 1) > 1 ? (
+                            <span
+                              className="pointer-events-none absolute bottom-0.5 right-0.5 z-[4] font-display text-[10px] text-parchment"
+                              style={{ textShadow: "0 1px 2px hsl(0 0% 0% / 0.85)" }}
                             >
-                              📦 List
-                            </button>
-                          )}
-                          {canSalvage(it) && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void runAction("/api/game/item/salvage", { item_id: it.id }, "Salvaged");
-                              }}
-                              className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                            >
-                              Salvage
-                            </button>
-                          )}
-                          </div>
+                              ×{it.quantity}
+                            </span>
+                          ) : null}
                         </div>
-                      </ItemTooltipPanel>
+                        {showHoverTip && it ? (
+                          <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left">
+                            <ItemTooltipPanel item={it} rarityClass={rc} />
+                          </div>
+                        ) : null}
+                        {showPinned && it ? (
+                          <div className="game-tooltip absolute bottom-full left-1/2 z-40 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left shadow-lg">
+                            <ItemTooltipPanel item={it} rarityClass={rc}>
+                              <div className="space-y-2">
+                                {compareForItem(it)}
+                                <div className="flex flex-wrap gap-1.5">
+                                  {(it.item_type || "").toLowerCase() === "consumable" ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void runAction("/api/game/item/use", { item_id: it.id }, "Used");
+                                      }}
+                                      className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                                    >
+                                      Use
+                                    </button>
+                                  ) : null}
+                                  {gearSlot(it) ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPinnedKey(null);
+                                          setEnhanceItemId(it.id);
+                                        }}
+                                        className="game-btn-primary px-2 py-0.5 text-[10px]"
+                                      >
+                                        🔨 Enhance
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped");
+                                        }}
+                                        className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                                      >
+                                        Equip
+                                      </button>
+                                    </>
+                                  ) : null}
+                                  {gearSlot(it) && !it.is_equipped && (it.item_type || "").toLowerCase() !== "consumable" ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPinnedKey(null);
+                                        setListItemId(it.id);
+                                      }}
+                                      className="game-btn-primary px-2 py-0.5 text-[10px]"
+                                    >
+                                      📦 List
+                                    </button>
+                                  ) : null}
+                                  {canSalvage(it) ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void runAction("/api/game/item/salvage", { item_id: it.id }, "Salvaged");
+                                      }}
+                                      className="game-btn-secondary px-2 py-0.5 text-[10px]"
+                                    >
+                                      Salvage
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </ItemTooltipPanel>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {maxInvPage > 0 ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                      Page {invPage + 1} / {maxInvPage + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInventoryPage((p) => Math.max(0, p - 1))}
+                      className="game-btn-secondary px-2 py-1 text-[10px]"
+                      disabled={invPage <= 0}
+                    >
+                      ← Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInventoryPage((p) => Math.min(maxInvPage, p + 1))}
+                      className="game-btn-primary px-2 py-1 text-[10px]"
+                      disabled={invPage >= maxInvPage}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                ) : null}
+
+                {salvageMode ? (
+                  <div className="mt-4 border border-gold/25 bg-black/30 p-3 tex-forge">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-xs text-foreground">
+                        Selected: <span className="font-semibold tabular-nums">{salvageIds.size}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => selectShownBy(() => true)}
+                          className="game-btn-secondary px-2 py-1 text-[10px]"
+                          disabled={salvaging}
+                        >
+                          Select salvageable
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectShownBy((row) => rarityKey(row.rarity) === "common")}
+                          className="game-btn-secondary px-2 py-1 text-[10px]"
+                          disabled={salvaging}
+                        >
+                          Common
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectShownBy((row) => rarityKey(row.rarity) === "uncommon")}
+                          className="game-btn-secondary px-2 py-1 text-[10px]"
+                          disabled={salvaging}
+                        >
+                          Uncommon
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearSalvageSelection}
+                          className="game-btn-secondary px-2 py-1 text-[10px]"
+                          disabled={salvaging || salvageIds.size === 0}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void salvageBatchSelected()}
+                          className="game-btn-primary px-2 py-1 text-[10px]"
+                          disabled={salvaging || salvageIds.size === 0}
+                        >
+                          {salvaging ? "Salvaging…" : "Salvage selected"}
+                        </button>
+                      </div>
                     </div>
-                  )}
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Weapons, armor, and accessories only. Equipped and locked items cannot be salvaged.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {(
+                    [
+                      ["Attack", combatStats ? Math.round(combatStats.attack_power) : "—"],
+                      ["Defense", combatStats ? Math.round(combatStats.armor) : "—"],
+                      ["Critical", combatStats ? Math.round(combatStats.crit_chance) : "—"],
+                      ["Speed", combatStats ? Math.round(combatStats.haste) : "—"],
+                    ] as const
+                  ).map(([label, val]) => (
+                    <div
+                      key={label}
+                      className="relative border border-gold/25 tex-forge px-3 py-2.5 text-center hero-forge-edge-gold hero-forge-clip-blade-sm"
+                    >
+                      <p className="text-[9px] uppercase tracking-[0.3em] text-gold-dim">{label}</p>
+                      <p className="mt-0.5 font-display text-2xl leading-tight text-gold-200">{val}</p>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+
+              <div className="p-4 pt-0 sm:p-6 sm:pt-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const list = blacksmithCandidates;
+                    if (list.length === 0) toast("No gear to enhance");
+                    else if (list.length === 1) setEnhanceItemId(list[0].id);
+                    else setBlacksmithPickerOpen(true);
+                  }}
+                  className="group relative mb-6 w-full cursor-pointer overflow-hidden hero-forge-clip-blade"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim" />
+                  <div className="absolute inset-0 opacity-30 mix-blend-overlay [background-image:repeating-linear-gradient(135deg,oklch(0_0_0/0.4)_0_2px,transparent_2px_5px)]" />
+                  <div className="relative flex items-center justify-center gap-3 py-3.5 text-background sm:py-4">
+                    <Hammer className="h-5 w-5 shrink-0" />
+                    <span className="font-display text-lg tracking-[0.35em] sm:text-xl">OPEN BLACKSMITH</span>
+                    <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
+                  </div>
+                  <div className="absolute top-0 -left-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-[300%]" />
+                </button>
+              </div>
+            </section>
           </div>
-
-          {maxInvPage > 0 && (
-            <div className="hero-pager-bar mt-2 flex justify-end items-center gap-2">
-              <span className="text-[10px] tabular-nums text-muted-foreground">
-                Page {invPage + 1} / {maxInvPage + 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => setInventoryPage((p) => Math.max(0, p - 1))}
-                className="game-btn-secondary text-[10px] px-2 py-1"
-                disabled={invPage <= 0}
-                title="Previous page"
-              >
-                ← Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => setInventoryPage((p) => Math.min(maxInvPage, p + 1))}
-                className="game-btn-primary text-[10px] px-2 py-1"
-                disabled={invPage >= maxInvPage}
-                title="Next page"
-              >
-                Next →
-              </button>
-            </div>
-          )}
-
-          {salvageMode && (
-            <div className="hero-batch-panel mt-3 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-foreground">
-                  Selected: <span className="font-semibold tabular-nums">{salvageIds.size}</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => selectShownBy(() => true)}
-                    className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={salvaging}
-                  >
-                    Select salvageable
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectShownBy((it) => rarityKey(it.rarity) === "common")}
-                    className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={salvaging}
-                  >
-                    Common
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectShownBy((it) => rarityKey(it.rarity) === "uncommon")}
-                    className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={salvaging}
-                  >
-                    Uncommon
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearSalvageSelection}
-                    className="game-btn-secondary px-2 py-1 text-[10px]"
-                    disabled={salvaging || salvageIds.size === 0}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void salvageBatchSelected()}
-                    className="game-btn-primary px-2 py-1 text-[10px]"
-                    disabled={salvaging || salvageIds.size === 0}
-                  >
-                    {salvaging ? "Salvaging…" : "Salvage selected"}
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2 text-[10px] text-muted-foreground">
-                Weapons, armor, and accessories only. Equipped and locked items cannot be salvaged. Use the Forge tab
-                for timed upgrades. Vendor sell remains on Discord.
-              </div>
-            </div>
-          )}
-        </WomPanel>
+        </div>
       </div>
 
       {blacksmithPickerOpen && (
@@ -1154,7 +1352,6 @@ export function HeroTab() {
         );
       })()}
 
-    </div>
     </div>
   );
 }

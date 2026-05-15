@@ -2841,6 +2841,59 @@ code {
   animation: pulse-gold 2.4s ease-in-out infinite;
 }
 
+/* ── Hero / Blacksmith forge shell (ported from hero-blacksmith reference) ── */
+.tex-forge {
+  background-color: oklch(0.16 0.014 60);
+  background-image:
+    radial-gradient(at 20% 10%, oklch(0.28 0.04 70 / 0.35), transparent 55%),
+    radial-gradient(at 85% 90%, oklch(0.22 0.06 35 / 0.3), transparent 60%),
+    repeating-linear-gradient(115deg, oklch(0 0 0 / 0.12) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, oklch(0.78 0.14 78 / 0.025) 0 1px, transparent 1px 4px);
+}
+.tex-parchment {
+  background-color: oklch(0.18 0.014 60);
+  background-image:
+    radial-gradient(at 30% 20%, oklch(0.78 0.14 78 / 0.07), transparent 55%),
+    radial-gradient(at 70% 80%, oklch(0.5 0.22 20 / 0.06), transparent 60%),
+    repeating-radial-gradient(circle at 50% 50%, oklch(0 0 0 / 0.08) 0 1px, transparent 1px 2px);
+}
+.tex-leather {
+  background-color: oklch(0.13 0.012 60);
+  background-image:
+    radial-gradient(at 25% 25%, oklch(0.22 0.04 60 / 0.5), transparent 50%),
+    radial-gradient(at 75% 75%, oklch(0.1 0.01 60), transparent 50%),
+    repeating-linear-gradient(45deg, oklch(0 0 0 / 0.18) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(-45deg, oklch(0.78 0.14 78 / 0.03) 0 1px, transparent 1px 6px);
+}
+.hero-forge-clip-blade {
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+.hero-forge-clip-blade-sm {
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.hero-forge-clip-banner {
+  clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 50%, 100% 100%, 0 100%, 18px 50%);
+}
+.hero-forge-clip-tag {
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%);
+}
+.hero-forge-clip-rhombus {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.hero-forge-edge-gold {
+  box-shadow:
+    inset 0 0 0 1px oklch(0.78 0.14 78 / 0.55),
+    inset 0 1px 0 oklch(0.92 0.18 88 / 0.4),
+    inset 0 -1px 0 oklch(0 0 0 / 0.6),
+    0 6px 18px -8px oklch(0 0 0 / 0.7);
+}
+.hero-forge-edge-gold-strong {
+  box-shadow:
+    inset 0 0 0 1px oklch(0.88 0.16 88 / 0.85),
+    inset 0 0 14px oklch(0.78 0.14 78 / 0.25),
+    0 8px 24px -10px oklch(0 0 0 / 0.8);
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
