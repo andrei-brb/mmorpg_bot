@@ -754,22 +754,31 @@ export function HeroTab() {
                 </div>
               </div>
 
-              <div className="relative mx-3 mb-4 mt-4 min-w-0 border border-gold/25 tex-forge px-3 py-3.5 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
-                <div className="grid min-w-0 grid-cols-2 divide-x divide-gold/25">
-                  <div className="flex min-w-0 flex-col items-center justify-center gap-1 px-2 py-0.5 text-center sm:px-4 md:px-5">
-                    <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Combat power</p>
-                    <p className="font-display text-2xl tabular-nums leading-none text-gold-200 sm:text-3xl md:text-[2rem]">
-                      {combatPowerDisplay}
+              <div className="relative mx-3 mb-4 mt-4 min-w-0 w-full max-w-full border border-gold/25 tex-forge px-3 py-3.5 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
+                <div className="grid w-full min-w-0 grid-cols-2 divide-x divide-gold/25 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="flex min-h-0 min-w-0 max-w-full flex-col items-center justify-center gap-1 px-2 py-0.5 text-center sm:px-4 md:px-5">
+                    <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">
+                      Combat power
                     </p>
+                    <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:thin]">
+                      <p className="whitespace-nowrap px-0.5 text-center font-display text-lg tabular-nums leading-none text-gold-200 sm:text-2xl md:text-[2rem]">
+                        {combatPowerDisplay}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex min-w-0 flex-col items-center justify-center gap-1 px-2 py-0.5 text-center sm:px-4 md:px-5">
+                  <div className="flex min-h-0 min-w-0 max-w-full flex-col items-center justify-center gap-1 px-2 py-0.5 text-center sm:px-4 md:px-5">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Treasury</p>
-                    <p className="flex flex-wrap items-center justify-center gap-1.5 font-display text-2xl tabular-nums leading-none text-gold sm:gap-2 sm:text-3xl md:text-[2rem]">
-                      <span>{Number(char?.gold ?? 0).toLocaleString()}</span>
-                      <span className="shrink-0 text-xl sm:text-2xl" aria-hidden>
-                        🪙
-                      </span>
-                    </p>
+                    <div
+                      className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:thin]"
+                      title={`${Number(char?.gold ?? 0).toLocaleString()} gold`}
+                    >
+                      <div className="flex flex-col items-center justify-center gap-0.5 whitespace-nowrap px-0.5 font-display text-lg tabular-nums leading-none text-gold sm:flex-row sm:gap-2 sm:text-2xl md:text-[2rem]">
+                        <span>{Number(char?.gold ?? 0).toLocaleString()}</span>
+                        <span className="shrink-0 text-base sm:text-xl md:text-2xl" aria-hidden>
+                          🪙
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
