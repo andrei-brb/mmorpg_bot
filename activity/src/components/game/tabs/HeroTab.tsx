@@ -606,7 +606,8 @@ export function HeroTab() {
   const combatStats = derivedStats?.ok !== false && derivedStats ? derivedStats : null;
 
   return (
-    <div className="space-y-2.5 hero-tab-ref w-full pb-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="space-y-2.5 hero-tab-ref w-full pb-4 px-1">
       {accessToken && char ? (
         <WomPanel glow className="game-panel-hero">
           <div className="game-panel-header game-panel-header-hero">Offline earnings</div>
@@ -1153,6 +1154,7 @@ export function HeroTab() {
         );
       })()}
 
+    </div>
     </div>
   );
 }

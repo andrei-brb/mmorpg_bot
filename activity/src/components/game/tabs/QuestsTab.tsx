@@ -166,7 +166,8 @@ export function QuestsTab() {
 
   return (
     <>
-    <div className="space-y-4 w-full pb-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="space-y-4 w-full pb-4 px-1">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px] items-start">
         <div className="space-y-4 min-w-0">
           <WomPanel
@@ -603,6 +604,7 @@ export function QuestsTab() {
           </WomPanel>
         </div>
       </div>
+    </div>
     </div>
 
     <Dialog
