@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Sword, Hammer, Recycle, ChevronRight } from "lucide-react";
+import { Sword, Hammer, Recycle, ChevronRight, Clock, Coins, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CharacterDerivedStatsPayload, EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
@@ -754,16 +754,24 @@ export function HeroTab() {
                 </div>
               </div>
 
-              <div className="relative mx-4 mb-4 mt-4 border border-gold/25 tex-forge px-4 py-3 hero-forge-edge-gold hero-forge-clip-blade">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="border-r border-gold/15 pr-4 text-center">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-gold-dim">Combat power</p>
-                    <p className="font-display text-3xl leading-tight text-gold-200">{combatPowerDisplay}</p>
+              <div className="relative mx-3 mb-4 mt-4 min-w-0 border border-gold/25 tex-forge px-3 py-3 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
+                <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
+                  <div className="flex min-w-0 flex-col items-center justify-center border-r border-gold/20 pr-2 text-center sm:pr-4">
+                    <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Combat power</p>
+                    <p className="mt-1 min-w-0 max-w-full truncate font-display text-xl tabular-nums leading-tight text-gold-200 sm:text-2xl sm:max-w-none md:text-3xl">
+                      {combatPowerDisplay}
+                    </p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-gold-dim">Treasury</p>
-                    <p className="font-display text-3xl leading-tight text-gold">
-                      {Number(char?.gold ?? 0).toLocaleString()} 🪙
+                  <div className="flex min-w-0 flex-col items-center justify-center pl-2 text-center sm:pl-4">
+                    <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Treasury</p>
+                    <p
+                      className="mt-1 flex min-w-0 max-w-full items-center justify-center gap-1 font-display text-xl tabular-nums leading-tight text-gold sm:text-2xl sm:max-w-none md:text-3xl"
+                      title={`${Number(char?.gold ?? 0).toLocaleString()} gold`}
+                    >
+                      <span className="min-w-0 truncate">{Number(char?.gold ?? 0).toLocaleString()}</span>
+                      <span className="shrink-0 text-lg sm:text-xl" aria-hidden>
+                        🪙
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -772,45 +780,102 @@ export function HeroTab() {
 
             <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
               {accessToken && char ? (
-                <div className="relative">
-                  <div className="hero-forge-clip-banner flex items-center justify-between bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim px-6 py-2.5 text-background sm:px-8">
-                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-                      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-background" />
-                      <span className="truncate font-display text-[10px] tracking-[0.22em] sm:text-xs sm:tracking-[0.25em]">
-                        OFFLINE EARNINGS ·{" "}
-                        {idleLoading ? (
-                          <span className="font-bold">…</span>
-                        ) : idleRewards?.ok === false ? (
-                          <span className="font-bold">UNAVAILABLE</span>
-                        ) : (
-                          <span className="font-bold">
-                            +{idleRewards?.pending_xp ?? 0} XP · {idleRewards?.pending_gold ?? 0} GOLD
-                          </span>
-                        )}
-                      </span>
-                      {typeof idleRewards?.effective_hours === "number" && idleRewards.effective_hours > 0 ? (
-                        <span className="hidden text-[10px] tracking-[0.3em] opacity-70 sm:inline">
-                          ~{idleRewards.effective_hours.toFixed(1)}H ACCRUED
-                        </span>
-                      ) : null}
+                <div className="relative px-2 pb-2 pt-2 sm:px-3 sm:pt-3">
+                  <div className="border border-gold/25 tex-forge hero-forge-clip-blade-sm hero-forge-edge-gold p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
+                        <div
+                          className="flex h-9 w-9 shrink-0 items-center justify-center hero-forge-clip-rhombus border border-gold/35 bg-gold/10 sm:h-10 sm:w-10"
+                          aria-hidden
+                        >
+                          <Clock className="h-4 w-4 text-gold-200 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-display text-[11px] tracking-[0.22em] text-gold-200 sm:text-xs sm:tracking-[0.28em]">
+                            OFFLINE EARNINGS
+                          </h3>
+                          <p className="mt-0.5 text-[9px] leading-snug text-gold-dim sm:text-[10px]">
+                            Accrues while you&apos;re away — up to {idleRewards?.max_hours ?? 24}h per claim.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={
+                          idleClaiming ||
+                          idleLoading ||
+                          idleRewards?.ok === false ||
+                          ((idleRewards?.pending_xp ?? 0) === 0 && (idleRewards?.pending_gold ?? 0) === 0)
+                        }
+                        onClick={() => void claimIdleRewards()}
+                        className="hero-forge-clip-tag w-full shrink-0 bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] px-4 py-2.5 font-display text-[11px] tracking-[0.28em] text-black transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[7.5rem] sm:py-2"
+                      >
+                        {idleClaiming ? "…" : "COLLECT"}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={
-                        idleClaiming ||
-                        idleLoading ||
-                        idleRewards?.ok === false ||
-                        ((idleRewards?.pending_xp ?? 0) === 0 && (idleRewards?.pending_gold ?? 0) === 0)
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
+                      <div className="hero-forge-clip-tag border border-gold/25 bg-black/35 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                        <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-gold-dim">
+                          <Sparkles className="h-3 w-3 shrink-0 text-gold-200/90" aria-hidden />
+                          Pending XP
+                        </div>
+                        {idleLoading ? (
+                          <div className="mt-1.5 h-7 w-16 animate-pulse rounded-sm bg-gold/10 sm:h-8" />
+                        ) : (
+                          <p className="mt-1 font-display text-lg tabular-nums leading-none text-gold-200 sm:text-xl">
+                            +{idleRewards?.pending_xp ?? 0}
+                          </p>
+                        )}
+                      </div>
+                      <div className="hero-forge-clip-tag border border-gold/25 bg-black/35 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                        <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-gold-dim">
+                          <Coins className="h-3 w-3 shrink-0 text-gold/90" aria-hidden />
+                          Pending gold
+                        </div>
+                        {idleLoading ? (
+                          <div className="mt-1.5 h-7 w-16 animate-pulse rounded-sm bg-gold/10 sm:h-8" />
+                        ) : (
+                          <p className="mt-1 flex items-baseline gap-1 font-display text-lg tabular-nums leading-none text-gold sm:text-xl">
+                            {idleRewards?.pending_gold ?? 0}
+                            <span className="text-sm" aria-hidden>
+                              🪙
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {(() => {
+                      if (idleRewards?.ok === false) {
+                        return (
+                          <p className="mt-2 rounded-sm border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-[10px] text-destructive">
+                            Offline rewards unavailable. Try again later.
+                          </p>
+                        );
                       }
-                      onClick={() => void claimIdleRewards()}
-                      className="hero-forge-clip-tag shrink-0 bg-background/90 px-3 py-1 font-display text-[10px] tracking-[0.3em] text-gold-200 transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {idleClaiming ? "…" : "COLLECT"}
-                    </button>
+                      if (typeof idleRewards?.effective_hours === "number" && idleRewards.effective_hours > 0) {
+                        return (
+                          <p className="mt-2 flex items-center gap-1.5 text-[10px] tabular-nums text-gold-dim sm:text-[11px]">
+                            <Clock className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+                            <span>~{idleRewards.effective_hours.toFixed(1)}h accrued this session</span>
+                          </p>
+                        );
+                      }
+                      if (
+                        !idleLoading &&
+                        (idleRewards?.pending_xp ?? 0) === 0 &&
+                        (idleRewards?.pending_gold ?? 0) === 0
+                      ) {
+                        return (
+                          <p className="mt-2 text-[10px] text-muted-foreground">
+                            No idle accrual yet — check back after being away from the game.
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
-                  <p className="mx-6 mt-2 text-[10px] uppercase tracking-[0.25em] text-muted-foreground sm:mx-8">
-                    Accrues while you&apos;re away (cap {idleRewards?.max_hours ?? 24}h per claim).
-                  </p>
                 </div>
               ) : (
                 <div className="border-b border-gold/20 px-6 py-3 text-[11px] text-muted-foreground">
