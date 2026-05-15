@@ -23,10 +23,168 @@
       ]
     },
     {
+      "id": "paladin_f_vigor",
+      "name": "Battle Vigor",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_starter"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA",
+        "+4 STA",
+        "+6 STA"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "paladin_f_edge",
+      "name": "Honed Edge",
+      "column": 2,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_starter"
+      ],
+      "effects": [
+        {
+          "stat": "strength",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STR",
+        "+4 STR",
+        "+6 STR"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "paladin_f_bulwark",
+      "name": "Bulwark",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_starter"
+      ],
+      "effects": [
+        {
+          "stat": "armor",
+          "per_rank": 5
+        }
+      ],
+      "descriptions": [
+        "+5 Armor",
+        "+10 Armor"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "paladin_f_swift",
+      "name": "Swift Strikes",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_f_vigor"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 Haste",
+        "+6 Haste"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "paladin_f_keen",
+      "name": "Keen Eye",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_f_edge"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Crit",
+        "+4 Crit"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "paladin_f_iron",
+      "name": "Iron Will",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "paladin_f_bulwark"
+      ],
+      "effects": [
+        {
+          "stat": "resistance",
+          "per_rank": 15
+        }
+      ],
+      "descriptions": [
+        "+15 Resistance",
+        "+30 Resistance"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "paladin_f_veteran",
+      "name": "Veteran's Insight",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 1,
+      "node_type": "utility",
+      "prereqs": [
+        "paladin_f_swift",
+        "paladin_f_keen",
+        "paladin_f_iron"
+      ],
+      "effects": [
+        {
+          "utility": "combat_xp",
+          "pct_per_rank": 10
+        }
+      ],
+      "descriptions": [
+        "+10% XP from kills"
+      ],
+      "points_required": 3,
+      "layer": "core"
+    },
+    {
       "id": "paladin_preview_retribution",
       "name": "Retribution Aptitude",
       "column": 1,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",
@@ -49,7 +207,7 @@
       "id": "paladin_preview_holy_paladin",
       "name": "Holy Aptitude",
       "column": 3,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",

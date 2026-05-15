@@ -23,10 +23,168 @@
       ]
     },
     {
+      "id": "mage_f_focus",
+      "name": "Arcane Focus",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_starter"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 INT",
+        "+6 INT",
+        "+9 INT"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "mage_f_spark",
+      "name": "Kindled Spark",
+      "column": 2,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_starter"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 INT",
+        "+4 INT",
+        "+6 INT"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "mage_f_ward",
+      "name": "Mana Ward",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_starter"
+      ],
+      "effects": [
+        {
+          "stat": "resistance",
+          "per_rank": 12
+        }
+      ],
+      "descriptions": [
+        "+12 Resistance",
+        "+24 Resistance"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "mage_f_haste",
+      "name": "Quickened Cast",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_f_focus"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 Haste",
+        "+6 Haste"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "mage_f_crit",
+      "name": "Arcane Precision",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_f_spark"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Crit",
+        "+4 Crit"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "mage_f_spirit",
+      "name": "Deep Well",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "mage_f_ward"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 SPI",
+        "+4 SPI"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "mage_f_mastery",
+      "name": "Spell Mastery",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 1,
+      "node_type": "capstone",
+      "prereqs": [
+        "mage_f_haste",
+        "mage_f_crit",
+        "mage_f_spirit"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "flat": 5
+        }
+      ],
+      "descriptions": [
+        "+5 INT"
+      ],
+      "points_required": 3,
+      "layer": "core"
+    },
+    {
       "id": "mage_preview_fire",
       "name": "Fire Aptitude",
       "column": 1,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",
@@ -49,7 +207,7 @@
       "id": "mage_preview_frost",
       "name": "Frost Aptitude",
       "column": 3,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",

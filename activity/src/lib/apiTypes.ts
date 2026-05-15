@@ -747,6 +747,7 @@ export type TalentNodeState = {
   layer?: string;
   spec_key?: string | null;
   prereqs?: string[];
+  points_required?: number;
   auto_grant?: boolean;
   descriptions?: string[];
   ranks?: number;

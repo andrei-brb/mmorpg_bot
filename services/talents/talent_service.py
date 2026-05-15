@@ -251,6 +251,15 @@ class TalentService:
                 can_allocate = False
                 locked_reason = "prereq"
 
+        if can_allocate and is_foundation:
+            pts_req = int(node.get("points_required") or 0)
+            if pts_req > 0:
+                class_key = str(char.get("class") or "warrior")
+                spent = self._foundation_points_spent(class_key, alloc_map)
+                if spent < pts_req:
+                    can_allocate = False
+                    locked_reason = "points_required"
+
         return {
             **node,
             "ranks": ranks,
@@ -300,7 +309,13 @@ class TalentService:
         if delta <= 0:
             return False, "Invalid rank change.", None
 
-        ui = self._node_ui_state(node, alloc_map, char, spec_key, is_foundation=node.get("layer") in ("starter", "preview"))
+        layer = str(node.get("layer") or "")
+        is_foundation_node = layer in ("starter", "preview", "core")
+        ui = self._node_ui_state(node, alloc_map, char, spec_key, is_foundation=is_foundation_node)
+        if is_foundation_node and not node.get("auto_grant"):
+            spent = self._foundation_points_spent(class_key, alloc_map)
+            if spent + delta > 5:
+                return False, "Class Foundation allows at most 5 points.", None
         if not ui.get("can_allocate") and current < max_ranks:
             reason = ui.get("locked_reason") or "locked"
             if reason == "need_spec":
@@ -443,6 +458,15 @@ class TalentService:
         if row:
             return dict(row)
         return {"character_id": char_id, "unspent_points": 0, "respec_count": 0, "foundation_locked": False}
+
+    def _foundation_points_spent(self, class_key: str, alloc_map: Dict[str, int]) -> int:
+        foundation = get_class_foundation(class_key)
+        total = 0
+        for n in foundation.get("nodes") or []:
+            if n.get("auto_grant"):
+                continue
+            total += int(alloc_map.get(str(n["id"]), 0))
+        return total
 
     async def _get_allocations(self, char_id: UUID) -> List[Dict[str, Any]]:
         rows = await self.db.fetch(

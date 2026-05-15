@@ -140,11 +140,115 @@ def _capstone_node(nid: str, name: str, column: int, tier: int, prereqs: List[st
     }
 
 
+def _foundation_core_nodes(class_key: str) -> List[Dict[str, Any]]:
+    """Lovable-style 7-node foundation grid (5 point budget) above spec previews."""
+    starter = f"{class_key}_starter"
+    pfx = f"{class_key}_f"
+    pri = CLASSES[class_key].primary_stat
+    role = CLASSES[class_key].role
+
+    if role == "tank":
+        row1 = [
+            _stat_node(f"{pfx}_vigor", "Battle Vigor", 1, 1, "stamina", 2, [starter], 3),
+            _stat_node(f"{pfx}_bulwark", "Bulwark", 3, 1, "armor", 5, [starter], 2),
+        ]
+        row1.insert(1, _stat_node(f"{pfx}_edge", "Honed Edge", 2, 1, pri, 2, [starter], 3))
+        row2 = [
+            _stat_node(f"{pfx}_swift", "Swift Strikes", 1, 2, "haste_pct", 3, [f"{pfx}_vigor"], 2),
+            _stat_node(f"{pfx}_iron", "Iron Will", 3, 2, "resistance", 15, [f"{pfx}_bulwark"], 2),
+        ]
+        row2.insert(1, _stat_node(f"{pfx}_keen", "Keen Eye", 2, 2, "crit_pct", 2, [f"{pfx}_edge"], 2))
+        cap = _capstone_node(
+            f"{pfx}_veteran",
+            "Veteran's Insight",
+            2,
+            3,
+            [f"{pfx}_swift", f"{pfx}_keen", f"{pfx}_iron"],
+            [{"utility": "combat_xp", "pct_per_rank": 10}],
+        )
+        cap["points_required"] = 3
+        cap["node_type"] = "utility"
+        cap["descriptions"] = ["+10% XP from kills"]
+        return row1 + row2 + [cap]
+
+    if role == "healer":
+        row1 = [
+            _stat_node(f"{pfx}_devotion", "Devotion", 1, 1, "spirit", 3, [starter], 3),
+            _stat_node(f"{pfx}_clarity", "Inner Clarity", 2, 1, "intellect", 3, [starter], 3),
+            _stat_node(f"{pfx}_sanctuary", "Sanctuary", 3, 1, "stamina", 2, [starter], 2),
+        ]
+        row2 = [
+            _stat_node(f"{pfx}_mending", "Mending Touch", 1, 2, pri, 2, [f"{pfx}_devotion"], 2),
+            _stat_node(f"{pfx}_ward", "Ward", 2, 2, "resistance", 12, [f"{pfx}_clarity"], 2),
+            _stat_node(f"{pfx}_serenity", "Serenity", 3, 2, "spirit", 2, [f"{pfx}_sanctuary"], 2),
+        ]
+        cap = _capstone_node(
+            f"{pfx}_beacon",
+            "Beacon",
+            2,
+            3,
+            [f"{pfx}_mending", f"{pfx}_ward", f"{pfx}_serenity"],
+            [{"utility": "craft_xp", "pct_per_rank": 10}],
+        )
+        cap["points_required"] = 3
+        cap["node_type"] = "utility"
+        cap["descriptions"] = ["+10% crafting XP"]
+        return row1 + row2 + [cap]
+
+    if class_key == "mage":
+        row1 = [
+            _stat_node(f"{pfx}_focus", "Arcane Focus", 1, 1, "intellect", 3, [starter], 3),
+            _stat_node(f"{pfx}_spark", "Kindled Spark", 2, 1, pri, 2, [starter], 3),
+            _stat_node(f"{pfx}_ward", "Mana Ward", 3, 1, "resistance", 12, [starter], 2),
+        ]
+        row2 = [
+            _stat_node(f"{pfx}_haste", "Quickened Cast", 1, 2, "haste_pct", 3, [f"{pfx}_focus"], 2),
+            _stat_node(f"{pfx}_crit", "Arcane Precision", 2, 2, "crit_pct", 2, [f"{pfx}_spark"], 2),
+            _stat_node(f"{pfx}_spirit", "Deep Well", 3, 2, "spirit", 2, [f"{pfx}_ward"], 2),
+        ]
+        cap = _capstone_node(
+            f"{pfx}_mastery",
+            "Spell Mastery",
+            2,
+            3,
+            [f"{pfx}_haste", f"{pfx}_crit", f"{pfx}_spirit"],
+            [{"stat": "intellect", "flat": 5}],
+        )
+        cap["points_required"] = 3
+        cap["descriptions"] = ["+5 INT"]
+        return row1 + row2 + [cap]
+
+    # DPS / hybrid default
+    row1 = [
+        _stat_node(f"{pfx}_vigor", "Battle Vigor", 1, 1, "stamina", 2, [starter], 3),
+        _stat_node(f"{pfx}_edge", "Honed Edge", 2, 1, pri, 2, [starter], 3),
+        _stat_node(f"{pfx}_precision", "Precision", 3, 1, "crit_pct", 2, [starter], 2),
+    ]
+    row2 = [
+        _stat_node(f"{pfx}_swift", "Swift Strikes", 1, 2, "haste_pct", 3, [f"{pfx}_vigor"], 2),
+        _stat_node(f"{pfx}_lethality", "Lethality", 2, 2, pri, 2, [f"{pfx}_edge"], 2),
+        _stat_node(f"{pfx}_keen", "Keen Eye", 3, 2, "crit_pct", 2, [f"{pfx}_precision"], 2),
+    ]
+    cap = _capstone_node(
+        f"{pfx}_veteran",
+        "Veteran's Insight",
+        2,
+        3,
+        [f"{pfx}_swift", f"{pfx}_lethality", f"{pfx}_keen"],
+        [{"utility": "combat_xp", "pct_per_rank": 10}],
+    )
+    cap["points_required"] = 3
+    cap["node_type"] = "utility"
+    cap["descriptions"] = ["+10% XP from kills"]
+    return row1 + row2 + [cap]
+
+
 def build_foundation(class_key: str) -> Dict[str, Any]:
     specs = list(CLASSES[class_key].specializations)
+    starter_id = f"{class_key}_starter"
     nodes: List[Dict[str, Any]] = [
         {
-            "id": f"{class_key}_starter",
+            "id": starter_id,
             "name": "Foundation",
             "column": 2,
             "tier": 0,
@@ -158,6 +262,9 @@ def build_foundation(class_key: str) -> Dict[str, Any]:
             "descriptions": ["+2 STA — every journey starts here."],
         },
     ]
+    for n in _foundation_core_nodes(class_key):
+        n["layer"] = "core"
+        nodes.append(n)
     for i, sk in enumerate(specs):
         sp = SPECIALIZATIONS[sk]
         col = 1 if i == 0 else 3
@@ -166,12 +273,12 @@ def build_foundation(class_key: str) -> Dict[str, Any]:
                 "id": f"{class_key}_preview_{sk}",
                 "name": f"{sp.name} Aptitude",
                 "column": col,
-                "tier": 1,
+                "tier": 4,
                 "max_ranks": 2,
                 "node_type": "preview",
                 "layer": "preview",
                 "spec_key": sk,
-                "prereqs": [f"{class_key}_starter"],
+                "prereqs": [starter_id],
                 "effects": [{"stat": _primary_for_class(class_key), "per_rank": 1}],
                 "descriptions": [
                     f"Lean toward {sp.name} (+1 {_primary_for_class(class_key)} per rank)",

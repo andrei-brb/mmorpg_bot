@@ -51,6 +51,7 @@ function mapNode(node: TalentNodeState, treeIcon?: LucideIcon): ForgeTalent {
     row: Number(node.tier ?? 0),
     col: Number(node.column ?? 0),
     requires: node.prereqs?.map(String),
+    pointsRequired: node.points_required != null ? Number(node.points_required) : undefined,
     ranks: descriptions,
     autoGrant: Boolean(node.auto_grant),
     canAllocate: node.can_allocate,
@@ -136,6 +137,7 @@ export function lockedReasonLabel(reason?: string | null): string | undefined {
     need_spec: "Choose your specialization at level 10.",
     other_spec: "This branch belongs to your other specialization.",
     prereq: "Prerequisites not met.",
+    points_required: "Spend more points in this tree first.",
     locked: "Cannot allocate here.",
   };
   return map[reason] || reason;

@@ -23,10 +23,168 @@
       ]
     },
     {
+      "id": "priest_f_devotion",
+      "name": "Devotion",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "priest_starter"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 SPI",
+        "+6 SPI",
+        "+9 SPI"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "priest_f_clarity",
+      "name": "Inner Clarity",
+      "column": 2,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "priest_starter"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 INT",
+        "+6 INT",
+        "+9 INT"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "priest_f_sanctuary",
+      "name": "Sanctuary",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "priest_starter"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA",
+        "+4 STA"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "priest_f_mending",
+      "name": "Mending Touch",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "priest_f_devotion"
+      ],
+      "effects": [
+        {
+          "stat": "intellect",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 INT",
+        "+4 INT"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "priest_f_ward",
+      "name": "Ward",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "priest_f_clarity"
+      ],
+      "effects": [
+        {
+          "stat": "resistance",
+          "per_rank": 12
+        }
+      ],
+      "descriptions": [
+        "+12 Resistance",
+        "+24 Resistance"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "priest_f_serenity",
+      "name": "Serenity",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "priest_f_sanctuary"
+      ],
+      "effects": [
+        {
+          "stat": "spirit",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 SPI",
+        "+4 SPI"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "priest_f_beacon",
+      "name": "Beacon",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 1,
+      "node_type": "utility",
+      "prereqs": [
+        "priest_f_mending",
+        "priest_f_ward",
+        "priest_f_serenity"
+      ],
+      "effects": [
+        {
+          "utility": "craft_xp",
+          "pct_per_rank": 10
+        }
+      ],
+      "descriptions": [
+        "+10% crafting XP"
+      ],
+      "points_required": 3,
+      "layer": "core"
+    },
+    {
       "id": "priest_preview_holy_priest",
       "name": "Holy Aptitude",
       "column": 1,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",
@@ -49,7 +207,7 @@
       "id": "priest_preview_shadow",
       "name": "Shadow Aptitude",
       "column": 3,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",

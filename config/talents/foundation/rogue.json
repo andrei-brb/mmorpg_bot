@@ -23,10 +23,168 @@
       ]
     },
     {
+      "id": "rogue_f_vigor",
+      "name": "Battle Vigor",
+      "column": 1,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "rogue_starter"
+      ],
+      "effects": [
+        {
+          "stat": "stamina",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 STA",
+        "+4 STA",
+        "+6 STA"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "rogue_f_edge",
+      "name": "Honed Edge",
+      "column": 2,
+      "tier": 1,
+      "max_ranks": 3,
+      "node_type": "stat",
+      "prereqs": [
+        "rogue_starter"
+      ],
+      "effects": [
+        {
+          "stat": "agility",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 AGI",
+        "+4 AGI",
+        "+6 AGI"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "rogue_f_precision",
+      "name": "Precision",
+      "column": 3,
+      "tier": 1,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "rogue_starter"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Crit",
+        "+4 Crit"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "rogue_f_swift",
+      "name": "Swift Strikes",
+      "column": 1,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "rogue_f_vigor"
+      ],
+      "effects": [
+        {
+          "stat": "haste_pct",
+          "per_rank": 3
+        }
+      ],
+      "descriptions": [
+        "+3 Haste",
+        "+6 Haste"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "rogue_f_lethality",
+      "name": "Lethality",
+      "column": 2,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "rogue_f_edge"
+      ],
+      "effects": [
+        {
+          "stat": "agility",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 AGI",
+        "+4 AGI"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "rogue_f_keen",
+      "name": "Keen Eye",
+      "column": 3,
+      "tier": 2,
+      "max_ranks": 2,
+      "node_type": "stat",
+      "prereqs": [
+        "rogue_f_precision"
+      ],
+      "effects": [
+        {
+          "stat": "crit_pct",
+          "per_rank": 2
+        }
+      ],
+      "descriptions": [
+        "+2 Crit",
+        "+4 Crit"
+      ],
+      "layer": "core"
+    },
+    {
+      "id": "rogue_f_veteran",
+      "name": "Veteran's Insight",
+      "column": 2,
+      "tier": 3,
+      "max_ranks": 1,
+      "node_type": "utility",
+      "prereqs": [
+        "rogue_f_swift",
+        "rogue_f_lethality",
+        "rogue_f_keen"
+      ],
+      "effects": [
+        {
+          "utility": "combat_xp",
+          "pct_per_rank": 10
+        }
+      ],
+      "descriptions": [
+        "+10% XP from kills"
+      ],
+      "points_required": 3,
+      "layer": "core"
+    },
+    {
       "id": "rogue_preview_assassination",
       "name": "Assassination Aptitude",
       "column": 1,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",
@@ -49,7 +207,7 @@
       "id": "rogue_preview_subtlety",
       "name": "Subtlety Aptitude",
       "column": 3,
-      "tier": 1,
+      "tier": 4,
       "max_ranks": 2,
       "node_type": "preview",
       "layer": "preview",
