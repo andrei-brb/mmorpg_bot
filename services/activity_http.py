@@ -2181,10 +2181,17 @@ async def handle_social_roster(request: web.Request) -> web.Response:
         return web.json_response(_json_safe({"ok": False, "error": "no_character", "friends": []}), status=400)
     from services.social.social_service import SocialService
 
-    svc = SocialService(db)
-    friends = await svc.get_roster(discord_id)
-    total_unread = await svc.get_total_unread(discord_id)
-    return web.json_response(_json_safe({"ok": True, "friends": friends, "total_unread": total_unread}))
+    try:
+        svc = SocialService(db)
+        friends = await svc.get_roster(discord_id)
+        total_unread = await svc.get_total_unread(discord_id)
+        return web.json_response(_json_safe({"ok": True, "friends": friends, "total_unread": total_unread}))
+    except Exception as e:
+        log.exception("handle_social_roster: %s", e)
+        return web.json_response(
+            _json_safe({"ok": False, "error": "social_unavailable", "friends": [], "total_unread": 0}),
+            status=500,
+        )
 
 
 async def handle_social_requests(request: web.Request) -> web.Response:
@@ -2199,8 +2206,15 @@ async def handle_social_requests(request: web.Request) -> web.Response:
         )
     from services.social.social_service import SocialService
 
-    data = await SocialService(db).get_requests(discord_id)
-    return web.json_response(_json_safe({"ok": True, **data}))
+    try:
+        data = await SocialService(db).get_requests(discord_id)
+        return web.json_response(_json_safe({"ok": True, **data}))
+    except Exception as e:
+        log.exception("handle_social_requests: %s", e)
+        return web.json_response(
+            _json_safe({"ok": False, "error": "social_unavailable", "incoming": [], "outgoing": []}),
+            status=500,
+        )
 
 
 async def handle_social_players_search(request: web.Request) -> web.Response:
@@ -2414,10 +2428,14 @@ async def handle_social_suggestions(request: web.Request) -> web.Response:
         raise
     if not char:
         return web.json_response(_json_safe({"ok": False, "error": "no_character", "suggestions": []}), status=400)
-    from services.social.social_service import SocialService
+    try:
+        from services.social.social_service import SocialService
 
-    suggestions = await SocialService(db).get_suggestions(discord_id)
-    return web.json_response(_json_safe({"ok": True, "suggestions": suggestions}))
+        suggestions = await SocialService(db).get_suggestions(discord_id)
+        return web.json_response(_json_safe({"ok": True, "suggestions": suggestions}))
+    except Exception as e:
+        log.exception("handle_social_suggestions: %s", e)
+        return web.json_response(_json_safe({"ok": True, "suggestions": []}))
 
 
 async def handle_social_whispers_inbox(request: web.Request) -> web.Response:

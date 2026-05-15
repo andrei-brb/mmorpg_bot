@@ -154,27 +154,62 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
   const refreshAll = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
+    let hadCriticalFailure = false;
     try {
-      const [roster, reqs, ign, settings, sug, guildMe] = await Promise.all([
+      const [rosterR, reqsR, ignR, settingsR, sugR, guildR] = await Promise.allSettled([
         api.getSocialRoster(accessToken, guildId),
         api.getSocialRequests(accessToken, guildId),
         api.getSocialIgnore(accessToken, guildId),
         api.getSocialSettings(accessToken, guildId),
         api.getSocialSuggestions(accessToken, guildId),
-        api.getGuildMe(accessToken, guildId).catch(() => ({ ok: false })),
+        api.getGuildMe(accessToken, guildId),
       ]);
-      setFriends(roster.friends || []);
-      setTotalUnread(roster.total_unread ?? 0);
-      setIncoming(reqs.incoming || []);
-      setOutgoing(reqs.outgoing || []);
-      setIgnored(ign.ignored || []);
-      setAppearOffline(Boolean(settings.appear_offline));
-      setSuggestions(sug.suggestions || []);
-      const gm = guildMe as { in_guild?: boolean; guild?: { my_rank?: string | null } };
-      const rank = gm.guild?.my_rank;
-      setCanGuildInvite(
-        Boolean(gm.in_guild && rank && ["officer", "guildmaster"].includes(String(rank).toLowerCase())),
-      );
+
+      if (rosterR.status === "fulfilled") {
+        setFriends(rosterR.value.friends || []);
+        setTotalUnread(rosterR.value.total_unread ?? 0);
+      } else {
+        hadCriticalFailure = true;
+        setFriends([]);
+        setTotalUnread(0);
+      }
+
+      if (reqsR.status === "fulfilled") {
+        setIncoming(reqsR.value.incoming || []);
+        setOutgoing(reqsR.value.outgoing || []);
+      } else {
+        hadCriticalFailure = true;
+        setIncoming([]);
+        setOutgoing([]);
+      }
+
+      if (ignR.status === "fulfilled") {
+        setIgnored(ignR.value.ignored || []);
+      } else {
+        setIgnored([]);
+      }
+
+      if (settingsR.status === "fulfilled") {
+        setAppearOffline(Boolean(settingsR.value.appear_offline));
+      }
+
+      if (sugR.status === "fulfilled") {
+        setSuggestions(sugR.value.suggestions || []);
+      } else {
+        setSuggestions([]);
+      }
+
+      if (guildR.status === "fulfilled") {
+        const gm = guildR.value;
+        const rank = gm.guild?.my_rank;
+        setCanGuildInvite(
+          Boolean(gm.in_guild && rank && ["officer", "guildmaster"].includes(String(rank).toLowerCase())),
+        );
+      }
+
+      if (hadCriticalFailure) {
+        toast.error("Could not load social data. Restart the game server if this persists.");
+      }
     } catch {
       toast.error("Could not load social data.");
     } finally {

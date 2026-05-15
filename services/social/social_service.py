@@ -228,46 +228,58 @@ class SocialService:
         return {str(r["from_player_id"]): int(r["n"]) for r in rows}
 
     async def get_total_unread(self, viewer_id: int) -> int:
-        row = await self.db.fetchrow(
-            """
-            SELECT COUNT(*)::int AS n FROM player_whispers
-            WHERE to_player_id = $1 AND read_at IS NULL
-            """,
-            int(viewer_id),
-        )
-        return int(row["n"] or 0) if row else 0
+        try:
+            row = await self.db.fetchrow(
+                """
+                SELECT COUNT(*)::int AS n FROM player_whispers
+                WHERE to_player_id = $1 AND read_at IS NULL
+                """,
+                int(viewer_id),
+            )
+            return int(row["n"] or 0) if row else 0
+        except Exception as e:
+            log.warning("get_total_unread failed: %s", e)
+            return 0
 
     async def get_roster(self, viewer_id: int) -> list[dict]:
-        unread = await self.get_unread_counts(viewer_id)
-        rows = await self.db.fetch(
-            """
-            SELECT
-                CASE WHEN f.player_a_id = $1 THEN f.player_b_id ELSE f.player_a_id END AS friend_id,
-                p.username,
-                p.last_seen,
-                p.settings AS friend_settings,
-                c.id AS character_id,
-                c.level,
-                c.class,
-                c.name AS character_name,
-                c.current_zone,
-                c.combat_status,
-                c.in_dungeon,
-                (
-                    SELECT w.body FROM player_whispers w
-                    WHERE (w.from_player_id = $1 AND w.to_player_id = p.id)
-                       OR (w.from_player_id = p.id AND w.to_player_id = $1)
-                    ORDER BY w.created_at DESC
-                    LIMIT 1
-                ) AS last_whisper_body
-            FROM player_friendships f
-            JOIN players p ON p.id = CASE WHEN f.player_a_id = $1 THEN f.player_b_id ELSE f.player_a_id END
-            LEFT JOIN characters c ON c.player_id = p.id AND c.is_active = TRUE
-            WHERE f.player_a_id = $1 OR f.player_b_id = $1
-            ORDER BY p.username ASC
-            """,
-            int(viewer_id),
-        )
+        try:
+            unread = await self.get_unread_counts(viewer_id)
+        except Exception as e:
+            log.warning("get_unread_counts failed: %s", e)
+            unread = {}
+        try:
+            rows = await self.db.fetch(
+                """
+                SELECT
+                    CASE WHEN f.player_a_id = $1 THEN f.player_b_id ELSE f.player_a_id END AS friend_id,
+                    p.username,
+                    p.last_seen,
+                    p.settings AS friend_settings,
+                    c.id AS character_id,
+                    c.level,
+                    c.class,
+                    c.name AS character_name,
+                    c.current_zone,
+                    c.combat_status,
+                    c.in_dungeon,
+                    (
+                        SELECT w.body FROM player_whispers w
+                        WHERE (w.from_player_id = $1 AND w.to_player_id = p.id)
+                           OR (w.from_player_id = p.id AND w.to_player_id = $1)
+                        ORDER BY w.created_at DESC
+                        LIMIT 1
+                    ) AS last_whisper_body
+                FROM player_friendships f
+                JOIN players p ON p.id = CASE WHEN f.player_a_id = $1 THEN f.player_b_id ELSE f.player_a_id END
+                LEFT JOIN characters c ON c.player_id = p.id AND c.is_active = TRUE
+                WHERE f.player_a_id = $1 OR f.player_b_id = $1
+                ORDER BY p.username ASC
+                """,
+                int(viewer_id),
+            )
+        except Exception as e:
+            log.warning("get_roster query failed: %s", e)
+            return []
         out = []
         for r in rows:
             fid = int(r["friend_id"])
@@ -300,6 +312,13 @@ class SocialService:
         return [f for f in roster if int(f.get("unread_count") or 0) > 0]
 
     async def get_requests(self, viewer_id: int) -> dict:
+        try:
+            return await self._get_requests_impl(viewer_id)
+        except Exception as e:
+            log.warning("get_requests failed: %s", e)
+            return {"incoming": [], "outgoing": []}
+
+    async def _get_requests_impl(self, viewer_id: int) -> dict:
         incoming_rows = await self.db.fetch(
             """
             SELECT fr.id, fr.from_player_id, fr.created_at, p.username,
@@ -479,24 +498,28 @@ class SocialService:
         return True, "Removed from friends."
 
     async def list_ignores(self, viewer_id: int) -> list[dict]:
-        rows = await self.db.fetch(
-            """
-            SELECT pi.blocked_id, p.username, pi.created_at
-            FROM player_ignores pi
-            JOIN players p ON p.id = pi.blocked_id
-            WHERE pi.blocker_id = $1
-            ORDER BY pi.created_at DESC
-            """,
-            int(viewer_id),
-        )
-        return [
-            {
-                "user_id": str(r["blocked_id"]),
-                "username": str(r["username"] or ""),
-                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
-            }
-            for r in rows
-        ]
+        try:
+            rows = await self.db.fetch(
+                """
+                SELECT pi.blocked_id, p.username, pi.created_at
+                FROM player_ignores pi
+                JOIN players p ON p.id = pi.blocked_id
+                WHERE pi.blocker_id = $1
+                ORDER BY pi.created_at DESC
+                """,
+                int(viewer_id),
+            )
+            return [
+                {
+                    "user_id": str(r["blocked_id"]),
+                    "username": str(r["username"] or ""),
+                    "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            log.warning("list_ignores failed: %s", e)
+            return []
 
     async def add_ignore(
         self, blocker_id: int, *, username: str | None = None, blocked_user_id: int | None = None
@@ -644,6 +667,13 @@ class SocialService:
         return row["id"] if row else None
 
     async def get_suggestions(self, viewer_id: int, *, limit: int = 12) -> list[dict]:
+        try:
+            return await self._get_suggestions_impl(viewer_id, limit=limit)
+        except Exception as e:
+            log.warning("get_suggestions failed: %s", e)
+            return []
+
+    async def _get_suggestions_impl(self, viewer_id: int, *, limit: int = 12) -> list[dict]:
         char_id = await self._viewer_character_id(viewer_id)
         if not char_id:
             return []
@@ -706,42 +736,51 @@ class SocialService:
         _add(guild_rows, "Guild mate")
 
         if len(out) < limit:
-            dungeon_rows = await self.db.fetch(
-                f"""
-                SELECT DISTINCT p.id, p.username, c.id AS character_id, c.name AS character_name, c.level, c.class
-                FROM dungeon_participants me
-                JOIN dungeon_participants other ON other.run_id = me.run_id AND other.character_id != me.character_id
-                JOIN characters c ON c.id = other.character_id AND c.is_active = TRUE
-                JOIN players p ON p.id = c.player_id
-                JOIN dungeon_runs dr ON dr.id = me.run_id
-                WHERE me.character_id = $2
-                  AND dr.started_at >= NOW() - INTERVAL '7 days'
-                {exclude_sql}
-                ORDER BY dr.created_at DESC
-                LIMIT 6
-                """,
-                int(viewer_id),
-                char_id,
-            )
-            _add(dungeon_rows, "Recent dungeon")
+            try:
+                dungeon_rows = await self.db.fetch(
+                    f"""
+                    SELECT DISTINCT ON (p.id) p.id, p.username, c.id AS character_id,
+                           c.name AS character_name, c.level, c.class
+                    FROM dungeon_participants me
+                    JOIN dungeon_participants other ON other.run_id = me.run_id
+                        AND other.character_id != me.character_id
+                    JOIN characters c ON c.id = other.character_id AND c.is_active = TRUE
+                    JOIN players p ON p.id = c.player_id
+                    JOIN dungeon_runs dr ON dr.id = me.run_id
+                    WHERE me.character_id = $2
+                      AND dr.started_at >= NOW() - INTERVAL '7 days'
+                    {exclude_sql}
+                    ORDER BY p.id, dr.started_at DESC
+                    LIMIT 6
+                    """,
+                    int(viewer_id),
+                    char_id,
+                )
+                _add(dungeon_rows, "Recent dungeon")
+            except Exception as e:
+                log.debug("dungeon suggestions skipped: %s", e)
 
         if len(out) < limit:
-            pvp_rows = await self.db.fetch(
-                f"""
-                SELECT DISTINCT p.id, p.username, c.id AS character_id, c.name AS character_name, c.level, c.class
-                FROM pvp_match_history h
-                JOIN characters c ON c.id = h.opponent_character_id AND c.is_active = TRUE
-                JOIN players p ON p.id = c.player_id
-                WHERE h.character_id = $2
-                  AND h.created_at >= NOW() - INTERVAL '7 days'
-                  AND h.opponent_character_id IS NOT NULL
-                {exclude_sql}
-                ORDER BY h.created_at DESC
-                LIMIT 6
-                """,
-                int(viewer_id),
-                char_id,
-            )
-            _add(pvp_rows, "Recent PvP")
+            try:
+                pvp_rows = await self.db.fetch(
+                    f"""
+                    SELECT DISTINCT ON (p.id) p.id, p.username, c.id AS character_id,
+                           c.name AS character_name, c.level, c.class
+                    FROM pvp_match_history h
+                    JOIN characters c ON c.id = h.opponent_character_id AND c.is_active = TRUE
+                    JOIN players p ON p.id = c.player_id
+                    WHERE h.character_id = $2
+                      AND h.created_at >= NOW() - INTERVAL '7 days'
+                      AND h.opponent_character_id IS NOT NULL
+                    {exclude_sql}
+                    ORDER BY p.id, h.created_at DESC
+                    LIMIT 6
+                    """,
+                    int(viewer_id),
+                    char_id,
+                )
+                _add(pvp_rows, "Recent PvP")
+            except Exception as e:
+                log.debug("pvp suggestions skipped: %s", e)
 
         return out[:limit]
