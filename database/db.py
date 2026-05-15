@@ -1241,9 +1241,9 @@ CREATE TABLE IF NOT EXISTS market_listings (
 
 CREATE INDEX IF NOT EXISTS idx_market_active ON market_listings(is_active, expires_at) WHERE is_active;
 
-CREATE INDEX IF NOT EXISTS idx_market_auction_end
-    ON market_listings(auction_ends_at)
-    WHERE is_active = TRUE AND COALESCE(listing_kind, 'fixed') = 'auction';
+-- Partial index on listing_kind belongs only in initialize_schema after ALTER migrations.
+-- Putting it here breaks existing DBs: CREATE TABLE IF NOT EXISTS is skipped, but the index
+-- still runs and references columns that do not exist yet.
 
 CREATE TABLE IF NOT EXISTS gold_log (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
