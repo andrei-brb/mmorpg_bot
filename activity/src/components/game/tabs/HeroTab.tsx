@@ -754,24 +754,19 @@ export function HeroTab() {
                 </div>
               </div>
 
-              <div className="relative mx-3 mb-4 mt-4 min-w-0 border border-gold/25 tex-forge px-3 py-3 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
-                <div className="grid min-w-0 grid-cols-2 divide-x divide-gold/25">
-                  <div className="flex min-w-0 flex-col items-center justify-center px-3 py-0.5 text-center sm:px-5 md:px-7">
+              <div className="relative mx-3 mb-4 mt-4 min-w-0 border border-gold/25 tex-forge px-3 py-3.5 hero-forge-edge-gold hero-forge-clip-blade sm:mx-4 sm:px-4 sm:py-3.5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-start sm:gap-0 sm:divide-x sm:divide-gold/25">
+                  <div className="flex min-w-0 flex-col items-center gap-1 text-center sm:px-4 md:px-5">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Combat power</p>
-                    <p className="mt-1 min-w-0 w-full max-w-full truncate px-0.5 font-display text-xl tabular-nums leading-tight text-gold-200 sm:text-2xl sm:max-w-[min(100%,11rem)] md:text-3xl md:max-w-[min(100%,13rem)]">
+                    <p className="font-display text-2xl tabular-nums leading-none text-gold-200 sm:text-3xl md:text-[2rem]">
                       {combatPowerDisplay}
                     </p>
                   </div>
-                  <div className="flex min-w-0 flex-col items-center justify-center px-3 py-0.5 text-center sm:px-5 md:px-7">
+                  <div className="flex min-w-0 flex-col items-center gap-1 border-t border-gold/20 pt-4 text-center sm:border-t-0 sm:px-4 sm:pt-0 md:px-5">
                     <p className="text-[9px] uppercase tracking-[0.28em] text-gold-dim sm:text-[10px] sm:tracking-[0.3em]">Treasury</p>
-                    <p
-                      className="mt-1 flex min-w-0 w-full max-w-full items-center justify-center gap-1.5 px-0.5 font-display text-xl tabular-nums leading-tight text-gold sm:gap-2 sm:text-2xl md:text-3xl"
-                      title={`${Number(char?.gold ?? 0).toLocaleString()} gold`}
-                    >
-                      <span className="min-w-0 max-w-[min(100%,10rem)] truncate sm:max-w-[min(100%,12rem)] md:max-w-[min(100%,14rem)]">
-                        {Number(char?.gold ?? 0).toLocaleString()}
-                      </span>
-                      <span className="shrink-0 text-lg sm:text-xl" aria-hidden>
+                    <p className="flex flex-wrap items-center justify-center gap-1.5 font-display text-2xl tabular-nums leading-none text-gold sm:gap-2 sm:text-3xl md:text-[2rem]">
+                      <span>{Number(char?.gold ?? 0).toLocaleString()}</span>
+                      <span className="shrink-0 text-xl sm:text-2xl" aria-hidden>
                         🪙
                       </span>
                     </p>
