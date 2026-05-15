@@ -40,6 +40,20 @@ const TAB_ICONS: Record<TabName, string> = {
   Realm: "🌐",
 };
 
+/** Visible labels (keys stay short for `activeTab` / routing). */
+const TAB_LABELS: Record<TabName, string> = {
+  Hero: "Hero",
+  Forge: "Forge",
+  Explore: "Explore",
+  Quests: "Quests",
+  Combat: "Combat",
+  Guild: "Guild",
+  Market: "Market",
+  Arena: "Arena",
+  Pass: "Battle Pass",
+  Realm: "Realm",
+};
+
 export function GameShell() {
   const [activeTab, setActiveTab] = useState<TabName>("Hero");
   const [profileOpen, setProfileOpen] = useState(false);
@@ -359,11 +373,21 @@ export function GameShell() {
                   {TABS.map((tab) => (
                     <button
                       key={tab}
+                      type="button"
                       onClick={() => setActiveTab(tab)}
                       className={`tab-btn ${activeTab === tab ? "tab-btn-active tab-active-glow" : ""}`}
+                      title={TAB_LABELS[tab]}
+                      aria-label={`Open ${TAB_LABELS[tab]}`}
+                      aria-current={activeTab === tab ? "page" : undefined}
                     >
-                      <span className="mr-1.5">{TAB_ICONS[tab]}</span>
-                      <span className="hidden sm:inline">{tab}</span>
+                      <span className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1.5 sm:px-0.5">
+                        <span className="text-[1.1rem] leading-none sm:text-base" aria-hidden>
+                          {TAB_ICONS[tab]}
+                        </span>
+                        <span className="max-w-[5.5rem] text-center text-[8px] leading-tight tracking-[0.08em] sm:max-w-none sm:text-xs sm:tracking-[0.12em]">
+                          {TAB_LABELS[tab].toUpperCase()}
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
