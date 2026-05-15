@@ -27,6 +27,9 @@ import type {
   SocialPlayersSearchPayload,
   SocialIgnorePayload,
   SocialWhispersPayload,
+  SocialSettingsPayload,
+  SocialSuggestionsPayload,
+  SocialWhisperInboxPayload,
 } from "./apiTypes";
 
 function isLocalHost(hostname: string): boolean {
@@ -1031,4 +1034,58 @@ export async function postSocialWhisper(
     body: JSON.stringify({ to_user_id: toUserId, body }),
   });
   return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function getSocialSettings(token: string, guildId?: string): Promise<SocialSettingsPayload> {
+  const res = await fetch(apiUrl("/api/game/social/settings"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<SocialSettingsPayload>;
+}
+
+export async function postSocialSettings(
+  token: string,
+  appearOffline: boolean,
+  guildId?: string,
+): Promise<SocialSettingsPayload> {
+  const res = await fetch(apiUrl("/api/game/social/settings"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ appear_offline: appearOffline }),
+  });
+  return res.json() as Promise<SocialSettingsPayload>;
+}
+
+export async function postSocialFriendCancel(
+  token: string,
+  requestId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/social/friend/cancel"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ request_id: requestId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string }>;
+}
+
+export async function getSocialSuggestions(token: string, guildId?: string): Promise<SocialSuggestionsPayload> {
+  const res = await fetch(apiUrl("/api/game/social/suggestions"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<SocialSuggestionsPayload>;
+}
+
+export async function getSocialWhisperInbox(token: string, guildId?: string): Promise<SocialWhisperInboxPayload> {
+  const res = await fetch(apiUrl("/api/game/social/whispers/inbox"), { headers: authHeaders(token, guildId) });
+  return res.json() as Promise<SocialWhisperInboxPayload>;
+}
+
+export async function postPvpChallenge(
+  token: string,
+  targetUserId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; error?: string }> {
+  const res = await fetch(apiUrl("/api/game/pvp/challenge"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ target_user_id: targetUserId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; error?: string }>;
 }

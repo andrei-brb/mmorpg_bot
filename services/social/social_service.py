@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -30,9 +31,52 @@ def _zone_display(zone_key: str | None) -> str | None:
     return zone_key.replace("_", " ").title()
 
 
+def _ignore_filter_sql(viewer_param: str = "$1") -> str:
+    """Exclude players blocked in either direction from viewer."""
+    return f"""
+      AND NOT EXISTS (
+          SELECT 1 FROM player_ignores ig
+          WHERE (ig.blocker_id = {viewer_param} AND ig.blocked_id = p.id)
+             OR (ig.blocker_id = p.id AND ig.blocked_id = {viewer_param})
+      )
+    """
+
+
 class SocialService:
     def __init__(self, db: Any) -> None:
         self.db = db
+
+    async def _player_settings(self, player_id: int) -> dict:
+        row = await self.db.fetchrow("SELECT settings FROM players WHERE id = $1", int(player_id))
+        raw = row["settings"] if row else {}
+        if raw is None:
+            return {}
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw) or {}
+            except json.JSONDecodeError:
+                return {}
+        if isinstance(raw, dict):
+            return raw
+        return {}
+
+    async def appears_offline(self, player_id: int) -> bool:
+        settings = await self._player_settings(player_id)
+        return bool(settings.get("social_appear_offline"))
+
+    async def get_settings(self, player_id: int) -> dict:
+        return {"appear_offline": await self.appears_offline(player_id)}
+
+    async def set_settings(self, player_id: int, *, appear_offline: bool | None = None) -> dict:
+        settings = await self._player_settings(player_id)
+        if appear_offline is not None:
+            settings["social_appear_offline"] = bool(appear_offline)
+        await self.db.execute(
+            "UPDATE players SET settings = $2::jsonb WHERE id = $1",
+            int(player_id),
+            json.dumps(settings),
+        )
+        return await self.get_settings(player_id)
 
     async def touch_presence(self, player_id: int) -> None:
         await self.db.execute(
@@ -143,7 +187,9 @@ class SocialService:
             for r in rows
         ]
 
-    def _presence_from_row(self, row: dict) -> dict:
+    def _presence_from_row(self, row: dict, *, mask_offline: bool = False) -> dict:
+        if mask_offline:
+            return {"online": False, "last_seen": None, "zone_hint": None}
         last_seen = row.get("last_seen")
         now = datetime.now(timezone.utc)
         online = False
@@ -169,19 +215,51 @@ class SocialService:
             "zone_hint": zone_hint,
         }
 
+    async def get_unread_counts(self, viewer_id: int) -> dict[str, int]:
+        rows = await self.db.fetch(
+            """
+            SELECT from_player_id, COUNT(*)::int AS n
+            FROM player_whispers
+            WHERE to_player_id = $1 AND read_at IS NULL
+            GROUP BY from_player_id
+            """,
+            int(viewer_id),
+        )
+        return {str(r["from_player_id"]): int(r["n"]) for r in rows}
+
+    async def get_total_unread(self, viewer_id: int) -> int:
+        row = await self.db.fetchrow(
+            """
+            SELECT COUNT(*)::int AS n FROM player_whispers
+            WHERE to_player_id = $1 AND read_at IS NULL
+            """,
+            int(viewer_id),
+        )
+        return int(row["n"] or 0) if row else 0
+
     async def get_roster(self, viewer_id: int) -> list[dict]:
+        unread = await self.get_unread_counts(viewer_id)
         rows = await self.db.fetch(
             """
             SELECT
                 CASE WHEN f.player_a_id = $1 THEN f.player_b_id ELSE f.player_a_id END AS friend_id,
                 p.username,
                 p.last_seen,
+                p.settings AS friend_settings,
+                c.id AS character_id,
                 c.level,
                 c.class,
                 c.name AS character_name,
                 c.current_zone,
                 c.combat_status,
-                c.in_dungeon
+                c.in_dungeon,
+                (
+                    SELECT w.body FROM player_whispers w
+                    WHERE (w.from_player_id = $1 AND w.to_player_id = p.id)
+                       OR (w.from_player_id = p.id AND w.to_player_id = $1)
+                    ORDER BY w.created_at DESC
+                    LIMIT 1
+                ) AS last_whisper_body
             FROM player_friendships f
             JOIN players p ON p.id = CASE WHEN f.player_a_id = $1 THEN f.player_b_id ELSE f.player_a_id END
             LEFT JOIN characters c ON c.player_id = p.id AND c.is_active = TRUE
@@ -192,18 +270,34 @@ class SocialService:
         )
         out = []
         for r in rows:
-            pres = self._presence_from_row(dict(r))
+            fid = int(r["friend_id"])
+            settings = r.get("friend_settings") or {}
+            if isinstance(settings, str):
+                try:
+                    settings = json.loads(settings) or {}
+                except json.JSONDecodeError:
+                    settings = {}
+            mask = bool(settings.get("social_appear_offline"))
+            pres = self._presence_from_row(dict(r), mask_offline=mask)
             out.append(
                 {
-                    "user_id": str(r["friend_id"]),
+                    "user_id": str(fid),
                     "username": str(r["username"] or ""),
+                    "character_id": str(r["character_id"]) if r.get("character_id") else None,
                     "character_name": str(r["character_name"] or "") or None,
                     "level": int(r["level"]) if r["level"] is not None else None,
                     "class": str(r["class"]) if r["class"] else None,
+                    "unread_count": unread.get(str(fid), 0),
+                    "last_whisper_preview": str(r["last_whisper_body"])[:120] if r.get("last_whisper_body") else None,
                     **pres,
                 }
             )
         return out
+
+    async def get_whisper_inbox(self, viewer_id: int) -> list[dict]:
+        """Friends with unread messages (offline inbox summary)."""
+        roster = await self.get_roster(viewer_id)
+        return [f for f in roster if int(f.get("unread_count") or 0) > 0]
 
     async def get_requests(self, viewer_id: int) -> dict:
         incoming_rows = await self.db.fetch(
@@ -358,6 +452,20 @@ class SocialService:
             request_id,
         )
         return True, "Request declined."
+
+    async def cancel_friend_request(self, viewer_id: int, request_id: str) -> tuple[bool, str]:
+        req = await self.db.fetchrow(
+            "SELECT from_player_id, status FROM player_friend_requests WHERE id = $1",
+            request_id,
+        )
+        if not req:
+            return False, "Request not found."
+        if int(req["from_player_id"]) != int(viewer_id):
+            return False, "Not your request."
+        if req["status"] != "pending":
+            return False, "Request is no longer pending."
+        await self.db.execute("DELETE FROM player_friend_requests WHERE id = $1", request_id)
+        return True, "Request cancelled."
 
     async def unfriend(self, viewer_id: int, friend_user_id: int) -> tuple[bool, str]:
         pa, pb = _canonical_pair(int(viewer_id), int(friend_user_id))
@@ -527,3 +635,113 @@ class SocialService:
             }
             for r in rows
         ]
+
+    async def _viewer_character_id(self, viewer_id: int) -> Any:
+        row = await self.db.fetchrow(
+            "SELECT id FROM characters WHERE player_id = $1 AND is_active = TRUE LIMIT 1",
+            int(viewer_id),
+        )
+        return row["id"] if row else None
+
+    async def get_suggestions(self, viewer_id: int, *, limit: int = 12) -> list[dict]:
+        char_id = await self._viewer_character_id(viewer_id)
+        if not char_id:
+            return []
+
+        exclude_sql = """
+          AND p.id != $1
+          AND NOT EXISTS (
+              SELECT 1 FROM player_friendships fr
+              WHERE fr.player_a_id = LEAST($1::bigint, p.id) AND fr.player_b_id = GREATEST($1::bigint, p.id)
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM player_ignores ig
+              WHERE (ig.blocker_id = $1 AND ig.blocked_id = p.id)
+                 OR (ig.blocker_id = p.id AND ig.blocked_id = $1)
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM player_friend_requests r
+              WHERE r.status = 'pending'
+                AND ((r.from_player_id = $1 AND r.to_player_id = p.id)
+                  OR (r.from_player_id = p.id AND r.to_player_id = $1))
+          )
+        """
+        out: list[dict] = []
+        seen: set[int] = set()
+
+        def _add(rows: list, reason: str) -> None:
+            for r in rows:
+                pid = int(r["id"])
+                if pid in seen or pid == int(viewer_id):
+                    continue
+                seen.add(pid)
+                out.append(
+                    {
+                        "user_id": str(pid),
+                        "username": str(r["username"] or ""),
+                        "character_id": str(r["character_id"]) if r.get("character_id") else None,
+                        "character_name": str(r.get("character_name") or "") or None,
+                        "level": int(r["level"]) if r.get("level") is not None else None,
+                        "class": str(r["class"]) if r.get("class") else None,
+                        "reason": reason,
+                    }
+                )
+                if len(out) >= limit:
+                    return
+
+        guild_rows = await self.db.fetch(
+            f"""
+            SELECT DISTINCT p.id, p.username, c.id AS character_id, c.name AS character_name, c.level, c.class
+            FROM characters me
+            JOIN characters c ON c.guild_id = me.guild_id AND c.player_id != me.player_id AND c.is_active = TRUE
+            JOIN players p ON p.id = c.player_id
+            WHERE me.id = $2 AND me.guild_id IS NOT NULL
+            {exclude_sql}
+            ORDER BY p.username ASC
+            LIMIT 6
+            """,
+            int(viewer_id),
+            char_id,
+        )
+        _add(guild_rows, "Guild mate")
+
+        if len(out) < limit:
+            dungeon_rows = await self.db.fetch(
+                f"""
+                SELECT DISTINCT p.id, p.username, c.id AS character_id, c.name AS character_name, c.level, c.class
+                FROM dungeon_participants me
+                JOIN dungeon_participants other ON other.run_id = me.run_id AND other.character_id != me.character_id
+                JOIN characters c ON c.id = other.character_id AND c.is_active = TRUE
+                JOIN players p ON p.id = c.player_id
+                JOIN dungeon_runs dr ON dr.id = me.run_id
+                WHERE me.character_id = $2
+                  AND dr.started_at >= NOW() - INTERVAL '7 days'
+                {exclude_sql}
+                ORDER BY dr.created_at DESC
+                LIMIT 6
+                """,
+                int(viewer_id),
+                char_id,
+            )
+            _add(dungeon_rows, "Recent dungeon")
+
+        if len(out) < limit:
+            pvp_rows = await self.db.fetch(
+                f"""
+                SELECT DISTINCT p.id, p.username, c.id AS character_id, c.name AS character_name, c.level, c.class
+                FROM pvp_match_history h
+                JOIN characters c ON c.id = h.opponent_character_id AND c.is_active = TRUE
+                JOIN players p ON p.id = c.player_id
+                WHERE h.character_id = $2
+                  AND h.created_at >= NOW() - INTERVAL '7 days'
+                  AND h.opponent_character_id IS NOT NULL
+                {exclude_sql}
+                ORDER BY h.created_at DESC
+                LIMIT 6
+                """,
+                int(viewer_id),
+                char_id,
+            )
+            _add(pvp_rows, "Recent PvP")
+
+        return out[:limit]

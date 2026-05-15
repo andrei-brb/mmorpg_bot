@@ -9,6 +9,7 @@ import type {
   SocialIgnoreRow,
   SocialPlayerSearchRow,
   SocialRequestRow,
+  SocialSuggestionRow,
   SocialWhisperMessage,
 } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
@@ -51,11 +52,14 @@ function PresenceLine({ friend }: { friend: SocialFriendRow }) {
       </p>
     );
   }
-  return (
-    <p className="text-[10px] text-muted-foreground truncate">
-      {friend.last_seen ? `Last seen ${formatLastSeen(friend.last_seen)}` : "Offline"}
-    </p>
-  );
+  if (friend.last_seen) {
+    return (
+      <p className="text-[10px] text-muted-foreground truncate">
+        Last seen {formatLastSeen(friend.last_seen)}
+      </p>
+    );
+  }
+  return <p className="text-[10px] text-muted-foreground truncate">Offline</p>;
 }
 
 function UsernameSearch({
@@ -117,7 +121,7 @@ type SocialPanelProps = {
   guildId?: string;
 };
 
-type SocialSubTab = "friends" | "requests" | "find" | "messages" | "blocked";
+type SocialSubTab = "friends" | "requests" | "find" | "messages" | "privacy";
 
 export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
   const [subTab, setSubTab] = useState<SocialSubTab>("friends");
@@ -125,7 +129,12 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
   const [incoming, setIncoming] = useState<SocialRequestRow[]>([]);
   const [outgoing, setOutgoing] = useState<SocialRequestRow[]>([]);
   const [ignored, setIgnored] = useState<SocialIgnoreRow[]>([]);
+  const [suggestions, setSuggestions] = useState<SocialSuggestionRow[]>([]);
+  const [totalUnread, setTotalUnread] = useState(0);
+  const [appearOffline, setAppearOffline] = useState(false);
+  const [canGuildInvite, setCanGuildInvite] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [addQuery, setAddQuery] = useState("");
   const [addSuggestions, setAddSuggestions] = useState<SocialPlayerSearchRow[]>([]);
@@ -146,15 +155,26 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     if (!accessToken) return;
     setLoading(true);
     try {
-      const [roster, reqs, ign] = await Promise.all([
+      const [roster, reqs, ign, settings, sug, guildMe] = await Promise.all([
         api.getSocialRoster(accessToken, guildId),
         api.getSocialRequests(accessToken, guildId),
         api.getSocialIgnore(accessToken, guildId),
+        api.getSocialSettings(accessToken, guildId),
+        api.getSocialSuggestions(accessToken, guildId),
+        api.getGuildMe(accessToken, guildId).catch(() => ({ ok: false })),
       ]);
       setFriends(roster.friends || []);
+      setTotalUnread(roster.total_unread ?? 0);
       setIncoming(reqs.incoming || []);
       setOutgoing(reqs.outgoing || []);
       setIgnored(ign.ignored || []);
+      setAppearOffline(Boolean(settings.appear_offline));
+      setSuggestions(sug.suggestions || []);
+      const gm = guildMe as { in_guild?: boolean; guild?: { my_rank?: string | null } };
+      const rank = gm.guild?.my_rank;
+      setCanGuildInvite(
+        Boolean(gm.in_guild && rank && ["officer", "guildmaster"].includes(String(rank).toLowerCase())),
+      );
     } catch {
       toast.error("Could not load social data.");
     } finally {
@@ -305,7 +325,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     const res = await api.postSocialWhisper(accessToken, whisperFriend.user_id, body, guildId);
     if (res.ok) {
       setWhisperDraft("");
-      void loadWhispers();
+      void loadWhispers().then(() => refreshAll());
     } else toast.error(res.message || "Could not send whisper.");
   };
 
@@ -314,6 +334,47 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     const res = await api.postDungeonPartyInvite(accessToken, userId, guildId);
     if (res.ok) toast.success(res.message || "Party invite sent.");
     else toast.error(res.message || "Start a dungeon party first, then invite.");
+  };
+
+  const challengePvp = async (userId: string) => {
+    if (!accessToken) return;
+    const res = await api.postPvpChallenge(accessToken, userId, guildId);
+    if (res.ok) {
+      toast.success(res.message || "Challenge sent.");
+      window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Arena" }));
+    } else toast.error(res.message || "Could not challenge.");
+  };
+
+  const inviteToGuild = async (characterId: string) => {
+    if (!accessToken) return;
+    const res = await api.postGuildInviteSend(accessToken, characterId, guildId);
+    if (res.ok) toast.success(res.message || "Guild invite sent.");
+    else toast.error(res.message || "Could not send guild invite.");
+  };
+
+  const cancelOutgoing = async (requestId: string) => {
+    if (!accessToken) return;
+    const res = await api.postSocialFriendCancel(accessToken, requestId, guildId);
+    if (res.ok) {
+      toast.info(res.message || "Cancelled.");
+      void refreshAll();
+    } else toast.error(res.message || "Failed.");
+  };
+
+  const toggleAppearOffline = async () => {
+    if (!accessToken || settingsSaving) return;
+    setSettingsSaving(true);
+    try {
+      const next = !appearOffline;
+      const res = await api.postSocialSettings(accessToken, next, guildId);
+      if (res.ok !== false) {
+        setAppearOffline(Boolean(res.appear_offline));
+        toast.success(next ? "You appear offline to friends." : "Friends can see your presence.");
+        void refreshAll();
+      }
+    } finally {
+      setSettingsSaving(false);
+    }
   };
 
   if (!accessToken) {
@@ -359,15 +420,20 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
           </TabsTrigger>
           <TabsTrigger
             value="messages"
-            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
+            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
           >
             Chat
+            {totalUnread > 0 ? (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
+                {totalUnread > 9 ? "9+" : totalUnread}
+              </span>
+            ) : null}
           </TabsTrigger>
           <TabsTrigger
-            value="blocked"
+            value="privacy"
             className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
           >
-            Blocked
+            Privacy
           </TabsTrigger>
         </TabsList>
 
@@ -403,6 +469,9 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                       </p>
                     ) : null}
                     <PresenceLine friend={f} />
+                    {(f.unread_count ?? 0) > 0 ? (
+                      <p className="text-[10px] text-primary mt-0.5">{f.unread_count} unread</p>
+                    ) : null}
                     <div className="flex flex-wrap gap-1 mt-2">
                       <Button
                         type="button"
@@ -422,6 +491,26 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                       >
                         Party
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px] font-cinzel px-2"
+                        onClick={() => void challengePvp(f.user_id)}
+                      >
+                        Arena
+                      </Button>
+                      {canGuildInvite && f.character_id ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px] font-cinzel px-2"
+                          onClick={() => void inviteToGuild(f.character_id!)}
+                        >
+                          Guild
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         size="sm"
@@ -486,10 +575,18 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                     {outgoing.map((r) => (
                       <li
                         key={r.request_id}
-                        className="flex items-center justify-between rounded-sm border border-border/30 px-2.5 py-2 text-xs"
+                        className="flex items-center justify-between gap-2 rounded-sm border border-border/30 px-2.5 py-2 text-xs"
                       >
                         <span className="text-foreground">@{r.username}</span>
-                        <span className="text-muted-foreground text-[10px] uppercase">Pending</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[10px]"
+                          onClick={() => void cancelOutgoing(r.request_id)}
+                        >
+                          Cancel
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -512,6 +609,33 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
             placeholder="@username"
             onPick={(u) => void sendFriendRequest(u)}
           />
+          {suggestions.length > 0 ? (
+            <div className="mt-4">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">Suggested</p>
+              <ul className="space-y-1.5">
+                {suggestions.map((s) => (
+                  <li
+                    key={s.user_id}
+                    className="flex items-center justify-between gap-2 rounded-sm border border-border/40 px-2.5 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium text-foreground">@{s.username}</span>
+                      <span className="text-muted-foreground ml-1 text-[10px]">· {s.reason}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 text-[10px] font-cinzel shrink-0"
+                      onClick={() => void sendFriendRequest(s.username)}
+                    >
+                      Add
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </TabsContent>
 
         <TabsContent
@@ -522,20 +646,33 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
             <p className="text-xs text-muted-foreground px-1">Add friends to send whispers.</p>
           ) : (
             <>
+              {totalUnread > 0 ? (
+                <p className="text-[10px] text-primary px-1 shrink-0">
+                  {totalUnread} unread — messages saved while you were away.
+                </p>
+              ) : null}
               <div className="flex gap-1 overflow-x-auto pb-1 shrink-0">
                 {friends.map((f) => (
                   <button
                     key={f.user_id}
                     type="button"
-                    onClick={() => setWhisperFriend(f)}
+                    onClick={() => {
+                      setWhisperFriend(f);
+                      void loadWhispers();
+                    }}
                     className={cn(
-                      "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-cinzel transition-colors",
+                      "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-cinzel transition-colors relative",
                       whisperFriend?.user_id === f.user_id
                         ? "border-primary bg-primary/15 text-primary"
                         : "border-border/50 text-muted-foreground hover:text-foreground",
                     )}
                   >
                     @{f.username}
+                    {(f.unread_count ?? 0) > 0 ? (
+                      <span className="absolute -top-1 -right-1 h-3.5 min-w-[14px] px-0.5 rounded-full bg-primary text-[8px] text-primary-foreground">
+                        {f.unread_count}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -591,9 +728,28 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="blocked" className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-3 pr-0.5 pb-1 data-[state=inactive]:hidden">
-          <p className="text-xs text-muted-foreground px-1 leading-relaxed">
-            Ignored players cannot send you friend requests. Removing someone does not re-add them as a friend.
+        <TabsContent value="privacy" className="flex-1 min-h-0 overflow-y-auto mt-2 space-y-3 pr-0.5 pb-1 data-[state=inactive]:hidden">
+          <div className="rounded-sm border border-border/40 bg-muted/20 p-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-foreground">Appear offline</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Friends see you as offline; party and PvP invites from blocked players are rejected.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant={appearOffline ? "default" : "outline"}
+              className="font-cinzel text-[10px] shrink-0 h-8"
+              disabled={settingsSaving}
+              onClick={() => void toggleAppearOffline()}
+            >
+              {appearOffline ? "On" : "Off"}
+            </Button>
+          </div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-1">Blocked players</p>
+          <p className="text-xs text-muted-foreground px-1 leading-relaxed -mt-2">
+            Blocked players cannot friend you, invite you to parties, or challenge you in Arena.
           </p>
           <UsernameSearch
             value={ignoreQuery}

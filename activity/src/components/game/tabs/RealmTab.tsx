@@ -22,7 +22,7 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 const ROADMAP: { bucket: string; title: string; blurb: string }[] = [
-  { bucket: "Social", title: "Social privacy & richer presence", blurb: "Appear offline, block party/PvP, offline whispers." },
+  { bucket: "Social", title: "Friend suggestions & Discord invites", blurb: "Smarter recommendations and optional DM alerts for friend requests." },
   { bucket: "World", title: "Territory & faction campaigns", blurb: "Server-wide objectives, war phases, and map control." },
   { bucket: "Economy", title: "Direct player trade", blurb: "Secure trade window alongside the market." },
   { bucket: "Economy", title: "Auction dynamics", blurb: "Bids, buy orders, and listing depth." },

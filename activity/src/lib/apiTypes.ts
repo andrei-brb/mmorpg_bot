@@ -738,18 +738,47 @@ export type DailyLoginClaimPayload = {
 export type SocialFriendRow = {
   user_id: string;
   username: string;
+  character_id?: string | null;
   character_name?: string | null;
   level?: number | null;
   class?: string | null;
   online?: boolean;
   last_seen?: string | null;
   zone_hint?: string | null;
+  unread_count?: number;
+  last_whisper_preview?: string | null;
 };
 
 export type SocialRosterPayload = {
   ok?: boolean;
   error?: string;
   friends?: SocialFriendRow[];
+  total_unread?: number;
+};
+
+export type SocialSettingsPayload = {
+  ok?: boolean;
+  appear_offline?: boolean;
+};
+
+export type SocialSuggestionRow = {
+  user_id: string;
+  username: string;
+  character_id?: string | null;
+  character_name?: string | null;
+  level?: number | null;
+  class?: string | null;
+  reason?: string;
+};
+
+export type SocialSuggestionsPayload = {
+  ok?: boolean;
+  suggestions?: SocialSuggestionRow[];
+};
+
+export type SocialWhisperInboxPayload = {
+  ok?: boolean;
+  threads?: SocialFriendRow[];
 };
 
 /** GET /api/game/social/requests */

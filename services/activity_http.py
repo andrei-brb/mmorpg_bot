@@ -1142,13 +1142,26 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
 
     from services.dungeon.dungeon_service import DungeonService
     from services.character.character_service import CharacterService
+    from services.social.social_service import SocialService
 
     char_svc = CharacterService(db)
     dungeon_svc = DungeonService(db)
+    social_svc = SocialService(db)
 
     char = await char_svc.get_character(discord_id)
     if not char:
         return web.json_response({"error": "no_character", "message": "Create a character first."}, status=400)
+
+    try:
+        target_discord_id = int(target_user_id)
+    except (TypeError, ValueError):
+        return web.json_response({"error": "invalid_target", "message": "Invalid target user."}, status=400)
+
+    if await social_svc.is_ignored(discord_id, target_discord_id):
+        return web.json_response(
+            {"ok": False, "error": "blocked", "message": "You cannot invite this player."},
+            status=400,
+        )
 
     run = await dungeon_svc.get_active_run(char["id"])
     if not run:
@@ -2168,8 +2181,10 @@ async def handle_social_roster(request: web.Request) -> web.Response:
         return web.json_response(_json_safe({"ok": False, "error": "no_character", "friends": []}), status=400)
     from services.social.social_service import SocialService
 
-    friends = await SocialService(db).get_roster(discord_id)
-    return web.json_response(_json_safe({"ok": True, "friends": friends}))
+    svc = SocialService(db)
+    friends = await svc.get_roster(discord_id)
+    total_unread = await svc.get_total_unread(discord_id)
+    return web.json_response(_json_safe({"ok": True, "friends": friends, "total_unread": total_unread}))
 
 
 async def handle_social_requests(request: web.Request) -> web.Response:
@@ -2342,6 +2357,80 @@ async def handle_social_whispers_get(request: web.Request) -> web.Response:
 
     messages = await SocialService(db).get_whispers(discord_id, int(with_user))
     return web.json_response(_json_safe({"ok": True, "messages": messages}))
+
+
+async def handle_social_settings_get(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    from services.social.social_service import SocialService
+
+    settings = await SocialService(db).get_settings(discord_id)
+    return web.json_response(_json_safe({"ok": True, **settings}))
+
+
+async def handle_social_settings_post(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    from services.social.social_service import SocialService
+
+    appear = body.get("appear_offline")
+    settings = await SocialService(db).set_settings(
+        discord_id,
+        appear_offline=bool(appear) if appear is not None else None,
+    )
+    return web.json_response(_json_safe({"ok": True, **settings}))
+
+
+async def handle_social_friend_cancel(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    body = await _json_body(request)
+    request_id = body.get("request_id")
+    if not request_id:
+        return web.json_response(_json_safe({"ok": False, "message": "request_id required"}), status=400)
+    from services.social.social_service import SocialService
+
+    ok, msg = await SocialService(db).cancel_friend_request(discord_id, str(request_id))
+    return web.json_response(_json_safe({"ok": ok, "message": msg}), status=200 if ok else 400)
+
+
+async def handle_social_suggestions(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "suggestions": []}), status=400)
+    from services.social.social_service import SocialService
+
+    suggestions = await SocialService(db).get_suggestions(discord_id)
+    return web.json_response(_json_safe({"ok": True, "suggestions": suggestions}))
+
+
+async def handle_social_whispers_inbox(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character", "threads": []}), status=400)
+    from services.social.social_service import SocialService
+
+    threads = await SocialService(db).get_whisper_inbox(discord_id)
+    return web.json_response(_json_safe({"ok": True, "threads": threads}))
 
 
 async def handle_social_whisper_post(request: web.Request) -> web.Response:
@@ -2546,6 +2635,17 @@ async def handle_pvp_challenge(request: web.Request) -> web.Response:
     target = body.get("target_user_id") or body.get("target")
     if target is None:
         return web.json_response(_json_safe({"ok": False, "error": "missing_target"}), status=400)
+    from services.social.social_service import SocialService
+
+    try:
+        target_discord_id = int(target)
+    except (TypeError, ValueError):
+        return web.json_response(_json_safe({"ok": False, "error": "invalid_target"}), status=400)
+    if await SocialService(db).is_ignored(discord_id, target_discord_id):
+        return web.json_response(
+            _json_safe({"ok": False, "error": "blocked", "message": "You cannot challenge this player."}),
+            status=400,
+        )
     guild_id = _guild_id_from_request(request, body)
     r = await activity_pvp_api.send_challenge(bot, discord_id, str(target), guild_id)
     return web.json_response(_json_safe(r), status=200 if r.get("ok") else 400)
@@ -2567,14 +2667,17 @@ async def handle_pvp_player_search(request: web.Request) -> web.Response:
         return web.json_response(_json_safe({"ok": True, "players": []}))
 
     q = q[:32]
+    from services.social.social_service import _ignore_filter_sql
+
     rows = await db.fetch(
-        """
-        SELECT id, username
-        FROM players
-        WHERE id != $1
-          AND username IS NOT NULL
-          AND username ILIKE $2
-        ORDER BY username ASC
+        f"""
+        SELECT p.id, p.username
+        FROM players p
+        WHERE p.id != $1
+          AND p.username IS NOT NULL
+          AND p.username ILIKE $2
+          {_ignore_filter_sql("$1")}
+        ORDER BY p.username ASC
         LIMIT 12
         """,
         discord_id,
@@ -2601,10 +2704,10 @@ async def handle_dungeon_party_players(request: web.Request) -> web.Response:
         return web.json_response(_json_safe({"ok": True, "players": []}))
 
     q = q[:32]
-    # Get players with characters who are not in dungeon
-    # Join players with characters via player_id (not discord_id)
+    from services.social.social_service import _ignore_filter_sql
+
     rows = await db.fetch(
-        """
+        f"""
         SELECT p.id, p.username, c.level, c.class
         FROM players p
         JOIN characters c ON c.player_id = p.id
@@ -2613,6 +2716,7 @@ async def handle_dungeon_party_players(request: web.Request) -> web.Response:
           AND c.is_active = TRUE
           AND c.in_dungeon = FALSE
           AND p.username ILIKE $2
+          {_ignore_filter_sql("$1")}
         ORDER BY p.username ASC
         LIMIT 12
         """,
@@ -5181,11 +5285,16 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/pvp/challenge", handle_pvp_challenge)
     app.router.add_get("/api/game/pvp/players", handle_pvp_player_search)
     app.router.add_get("/api/game/social/roster", handle_social_roster)
+    app.router.add_get("/api/game/social/settings", handle_social_settings_get)
+    app.router.add_post("/api/game/social/settings", handle_social_settings_post)
+    app.router.add_get("/api/game/social/suggestions", handle_social_suggestions)
+    app.router.add_get("/api/game/social/whispers/inbox", handle_social_whispers_inbox)
     app.router.add_get("/api/game/social/requests", handle_social_requests)
     app.router.add_get("/api/game/social/players", handle_social_players_search)
     app.router.add_post("/api/game/social/friend/request", handle_social_friend_request)
     app.router.add_post("/api/game/social/friend/accept", handle_social_friend_accept)
     app.router.add_post("/api/game/social/friend/decline", handle_social_friend_decline)
+    app.router.add_post("/api/game/social/friend/cancel", handle_social_friend_cancel)
     app.router.add_delete("/api/game/social/friend", handle_social_friend_delete)
     app.router.add_get("/api/game/social/ignore", handle_social_ignore_list)
     app.router.add_post("/api/game/social/ignore", handle_social_ignore_add)
