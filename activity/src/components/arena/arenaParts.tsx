@@ -17,12 +17,12 @@ export function ArenaPanel({ title, icon, children }: { title: string; icon: Rea
 
 export function ArenaActionCard({ icon, title, body }: { icon: ReactNode; title: string; body: ReactNode }) {
   return (
-    <div className="relative min-w-0 hero-forge-edge-gold hero-forge-clip-blade-sm tex-forge p-4">
-      <div className="mb-3 flex items-center gap-2">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col hero-forge-edge-gold hero-forge-clip-blade-sm tex-forge p-4 sm:p-5">
+      <div className="mb-3 flex shrink-0 items-center gap-2">
         <span className="text-gold-bright">{icon}</span>
         <span className="font-display text-[11px] tracking-[0.35em] text-gold-bright">{title.toUpperCase()}</span>
       </div>
-      {body}
+      <div className="min-h-0 min-w-0 flex-1">{body}</div>
     </div>
   );
 }

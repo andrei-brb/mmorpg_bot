@@ -82,7 +82,7 @@ export function PvpHub({
   }, [query, onSearchPlayers]);
 
   return (
-    <div className="min-w-0 space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       {incoming_challenge && (
         <div className="hero-forge-edge-gold hero-forge-clip-blade-sm tex-forge border border-gold/30 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -153,13 +153,13 @@ export function PvpHub({
       )}
 
       {!isQueued && !isChallenged && (
-        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid min-h-0 w-full min-w-0 grid-cols-1 grid-flow-row gap-3 sm:grid-cols-3 sm:items-stretch">
           <ArenaActionCard
             icon={<Crown className="h-4 w-4" />}
             title="Challenge"
             body={
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="relative min-w-0 flex-1">
+              <div className="flex min-h-0 min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
+                <div className="relative min-h-0 min-w-0 flex-1">
                   <input
                     type="text"
                     placeholder="@username"

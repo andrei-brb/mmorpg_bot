@@ -20,7 +20,7 @@ export function ArenaLayout({ activeSub, onSubChange, children }: ArenaLayoutPro
       <span className="corner-ornament corner-bl" aria-hidden />
       <span className="corner-ornament corner-br" aria-hidden />
 
-      <div className="relative min-w-0 bg-black/60 border border-gold/30">
+      <div className="relative w-full min-w-0 bg-black/60 border border-gold/30">
         <div className="relative">
           <div className="hero-forge-clip-banner flex items-center justify-center gap-3 bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim px-6 py-2.5 text-background sm:px-8">
             <Swords className="h-4 w-4 shrink-0" />
@@ -46,7 +46,7 @@ export function ArenaLayout({ activeSub, onSubChange, children }: ArenaLayoutPro
           />
         </div>
 
-        <div className="tex-leather min-w-0 p-4 sm:p-6">{children}</div>
+        <div className="tex-leather w-full min-w-0 p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );
