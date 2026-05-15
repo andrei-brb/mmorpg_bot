@@ -165,11 +165,11 @@ export function QuestsTab() {
       : null;
 
   return (
-    <div className="flex min-h-0 h-full w-full min-w-0 flex-1 flex-col">
+    <div className="quests-tab-root flex min-h-0 h-full w-full min-w-0 flex-1 flex-col self-stretch">
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="w-full min-w-0 space-y-4 px-1 pb-4">
-          <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,min(380px,45%))]">
-            <div className="min-w-0 space-y-4">
+          <div className="quests-tab-layout">
+            <div className="quests-tab-main min-w-0 space-y-4">
           <WomPanel
             glow
             className="w-full min-w-0 overflow-hidden"
@@ -476,7 +476,7 @@ export function QuestsTab() {
           </WomPanel>
             </div>
 
-            <div className="min-w-0 space-y-4">
+            <div className="quests-tab-side min-w-0 space-y-4">
           <WomPanel
             glow
             className="w-full min-w-0"
