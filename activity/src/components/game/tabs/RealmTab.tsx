@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WomPanel, WomSectionHeader } from "@/components/wom/WomUi";
-import type { CharacterDerivedStatsPayload, GuildMePayload, ProgressPayload } from "@/lib/apiTypes";
+import type { CharacterDerivedStatsPayload, ProgressPayload } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import { cn } from "@/lib/utils";
 import { SocialPanel } from "@/components/game/panels/SocialPanel";
@@ -101,8 +101,6 @@ export function RealmTab() {
     liveEvents,
   } = useGameSession();
 
-  const [guildSnap, setGuildSnap] = useState<GuildMePayload | null>(null);
-  const [guildLoading, setGuildLoading] = useState(false);
   const [derived, setDerived] = useState<CharacterDerivedStatsPayload | null>(null);
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [goalDraft, setGoalDraft] = useState("");
@@ -119,23 +117,6 @@ export function RealmTab() {
     void refreshProgress();
     void refreshMap();
   }, [refreshProgress, refreshMap]);
-
-  const loadGuild = useCallback(async () => {
-    if (!accessToken) return;
-    setGuildLoading(true);
-    try {
-      const j = await api.getGuildMe(accessToken, guildId);
-      setGuildSnap(j);
-    } catch {
-      setGuildSnap({ ok: false });
-    } finally {
-      setGuildLoading(false);
-    }
-  }, [accessToken, guildId]);
-
-  useEffect(() => {
-    void loadGuild();
-  }, [loadGuild]);
 
   const derivedStatsKey = useMemo(() => {
     const items = inventory?.items || [];
@@ -172,10 +153,6 @@ export function RealmTab() {
   const zones = map?.zones || [];
   const wb = map?.world_boss_windows || [];
 
-  const openGuildTab = () => {
-    window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Guild" }));
-  };
-
   const addGoal = () => {
     const t = goalDraft.trim();
     if (!t) return;
@@ -202,9 +179,6 @@ export function RealmTab() {
     ],
     [c, s],
   );
-
-  const g = guildSnap?.guild;
-  const inGuild = Boolean(guildSnap?.in_guild && g);
 
   return (
     <div className="flex flex-col gap-3 min-h-0 flex-1 overflow-hidden pr-0.5">
@@ -237,40 +211,6 @@ export function RealmTab() {
         </TabsList>
 
         <TabsContent value="social" className="flex-1 min-h-0 overflow-y-auto mt-3 space-y-3 pr-1 pb-2">
-          <WomPanel glow>
-            <WomSectionHeader kicker="Guild hall" title="Your guild" />
-            {guildLoading ? (
-              <p className="text-xs text-muted-foreground">Loading…</p>
-            ) : inGuild && g ? (
-              <div className="space-y-3">
-                <p className="text-sm font-cinzel text-primary">
-                  [{g.tag}] {g.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Rank: <span className="text-foreground capitalize">{g.my_rank || "member"}</span>
-                  {" · "}
-                  Members {g.member_count ?? 0}/{g.max_members ?? 20}
-                </p>
-                <Button type="button" size="sm" variant="secondary" className="font-cinzel" onClick={openGuildTab}>
-                  Open Guild tab
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  You are not in an in-game guild yet. Found a hall or join one from the{" "}
-                  <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={openGuildTab}>
-                    Guild
-                  </button>{" "}
-                  tab.
-                </p>
-                <Button type="button" size="sm" variant="outline" className="font-cinzel" onClick={openGuildTab}>
-                  Go to Guild
-                </Button>
-              </div>
-            )}
-          </WomPanel>
-
           <SocialPanel accessToken={accessToken} guildId={guildId} />
 
           {liveEvents.length > 0 ? (

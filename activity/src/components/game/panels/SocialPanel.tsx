@@ -9,7 +9,6 @@ import type {
   SocialIgnoreRow,
   SocialPlayerSearchRow,
   SocialRequestRow,
-  SocialSuggestionRow,
   SocialWhisperMessage,
 } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
@@ -129,10 +128,8 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
   const [incoming, setIncoming] = useState<SocialRequestRow[]>([]);
   const [outgoing, setOutgoing] = useState<SocialRequestRow[]>([]);
   const [ignored, setIgnored] = useState<SocialIgnoreRow[]>([]);
-  const [suggestions, setSuggestions] = useState<SocialSuggestionRow[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
   const [appearOffline, setAppearOffline] = useState(false);
-  const [canGuildInvite, setCanGuildInvite] = useState(false);
   const [loading, setLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
@@ -156,13 +153,11 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     setLoading(true);
     let hadCriticalFailure = false;
     try {
-      const [rosterR, reqsR, ignR, settingsR, sugR, guildR] = await Promise.allSettled([
+      const [rosterR, reqsR, ignR, settingsR] = await Promise.allSettled([
         api.getSocialRoster(accessToken, guildId),
         api.getSocialRequests(accessToken, guildId),
         api.getSocialIgnore(accessToken, guildId),
         api.getSocialSettings(accessToken, guildId),
-        api.getSocialSuggestions(accessToken, guildId),
-        api.getGuildMe(accessToken, guildId),
       ]);
 
       if (rosterR.status === "fulfilled") {
@@ -191,20 +186,6 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
 
       if (settingsR.status === "fulfilled") {
         setAppearOffline(Boolean(settingsR.value.appear_offline));
-      }
-
-      if (sugR.status === "fulfilled") {
-        setSuggestions(sugR.value.suggestions || []);
-      } else {
-        setSuggestions([]);
-      }
-
-      if (guildR.status === "fulfilled") {
-        const gm = guildR.value;
-        const rank = gm.guild?.my_rank;
-        setCanGuildInvite(
-          Boolean(gm.in_guild && rank && ["officer", "guildmaster"].includes(String(rank).toLowerCase())),
-        );
       }
 
       if (hadCriticalFailure) {
@@ -380,13 +361,6 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
     } else toast.error(res.message || "Could not challenge.");
   };
 
-  const inviteToGuild = async (characterId: string) => {
-    if (!accessToken) return;
-    const res = await api.postGuildInviteSend(accessToken, characterId, guildId);
-    if (res.ok) toast.success(res.message || "Guild invite sent.");
-    else toast.error(res.message || "Could not send guild invite.");
-  };
-
   const cancelOutgoing = async (requestId: string) => {
     if (!accessToken) return;
     const res = await api.postSocialFriendCancel(accessToken, requestId, guildId);
@@ -418,7 +392,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
 
   return (
     <WomPanel glow className="flex flex-col min-h-0 flex-1">
-      <WomSectionHeader kicker="Realm" title="Social" />
+      <WomSectionHeader kicker="Realm" title="Friends & chat" />
       <Tabs
         value={subTab}
         onValueChange={(v) => setSubTab(v as SocialSubTab)}
@@ -426,19 +400,19 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
       >
         <TabsList
           className={cn(
-            "h-auto w-full shrink-0 grid grid-cols-5 gap-0.5 p-1",
+            "h-auto w-full shrink-0 grid grid-cols-5 gap-1 p-1.5",
             "bg-muted/40 border border-border/40 rounded-sm",
           )}
         >
           <TabsTrigger
             value="friends"
-            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
+            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
           >
             Friends{friends.length > 0 ? ` (${friends.length})` : ""}
           </TabsTrigger>
           <TabsTrigger
             value="requests"
-            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
+            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
           >
             Requests
             {incoming.length > 0 ? (
@@ -449,13 +423,13 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
           </TabsTrigger>
           <TabsTrigger
             value="find"
-            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
+            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
           >
             Find
           </TabsTrigger>
           <TabsTrigger
             value="messages"
-            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
+            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide relative"
           >
             Chat
             {totalUnread > 0 ? (
@@ -466,7 +440,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
           </TabsTrigger>
           <TabsTrigger
             value="privacy"
-            className="text-[9px] sm:text-[10px] px-1 py-2 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
+            className="min-h-[44px] text-[10px] sm:text-[11px] px-1 py-3 data-[state=active]:bg-background/90 font-cinzel uppercase tracking-wide"
           >
             Privacy
           </TabsTrigger>
@@ -489,7 +463,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
               {friends.map((f) => (
                 <li
                   key={f.user_id}
-                  className="flex gap-3 rounded-sm border border-border/40 bg-muted/20 p-2.5 hover:border-border/70 transition-colors"
+                  className="flex gap-3 rounded-sm border border-border/40 bg-muted/20 p-3 hover:border-border/70 transition-colors"
                 >
                   <FriendAvatar username={f.username} online={f.online} />
                   <div className="flex-1 min-w-0">
@@ -507,12 +481,12 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                     {(f.unread_count ?? 0) > 0 ? (
                       <p className="text-[10px] text-primary mt-0.5">{f.unread_count} unread</p>
                     ) : null}
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="grid grid-cols-4 gap-1 mt-2.5">
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[10px] font-cinzel px-2"
+                        className="h-8 text-[10px] font-cinzel px-1"
                         onClick={() => openWhisper(f)}
                       >
                         Message
@@ -521,7 +495,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[10px] font-cinzel px-2"
+                        className="h-8 text-[10px] font-cinzel px-1"
                         onClick={() => void inviteToParty(f.user_id)}
                       >
                         Party
@@ -530,27 +504,16 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[10px] font-cinzel px-2"
+                        className="h-8 text-[10px] font-cinzel px-1"
                         onClick={() => void challengePvp(f.user_id)}
                       >
                         Arena
                       </Button>
-                      {canGuildInvite && f.character_id ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-[10px] font-cinzel px-2"
-                          onClick={() => void inviteToGuild(f.character_id!)}
-                        >
-                          Guild
-                        </Button>
-                      ) : null}
                       <Button
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-7 text-[10px] text-muted-foreground px-2"
+                        className="h-8 text-[10px] text-muted-foreground px-1 border-l border-border/30 rounded-l-none"
                         onClick={() => void unfriend(f.user_id, f.username)}
                       >
                         Remove
@@ -577,7 +540,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                     {incoming.map((r) => (
                       <li
                         key={r.request_id}
-                        className="flex flex-wrap items-center gap-2 rounded-sm border border-border/40 bg-muted/20 p-2.5"
+                        className="flex flex-wrap items-center gap-2 rounded-sm border border-border/40 bg-muted/20 p-3"
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">@{r.username}</p>
@@ -585,13 +548,13 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                             <p className="text-[10px] text-muted-foreground">{r.character_name}</p>
                           ) : null}
                         </div>
-                        <Button size="sm" className="h-7 text-[10px] font-cinzel" onClick={() => void acceptRequest(r.request_id)}>
+                        <Button size="sm" className="h-8 text-[10px] font-cinzel" onClick={() => void acceptRequest(r.request_id)}>
                           Accept
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-[10px] font-cinzel"
+                          className="h-8 text-[10px] font-cinzel"
                           onClick={() => void declineRequest(r.request_id)}
                         >
                           Decline
@@ -610,14 +573,14 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                     {outgoing.map((r) => (
                       <li
                         key={r.request_id}
-                        className="flex items-center justify-between gap-2 rounded-sm border border-border/30 px-2.5 py-2 text-xs"
+                        className="flex items-center justify-between gap-2 rounded-sm border border-border/40 bg-muted/20 p-3 text-xs"
                       >
-                        <span className="text-foreground">@{r.username}</span>
+                        <span className="text-foreground font-medium">@{r.username}</span>
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-[10px]"
+                          className="h-8 text-[10px]"
                           onClick={() => void cancelOutgoing(r.request_id)}
                         >
                           Cancel
@@ -644,33 +607,6 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
             placeholder="@username"
             onPick={(u) => void sendFriendRequest(u)}
           />
-          {suggestions.length > 0 ? (
-            <div className="mt-4">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 px-1">Suggested</p>
-              <ul className="space-y-1.5">
-                {suggestions.map((s) => (
-                  <li
-                    key={s.user_id}
-                    className="flex items-center justify-between gap-2 rounded-sm border border-border/40 px-2.5 py-2 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <span className="font-medium text-foreground">@{s.username}</span>
-                      <span className="text-muted-foreground ml-1 text-[10px]">· {s.reason}</span>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 text-[10px] font-cinzel shrink-0"
-                      onClick={() => void sendFriendRequest(s.username)}
-                    >
-                      Add
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </TabsContent>
 
         <TabsContent
@@ -713,11 +649,11 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
               </div>
               {whisperFriend ? (
                 <div className="flex flex-col flex-1 min-h-0 rounded-sm border border-border/50 bg-muted/10">
-                  <div className="border-b border-border/40 px-3 py-2 shrink-0">
-                    <p className="text-xs font-cinzel text-primary">@{whisperFriend.username}</p>
+                  <div className="border-b border-border/40 px-3 py-2.5 shrink-0 bg-muted/20">
+                    <p className="text-sm font-cinzel text-primary">@{whisperFriend.username}</p>
                     <PresenceLine friend={whisperFriend} />
                   </div>
-                  <div className="flex-1 min-h-[120px] max-h-44 overflow-y-auto p-2 space-y-1.5 text-xs">
+                  <div className="flex-1 min-h-[120px] max-h-44 overflow-y-auto p-3 space-y-2 text-xs">
                     {whispers.length === 0 ? (
                       <p className="text-muted-foreground text-center py-4">Say hello.</p>
                     ) : (
@@ -725,7 +661,7 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
                         <div
                           key={m.id}
                           className={cn(
-                            "rounded-md px-2.5 py-1.5 max-w-[85%] break-words",
+                            "rounded-md px-3 py-2 max-w-[85%] break-words",
                             m.mine
                               ? "ml-auto bg-primary/25 text-foreground border border-primary/20"
                               : "bg-muted/60 text-foreground border border-border/30",
@@ -802,14 +738,14 @@ export function SocialPanel({ accessToken, guildId }: SocialPanelProps) {
               {ignored.map((row) => (
                 <li
                   key={row.user_id}
-                  className="flex items-center justify-between rounded-sm border border-border/40 px-2.5 py-2 text-xs"
+                  className="flex items-center justify-between rounded-sm border border-border/40 bg-muted/20 p-3 text-xs"
                 >
                   <span className="font-medium">@{row.username}</span>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-[10px]"
+                    className="h-8 text-[10px]"
                     onClick={() => void removeIgnore(row.user_id)}
                   >
                     Unblock
