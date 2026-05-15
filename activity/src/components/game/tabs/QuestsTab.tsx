@@ -166,7 +166,7 @@ export function QuestsTab() {
 
   return (
     <>
-    <div className="space-y-4">
+    <div className="space-y-4 w-full pb-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px] items-start">
         <div className="space-y-4 min-w-0">
           <WomPanel
