@@ -9,7 +9,7 @@ import { hasSpecPortrait, specPortraitKey } from "@/lib/specPortraitCatalog";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ListItemModal } from "../modals/ListItemModal";
 import { ItemIcon } from "../ItemIcon";
-import { ItemTooltipPanel } from "../ItemTooltipPanel";
+import { ItemPopover } from "@/components/hero/ItemPopover";
 import { WomPanel } from "@/components/wom/WomUi";
 
 /** Flanking portrait (hero-blacksmith visual); weapons sit in hex row below */
@@ -176,8 +176,6 @@ export function HeroTab() {
   const [idleRewards, setIdleRewards] = useState<IdleRewardsPayload | null>(null);
   const [idleLoading, setIdleLoading] = useState(false);
   const [idleClaiming, setIdleClaiming] = useState(false);
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [enhanceItemId, setEnhanceItemId] = useState<string | null>(null);
   const [enhancePayload, setEnhancePayload] = useState<EnhanceInfoPayload | null>(null);
   const [enhanceInfoLoading, setEnhanceInfoLoading] = useState(false);
@@ -288,7 +286,6 @@ export function HeroTab() {
     }
   }, [accessToken, guildId, idleClaiming, refreshInventory, refreshProgress]);
 
-  /** Hover: stats only. Click: `pinnedKey` keeps actions open until outside click or same slot toggled. */
   const bag = useMemo(() => items.filter((i) => !i.is_equipped), [items]);
   const bagSlotsMax = Number(inventory?.bag_slots_max ?? 0) || 0;
   const bagSlotsUsed = Number(inventory?.bag_slots_used ?? bag.length) || 0;
@@ -345,7 +342,6 @@ export function HeroTab() {
           msg;
         toast(line);
         await refreshInventory();
-        if (res.ok && j.ok !== false) setPinnedKey(null);
       } catch (e) {
         toast.error(String(e));
       }
@@ -426,17 +422,6 @@ export function HeroTab() {
       setSalvaging(false);
     }
   }, [salvageIds, salvaging, itemPost, refreshInventory, bag]);
-
-  useEffect(() => {
-    if (!pinnedKey) return;
-    const onDown = (e: MouseEvent) => {
-      const el = document.querySelector(`[data-item-slot="${CSS.escape(pinnedKey)}"]`);
-      if (el && e.target instanceof Node && el.contains(e.target)) return;
-      setPinnedKey(null);
-    };
-    document.addEventListener("mousedown", onDown, true);
-    return () => document.removeEventListener("mousedown", onDown, true);
-  }, [pinnedKey]);
 
   useEffect(() => {
     if (!enhanceItemId) {
@@ -568,81 +553,48 @@ export function HeroTab() {
     rc: string,
     compactIcon: boolean,
   ) {
-    const showHoverTip = it && hoveredKey === slotId && pinnedKey !== slotId;
-    const showPinned = it && pinnedKey === slotId;
     const px = compactIcon ? 36 : HERO_ITEM_ICON;
-    const tip = (
-      <>
-        {showHoverTip && it ? (
-          <div className="pointer-events-none game-tooltip bottom-full left-1/2 z-30 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left">
-            <ItemTooltipPanel item={it} rarityClass={rc} />
-          </div>
-        ) : null}
-        {showPinned && it ? (
-          <div className="game-tooltip bottom-full left-1/2 z-40 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left shadow-lg">
-            <ItemTooltipPanel item={it} rarityClass={rc}>
-              <div className="flex flex-wrap gap-1">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPinnedKey(null);
-                    setEnhanceItemId(it.id);
-                  }}
-                  className="game-btn-primary px-2 py-0.5 text-[9px]"
-                >
-                  🔨 Enhance
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped");
-                  }}
-                  className="game-btn-secondary px-2 py-0.5 text-[9px]"
-                >
-                  Unequip
-                </button>
-              </div>
-            </ItemTooltipPanel>
-          </div>
-        ) : null}
-      </>
+    const frame = (
+      <div
+        className={`hero-forge-clip-blade-sm relative flex aspect-square h-14 w-14 items-center justify-center ring-1 sm:h-16 sm:w-16 ${
+          it ? `${tone.ring} ${tone.glow} cursor-pointer hover:scale-105 ${rc}` : "tex-forge ring-gold/10 opacity-95"
+        } transition-transform`}
+      >
+        {it ? (
+          <>
+            <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
+              <ItemIcon item={it} size={compactIcon ? px : HERO_ITEM_ICON} />
+            </div>
+            {Number(it.enhancement_level ?? 0) > 0 ? (
+              <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-[8] rounded-sm border border-gold/60 bg-background px-1 py-px font-display text-[9px] font-semibold tracking-wider text-gold-200">
+                +{it.enhancement_level}
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <span className="relative z-[1] flex flex-col items-center justify-center opacity-65">
+            <span className="text-lg leading-none" aria-hidden>
+              {SLOT_ICONS[slotId] ?? "◇"}
+            </span>
+          </span>
+        )}
+      </div>
     );
     return (
       <div className="relative z-[6] shrink-0" data-item-slot={slotId}>
-        <div
-          className={`hero-forge-clip-blade-sm relative flex aspect-square h-14 w-14 items-center justify-center ring-1 sm:h-16 sm:w-16 ${
-            it ? `${tone.ring} ${tone.glow} cursor-pointer hover:scale-105 ${rc}` : "tex-forge ring-gold/10 opacity-95"
-          } transition-transform`}
-          onMouseEnter={() => it != null && setHoveredKey(slotId)}
-          onMouseLeave={() => setHoveredKey(null)}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!it) return;
-            setPinnedKey((p) => (p === slotId ? null : slotId));
-          }}
-        >
-          {it ? (
-            <>
-              <div className="absolute inset-0 z-[1] flex items-center justify-center p-0.5">
-                <ItemIcon item={it} size={compactIcon ? px : HERO_ITEM_ICON} />
-              </div>
-              {Number(it.enhancement_level ?? 0) > 0 ? (
-                <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-[8] rounded-sm border border-gold/60 bg-background px-1 py-px font-display text-[9px] font-semibold tracking-wider text-gold-200">
-                  +{it.enhancement_level}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="relative z-[1] flex flex-col items-center justify-center opacity-65">
-              <span className="text-lg leading-none" aria-hidden>
-                {SLOT_ICONS[slotId] ?? "◇"}
-              </span>
-            </span>
-          )}
-        </div>
-        {tip}
+        {it ? (
+          <ItemPopover
+            item={it}
+            side="top"
+            equipped
+            onUnequip={() => void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped")}
+            onEnhance={isEnhanceableGear(it) ? () => setEnhanceItemId(it.id) : undefined}
+          >
+            {frame}
+          </ItemPopover>
+        ) : (
+          frame
+        )}
       </div>
     );
   }
@@ -671,70 +623,44 @@ export function HeroTab() {
     const rk = rarityKey(it?.rarity);
     const tone = forgeFrameAccent(rk);
     const rc = RARITY_COLORS[rk] || "";
+    const frame = (
+      <div
+        className={`relative flex h-16 w-16 items-center justify-center hero-forge-clip-rhombus tex-forge hero-forge-edge-gold ring-1 sm:h-[4.75rem] sm:w-[4.75rem] ${
+          it ? `${tone.ring} ${tone.glow} cursor-pointer hover:brightness-105 ${rc}` : "ring-gold/25"
+        }`}
+      >
+        {it ? (
+          <div className="absolute inset-[3px] z-[2] flex items-center justify-center">
+            <ItemIcon item={it} size={40} />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center text-gold-dim">
+            <Sword className="h-8 w-8 -rotate-45 text-gold-200 opacity-55" aria-hidden />
+          </div>
+        )}
+        {it && Number(it.enhancement_level ?? 0) > 0 ? (
+          <span className="pointer-events-none absolute -right-1 -top-0.5 z-[8] rounded-sm border border-gold/60 bg-background px-1 py-px font-display text-[9px] text-gold-200">
+            +{it.enhancement_level}
+          </span>
+        ) : null}
+      </div>
+    );
     return (
       <div className="flex flex-col items-center">
         <div className="relative z-[6]" data-item-slot={slotId}>
-          <div
-            className={`relative flex h-16 w-16 items-center justify-center hero-forge-clip-rhombus tex-forge hero-forge-edge-gold ring-1 sm:h-[4.75rem] sm:w-[4.75rem] ${
-              it ? `${tone.ring} ${tone.glow} cursor-pointer hover:brightness-105 ${rc}` : "ring-gold/25"
-            }`}
-            onMouseEnter={() => it != null && setHoveredKey(slotId)}
-            onMouseLeave={() => setHoveredKey(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!it) return;
-              setPinnedKey((p) => (p === slotId ? null : slotId));
-            }}
-          >
-            {it ? (
-              <div className="absolute inset-[3px] z-[2] flex items-center justify-center">
-                <ItemIcon item={it} size={40} />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-gold-dim">
-                <Sword className="h-8 w-8 -rotate-45 text-gold-200 opacity-55" aria-hidden />
-              </div>
-            )}
-            {it && Number(it.enhancement_level ?? 0) > 0 ? (
-              <span className="pointer-events-none absolute -right-1 -top-0.5 z-[8] rounded-sm border border-gold/60 bg-background px-1 py-px font-display text-[9px] text-gold-200">
-                +{it.enhancement_level}
-              </span>
-            ) : null}
-            {it && hoveredKey === slotId && pinnedKey !== slotId ? (
-              <div className="pointer-events-none game-tooltip absolute bottom-[104%] left-1/2 z-30 mb-0 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left">
-                <ItemTooltipPanel item={it} rarityClass={rc} />
-              </div>
-            ) : null}
-            {it && pinnedKey === slotId ? (
-              <div className="game-tooltip absolute bottom-[104%] left-1/2 z-40 mb-0 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left shadow-lg">
-                <ItemTooltipPanel item={it} rarityClass={rc}>
-                  <div className="flex flex-wrap gap-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPinnedKey(null);
-                        setEnhanceItemId(it.id);
-                      }}
-                      className="game-btn-primary px-2 py-0.5 text-[9px]"
-                    >
-                      🔨 Enhance
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped");
-                      }}
-                      className="game-btn-secondary px-2 py-0.5 text-[9px]"
-                    >
-                      Unequip
-                    </button>
-                  </div>
-                </ItemTooltipPanel>
-              </div>
-            ) : null}
-          </div>
+          {it ? (
+            <ItemPopover
+              item={it}
+              side="top"
+              equipped
+              onUnequip={() => void runAction("/api/game/item/unequip", { slot: slotId }, "Unequipped")}
+              onEnhance={isEnhanceableGear(it) ? () => setEnhanceItemId(it.id) : undefined}
+            >
+              {frame}
+            </ItemPopover>
+          ) : (
+            frame
+          )}
         </div>
         <span className="mt-1 text-center font-display text-[10px] tracking-[0.3em] text-gold-dim">{subtitle}</span>
       </div>
@@ -903,7 +829,6 @@ export function HeroTab() {
                       key={v}
                       type="button"
                       onClick={() => {
-                        setPinnedKey(null);
                         if (v !== "gear") setSalvageMode(false);
                         setSalvageIds(new Set());
                         setInventoryView(v === "consumables" ? "consumables" : v === "materials" ? "materials" : "gear");
@@ -924,7 +849,6 @@ export function HeroTab() {
                   type="button"
                   title="Salvage mode — select gear to dismantle"
                   onClick={() => {
-                    setPinnedKey(null);
                     setSalvageMode((m) => !m);
                     setSalvageIds(new Set());
                   }}
@@ -946,7 +870,6 @@ export function HeroTab() {
                   <button
                     type="button"
                     onClick={() => {
-                      setPinnedKey(null);
                       setSalvageMode(true);
                       setSalvageIds(new Set());
                     }}
@@ -966,148 +889,107 @@ export function HeroTab() {
                     const rc = inv.rarity ? RARITY_COLORS[inv.rarity] || "" : "";
                     const invKey = `inv-${inv.id}`;
                     const it = inv.item;
-                    const showHoverTip = it && hoveredKey === invKey && pinnedKey !== invKey;
-                    const showPinned = it && pinnedKey === invKey;
                     const isSelected = it ? salvageIds.has(it.id) : false;
                     const tone = forgeFrameAccent(rarityKey(it?.rarity));
+                    const slot = it ? gearSlot(it) : null;
+                    const isConsumable = it ? (it.item_type || "").toLowerCase() === "consumable" : false;
+
+                    const tile = (
+                      <div
+                        className={`hero-forge-clip-blade-sm relative flex aspect-square items-center justify-center ring-1 ${
+                          it
+                            ? `tex-leather cursor-pointer transition-transform hover:scale-[1.03] ${tone.ring} ${tone.glow} ${rc}`
+                            : "bg-black/40 [background-image:repeating-linear-gradient(45deg,oklch(0_0_0/0.4)_0_2px,transparent_2px_6px)] ring-gold/10"
+                        }`}
+                      >
+                        {salvageMode && it && canSalvage(it) ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSalvageId(it.id);
+                            }}
+                            className={`absolute left-0.5 top-0.5 z-20 h-3.5 w-3.5 rounded-sm border text-[9px] leading-none ${
+                              isSelected
+                                ? "border-primary bg-primary/90 text-primary-foreground"
+                                : "border-border bg-background/80 text-foreground"
+                            }`}
+                            title={isSelected ? "Unselect" : "Select for salvage"}
+                          >
+                            {isSelected ? "✓" : ""}
+                          </button>
+                        ) : null}
+                        {it ? (
+                          <>
+                            <div className="absolute inset-0 z-[1] flex items-center justify-center overflow-hidden p-0.5">
+                              <ItemIcon item={it} variant="tile" size={HERO_BAG_ITEM_ICON} />
+                            </div>
+                            {Number(it.enhancement_level ?? 0) > 0 ? (
+                              <span className="pointer-events-none absolute left-0.5 top-0.5 z-[3] font-display text-[9px] font-semibold tracking-wider text-gold-200">
+                                +{it.enhancement_level}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="relative z-[1] text-[9px] tabular-nums text-gold-600/50">—</span>
+                        )}
+                        {it && Number(it.quantity ?? 1) > 1 ? (
+                          <span
+                            className="pointer-events-none absolute bottom-0.5 right-0.5 z-[4] font-display text-[10px] text-parchment"
+                            style={{ textShadow: "0 1px 2px hsl(0 0% 0% / 0.85)" }}
+                          >
+                            ×{it.quantity}
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+
                     return (
                       <div key={inv.id} className="relative z-[2]" data-item-slot={invKey}>
-                        <div
-                          className={`hero-forge-clip-blade-sm relative flex aspect-square items-center justify-center ring-1 ${
-                            it
-                              ? `tex-leather cursor-pointer transition-transform hover:scale-[1.03] ${tone.ring} ${tone.glow} ${rc}`
-                              : "bg-black/40 [background-image:repeating-linear-gradient(45deg,oklch(0_0_0/0.4)_0_2px,transparent_2px_6px)] ring-gold/10"
-                          }`}
-                          onMouseEnter={() => inv.name && setHoveredKey(invKey)}
-                          onMouseLeave={() => setHoveredKey(null)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!it) return;
-                            if (salvageMode) {
-                              if (canSalvage(it)) toggleSalvageId(it.id);
-                              return;
+                        {it && !salvageMode ? (
+                          <ItemPopover
+                            item={it}
+                            side="top"
+                            equipped={Boolean(it.is_equipped)}
+                            compare={compareForItem(it) ?? undefined}
+                            onUse={
+                              isConsumable
+                                ? () => void runAction("/api/game/item/use", { item_id: it.id }, "Used")
+                                : undefined
                             }
-                            setPinnedKey((p) => (p === invKey ? null : invKey));
-                          }}
-                        >
-                          {salvageMode && it && canSalvage(it) ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSalvageId(it.id);
-                              }}
-                              className={`absolute left-0.5 top-0.5 z-20 h-3.5 w-3.5 rounded-sm border text-[9px] leading-none ${
-                                isSelected
-                                  ? "border-primary bg-primary/90 text-primary-foreground"
-                                  : "border-border bg-background/80 text-foreground"
-                              }`}
-                              title={isSelected ? "Unselect" : "Select for salvage"}
-                            >
-                              {isSelected ? "✓" : ""}
-                            </button>
-                          ) : null}
-                          {it ? (
-                            <>
-                              <div className="absolute inset-0 z-[1] flex items-center justify-center overflow-hidden p-0.5">
-                                <ItemIcon item={it} variant="tile" size={HERO_BAG_ITEM_ICON} />
-                              </div>
-                              {Number(it.enhancement_level ?? 0) > 0 ? (
-                                <span className="pointer-events-none absolute left-0.5 top-0.5 z-[3] font-display text-[9px] font-semibold tracking-wider text-gold-200">
-                                  +{it.enhancement_level}
-                                </span>
-                              ) : null}
-                            </>
-                          ) : (
-                            <span className="relative z-[1] text-[9px] tabular-nums text-gold-600/50">—</span>
-                          )}
-                          {it && Number(it.quantity ?? 1) > 1 ? (
-                            <span
-                              className="pointer-events-none absolute bottom-0.5 right-0.5 z-[4] font-display text-[10px] text-parchment"
-                              style={{ textShadow: "0 1px 2px hsl(0 0% 0% / 0.85)" }}
-                            >
-                              ×{it.quantity}
-                            </span>
-                          ) : null}
-                        </div>
-                        {showHoverTip && it ? (
-                          <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left">
-                            <ItemTooltipPanel item={it} rarityClass={rc} />
+                            onUnequip={
+                              it.is_equipped && slot
+                                ? () => void runAction("/api/game/item/unequip", { slot }, "Unequipped")
+                                : undefined
+                            }
+                            onEquip={
+                              !it.is_equipped && slot && !isConsumable
+                                ? () => void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped")
+                                : undefined
+                            }
+                            onEnhance={isEnhanceableGear(it) ? () => setEnhanceItemId(it.id) : undefined}
+                            onList={
+                              slot && !it.is_equipped && !isConsumable ? () => setListItemId(it.id) : undefined
+                            }
+                            onSalvage={
+                              canSalvage(it)
+                                ? () => void runAction("/api/game/item/salvage", { item_id: it.id }, "Salvaged")
+                                : undefined
+                            }
+                          >
+                            {tile}
+                          </ItemPopover>
+                        ) : (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!it) return;
+                              if (salvageMode && canSalvage(it)) toggleSalvageId(it.id);
+                            }}
+                          >
+                            {tile}
                           </div>
-                        ) : null}
-                        {showPinned && it ? (
-                          <div className="game-tooltip absolute bottom-full left-1/2 z-40 mb-2 max-w-[min(92vw,280px)] -translate-x-1/2 whitespace-normal text-left shadow-lg">
-                            <ItemTooltipPanel item={it} rarityClass={rc}>
-                              <div className="space-y-2">
-                                {compareForItem(it)}
-                                <div className="flex flex-wrap gap-1.5">
-                                  {(it.item_type || "").toLowerCase() === "consumable" ? (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void runAction("/api/game/item/use", { item_id: it.id }, "Used");
-                                      }}
-                                      className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                                    >
-                                      Use
-                                    </button>
-                                  ) : null}
-                                  {gearSlot(it) ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPinnedKey(null);
-                                          setEnhanceItemId(it.id);
-                                        }}
-                                        className="game-btn-primary px-2 py-0.5 text-[10px]"
-                                      >
-                                        🔨 Enhance
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          void runAction("/api/game/item/equip", { item_id: it.id }, "Equipped");
-                                        }}
-                                        className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                                      >
-                                        Equip
-                                      </button>
-                                    </>
-                                  ) : null}
-                                  {gearSlot(it) && !it.is_equipped && (it.item_type || "").toLowerCase() !== "consumable" ? (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPinnedKey(null);
-                                        setListItemId(it.id);
-                                      }}
-                                      className="game-btn-primary px-2 py-0.5 text-[10px]"
-                                    >
-                                      📦 List
-                                    </button>
-                                  ) : null}
-                                  {canSalvage(it) ? (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void runAction("/api/game/item/salvage", { item_id: it.id }, "Salvaged");
-                                      }}
-                                      className="game-btn-secondary px-2 py-0.5 text-[10px]"
-                                    >
-                                      Salvage
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </ItemTooltipPanel>
-                          </div>
-                        ) : null}
+                        )}
                       </div>
                     );
                   })}
@@ -1349,7 +1231,6 @@ export function HeroTab() {
             onClose={() => setListItemId(null)}
             onSuccess={() => {
               setListItemId(null);
-              setPinnedKey(null);
             }}
           />
         );

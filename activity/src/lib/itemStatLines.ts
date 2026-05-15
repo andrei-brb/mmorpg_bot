@@ -120,3 +120,52 @@ function consumableEffectLines(item: InvRow): string[] {
       return [`${et}: ${v}${dur}`];
   }
 }
+
+/** Four summary rows for item hover popovers (game stats, not random rolls). */
+export function itemPopoverStatRows(item: InvRow): { label: string; value: string }[] {
+  const type = (item.item_type || "").toLowerCase();
+  if (type === "consumable") {
+    const lines = itemTooltipLines(item).filter(Boolean);
+    if (lines.length === 0) {
+      return [
+        { label: "Type", value: "Consumable" },
+        { label: "—", value: "—" },
+        { label: "—", value: "—" },
+        { label: "—", value: "—" },
+      ];
+    }
+    return lines.slice(0, 4).map((line) => {
+       const idx = line.indexOf(": ");
+       if (idx > 0) {
+         return { label: line.slice(0, idx).trim(), value: line.slice(idx + 2).trim() };
+       }
+       return { label: "Effect", value: line };
+     });
+  }
+
+  const enhLevel = Math.max(0, Math.min(10, Number(item.enhancement_level ?? 0) || 0));
+  const enhMult = 1 + enhLevel * 0.1;
+  const n = (v: unknown) => Number(v ?? 0) || 0;
+  const sum = (base: unknown, bonus: unknown) => n(base) + n(bonus);
+
+  const str = Math.floor(sum(item.s_str, item.r_str) * enhMult);
+  const agi = Math.floor(sum(item.s_agi, item.r_agi) * enhMult);
+  const int_ = Math.floor(sum(item.s_int, item.r_int) * enhMult);
+  const spi = Math.floor(sum(item.s_spi, item.r_spi) * enhMult);
+  const dmgMin = Math.floor(n(item.s_dmg_min) * enhMult);
+  const dmgMax = Math.floor(n(item.s_dmg_max) * enhMult);
+  const armor = Math.floor(n(item.s_armor) * enhMult);
+  const hit = Math.floor(sum(item.s_hit_rating, item.r_hit_rating) * enhMult);
+  const haste = Math.floor(sum(item.s_haste, item.r_haste) * enhMult);
+
+  let attack = 0;
+  if (dmgMin || dmgMax) attack = Math.round((dmgMin + dmgMax) / 2) || dmgMax || dmgMin;
+  else attack = str || agi || int_ || spi;
+
+  return [
+    { label: "Attack", value: attack ? `+${attack}` : "—" },
+    { label: "Defense", value: armor ? `+${armor}` : "—" },
+    { label: "Hit", value: hit ? `+${hit}` : "—" },
+    { label: "Haste", value: haste ? `+${haste}` : "—" },
+  ];
+}
