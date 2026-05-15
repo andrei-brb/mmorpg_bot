@@ -763,8 +763,8 @@ export function HeroTab() {
           <span className="corner-ornament corner-bl" aria-hidden />
           <span className="corner-ornament corner-br" aria-hidden />
 
-          <div className="relative grid min-h-0 flex-1 grid-cols-12 gap-px border border-gold/30 bg-black/60 md:[grid-template-rows:minmax(0,1fr)]">
-            <section className="relative col-span-12 flex min-h-0 flex-col overflow-hidden tex-leather md:col-span-5">
+          <div className="relative grid min-h-0 flex-1 grid-cols-12 gap-px border border-gold/30 bg-black/60 sm:[grid-template-rows:minmax(0,1fr)]">
+            <section className="relative col-span-12 flex min-h-0 flex-col overflow-hidden tex-leather sm:col-span-6 md:col-span-5">
               <div className="flex items-center justify-between px-5 pt-4">
                 <div className="hero-forge-clip-tag border border-gold/40 bg-gold/15 px-3 py-1">
                   <span className="font-display text-[10px] tracking-[0.3em] text-gold-200">
@@ -845,7 +845,7 @@ export function HeroTab() {
               </div>
             </section>
 
-            <section className="relative col-span-12 flex min-h-0 flex-col bg-background md:col-span-7">
+            <section className="relative col-span-12 flex min-h-0 flex-col bg-background sm:col-span-6 md:col-span-7">
               {accessToken && char ? (
                 <div className="relative">
                   <div className="hero-forge-clip-banner flex items-center justify-between bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim px-6 py-2.5 text-background sm:px-8">
