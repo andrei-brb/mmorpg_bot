@@ -396,7 +396,7 @@ class CombatSession:
     boss_phase:   int = 1
     zone_key:     str = ""
     enemy_key:    str = ""   # key from ENEMIES used for display / rewards
-    # Story lore gates (Discord /fight only). Activity & dungeons set apply_lore_gates=False.
+    # Story lore gates: Discord /fight, explore, Activity overworld story bosses. Dungeons stay off.
     apply_lore_gates: bool = True
     lore_gate_by_char: Dict[str, bool] = field(default_factory=dict)
     lore_gate_hint: Optional[str] = None

@@ -239,6 +239,9 @@ export type CombatStatePayload = {
   your_turn?: boolean;
   active_turn_discord_id?: string | null;
   party_players?: PartyCombatRow[];
+  /** Story boss: player cannot deal damage until deed/item requirements are met. */
+  lore_blocked?: boolean;
+  lore_gate_hint?: string | null;
 };
 
 export type DungeonFloorPreview = {

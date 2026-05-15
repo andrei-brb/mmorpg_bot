@@ -352,6 +352,27 @@ export function CombatEncounterView({
     <div className={focusMode ? "flex h-full min-h-0 flex-col gap-2 sm:gap-3" : "space-y-4"}>
       {topBar != null ? topBar : null}
 
+      {state.lore_blocked ? (
+        <div
+          className="rounded-sm px-3 py-2 text-xs"
+          style={{
+            border: "1px solid hsl(270 45% 40% / 0.55)",
+            background: "linear-gradient(180deg, hsl(270 28% 14% / 0.65) 0%, hsl(228 20% 10% / 0.9) 100%)",
+          }}
+        >
+          <div className="font-cinzel font-semibold text-violet-200 flex items-center gap-2">
+            <span className="text-base" aria-hidden>
+              🪞
+            </span>
+            Story locked — attacks won&apos;t land
+          </div>
+          <p className="text-muted-foreground mt-1 leading-relaxed">
+            {state.lore_gate_hint ||
+              "Complete the main story deed or obtain the required item, then return to fight this boss."}
+          </p>
+        </div>
+      ) : null}
+
       {showDiscordDungeonBanner && (
         <div
           className="rounded-sm px-3 py-2 text-xs"

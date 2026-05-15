@@ -95,8 +95,14 @@ function StoryBeacon({ ptr }: { ptr: MainQuestPointerPayload }) {
         </p>
       )}
       {kind === "blocked_level" && ptr.level_required != null && (
-        <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">Required level: {ptr.level_required}        </p>
+        <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">Required level: {ptr.level_required}</p>
       )}
+      {kind === "blocked_deeds" && (ptr.missing_deed_flags?.length ?? 0) > 0 ? (
+        <p className="text-[10px] text-violet-200/90 mt-2 leading-relaxed">
+          <span className="font-cinzel uppercase tracking-wider">Needed deeds:</span>{" "}
+          {ptr.missing_deed_flags!.map((f) => f.replace(/_/g, " ")).join(", ")}
+        </p>
+      ) : null}
     </WomPanel>
   );
 }

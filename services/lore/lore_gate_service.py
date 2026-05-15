@@ -84,7 +84,7 @@ class LoreGateService:
         """
         Returns (lore_gate_by_char, hint).
 
-        If apply_lore_gates is False (Activity / dungeon): everyone may damage (all True).
+        If apply_lore_gates is False (dungeon / normal mobs): everyone may damage (all True).
         If enemy has no LORE_BOSS_GATES entry: everyone may damage (all True).
         Otherwise each character_id maps to True/False.
         """

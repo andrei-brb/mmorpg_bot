@@ -1,8 +1,8 @@
 """
 Lore boss gates — Obsidian Silence / story progression.
 
-Only enforced when CombatSession.apply_lore_gates is True (Discord /fight & explore).
-Activity combat tab and dungeons set apply_lore_gates=False so gear/leveling loops are unaffected.
+Enforced when CombatSession.apply_lore_gates is True (Discord /fight, explore, and Activity
+overworld fights against enemies listed here). Dungeons and normal zone mobs stay ungated.
 
 Add entries as you implement enemies and key items in the DB.
 """
@@ -55,3 +55,11 @@ LORE_BOSS_GATES: Dict[str, LoreBossGateDict] = {
 
 def get_gate(enemy_key: str) -> Optional[LoreBossGateDict]:
     return LORE_BOSS_GATES.get(enemy_key)
+
+
+def enemy_has_lore_gate(enemy_key: str) -> bool:
+    """True when this enemy_key has deed/item requirements (story boss gate)."""
+    cfg = LORE_BOSS_GATES.get((enemy_key or "").strip())
+    if not cfg:
+        return False
+    return bool((cfg.get("required_flags") or []) or (cfg.get("required_items") or []))

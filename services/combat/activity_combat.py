@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
+from config.lore_gates import enemy_has_lore_gate
 from config.settings import (
     ABILITY_UNLOCK_LEVELS,
     CLASSES,
@@ -24,6 +25,7 @@ from config.settings import (
     ZONES,
     _boss_hp_scale_for_zone,
 )
+from services.lore.lore_gate_service import LoreGateService
 from services.combat.combat_engine import ABILITIES, CombatEngine, CombatSession, Combatant, ability_tooltip_payload
 
 log = logging.getLogger("activity_combat")
@@ -295,6 +297,20 @@ def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
     return out[:30]
 
 
+def _lore_gate_payload(session: CombatSession, char_id: Any) -> Dict[str, Any]:
+    """UI fields when fighting a story boss with deed/item gates."""
+    if not getattr(session, "apply_lore_gates", False):
+        return {}
+    cid = str(char_id)
+    blocked = session.lore_gate_by_char.get(cid) is False
+    if not blocked:
+        return {"lore_blocked": False, "lore_gate_hint": None}
+    return {
+        "lore_blocked": True,
+        "lore_gate_hint": getattr(session, "lore_gate_hint", None) or None,
+    }
+
+
 def _dungeon_total_floors_payload(ac: ActivityCombatState) -> Optional[int]:
     """Total floors for the dungeon encounter (Activity UI); avoids client guessing from current floor."""
     if not ac.dungeon_key:
@@ -377,6 +393,7 @@ def serialize_activity_state(
             "your_turn": your_turn,
             "active_turn_discord_id": str(active_did) if active_did is not None else None,
             "party_players": party_rows,
+            **_lore_gate_payload(session, char.get("id")),
         }
 
     player = session.alive_players[0] if session.alive_players else session.players[0]
@@ -402,6 +419,7 @@ def serialize_activity_state(
         "dungeon_key": ac.dungeon_key,
         "dungeon_floor": ac.dungeon_floor,
         "dungeon_total_floors": _dungeon_total_floors_payload(ac),
+        **_lore_gate_payload(session, char.get("id")),
     }
 
 
@@ -623,6 +641,7 @@ async def start_activity_combat(
     else:
         enemy_c = _make_enemy(enemy_key, char["level"], zone)
 
+    apply_lore = bool(not dungeon_mode and enemy_has_lore_gate(enemy_key))
     session = CombatSession(
         session_id=uuid4(),
         players=[player_c],
@@ -630,8 +649,15 @@ async def start_activity_combat(
         is_boss=is_boss,
         enemy_key=enemy_key,
         zone_key=char["current_zone"],
-        apply_lore_gates=False,
+        apply_lore_gates=apply_lore,
     )
+    if apply_lore:
+        lg = LoreGateService(db)
+        session.lore_gate_by_char, session.lore_gate_hint = await lg.evaluate_characters(
+            [char["id"]],
+            enemy_key,
+            apply_lore_gates=True,
+        )
 
     engine = CombatEngine()
     session.turn = 1
