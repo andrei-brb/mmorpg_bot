@@ -686,6 +686,53 @@ class Database:
                 );
             """)
             await c.execute("""
+                ALTER TABLE guild_raid_runs
+                ADD COLUMN IF NOT EXISTS boss_hp_remaining BIGINT;
+            """)
+            await c.execute("""
+                ALTER TABLE guild_raid_runs
+                ADD COLUMN IF NOT EXISTS boss_hp_max BIGINT;
+            """)
+            await c.execute("""
+                ALTER TABLE guild_raid_runs
+                ADD COLUMN IF NOT EXISTS recruit_ends_at TIMESTAMPTZ;
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_raid_strikes (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    run_id          UUID NOT NULL REFERENCES guild_raid_runs(id) ON DELETE CASCADE,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    damage          INT NOT NULL CHECK (damage >= 0),
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_raid_strikes_run
+                ON guild_raid_strikes(run_id, created_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_raid_bonus_claims (
+                    run_id          UUID NOT NULL REFERENCES guild_raid_runs(id) ON DELETE CASCADE,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    claimed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (run_id, character_id)
+                );
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_tech_contributions (
+                    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    node_id         VARCHAR(64) NOT NULL,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    amount          BIGINT NOT NULL CHECK (amount > 0),
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_tech_contrib_guild_node
+                ON guild_tech_contributions(guild_id, node_id);
+            """)
+            await c.execute("""
                 CREATE TABLE IF NOT EXISTS guild_checkins (
                     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                     guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,

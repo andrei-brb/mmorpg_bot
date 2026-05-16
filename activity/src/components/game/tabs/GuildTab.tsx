@@ -11,7 +11,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import * as api from "@/lib/gameApi";
-import type { GuildFeedMessage, GuildInviteCandidate, GuildMePayload, GuildTechDefinition } from "@/lib/apiTypes";
+import type {
+  GuildFeedMessage,
+  GuildInviteCandidate,
+  GuildMePayload,
+  GuildRaidActiveState,
+  GuildTechDefinition,
+} from "@/lib/apiTypes";
 import { toast } from "sonner";
 import "./guild.css";
 
@@ -132,6 +138,9 @@ export function GuildTab() {
   const [createTag, setCreateTag] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [checkinBusy, setCheckinBusy] = useState(false);
+  const [techBranch, setTechBranch] = useState<"economy" | "war" | "accord">("economy");
+  const [techDonateStr, setTechDonateStr] = useState("100");
+  const [raidTemplateKey, setRaidTemplateKey] = useState("gnoll_warren_raid");
   /** Avoid full skeleton on every refetch after boss/bank actions (only first paint / not-in-guild). */
   const hasLoadedGuildHubRef = useRef(false);
 
@@ -313,20 +322,9 @@ export function GuildTab() {
     await loadMe();
   };
 
-  const onUnlockTech = async (nodeId: string) => {
+  const onCreateRaid = async (templateKey: string) => {
     if (!accessToken) return;
-    const r = await api.postGuildTechUnlock(accessToken, nodeId, guildId);
-    if (!r.ok) {
-      toast.error(r.message || "Unlock failed");
-      return;
-    }
-    toast.success("Tech unlocked");
-    await loadMe();
-  };
-
-  const onCreateRaid = async () => {
-    if (!accessToken) return;
-    const r = await api.postGuildRaidCreate(accessToken, "gnoll_warren_raid", guildId);
+    const r = await api.postGuildRaidCreate(accessToken, templateKey, guildId);
     if (!r.ok) {
       toast.error(r.message || "Could not create raid");
       return;
@@ -355,13 +353,60 @@ export function GuildTab() {
     }
   };
 
-  const onCompleteRaid = async (runId: string) => {
+  const onStrikeRaid = async (runId: string) => {
     if (!accessToken) return;
-    const r = await api.postGuildRaidComplete(accessToken, runId, guildId);
-    if (!r.ok) toast.error(r.message || "Complete failed");
+    const r = await api.postGuildRaidStrike(accessToken, runId, guildId);
+    if (!r.ok) toast.error(r.message || "Strike failed");
     else {
-      toast.success("Raid completed — rewards sent");
+      toast.message(r.message || "Strike!");
       await refreshInventory();
+      await loadMe();
+    }
+  };
+
+  const onCancelRaid = async (runId: string) => {
+    if (!accessToken) return;
+    const r = await api.postGuildRaidCancel(accessToken, runId, guildId);
+    if (!r.ok) toast.error(r.message || "Cancel failed");
+    else {
+      toast.message("Raid cancelled");
+      await loadMe();
+    }
+  };
+
+  const onRaidBonus = async (runId: string) => {
+    if (!accessToken) return;
+    const r = await api.postGuildRaidBonusStart(accessToken, runId, guildId);
+    if (r.error || (!r.ok && !r.state)) {
+      toast.error(r.message || r.error || "Could not start raid encounter");
+      return;
+    }
+    toast.message("Raid encounter — switch to Combat tab");
+    window.dispatchEvent(new CustomEvent("game:setActiveTab", { detail: "Combat" }));
+  };
+
+  const onContributeTech = async (nodeId: string) => {
+    if (!accessToken) return;
+    const amount = parseInt(techDonateStr, 10);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid donation amount");
+      return;
+    }
+    const r = await api.postGuildTechContribute(accessToken, nodeId, amount, guildId);
+    if (!r.ok) toast.error(r.message || "Donation failed");
+    else {
+      toast.success(r.message || "Donated to research");
+      await refreshInventory();
+      await loadMe();
+    }
+  };
+
+  const onFinalizeTech = async (nodeId: string) => {
+    if (!accessToken) return;
+    const r = await api.postGuildTechFinalize(accessToken, nodeId, guildId);
+    if (!r.ok) toast.error(r.message || "Could not finalize research");
+    else {
+      toast.success("Research complete — node unlocked");
       await loadMe();
     }
   };
@@ -534,13 +579,28 @@ export function GuildTab() {
   const tpl = (data.boss?.template as { name?: string; hp_max?: number }) || {};
   const lb = (data.boss?.leaderboard as { name: string; total_damage: number }[]) || [];
   const techDefs = data.tech?.definitions || [];
+  const techFunds = data.tech?.funds || {};
   const unlocked = new Set(data.tech?.unlocked || []);
+  const raidTemplates = data.raids?.templates_available || ["gnoll_warren_raid"];
+  const activeRaid = (data.raids?.active || null) as GuildRaidActiveState | null;
+  const activeRun = activeRaid?.run as
+    | { id?: string; status?: string; boss_hp_remaining?: number; boss_hp_max?: number; template_key?: string }
+    | undefined;
   const recentRaids = (data.raids?.recent || []) as Array<{
     id: string;
     template_key?: string;
+    template_name?: string;
     status?: string;
     leader_name?: string;
+    participant_count?: number;
+    boss_hp_remaining?: number;
+    boss_hp_max?: number;
   }>;
+  const branchTechDefs = techDefs.filter((n) => (n.branch || "economy") === techBranch);
+  const raidHpPct =
+    activeRun?.boss_hp_max && activeRun.boss_hp_max > 0
+      ? Math.max(3, (100 * Number(activeRun.boss_hp_remaining ?? 0)) / Number(activeRun.boss_hp_max))
+      : 0;
 
   const hpPct = Math.max(3, (100 * Number(enc?.hp_remaining ?? 0)) / Math.max(1, Number(enc?.hp_max ?? 1)));
   let closesLabel = "";
@@ -918,16 +978,45 @@ export function GuildTab() {
 
           <Panel className="col-7">
             <SectionHeader
-              kicker="Passive bonuses for all members (explore, combat, idle)"
+              kicker="Donate gold to research — any member can finalize when the fund is full"
               title="Guild Tech"
               right={<Cpu size={16} color="var(--gold-400)" strokeWidth={1.5} aria-hidden />}
             />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+              {(["economy", "war", "accord"] as const).map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  className={techBranch === b ? "btn-gold" : "btn-ghost"}
+                  style={{ padding: "6px 12px", fontSize: 10, textTransform: "capitalize" }}
+                  onClick={() => setTechBranch(b)}
+                >
+                  {b}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+              <span className="text-label">Donate amount</span>
+              <input
+                type="number"
+                className="gold-input"
+                style={{ width: 100 }}
+                value={techDonateStr}
+                min={1}
+                onChange={(e) => setTechDonateStr(e.target.value)}
+                aria-label="Tech donation amount"
+              />
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "min(48vh, 420px)", overflowY: "auto", paddingRight: 4 }}>
-              {techDefs.map((node: GuildTechDefinition) => {
+              {branchTechDefs.map((node: GuildTechDefinition) => {
                 const has = unlocked.has(node.id);
                 const missingReq = (node.requires || []).filter((rid) => !unlocked.has(rid));
                 const blocked = !has && missingReq.length > 0;
-                const canBuy = officer && !has && !blocked;
+                const fund = techFunds[node.id] || { contributed: 0, required: node.fund_gold_required || 0 };
+                const fundPct =
+                  fund.required > 0 ? Math.min(100, Math.round((100 * fund.contributed) / fund.required)) : 100;
+                const fundFull = fund.required <= 0 || fund.contributed >= fund.required;
+                const canFinalize = !has && !blocked && fundFull;
                 return (
                   <div
                     key={node.id}
@@ -942,21 +1031,37 @@ export function GuildTab() {
                       </div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.4 }}>{node.description}</div>
                       <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }} className="font-mono">
-                        Cost: {node.cost_guild_xp.toLocaleString()} guild XP
+                        Unlock: {node.cost_guild_xp.toLocaleString()} guild XP
                         {node.cost_bank_gold ? ` + ${node.cost_bank_gold.toLocaleString()} bank gold` : ""}
                       </div>
+                      {!has && fund.required > 0 ? (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+                            Research fund: {fund.contributed.toLocaleString()} / {fund.required.toLocaleString()} gold
+                          </div>
+                          <div className="bar-track" role="progressbar" aria-valuenow={fundPct} aria-valuemin={0} aria-valuemax={100}>
+                            <div className="bar-fill" style={{ width: `${fundPct}%` }} />
+                          </div>
+                        </div>
+                      ) : null}
                       {blocked ? (
                         <p style={{ fontSize: 10, color: "var(--gold-200)", marginTop: 6, marginBottom: 0 }}>
-                          Requires: {missingReq.join(", ") || "prerequisites"}
+                          Requires prior nodes in this branch.
                         </p>
                       ) : null}
-                      {!has && !blocked && !officer ? (
-                        <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, marginBottom: 0 }}>Officers may unlock this node.</p>
-                      ) : null}
-                      {canBuy ? (
-                        <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => void onUnlockTech(node.id)}>
-                          Research
-                        </button>
+                      {!has && !blocked ? (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                          {!fundFull ? (
+                            <button type="button" className="btn-ghost" onClick={() => void onContributeTech(node.id)}>
+                              Donate
+                            </button>
+                          ) : null}
+                          {canFinalize ? (
+                            <button type="button" className="btn-gold" onClick={() => void onFinalizeTech(node.id)}>
+                              Finalize research
+                            </button>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                     {has ? <span className="pill success shrink-0">Unlocked</span> : null}
@@ -968,16 +1073,102 @@ export function GuildTab() {
 
           <Panel className="col-5">
             <SectionHeader
-              kicker="Recent runs — sign up when recruiting is open"
-              title="Raids"
+              kicker="Shared raid HP — strikes clear automatically; one bonus fight per member"
+              title="Raid sortie"
               right={
-                officer ? (
-                  <button type="button" className="btn-ghost" onClick={() => void onCreateRaid()}>
-                    Schedule sortie
-                  </button>
+                officer && !activeRun ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                    <select
+                      className="gold-input"
+                      style={{ fontSize: 10, padding: "6px 8px", maxWidth: 140 }}
+                      value={raidTemplateKey}
+                      onChange={(e) => setRaidTemplateKey(e.target.value)}
+                      aria-label="Raid template"
+                    >
+                      {raidTemplates.map((k) => (
+                        <option key={k} value={k}>
+                          {k.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn-ghost" onClick={() => void onCreateRaid(raidTemplateKey)}>
+                      Schedule
+                    </button>
+                  </div>
                 ) : null
               }
             />
+            {activeRun && activeRaid ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
+                  {(activeRaid.template as { name?: string })?.name || activeRun.template_key}
+                </div>
+                <span className={`${raidPillClass(activeRun.status)}`} style={{ marginTop: 6, display: "inline-block" }}>
+                  {activeRun.status}
+                </span>
+                {activeRun.status === "active" ? (
+                  <>
+                    <div className="font-mono" style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10 }}>
+                      {(activeRun.boss_hp_remaining ?? 0).toLocaleString()} / {(activeRun.boss_hp_max ?? 0).toLocaleString()} raid HP
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <div className="bar-track" role="progressbar" aria-valuenow={Math.round(raidHpPct)} aria-valuemin={0} aria-valuemax={100}>
+                        <div className="bar-fill" style={{ width: `${raidHpPct}%` }} />
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+                  {activeRun.status === "recruiting" && !activeRaid.my_signed_up ? (
+                    <button type="button" className="btn-ghost" onClick={() => void onSignupRaid(String(activeRun.id))}>
+                      Sign up
+                    </button>
+                  ) : null}
+                  {officer && activeRun.status === "recruiting" ? (
+                    <button type="button" className="btn-gold" onClick={() => void onStartRaid(String(activeRun.id))}>
+                      Start sortie
+                    </button>
+                  ) : null}
+                  {activeRun.status === "active" && activeRaid.can_strike ? (
+                    <button type="button" className="btn-crimson" onClick={() => void onStrikeRaid(String(activeRun.id))}>
+                      <Sword size={13} strokeWidth={2.5} /> Strike
+                    </button>
+                  ) : null}
+                  {activeRaid.bonus_available ? (
+                    <button type="button" className="btn-gold" onClick={() => void onRaidBonus(String(activeRun.id))}>
+                      Raid encounter
+                    </button>
+                  ) : null}
+                  {activeRaid.my_bonus_claimed ? (
+                    <span className="pill success">Bonus claimed</span>
+                  ) : null}
+                  {officer && (activeRun.status === "recruiting" || activeRun.status === "active") ? (
+                    <button type="button" className="btn-ghost" onClick={() => void onCancelRaid(String(activeRun.id))}>
+                      Cancel
+                    </button>
+                  ) : null}
+                </div>
+                {(activeRaid.leaderboard || []).length > 0 ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div className="text-label" style={{ marginBottom: 4 }}>
+                      Strike leaderboard
+                    </div>
+                    {(activeRaid.leaderboard || []).slice(0, 5).map((row, i) => (
+                      <div key={`${row.name}-${i}`} style={{ fontSize: 12, marginBottom: 2 }}>
+                        {i + 1}. {row.name} — {Number(row.total_damage).toLocaleString()}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px" }}>
+                No active sortie. Officers schedule a raid; members sign up, strike shared HP, then fight a personal bonus encounter.
+              </p>
+            )}
+            <div className="text-label" style={{ marginBottom: 8 }}>
+              Recent runs
+            </div>
             {recentRaids.length === 0 ? (
               <div className="empty-card">
                 <div style={{ fontSize: 12, color: "var(--text-muted)" }}>No raids logged yet.</div>
@@ -1002,7 +1193,7 @@ export function GuildTab() {
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{run.template_key}</div>
+                      <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{run.template_name || run.template_key}</div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
                         Leader <span style={{ color: "var(--text-primary)" }}>{run.leader_name || "?"}</span>
                       </div>
@@ -1019,11 +1210,6 @@ export function GuildTab() {
                       {officer && run.status === "recruiting" ? (
                         <button type="button" className="btn-gold" style={{ padding: "6px 14px", fontSize: 10 }} onClick={() => void onStartRaid(run.id)}>
                           Start
-                        </button>
-                      ) : null}
-                      {officer && run.status === "active" ? (
-                        <button type="button" className="btn-gold" style={{ padding: "6px 14px", fontSize: 10 }} onClick={() => void onCompleteRaid(run.id)}>
-                          Complete
                         </button>
                       ) : null}
                     </div>

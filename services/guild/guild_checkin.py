@@ -116,10 +116,14 @@ async def perform_checkin(
     try:
         await char_svc.add_gold(character_id, CHECKIN_GOLD, "guild_hall_checkin")
         await char_svc.award_xp(character_id, CHECKIN_PLAYER_XP, 1.0)
+        from services.guild import guild_tech as guild_tech_mod
+
+        gxp_mult = await guild_tech_mod.checkin_guild_xp_mult(db, guild_id)
+        guild_xp_grant = max(1, int(CHECKIN_GUILD_XP * gxp_mult))
         await db.execute(
             "UPDATE guilds SET guild_xp = guild_xp + $2 WHERE id = $1",
             guild_id,
-            CHECKIN_GUILD_XP,
+            guild_xp_grant,
         )
     except Exception as e:
         log.exception("guild checkin reward failed: %s", e)

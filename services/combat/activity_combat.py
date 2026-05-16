@@ -75,6 +75,7 @@ class ActivityCombatState:
     party_char_to_discord: Dict[str, int] = field(default_factory=dict)
     party_turn_idx: int = 0
     potion_by_discord: Dict[int, bool] = field(default_factory=dict)
+    guild_raid_run_id: Optional[UUID] = None
 
 
 def _clear_party_dungeon_session(ac: ActivityCombatState) -> None:
@@ -499,6 +500,7 @@ async def start_activity_combat(
     enemy_key: Optional[str] = None,
     dungeon_key: Optional[str] = None,
     dungeon_floor: Optional[int] = None,
+    guild_raid_run_id: Optional[UUID] = None,
 ) -> Dict[str, Any]:
     """Begin iframe combat or return existing session.
 
@@ -530,8 +532,9 @@ async def start_activity_combat(
             }
         DISCORD_TO_PARTY_RUN.pop(discord_id, None)
 
+    raid_mode = guild_raid_run_id is not None
     dungeon_mode = bool(dungeon_key and dungeon_floor is not None)
-    if not dungeon_mode and not (enemy_key or "").strip():
+    if not dungeon_mode and not raid_mode and not (enemy_key or "").strip():
         return {"error": "missing_enemy_key", "message": "Missing enemy_key or dungeon_key/floor."}
 
     resolved_dungeon_key: Optional[str] = None
@@ -580,9 +583,14 @@ async def start_activity_combat(
                 "message": f"This zone requires level {zone.level_range[0]}+.",
             }
 
-        if enemy_key not in zone.enemies and enemy_key not in zone.bosses:
-            return {"error": "invalid_enemy", "message": "That enemy is not in your current zone."}
-        is_boss = enemy_key in zone.bosses
+        if not raid_mode:
+            if enemy_key not in zone.enemies and enemy_key not in zone.bosses:
+                return {"error": "invalid_enemy", "message": "That enemy is not in your current zone."}
+            is_boss = enemy_key in zone.bosses
+        else:
+            if enemy_key not in ENEMIES:
+                return {"error": "invalid_enemy", "message": "Unknown raid encounter enemy."}
+            is_boss = False
 
     # Resume only the *same* Activity fight; otherwise clear (e.g. Overworld → Dungeon tab).
     if discord_id in ACTIVE_ACTIVITY:
@@ -687,6 +695,7 @@ async def start_activity_combat(
         dungeon_floor=resolved_dungeon_floor,
         started_at=datetime.now(timezone.utc),
         hp_start=player_c.current_hp,
+        guild_raid_run_id=guild_raid_run_id,
     )
     ACTIVE_ACTIVITY[discord_id] = ac
 
@@ -1777,8 +1786,28 @@ async def _finish_victory(
     except Exception as e:
         log.error("Quest progress failed: %s", e)
 
+    raid_bonus_lines: List[str] = []
+    if ac.guild_raid_run_id is not None:
+        try:
+            from services.guild import guild_raid as guild_raid_mod
+
+            ok_rb, msg_rb, bonus_payload = await guild_raid_mod.grant_bonus_claim(
+                db, char_svc, ac.guild_raid_run_id, char["id"]
+            )
+            if ok_rb and bonus_payload:
+                bg = int(bonus_payload.get("bonus_gold") or 0)
+                bx = int(bonus_payload.get("bonus_xp") or 0)
+                if bg:
+                    raid_bonus_lines.append(f"Raid bonus: +{bg:,} gold")
+                if bx:
+                    raid_bonus_lines.append(f"Raid bonus: +{bx:,} XP")
+            elif not ok_rb and msg_rb and "already claimed" not in msg_rb.lower():
+                raid_bonus_lines.append(f"Raid bonus: {msg_rb}")
+        except Exception:
+            log.warning("guild raid bonus claim after victory failed", exc_info=True)
+
     await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", char["id"])
-    if session.is_boss and not ac.dungeon_key:
+    if session.is_boss and not ac.dungeon_key and ac.guild_raid_run_id is None:
         try:
             from services.world_boss.world_boss_service import WorldBossService
 
@@ -1803,6 +1832,8 @@ async def _finish_victory(
         out_lines.append("📦 " + " · ".join(loot_lines[:6]))
     if quest_lines:
         out_lines.extend(quest_lines[:4])
+    if raid_bonus_lines:
+        out_lines.extend(raid_bonus_lines)
 
     # Milestones (non-blocking)
     if guild_id:

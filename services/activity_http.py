@@ -5162,8 +5162,24 @@ async def handle_guild_me(request: web.Request) -> web.Response:
             else [],
         }
     unlocked = await guild_tech_mod.fetch_unlocked_ids(db, gid)
+    tech_funds = await guild_tech_mod.tech_progress_payload(db, gid)
+    char_svc = CharacterService(db)
+    char_id = _uuid_from_any(char["id"])
     raids = await guild_raid_mod.list_runs(db, gid, limit=8)
-    checkin = await guild_checkin_mod.status_payload(db, gid, _uuid_from_any(char["id"]))
+    raid_templates = await guild_raid_mod.unlocked_raid_templates(db, gid)
+    active_row = await db.fetchrow(
+        """
+        SELECT * FROM guild_raid_runs
+        WHERE guild_id = $1 AND status IN ('recruiting', 'active')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        gid,
+    )
+    active_raid = None
+    if active_row:
+        active_raid = await guild_raid_mod.run_state_payload(db, UUID(str(active_row["id"])), char_id, char_svc)
+    checkin = await guild_checkin_mod.status_payload(db, gid, char_id)
     return web.json_response(
         _json_safe(
             {
@@ -5179,8 +5195,13 @@ async def handle_guild_me(request: web.Request) -> web.Response:
                 "tech": {
                     "definitions": guild_tech_mod.tech_definitions_payload(),
                     "unlocked": unlocked,
+                    "funds": tech_funds.get("funds") or {},
                 },
-                "raids": {"recent": raids},
+                "raids": {
+                    "recent": raids,
+                    "templates_available": raid_templates,
+                    "active": active_raid,
+                },
                 "checkin": checkin,
             }
         )
@@ -5635,6 +5656,207 @@ async def handle_guild_raid_start(request: web.Request) -> web.Response:
     return web.json_response(_json_safe({"ok": True, "run": dict(run) if run else None}))
 
 
+async def handle_guild_tech_contribute(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    node_id = str(body.get("node_id") or "").strip()
+    amount = int(body.get("amount") or 0)
+    from services.guild import guild_tech as guild_tech_mod
+
+    gid = _uuid_from_any(char["guild_id"])
+    char_svc = CharacterService(db)
+    ok, msg, progress = await guild_tech_mod.contribute(
+        db, char_svc, gid, node_id, _uuid_from_any(char["id"]), amount
+    )
+    if not ok:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+    funds = await guild_tech_mod.tech_progress_payload(db, gid)
+    fresh = await char_svc.get_character(discord_id)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "message": msg,
+                "progress": progress,
+                "funds": funds.get("funds") or {},
+                "gold": int(fresh.get("gold") or 0) if fresh else None,
+            }
+        )
+    )
+
+
+async def handle_guild_tech_finalize(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    node_id = str(body.get("node_id") or "").strip()
+    from services.guild import guild_tech as guild_tech_mod
+
+    gid = _uuid_from_any(char["guild_id"])
+    ok, msg = await guild_tech_mod.finalize_research(
+        db, gid, node_id, _uuid_from_any(char["id"]), char.get("guild_rank")
+    )
+    if not ok:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+    from services.guild.guild_feed import post_system
+
+    name = guild_tech_mod.TECH_NODES.get(node_id, {}).get("name", node_id)
+    await post_system(db, gid, f"Guild finalized research: **{name}**.", "system", {"node_id": node_id})
+    g2 = await db.fetchrow("SELECT guild_xp, bank_gold FROM guilds WHERE id=$1", gid)
+    unlocked = await guild_tech_mod.fetch_unlocked_ids(db, gid)
+    funds = await guild_tech_mod.tech_progress_payload(db, gid)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "guild_xp": int(g2["guild_xp"] or 0) if g2 else 0,
+                "bank_gold": int(g2["bank_gold"] or 0) if g2 else 0,
+                "unlocked": unlocked,
+                "funds": funds.get("funds") or {},
+            }
+        )
+    )
+
+
+async def handle_guild_raid_strike(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    try:
+        run_id = UUID(str(body.get("run_id") or ""))
+    except (ValueError, TypeError):
+        return web.json_response(_json_safe({"ok": False, "message": "Missing or invalid run_id."}), status=400)
+    from services.guild import guild_raid as guild_raid_mod
+
+    char_svc = CharacterService(db)
+    bot = request.app.get("bot")
+    ok, msg, run = await guild_raid_mod.strike(db, char_svc, run_id, char, discord_bot=bot)
+    if not ok:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+    state = await guild_raid_mod.run_state_payload(db, run_id, _uuid_from_any(char["id"]), char_svc)
+    return web.json_response(_json_safe({"ok": True, "message": msg, "run": run, "state": state}))
+
+
+async def handle_guild_raid_state(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    run_id_raw = request.query.get("run_id") or ""
+    try:
+        run_id = UUID(str(run_id_raw))
+    except (ValueError, TypeError):
+        return web.json_response(_json_safe({"ok": False, "message": "Missing or invalid run_id."}), status=400)
+    from services.guild import guild_raid as guild_raid_mod
+
+    char_svc = CharacterService(db)
+    state = await guild_raid_mod.run_state_payload(db, run_id, _uuid_from_any(char["id"]), char_svc)
+    if not state:
+        return web.json_response(_json_safe({"ok": False, "message": "Raid not found."}), status=404)
+    return web.json_response(_json_safe({"ok": True, "state": state}))
+
+
+async def handle_guild_raid_bonus_start(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    try:
+        run_id = UUID(str(body.get("run_id") or ""))
+    except (ValueError, TypeError):
+        return web.json_response(_json_safe({"ok": False, "message": "Missing or invalid run_id."}), status=400)
+    from services.guild import guild_raid as guild_raid_mod
+    from services.combat import activity_combat as activity_combat_api
+
+    gid = _uuid_from_any(char["guild_id"])
+    ok, msg, meta = await guild_raid_mod.start_bonus_combat(db, run_id, _uuid_from_any(char["id"]), gid)
+    if not ok:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+    enemy_key = str((meta or {}).get("enemy_key") or "gnoll_raider")
+    discord_guild_id = _guild_id_from_request(request, body)
+    char_svc = CharacterService(db)
+    if discord_guild_id and char:
+        await char_svc.set_last_discord_guild(char["id"], discord_guild_id)
+    result = await activity_combat_api.start_activity_combat(
+        request.app["bot"],
+        discord_id,
+        discord_guild_id,
+        force=bool(body.get("force")),
+        enemy_key=enemy_key,
+        guild_raid_run_id=run_id,
+    )
+    status = 200
+    if result.get("error") == "already_in_combat":
+        status = 409
+    elif result.get("error"):
+        status = 400
+    return web.json_response(_json_safe({**result, "raid_meta": meta}), status=status)
+
+
+async def handle_guild_raid_cancel(request: web.Request) -> web.Response:
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    try:
+        run_id = UUID(str(body.get("run_id") or ""))
+    except (ValueError, TypeError):
+        return web.json_response(_json_safe({"ok": False, "message": "Missing or invalid run_id."}), status=400)
+    from services.guild import guild_raid as guild_raid_mod
+
+    ok, msg = await guild_raid_mod.cancel_run(db, run_id, char.get("guild_rank"))
+    if not ok:
+        return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
+    run = await db.fetchrow("SELECT * FROM guild_raid_runs WHERE id=$1", run_id)
+    return web.json_response(_json_safe({"ok": True, "message": msg, "run": dict(run) if run else None}))
+
+
 async def handle_guild_raid_complete(request: web.Request) -> web.Response:
     try:
         _user, discord_id, char, db = await _authed_discord_user_and_char(request)
@@ -5970,9 +6192,15 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/guild/boss/start", handle_guild_boss_start)
     app.router.add_post("/api/game/guild/boss/hit", handle_guild_boss_hit)
     app.router.add_post("/api/game/guild/tech/unlock", handle_guild_tech_unlock)
+    app.router.add_post("/api/game/guild/tech/contribute", handle_guild_tech_contribute)
+    app.router.add_post("/api/game/guild/tech/finalize", handle_guild_tech_finalize)
     app.router.add_post("/api/game/guild/raid/create", handle_guild_raid_create)
     app.router.add_post("/api/game/guild/raid/signup", handle_guild_raid_signup)
     app.router.add_post("/api/game/guild/raid/start", handle_guild_raid_start)
+    app.router.add_post("/api/game/guild/raid/strike", handle_guild_raid_strike)
+    app.router.add_get("/api/game/guild/raid/state", handle_guild_raid_state)
+    app.router.add_post("/api/game/guild/raid/bonus/start", handle_guild_raid_bonus_start)
+    app.router.add_post("/api/game/guild/raid/cancel", handle_guild_raid_cancel)
     app.router.add_post("/api/game/guild/raid/complete", handle_guild_raid_complete)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)

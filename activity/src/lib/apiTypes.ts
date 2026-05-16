@@ -638,11 +638,31 @@ export type AuctionListingRow = {
 /** GET /api/game/guild/me + related guild hub payloads */
 export type GuildTechDefinition = {
   id: string;
+  branch?: "economy" | "war" | "accord";
   name: string;
   description: string;
   cost_guild_xp: number;
   cost_bank_gold: number;
+  fund_gold_required?: number;
   requires: string[];
+};
+
+export type GuildTechFundProgress = {
+  contributed: number;
+  required: number;
+};
+
+export type GuildRaidActiveState = {
+  run: Record<string, unknown>;
+  template?: Record<string, unknown>;
+  participants?: Array<{ character_id: string; name: string; role?: string }>;
+  leaderboard?: Array<{ name: string; total_damage: number; strikes?: number }>;
+  my_signed_up?: boolean;
+  my_strikes_today?: number;
+  strike_cooldown_s?: number;
+  my_bonus_claimed?: boolean;
+  bonus_available?: boolean;
+  can_strike?: boolean;
 };
 
 export type GuildFeedMessage = {
@@ -708,9 +728,12 @@ export type GuildMePayload = {
   tech?: {
     definitions: GuildTechDefinition[];
     unlocked: string[];
+    funds?: Record<string, GuildTechFundProgress>;
   };
   raids?: {
     recent: Array<Record<string, unknown>>;
+    templates_available?: string[];
+    active?: GuildRaidActiveState | null;
   };
   checkin?: GuildCheckinPayload;
 };

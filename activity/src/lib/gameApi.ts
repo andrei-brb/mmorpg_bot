@@ -1003,6 +1003,83 @@ export async function postGuildRaidComplete(
   return res.json() as Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }>;
 }
 
+export async function postGuildRaidStrike(
+  token: string,
+  runId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; state?: Record<string, unknown> }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/strike"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; state?: Record<string, unknown> }>;
+}
+
+export async function postGuildRaidCancel(
+  token: string,
+  runId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/cancel"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  return res.json() as Promise<{ ok?: boolean; message?: string; run?: Record<string, unknown> | null }>;
+}
+
+export async function postGuildRaidBonusStart(
+  token: string,
+  runId: string,
+  guildId?: string,
+  force?: boolean,
+): Promise<{ ok?: boolean; error?: string; message?: string; state?: Record<string, unknown> }> {
+  const res = await fetch(apiUrl("/api/game/guild/raid/bonus/start"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, force: Boolean(force) }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; state?: Record<string, unknown> }>;
+}
+
+export async function postGuildTechContribute(
+  token: string,
+  nodeId: string,
+  amount: number,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; funds?: Record<string, { contributed: number; required: number }>; gold?: number }> {
+  const res = await fetch(apiUrl("/api/game/guild/tech/contribute"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId, amount }),
+  });
+  return res.json() as Promise<{
+    ok?: boolean;
+    message?: string;
+    funds?: Record<string, { contributed: number; required: number }>;
+    gold?: number;
+  }>;
+}
+
+export async function postGuildTechFinalize(
+  token: string,
+  nodeId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; unlocked?: string[]; funds?: Record<string, { contributed: number; required: number }> }> {
+  const res = await fetch(apiUrl("/api/game/guild/tech/finalize"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId }),
+  });
+  return res.json() as Promise<{
+    ok?: boolean;
+    message?: string;
+    unlocked?: string[];
+    funds?: Record<string, { contributed: number; required: number }>;
+  }>;
+}
+
 export async function getSocialRoster(token: string, guildId?: string): Promise<SocialRosterPayload> {
   const res = await fetch(apiUrl("/api/game/social/roster"), { headers: authHeaders(token, guildId) });
   return res.json() as Promise<SocialRosterPayload>;

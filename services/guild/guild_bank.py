@@ -98,9 +98,12 @@ async def withdraw(
     if bank < amount:
         return False, "Guild bank does not have enough gold."
 
+    from services.guild import guild_tech as guild_tech_mod
+
+    daily_cap = await guild_tech_mod.bank_withdraw_cap(db, guild_id)
     already = await _today_withdraw_total(db, guild_id)
-    if already + amount > GUILD_DAILY_WITHDRAW_CAP:
-        return False, "Guild daily withdraw cap reached."
+    if already + amount > daily_cap:
+        return False, f"Guild daily withdraw cap reached ({daily_cap:,} gold/day)."
 
     await db.execute("UPDATE guilds SET bank_gold = bank_gold - $2 WHERE id=$1", guild_id, amount)
     await char_svc.add_gold(character_id, amount, "guild_bank_withdraw")
