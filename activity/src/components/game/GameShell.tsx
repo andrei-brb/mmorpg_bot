@@ -3,16 +3,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { HeroTab } from "./tabs/HeroTab";
-import { CraftingTab } from "./tabs/CraftingTab";
-import { ExploreTab } from "./tabs/ExploreTab";
-import { QuestsTab } from "./tabs/QuestsTab";
-import { CombatTab } from "./tabs/CombatTab";
-import { GuildTab } from "./tabs/GuildTab";
-import { MarketTab } from "./tabs/MarketTab";
-import { RealmTab } from "./tabs/RealmTab";
-import { BattlePassTab } from "./tabs/BattlePassTab";
-import { PvpPage } from "@/components/pvp/PvpPage";
+import { GameTabs } from "@/components/layout/GameTabs";
 import { specIconUrl } from "@/lib/classAndSpecIconUrl";
 import { QuestOfferModal } from "./modals/QuestOfferModal";
 import { QuestCompleteModal } from "./modals/QuestCompleteModal";
@@ -24,38 +15,7 @@ import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload } from "@/lib/apiTypes";
 import { WomPanel } from "@/components/wom/WomUi";
 
-const TABS = ["Hero", "Forge", "Explore", "Quests", "Combat", "Guild", "Market", "Arena", "Pass", "Realm"] as const;
-type TabName = (typeof TABS)[number];
-
-const TAB_ICONS: Record<TabName, string> = {
-  Hero: "⚔️",
-  Forge: "🔨",
-  Explore: "🗺️",
-  Quests: "📜",
-  Combat: "💀",
-  Guild: "🏰",
-  Market: "🏪",
-  Arena: "🏟️",
-  Pass: "🎫",
-  Realm: "🌐",
-};
-
-/** Visible labels (keys stay short for `activeTab` / routing). */
-const TAB_LABELS: Record<TabName, string> = {
-  Hero: "Hero",
-  Forge: "Forge",
-  Explore: "Explore",
-  Quests: "Quests",
-  Combat: "Combat",
-  Guild: "Guild",
-  Market: "Market",
-  Arena: "Arena",
-  Pass: "Battle Pass",
-  Realm: "Realm",
-};
-
 export function GameShell() {
-  const [activeTab, setActiveTab] = useState<TabName>("Hero");
   const [profileOpen, setProfileOpen] = useState(false);
   const [derivedStats, setDerivedStats] = useState<CharacterDerivedStatsPayload | null>(null);
   // playerStats will be derived after we get the session values from useGameSession()
@@ -84,19 +44,6 @@ export function GameShell() {
 
   /** Hide main shell chrome (header + tab bar) during overworld combat focus or active Arena match. */
   const shellChromeHidden = combatFocusActive || arenaFocusActive;
-
-  // Allow child tabs (quests, etc.) to request a tab switch without threading `setActiveTab` through context.
-  useEffect(() => {
-    const onSetTab = (ev: Event) => {
-      const tab = (ev as CustomEvent).detail;
-      if (typeof tab !== "string") return;
-      const norm =
-        tab === "Progress" || tab === "progress" || tab === "realm" ? "Realm" : tab;
-      if ((TABS as readonly string[]).includes(norm)) setActiveTab(norm as TabName);
-    };
-    window.addEventListener("game:setActiveTab", onSetTab);
-    return () => window.removeEventListener("game:setActiveTab", onSetTab);
-  }, []);
 
   // Refetch derived stats when equipped gear changes (so profile updates immediately after equip/unequip).
   const derivedStatsKey = useMemo(() => {
@@ -367,92 +314,6 @@ export function GameShell() {
               </div>
             )}
 
-            {!shellChromeHidden && (
-              <div className="flex items-stretch gap-2 mb-3 min-h-0">
-                <div className="tab-bar rounded-sm flex-1 min-w-0 flex overflow-x-auto">
-                  {TABS.map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setActiveTab(tab)}
-                      className={`tab-btn ${activeTab === tab ? "tab-btn-active tab-active-glow" : ""}`}
-                      title={TAB_LABELS[tab]}
-                      aria-label={`Open ${TAB_LABELS[tab]}`}
-                      aria-current={activeTab === tab ? "page" : undefined}
-                    >
-                      <span className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1.5 sm:px-0.5">
-                        <span className="text-[1.1rem] leading-none sm:text-base" aria-hidden>
-                          {TAB_ICONS[tab]}
-                        </span>
-                        <span className="max-w-[5.5rem] text-center text-[8px] leading-tight tracking-[0.08em] sm:max-w-none sm:text-xs sm:tracking-[0.12em]">
-                          {TAB_LABELS[tab].toUpperCase()}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5 pl-1 border-l border-border/60 self-center py-1">
-                  <div
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] font-medium text-muted-foreground"
-                    title="Connected to game server"
-                    style={{
-                      background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
-                      border: "1px solid hsl(228 16% 20%)",
-                    }}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full bg-connected animate-pulse-glow shrink-0"
-                      style={{ boxShadow: "0 0 4px hsl(140 55% 42% / 0.5)" }}
-                    />
-                    <span className="hidden sm:inline">Live</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm transition-transform hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    style={{
-                      background: "linear-gradient(180deg, hsl(228 18% 18%) 0%, hsl(228 22% 10%) 100%)",
-                      border: "1px solid hsl(228 16% 28%)",
-                      boxShadow: "0 2px 8px hsl(0 0% 0% / 0.35), inset 0 1px 0 hsl(228 14% 30% / 0.35)",
-                    }}
-                    aria-label={mailBadgeActive ? "Mailbox, undelivered rewards" : "Mailbox"}
-                    onClick={() => setMailOpen(true)}
-                  >
-                    <span className="text-[1.15rem] leading-none select-none" aria-hidden>
-                      ✉️
-                    </span>
-                    {mailBadgeActive ? (
-                      <span
-                        className="absolute right-0 top-0 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[hsl(228_22%_10%)]"
-                        aria-hidden
-                      />
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProfileOpen(true)}
-                    className="relative group cursor-pointer shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    aria-label="Open profile"
-                  >
-                    <div
-                      className="absolute -inset-[2px] rounded-full opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none"
-                      style={{
-                        background: "conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))",
-                      }}
-                    />
-                    <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-background">
-                      <Avatar className="w-full h-full">
-                        {inventory?.discord?.avatar_url ? (
-                          <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
-                        ) : (
-                          <AvatarFallback className="text-[10px]">{(displayName || "Adventurer").slice(0, 2).toUpperCase()}</AvatarFallback>
-                        )}
-                      </Avatar>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div
               className={
                 shellChromeHidden
@@ -460,18 +321,73 @@ export function GameShell() {
                   : "sm:px-1 flex w-full min-w-0 flex-col flex-1 min-h-0"
               }
             >
-              <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-                {activeTab === "Hero" && <HeroTab />}
-                {activeTab === "Forge" && <CraftingTab />}
-                {activeTab === "Explore" && <ExploreTab />}
-                {activeTab === "Quests" && <QuestsTab />}
-                {activeTab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
-                {activeTab === "Guild" && <GuildTab />}
-                {activeTab === "Market" && <MarketTab />}
-                {activeTab === "Arena" && <PvpPage />}
-                {activeTab === "Pass" && <BattlePassTab />}
-                {activeTab === "Realm" && <RealmTab />}
-              </div>
+              <GameTabs
+                shellChromeHidden={shellChromeHidden}
+                combatFocusActive={combatFocusActive}
+                chrome={
+                  <>
+                    <div
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] font-medium text-muted-foreground"
+                      title="Connected to game server"
+                      style={{
+                        background: "linear-gradient(180deg, hsl(228 18% 14%) 0%, hsl(228 20% 10%) 100%)",
+                        border: "1px solid hsl(228 16% 20%)",
+                      }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-connected animate-pulse-glow shrink-0"
+                        style={{ boxShadow: "0 0 4px hsl(140 55% 42% / 0.5)" }}
+                      />
+                      <span className="hidden sm:inline">Live</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm transition-transform hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      style={{
+                        background: "linear-gradient(180deg, hsl(228 18% 18%) 0%, hsl(228 22% 10%) 100%)",
+                        border: "1px solid hsl(228 16% 28%)",
+                        boxShadow: "0 2px 8px hsl(0 0% 0% / 0.35), inset 0 1px 0 hsl(228 14% 30% / 0.35)",
+                      }}
+                      aria-label={mailBadgeActive ? "Mailbox, undelivered rewards" : "Mailbox"}
+                      onClick={() => setMailOpen(true)}
+                    >
+                      <span className="text-[1.15rem] leading-none select-none" aria-hidden>
+                        ✉️
+                      </span>
+                      {mailBadgeActive ? (
+                        <span
+                          className="absolute right-0 top-0 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[hsl(228_22%_10%)]"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfileOpen(true)}
+                      className="relative group cursor-pointer shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      aria-label="Open profile"
+                    >
+                      <div
+                        className="absolute -inset-[2px] rounded-full opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none"
+                        style={{
+                          background: "conic-gradient(from 0deg, hsl(43 78% 50%), hsl(35 80% 38%), hsl(43 78% 50%))",
+                        }}
+                      />
+                      <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-background">
+                        <Avatar className="w-full h-full">
+                          {inventory?.discord?.avatar_url ? (
+                            <AvatarImage src={String(inventory.discord.avatar_url)} alt={displayName || "Avatar"} />
+                          ) : (
+                            <AvatarFallback className="text-[10px]">
+                              {(displayName || "Adventurer").slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                      </div>
+                    </button>
+                  </>
+                }
+              />
             </div>
           </div>
 
