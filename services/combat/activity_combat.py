@@ -1787,16 +1787,17 @@ async def _finish_victory(
         log.error("Quest progress failed: %s", e)
 
     raid_bonus_lines: List[str] = []
+    raid_bonus_payload: Optional[Dict[str, Any]] = None
     if ac.guild_raid_run_id is not None:
         try:
             from services.guild import guild_raid as guild_raid_mod
 
-            ok_rb, msg_rb, bonus_payload = await guild_raid_mod.grant_bonus_claim(
+            ok_rb, msg_rb, raid_bonus_payload = await guild_raid_mod.grant_bonus_claim(
                 db, char_svc, ac.guild_raid_run_id, char["id"]
             )
-            if ok_rb and bonus_payload:
-                bg = int(bonus_payload.get("bonus_gold") or 0)
-                bx = int(bonus_payload.get("bonus_xp") or 0)
+            if ok_rb and raid_bonus_payload:
+                bg = int(raid_bonus_payload.get("bonus_gold") or 0)
+                bx = int(raid_bonus_payload.get("bonus_xp") or 0)
                 if bg:
                     raid_bonus_lines.append(f"Raid bonus: +{bg:,} gold")
                 if bx:
@@ -1886,18 +1887,27 @@ async def _finish_victory(
         except Exception:
             pass
 
+    outcome: Dict[str, Any] = {
+        "type": "victory",
+        "title": "🏆 Victory!",
+        "lines": out_lines,
+        "xp": rewards["xp"],
+        "gold": rewards["gold"],
+        "leveled_up": xp_result.get("leveled_up", False),
+        "loot": loot_lines,
+    }
+    if raid_bonus_payload:
+        rb_gold = int(raid_bonus_payload.get("bonus_gold") or 0)
+        rb_xp = int(raid_bonus_payload.get("bonus_xp") or 0)
+        if rb_gold:
+            outcome["raid_bonus_gold"] = rb_gold
+        if rb_xp:
+            outcome["raid_bonus_xp"] = rb_xp
+
     return {
         "ok": True,
         "ended": True,
-        "outcome": {
-            "type": "victory",
-            "title": "🏆 Victory!",
-            "lines": out_lines,
-            "xp": rewards["xp"],
-            "gold": rewards["gold"],
-            "leveled_up": xp_result.get("leveled_up", False),
-            "loot": loot_lines,
-        },
+        "outcome": outcome,
     }
 
 

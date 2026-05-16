@@ -1007,14 +1007,36 @@ export async function postGuildRaidStrike(
   token: string,
   runId: string,
   guildId?: string,
-): Promise<{ ok?: boolean; message?: string; state?: Record<string, unknown> }> {
+): Promise<{
+  ok?: boolean;
+  message?: string;
+  state?: Record<string, unknown>;
+  rewards?: GuildRaidRewards;
+}> {
   const res = await fetch(apiUrl("/api/game/guild/raid/strike"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
     body: JSON.stringify({ run_id: runId }),
   });
-  return res.json() as Promise<{ ok?: boolean; message?: string; state?: Record<string, unknown> }>;
+  return res.json() as Promise<{
+    ok?: boolean;
+    message?: string;
+    state?: Record<string, unknown>;
+    rewards?: GuildRaidRewards;
+  }>;
 }
+
+export type GuildRaidRewards = {
+  raid_cleared?: boolean;
+  template_name?: string;
+  template_key?: string;
+  gold?: number;
+  guild_xp?: number;
+  participant_count?: number;
+  damage?: number;
+  bonus_gold?: number;
+  bonus_xp?: number;
+};
 
 export async function postGuildRaidCancel(
   token: string,

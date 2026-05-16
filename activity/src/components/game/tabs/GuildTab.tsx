@@ -16,6 +16,7 @@ import type {
   GuildInviteCandidate,
   GuildMePayload,
   GuildRaidActiveState,
+  GuildRaidRewards,
   GuildTechDefinition,
 } from "@/lib/apiTypes";
 import { toast } from "sonner";
@@ -141,6 +142,8 @@ export function GuildTab() {
   const [techBranch, setTechBranch] = useState<"economy" | "war" | "accord">("economy");
   const [techDonateStr, setTechDonateStr] = useState("100");
   const [raidTemplateKey, setRaidTemplateKey] = useState("gnoll_warren_raid");
+  const [raidRewardOpen, setRaidRewardOpen] = useState(false);
+  const [raidRewards, setRaidRewards] = useState<GuildRaidRewards | null>(null);
   /** Avoid full skeleton on every refetch after boss/bank actions (only first paint / not-in-guild). */
   const hasLoadedGuildHubRef = useRef(false);
 
@@ -358,7 +361,12 @@ export function GuildTab() {
     const r = await api.postGuildRaidStrike(accessToken, runId, guildId);
     if (!r.ok) toast.error(r.message || "Strike failed");
     else {
-      toast.message(r.message || "Strike!");
+      if (r.rewards?.raid_cleared) {
+        setRaidRewards(r.rewards);
+        setRaidRewardOpen(true);
+      } else {
+        toast.message(r.message || "Strike!");
+      }
       await refreshInventory();
       await loadMe();
     }
@@ -638,6 +646,64 @@ export function GuildTab() {
   return (
     <div className="guild-root">
       <div className="guild-container">
+        <Dialog open={raidRewardOpen} onOpenChange={setRaidRewardOpen}>
+          <DialogContent className="max-w-[min(calc(100vw-2rem),24rem)] sm:max-w-md gap-4 p-5 border border-[var(--border-default)] bg-[var(--bg-panel)]">
+            <DialogHeader className="space-y-2 text-center sm:text-center">
+              <DialogTitle className="text-lg font-cinzel tracking-wide text-[var(--gold-200)]">
+                Raid cleared!
+              </DialogTitle>
+              <DialogDescription className="text-sm text-[var(--text-muted)]">
+                {raidRewards?.template_name || "Guild sortie"} — rewards added to your character.
+              </DialogDescription>
+            </DialogHeader>
+            <div
+              className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-4 space-y-3"
+              style={{ margin: 0 }}
+            >
+              {typeof raidRewards?.damage === "number" ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">Final strike</span>
+                  <span className="font-mono font-semibold text-[var(--text-primary)]">
+                    {raidRewards.damage.toLocaleString()} damage
+                  </span>
+                </div>
+              ) : null}
+              {typeof raidRewards?.gold === "number" && raidRewards.gold > 0 ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">Your share</span>
+                  <span className="inline-flex items-center gap-1.5 font-mono font-semibold text-[var(--gold-200)]">
+                    <GoldCoin size={14} />+{raidRewards.gold.toLocaleString()} gold
+                  </span>
+                </div>
+              ) : null}
+              {typeof raidRewards?.guild_xp === "number" && raidRewards.guild_xp > 0 ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">Guild hall</span>
+                  <span className="font-mono font-semibold text-[var(--text-primary)]">
+                    +{raidRewards.guild_xp.toLocaleString()} guild XP
+                  </span>
+                </div>
+              ) : null}
+              {typeof raidRewards?.participant_count === "number" ? (
+                <p className="text-[11px] text-center text-[var(--text-muted)] pt-1 border-t border-[var(--border-default)]">
+                  {raidRewards.participant_count} participant{raidRewards.participant_count === 1 ? "" : "s"} · gold
+                  scales with party size
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="btn-gold w-full"
+              onClick={() => {
+                setRaidRewardOpen(false);
+                setRaidRewards(null);
+              }}
+            >
+              Collect
+            </button>
+          </DialogContent>
+        </Dialog>
+
         <Dialog
           open={inviteOpen}
           onOpenChange={(open) => {

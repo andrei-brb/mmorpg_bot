@@ -692,6 +692,14 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       titleText.toLowerCase().includes("defeated");
     const xp = typeof outcome.xp === "number" ? outcome.xp : null;
     const gold = typeof outcome.gold === "number" ? outcome.gold : null;
+    const raidBonusGold =
+      typeof (outcome as { raid_bonus_gold?: number }).raid_bonus_gold === "number"
+        ? (outcome as { raid_bonus_gold: number }).raid_bonus_gold
+        : null;
+    const raidBonusXp =
+      typeof (outcome as { raid_bonus_xp?: number }).raid_bonus_xp === "number"
+        ? (outcome as { raid_bonus_xp: number }).raid_bonus_xp
+        : null;
     const leveledUp = Boolean(outcome.leveled_up);
     const loot = Array.isArray(outcome.loot) ? outcome.loot : [];
     const rawLogLines = (outcome.lines || []).map(stripMd);
@@ -731,6 +739,18 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                     <span className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-black/25 px-2 py-1 text-[11px] font-semibold text-foreground/90">
                       <MiniIcon kind="gold" />
                       <span className="tabular-nums">+{gold.toLocaleString()}</span>
+                    </span>
+                  ) : null}
+                  {raidBonusGold != null && raidBonusGold > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-sm border border-purple-500/30 bg-purple-950/25 px-2 py-1 text-[11px] font-semibold text-purple-100">
+                      <MiniIcon kind="gold" />
+                      <span className="tabular-nums">+{raidBonusGold.toLocaleString()}</span> raid gold
+                    </span>
+                  ) : null}
+                  {raidBonusXp != null && raidBonusXp > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-sm border border-purple-500/30 bg-purple-950/25 px-2 py-1 text-[11px] font-semibold text-purple-100">
+                      <MiniIcon kind="xp" />
+                      <span className="tabular-nums">+{raidBonusXp.toLocaleString()}</span> raid XP
                     </span>
                   ) : null}
                   {leveledUp ? (

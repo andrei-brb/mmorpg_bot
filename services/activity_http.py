@@ -5758,11 +5758,13 @@ async def handle_guild_raid_strike(request: web.Request) -> web.Response:
 
     char_svc = CharacterService(db)
     bot = request.app.get("bot")
-    ok, msg, run = await guild_raid_mod.strike(db, char_svc, run_id, char, discord_bot=bot)
+    ok, msg, run, rewards = await guild_raid_mod.strike(db, char_svc, run_id, char, discord_bot=bot)
     if not ok:
         return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
     state = await guild_raid_mod.run_state_payload(db, run_id, _uuid_from_any(char["id"]), char_svc)
-    return web.json_response(_json_safe({"ok": True, "message": msg, "run": run, "state": state}))
+    return web.json_response(
+        _json_safe({"ok": True, "message": msg, "run": run, "state": state, "rewards": rewards})
+    )
 
 
 async def handle_guild_raid_state(request: web.Request) -> web.Response:
@@ -5878,7 +5880,7 @@ async def handle_guild_raid_complete(request: web.Request) -> web.Response:
         return web.json_response(_json_safe({"ok": False, "message": "Missing or invalid run_id."}), status=400)
     char_svc = CharacterService(db)
     bot = request.app.get("bot")
-    ok, msg = await guild_raid_mod.complete_run(
+    ok, msg, rewards = await guild_raid_mod.complete_run(
         db,
         char_svc,
         run_id,
@@ -5889,7 +5891,7 @@ async def handle_guild_raid_complete(request: web.Request) -> web.Response:
     if not ok:
         return web.json_response(_json_safe({"ok": False, "message": msg}), status=400)
     run = await db.fetchrow("SELECT * FROM guild_raid_runs WHERE id=$1", run_id)
-    return web.json_response(_json_safe({"ok": True, "run": dict(run) if run else None}))
+    return web.json_response(_json_safe({"ok": True, "run": dict(run) if run else None, "rewards": rewards}))
 
 
 async def handle_guild_invite_candidates(request: web.Request) -> web.Response:

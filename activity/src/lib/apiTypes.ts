@@ -652,6 +652,18 @@ export type GuildTechFundProgress = {
   required: number;
 };
 
+export type GuildRaidRewards = {
+  raid_cleared?: boolean;
+  template_name?: string;
+  template_key?: string;
+  gold?: number;
+  guild_xp?: number;
+  participant_count?: number;
+  damage?: number;
+  bonus_gold?: number;
+  bonus_xp?: number;
+};
+
 export type GuildRaidActiveState = {
   run: Record<string, unknown>;
   template?: Record<string, unknown>;

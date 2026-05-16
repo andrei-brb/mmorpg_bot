@@ -262,16 +262,18 @@ async def settle_run(
     char_svc,
     run_id: UUID,
     discord_bot: Any = None,
-) -> tuple[bool, str]:
+    *,
+    for_character_id: Optional[UUID] = None,
+) -> tuple[bool, str, Optional[Dict[str, Any]]]:
     run = await db.fetchrow("SELECT * FROM guild_raid_runs WHERE id=$1", run_id)
     if not run or run["status"] != "active":
-        return False, "Raid is not active."
+        return False, "Raid is not active.", None
     if int(run["boss_hp_remaining"] or 0) > 0:
-        return False, "Raid target still standing."
+        return False, "Raid target still standing.", None
 
     tpl = RAID_TEMPLATES.get(run["template_key"])
     if not tpl:
-        return False, "Invalid template."
+        return False, "Invalid template.", None
     guild_id = UUID(str(run["guild_id"]))
     n = await _participant_count(db, run_id)
     scale = 1.0 + 0.05 * max(0, n - 1)
@@ -331,7 +333,17 @@ async def settle_run(
         except Exception as e:
             log.warning("Discord announce after raid complete: %s", e)
 
-    return True, ""
+    rewards: Dict[str, Any] = {
+        "raid_cleared": True,
+        "template_name": tpl.get("name", run["template_key"]),
+        "template_key": run["template_key"],
+        "gold": gold_each,
+        "guild_xp": gxp,
+        "participant_count": n,
+    }
+    if for_character_id is not None:
+        rewards["character_id"] = str(for_character_id)
+    return True, "", rewards
 
 
 async def strike(
@@ -340,32 +352,32 @@ async def strike(
     run_id: UUID,
     char: Dict[str, Any],
     discord_bot: Any = None,
-) -> tuple[bool, str, Optional[Dict[str, Any]]]:
+) -> tuple[bool, str, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     run = await db.fetchrow("SELECT * FROM guild_raid_runs WHERE id=$1", run_id)
     if not run or run["status"] != "active":
-        return False, "Raid is not active.", None
+        return False, "Raid is not active.", None, None
     cid = UUID(str(char["id"]))
     gid = char.get("guild_id")
     if not gid or UUID(str(gid)) != UUID(str(run["guild_id"])):
-        return False, "Not a member of this guild.", None
+        return False, "Not a member of this guild.", None, None
     if not await _is_signed_up(db, run_id, cid):
-        return False, "Sign up for this raid first.", None
+        return False, "Sign up for this raid first.", None, None
 
     tpl = RAID_TEMPLATES.get(run["template_key"])
     if not tpl:
-        return False, "Invalid template.", None
+        return False, "Invalid template.", None, None
 
     n_today = await _strikes_today(db, run_id, cid)
     if n_today >= MAX_STRIKES_PER_CHAR_PER_DAY:
-        return False, "Daily strike limit reached for this raid.", None
+        return False, "Daily strike limit reached for this raid.", None, None
 
     cd = await char_svc.on_cooldown(cid, "guild_raid_strike")
     if cd:
-        return False, f"Wait {int(cd) + 1}s before another strike.", None
+        return False, f"Wait {int(cd) + 1}s before another strike.", None, None
 
     hp_rem = int(run["boss_hp_remaining"] or 0)
     if hp_rem <= 0:
-        return False, "Raid target already destroyed.", None
+        return False, "Raid target already destroyed.", None, None
 
     gid = UUID(str(run["guild_id"]))
     dmg = await _strike_damage(db, gid, char, tpl)
@@ -389,11 +401,21 @@ async def strike(
     await char_svc.set_cooldown(cid, "guild_raid_strike", STRIKE_COOLDOWN_S)
 
     defeated = new_hp <= 0
+    rewards: Optional[Dict[str, Any]] = None
     if defeated:
-        await settle_run(db, char_svc, run_id, discord_bot)
+        _ok, _msg, rewards = await settle_run(
+            db, char_svc, run_id, discord_bot, for_character_id=cid
+        )
+        if rewards:
+            rewards["damage"] = applied
 
     run2 = await db.fetchrow("SELECT * FROM guild_raid_runs WHERE id=$1", run_id)
-    return True, f"Strike for {applied:,} damage." + (" Raid cleared!" if defeated else ""), dict(run2) if run2 else None
+    return (
+        True,
+        f"Strike for {applied:,} damage." + (" Raid cleared!" if defeated else ""),
+        dict(run2) if run2 else None,
+        rewards,
+    )
 
 
 async def _bonus_claim_allowed(run: Dict[str, Any]) -> bool:
@@ -600,12 +622,14 @@ async def complete_run(
     _actor_character_id: UUID,
     guild_rank: Optional[str],
     discord_bot: Any = None,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, Optional[Dict[str, Any]]]:
     if not can_officer_actions(guild_rank):
-        return False, "Raids complete automatically when HP reaches zero. Officers may cancel a stuck raid."
+        return False, "Raids complete automatically when HP reaches zero. Officers may cancel a stuck raid.", None
     run = await db.fetchrow("SELECT * FROM guild_raid_runs WHERE id=$1", run_id)
     if not run:
-        return False, "Raid not found."
+        return False, "Raid not found.", None
     if run["status"] == "active" and int(run["boss_hp_remaining"] or 0) <= 0:
-        return await settle_run(db, char_svc, run_id, discord_bot)
-    return False, "Use Strike to reduce raid HP, or Cancel to abort."
+        return await settle_run(
+            db, char_svc, run_id, discord_bot, for_character_id=_actor_character_id
+        )
+    return False, "Use Strike to reduce raid HP, or Cancel to abort.", None

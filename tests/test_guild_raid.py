@@ -40,11 +40,16 @@ class TestGuildRaidStrike(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(guild_raid_mod, "_strike_damage", AsyncMock(return_value=50)):
             with patch.object(guild_raid_mod, "_is_signed_up", AsyncMock(return_value=True)):
-                with patch.object(guild_raid_mod, "settle_run", AsyncMock(return_value=(True, ""))) as settle:
-                    ok, msg, _ = await guild_raid_mod.strike(db, char_svc, run_id, char)
+                with patch.object(
+                    guild_raid_mod,
+                    "settle_run",
+                    AsyncMock(return_value=(True, "", {"raid_cleared": True, "gold": 150})),
+                ) as settle:
+                    ok, msg, _, rewards = await guild_raid_mod.strike(db, char_svc, run_id, char)
 
         self.assertTrue(ok)
         self.assertIn("cleared", msg.lower())
+        self.assertTrue(rewards and rewards.get("raid_cleared"))
         settle.assert_awaited_once()
 
 
