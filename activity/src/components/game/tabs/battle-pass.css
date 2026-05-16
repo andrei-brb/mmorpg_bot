@@ -3,18 +3,39 @@
   margin-top: 0.75rem;
 }
 
+/* ── Game-style scrollbar ─────────────────────────────────────────────────── */
 .bp-lane-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  padding-bottom: 0.25rem;
+  scrollbar-color: #b89758 rgba(8, 6, 4, 0.6);
+  padding-bottom: 0.35rem;
 }
 
 .bp-lane-scroll::-webkit-scrollbar {
   height: 6px;
 }
 
+.bp-lane-scroll::-webkit-scrollbar-track {
+  background: rgba(8, 6, 4, 0.6);
+  border-radius: 0;
+  border-top: 1px solid rgba(184, 151, 88, 0.2);
+  border-bottom: 1px solid rgba(184, 151, 88, 0.2);
+}
+
+.bp-lane-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #5d4720 0%, #d4a94e 40%, #b89758 60%, #5d4720 100%);
+  border-radius: 0;
+  border: none;
+  box-shadow: 0 0 4px rgba(212, 169, 78, 0.5);
+}
+
+.bp-lane-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #8c6b34 0%, #f5dc8a 40%, #d4a94e 60%, #8c6b34 100%);
+}
+
+/* ── Lane layout ──────────────────────────────────────────────────────────── */
 .bp-lane-row {
   display: flex;
   gap: 0.65rem;
@@ -30,6 +51,7 @@
   margin-bottom: 0.35rem;
 }
 
+/* ── Tier cards ───────────────────────────────────────────────────────────── */
 .bp-tier-card {
   flex: 0 0 auto;
   width: 7.25rem;
@@ -56,8 +78,11 @@
   border-color: var(--verdant);
 }
 
+/* Locked premium cards: keep fully readable, just tint border amber */
 .bp-tier-card.is-locked-premium {
-  opacity: 0.55;
+  opacity: 1;
+  border-color: rgba(184, 151, 88, 0.35);
+  background: rgba(20, 14, 4, 0.85);
 }
 
 .bp-tier-num {
@@ -77,17 +102,37 @@
   align-items: center;
 }
 
+/* ── Premium overlay: remove full blackout, use only a subtle vignette ───── */
 .bp-premium-overlay {
   position: relative;
 }
 
+/* Thin lock-bar at the top of the premium lane instead of full black cover */
+.bp-premium-overlay.is-locked {
+  border-top: 1px solid rgba(184, 151, 88, 0.3);
+}
+
+.bp-premium-overlay.is-locked .bp-lane-label {
+  color: rgba(184, 151, 88, 0.6);
+}
+
+/* Remove the old full-cover dark pseudo-element */
 .bp-premium-overlay.is-locked::after {
-  content: "";
+  content: none;
+}
+
+/* Lock icon on each locked-premium card (rendered via ::before) */
+.bp-tier-card.is-locked-premium::before {
+  content: "🔒";
+  font-size: 9px;
+  opacity: 0.55;
   position: absolute;
-  inset: 0;
-  background: rgba(8, 6, 4, 0.45);
-  pointer-events: none;
-  border-radius: 2px;
+  top: 4px;
+  right: 5px;
+}
+
+.bp-tier-card {
+  position: relative; /* needed for the ::before lock icon */
 }
 
 @keyframes bp-tier-glow {
