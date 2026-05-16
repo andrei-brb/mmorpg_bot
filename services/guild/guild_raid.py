@@ -288,6 +288,12 @@ async def settle_run(
         cid = UUID(str(p["character_id"]))
         if gold_each > 0:
             await char_svc.add_gold(cid, gold_each, "guild_raid_reward")
+        try:
+            from services.battle_pass.battle_pass_service import grant_raid_clear_xp
+
+            await grant_raid_clear_xp(db, cid, run_id)
+        except Exception:
+            pass
 
     await db.execute(
         """
@@ -303,6 +309,13 @@ async def settle_run(
             guild_id,
             gxp,
         )
+
+    try:
+        from services.guild import guild_quests as guild_quests_mod
+
+        await guild_quests_mod.record_event(db, guild_id, "raid_clear", 1)
+    except Exception:
+        pass
 
     from services.guild.guild_feed import post_system
 
@@ -399,6 +412,13 @@ async def strike(
         new_hp,
     )
     await char_svc.set_cooldown(cid, "guild_raid_strike", STRIKE_COOLDOWN_S)
+
+    try:
+        from services.guild import guild_quests as guild_quests_mod
+
+        await guild_quests_mod.record_event(db, gid, "raid_strike", 1, cid)
+    except Exception:
+        pass
 
     defeated = new_hp <= 0
     rewards: Optional[Dict[str, Any]] = None

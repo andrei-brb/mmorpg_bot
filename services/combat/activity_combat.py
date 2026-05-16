@@ -1547,6 +1547,22 @@ async def _finish_party_victory(
         await db.execute("UPDATE characters SET combat_status='idle' WHERE id=$1", ch["id"])
         if xp_result.get("leveled_up"):
             summary_lines.append(f"{ch['name']} leveled up: {xp_result['old_level']} → {xp_result['new_level']}")
+        try:
+            from services.battle_pass.battle_pass_service import grant_dungeon_floor_xp
+
+            await grant_dungeon_floor_xp(db, UUID(str(ch["id"])), run_id, floor)
+        except Exception:
+            pass
+        ch_guild = ch.get("guild_id")
+        if ch_guild:
+            try:
+                from services.guild import guild_quests as guild_quests_mod
+
+                await guild_quests_mod.record_event(
+                    db, UUID(str(ch_guild)), "dungeon_floor", 1, UUID(str(ch["id"]))
+                )
+            except Exception:
+                pass
 
     if floor >= cfg.floors:
         await dungeon_svc.complete_run(run_id, "victory")
@@ -1903,6 +1919,16 @@ async def _finish_victory(
             outcome["raid_bonus_gold"] = rb_gold
         if rb_xp:
             outcome["raid_bonus_xp"] = rb_xp
+
+    try:
+        from services.battle_pass.battle_pass_service import grant_combat_victory_xp
+        from services.guild import guild_quests as guild_quests_mod
+
+        await grant_combat_victory_xp(db, UUID(str(char["id"])), session.enemy_key or "", session.is_boss)
+        if ig:
+            await guild_quests_mod.record_event(db, ig, "combat_kill", 1, UUID(str(char["id"])))
+    except Exception:
+        pass
 
     return {
         "ok": True,

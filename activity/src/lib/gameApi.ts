@@ -827,6 +827,29 @@ export async function postGuildCheckin(
   return res.json() as Promise<{ ok: boolean; message?: string; checkin?: GuildCheckinPayload }>;
 }
 
+export async function postGuildQuestClaim(
+  token: string,
+  questKey: string,
+  guildId?: string,
+): Promise<{
+  ok?: boolean;
+  message?: string;
+  delivery?: import("./apiTypes").RewardDelivery;
+  quests?: { daily: import("./apiTypes").GuildQuestRow[]; weekly: import("./apiTypes").GuildQuestRow[] };
+}> {
+  const res = await fetch(apiUrl("/api/game/guild/quests/claim"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ quest_key: questKey }),
+  });
+  return res.json() as Promise<{
+    ok?: boolean;
+    message?: string;
+    delivery?: import("./apiTypes").RewardDelivery;
+    quests?: { daily: import("./apiTypes").GuildQuestRow[]; weekly: import("./apiTypes").GuildQuestRow[] };
+  }>;
+}
+
 export async function getGuildInviteCandidates(
   token: string,
   query: string,

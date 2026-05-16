@@ -135,6 +135,13 @@ async def perform_checkin(
         )
         return False, "Check-in failed — try again shortly.", await status_payload(db, guild_id, character_id)
 
+    try:
+        from services.guild import guild_quests as guild_quests_mod
+
+        await guild_quests_mod.record_event(db, guild_id, "checkin", 1, character_id)
+    except Exception:
+        pass
+
     st = await status_payload(db, guild_id, character_id)
     msg = (
         f"Checked in! +{CHECKIN_GOLD} gold, +{CHECKIN_PLAYER_XP} XP, "

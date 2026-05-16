@@ -3306,6 +3306,17 @@ async def handle_explore(request: web.Request) -> web.Response:
         log.warning("NPC encounter roll failed: %s", e)
 
     # refresh char snapshot for UI
+    if outcome["type"] in ("enemy", "boss", "loot"):
+        try:
+            from services.battle_pass.battle_pass_service import grant_explore_xp
+            from services.guild import guild_quests as guild_quests_mod
+
+            await grant_explore_xp(db, _uuid_from_any(char["id"]))
+            if ig:
+                await guild_quests_mod.record_event(db, ig, "explore", 1, _uuid_from_any(char["id"]))
+        except Exception:
+            pass
+
     fresh = await char_svc.get_character(discord_id)
     return web.json_response(
         _json_safe(
@@ -5180,6 +5191,9 @@ async def handle_guild_me(request: web.Request) -> web.Response:
     if active_row:
         active_raid = await guild_raid_mod.run_state_payload(db, UUID(str(active_row["id"])), char_id, char_svc)
     checkin = await guild_checkin_mod.status_payload(db, gid, char_id)
+    from services.guild import guild_quests as guild_quests_mod
+
+    quests = await guild_quests_mod.list_for_guild(db, gid, char_id)
     return web.json_response(
         _json_safe(
             {
@@ -5203,9 +5217,54 @@ async def handle_guild_me(request: web.Request) -> web.Response:
                     "active": active_raid,
                 },
                 "checkin": checkin,
+                "quests": quests,
             }
         )
     )
+
+
+async def handle_guild_quest_claim(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char or not char.get("guild_id"):
+        return web.json_response(_json_safe({"ok": False, "error": "not_in_guild"}), status=400)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    quest_key = str(body.get("quest_key") or "").strip()
+    if not quest_key:
+        return web.json_response(_json_safe({"ok": False, "message": "quest_key required"}), status=400)
+    from services.guild import guild_quests as guild_quests_mod
+
+    char_svc = CharacterService(db)
+    gid = _uuid_from_any(char["guild_id"])
+    char_id = _uuid_from_any(char["id"])
+    ok, msg, delivery, quests = await guild_quests_mod.claim(db, char_svc, gid, char_id, quest_key)
+    status = 200 if ok else 400
+    return web.json_response(
+        _json_safe({"ok": ok, "message": msg, "delivery": delivery, "quests": quests}),
+        status=status,
+    )
+
+
+async def handle_battle_pass_unlock_premium(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    from services.battle_pass.battle_pass_service import BattlePassService
+
+    bp = BattlePassService(db)
+    ok, msg = await bp.unlock_premium(_uuid_from_any(char["id"]))
+    state = await bp.get_state(_uuid_from_any(char["id"]))
+    return web.json_response(_json_safe({"ok": ok, "message": msg, "battle_pass": state}), status=200 if ok else 400)
 
 
 async def handle_guild_checkin_post(request: web.Request) -> web.Response:
@@ -6164,6 +6223,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/battle-pass", handle_battle_pass_get)
     app.router.add_post("/api/game/battle-pass/claim", handle_battle_pass_claim)
     app.router.add_post("/api/game/battle-pass/playtime", handle_battle_pass_playtime)
+    app.router.add_post("/api/game/battle-pass/unlock-premium", handle_battle_pass_unlock_premium)
     app.router.add_post("/api/game/daily-login/claim", handle_daily_login_claim)
     app.router.add_get("/api/game/talents", handle_talents_get)
     app.router.add_post("/api/game/talents/allocate", handle_talents_allocate)
@@ -6185,6 +6245,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/guild/create", handle_guild_create)
     app.router.add_post("/api/game/guild/checkin", handle_guild_checkin_post)
     app.router.add_get("/api/game/guild/me", handle_guild_me)
+    app.router.add_post("/api/game/guild/quests/claim", handle_guild_quest_claim)
     app.router.add_get("/api/game/guild/invite/candidates", handle_guild_invite_candidates)
     app.router.add_post("/api/game/guild/invite/send", handle_guild_invite_send)
     app.router.add_post("/api/game/guild/bank/deposit", handle_guild_bank_deposit)

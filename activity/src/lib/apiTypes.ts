@@ -635,6 +635,30 @@ export type AuctionListingRow = {
   min_bid: number;
 };
 
+/** Shared reward payload from BP / guild quest / raid claims */
+export type RewardDelivery = {
+  gold?: number;
+  character_xp?: number;
+  crafting_xp?: number;
+  guild_xp?: number;
+  items?: Array<{ template_id?: string; quantity?: number }>;
+  failures?: Array<{ template_id?: string; reason?: string }>;
+};
+
+export type GuildQuestRow = {
+  key: string;
+  period: "daily" | "weekly";
+  name: string;
+  description: string;
+  metric: string;
+  target: number;
+  current: number;
+  completed: boolean;
+  my_claimed: boolean;
+  can_claim: boolean;
+  rewards: { gold?: number; character_xp?: number; guild_xp?: number };
+};
+
 /** GET /api/game/guild/me + related guild hub payloads */
 export type GuildTechDefinition = {
   id: string;
@@ -748,6 +772,7 @@ export type GuildMePayload = {
     active?: GuildRaidActiveState | null;
   };
   checkin?: GuildCheckinPayload;
+  quests?: { daily: GuildQuestRow[]; weekly: GuildQuestRow[] };
 };
 
 /** GET /api/game/battle-pass */
@@ -758,6 +783,7 @@ export type BattlePassTierRow = {
   unlocked?: boolean;
   claimed?: boolean;
   claimable?: boolean;
+  locked_premium?: boolean;
 };
 
 export type BattlePassStatePayload = {
@@ -781,6 +807,8 @@ export type BattlePassStatePayload = {
     premium_unlocked?: boolean;
   } | null;
   tiers?: BattlePassTierRow[];
+  tiers_free?: BattlePassTierRow[];
+  tiers_premium?: BattlePassTierRow[];
   daily_login?: {
     current_streak: number;
     longest_streak: number;

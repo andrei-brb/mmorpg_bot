@@ -3,21 +3,18 @@ import { CalendarCheck, CalendarDays, Castle, Cpu, Crown, Flag, ShieldHalf, Swor
 import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RewardRevealDialog } from "@/components/game/RewardRevealDialog";
 import * as api from "@/lib/gameApi";
 import type {
   GuildFeedMessage,
   GuildInviteCandidate,
   GuildMePayload,
+  GuildQuestRow,
   GuildRaidActiveState,
   GuildRaidRewards,
   GuildTechDefinition,
+  RewardDelivery,
 } from "@/lib/apiTypes";
 import { toast } from "sonner";
 import "./guild.css";
@@ -144,6 +141,11 @@ export function GuildTab() {
   const [raidTemplateKey, setRaidTemplateKey] = useState("gnoll_warren_raid");
   const [raidRewardOpen, setRaidRewardOpen] = useState(false);
   const [raidRewards, setRaidRewards] = useState<GuildRaidRewards | null>(null);
+  const [questPeriod, setQuestPeriod] = useState<"daily" | "weekly">("daily");
+  const [questClaimKey, setQuestClaimKey] = useState<string | null>(null);
+  const [questRewardOpen, setQuestRewardOpen] = useState(false);
+  const [questRewardDelivery, setQuestRewardDelivery] = useState<RewardDelivery | null>(null);
+  const [questRewardTitle, setQuestRewardTitle] = useState("Quest reward");
   /** Avoid full skeleton on every refetch after boss/bank actions (only first paint / not-in-guild). */
   const hasLoadedGuildHubRef = useRef(false);
 
@@ -627,6 +629,31 @@ export function GuildTab() {
   const mottoText = motd || "No motto of the day — officers can set one in Discord.";
   const ci = data.checkin;
 
+  const onClaimQuest = async (q: GuildQuestRow) => {
+    if (!accessToken || questClaimKey) return;
+    setQuestClaimKey(q.key);
+    try {
+      const r = await api.postGuildQuestClaim(accessToken, q.key, guildId);
+      if (!r.ok) {
+        toast.error(r.message || "Could not claim quest.");
+        return;
+      }
+      if (r.quests) {
+        setData((prev) => (prev ? { ...prev, quests: r.quests } : prev));
+      } else {
+        await loadMe();
+      }
+      setQuestRewardTitle(q.name);
+      setQuestRewardDelivery(r.delivery ?? null);
+      setQuestRewardOpen(true);
+      await refreshInventory();
+    } catch (e) {
+      toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/quests/claim")));
+    } finally {
+      setQuestClaimKey(null);
+    }
+  };
+
   const onCheckin = async () => {
     if (!accessToken || checkinBusy) return;
     setCheckinBusy(true);
@@ -646,63 +673,40 @@ export function GuildTab() {
   return (
     <div className="guild-root">
       <div className="guild-container">
-        <Dialog open={raidRewardOpen} onOpenChange={setRaidRewardOpen}>
-          <DialogContent className="max-w-[min(calc(100vw-2rem),24rem)] sm:max-w-md gap-4 p-5 border border-[var(--border-default)] bg-[var(--bg-panel)]">
-            <DialogHeader className="space-y-2 text-center sm:text-center">
-              <DialogTitle className="text-lg font-cinzel tracking-wide text-[var(--gold-200)]">
-                Raid cleared!
-              </DialogTitle>
-              <DialogDescription className="text-sm text-[var(--text-muted)]">
-                {raidRewards?.template_name || "Guild sortie"} — rewards added to your character.
-              </DialogDescription>
-            </DialogHeader>
-            <div
-              className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-4 space-y-3"
-              style={{ margin: 0 }}
-            >
-              {typeof raidRewards?.damage === "number" ? (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-[var(--text-muted)]">Final strike</span>
-                  <span className="font-mono font-semibold text-[var(--text-primary)]">
-                    {raidRewards.damage.toLocaleString()} damage
-                  </span>
-                </div>
-              ) : null}
-              {typeof raidRewards?.gold === "number" && raidRewards.gold > 0 ? (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-[var(--text-muted)]">Your share</span>
-                  <span className="inline-flex items-center gap-1.5 font-mono font-semibold text-[var(--gold-200)]">
-                    <GoldCoin size={14} />+{raidRewards.gold.toLocaleString()} gold
-                  </span>
-                </div>
-              ) : null}
-              {typeof raidRewards?.guild_xp === "number" && raidRewards.guild_xp > 0 ? (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-[var(--text-muted)]">Guild hall</span>
-                  <span className="font-mono font-semibold text-[var(--text-primary)]">
-                    +{raidRewards.guild_xp.toLocaleString()} guild XP
-                  </span>
-                </div>
-              ) : null}
-              {typeof raidRewards?.participant_count === "number" ? (
-                <p className="text-[11px] text-center text-[var(--text-muted)] pt-1 border-t border-[var(--border-default)]">
-                  {raidRewards.participant_count} participant{raidRewards.participant_count === 1 ? "" : "s"} · gold
-                  scales with party size
-                </p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="btn-gold w-full"
-              onClick={() => {
-                setRaidRewardOpen(false);
-                setRaidRewards(null);
-              }}
-            >
-              Collect
-            </button>
-          </DialogContent>
-        </Dialog>
+        <RewardRevealDialog
+          open={raidRewardOpen}
+          onOpenChange={(open) => {
+            setRaidRewardOpen(open);
+            if (!open) setRaidRewards(null);
+          }}
+          title="Raid cleared!"
+          description={`${raidRewards?.template_name || "Guild sortie"} — rewards added to your character.`}
+          delivery={
+            raidRewards
+              ? {
+                  gold: raidRewards.gold,
+                  guild_xp: raidRewards.guild_xp,
+                }
+              : null
+          }
+          extraRows={
+            typeof raidRewards?.damage === "number"
+              ? [{ label: "Final strike", value: `${raidRewards.damage.toLocaleString()} damage` }]
+              : undefined
+          }
+          footnote={
+            typeof raidRewards?.participant_count === "number"
+              ? `${raidRewards.participant_count} participant${raidRewards.participant_count === 1 ? "" : "s"} · gold scales with party size`
+              : undefined
+          }
+        />
+        <RewardRevealDialog
+          open={questRewardOpen}
+          onOpenChange={setQuestRewardOpen}
+          title={questRewardTitle}
+          description="Hall quest chest — added to your character."
+          delivery={questRewardDelivery}
+        />
 
         <Dialog
           open={inviteOpen}
@@ -888,6 +892,77 @@ export function GuildTab() {
                 {ci.checked_today ? "Done for today" : checkinBusy ? "…" : "Check in"}
               </button>
             </div>
+          </Panel>
+        ) : null}
+
+        {data.quests ? (
+          <Panel>
+            <SectionHeader
+              kicker="Hall goals"
+              title="Quest board"
+              right={
+                <div className="flex gap-1">
+                  {(["daily", "weekly"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={questPeriod === p ? "btn-gold !px-3 !py-1 !text-[10px]" : "btn-ghost !px-3 !py-1 !text-[10px]"}
+                      onClick={() => setQuestPeriod(p)}
+                    >
+                      {p === "daily" ? "Daily" : "Weekly"}
+                    </button>
+                  ))}
+                </div>
+              }
+            />
+            <ul className="space-y-3" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {(questPeriod === "daily" ? data.quests.daily : data.quests.weekly).map((q) => {
+                const pct = q.target > 0 ? Math.min(100, Math.round((q.current / q.target) * 100)) : 0;
+                const rewardBits = [
+                  q.rewards.gold ? `${q.rewards.gold} gold` : null,
+                  q.rewards.character_xp ? `${q.rewards.character_xp} XP` : null,
+                  q.rewards.guild_xp ? `${q.rewards.guild_xp} guild XP` : null,
+                ].filter(Boolean);
+                return (
+                  <li
+                    key={q.key}
+                    className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-void)]/50 p-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                        <div className="font-display text-sm font-semibold text-[var(--text-primary)]">{q.name}</div>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1 mb-0 leading-relaxed">{q.description}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-2 mb-0">
+                          Reward: {rewardBits.join(" · ") || "—"}
+                        </p>
+                      </div>
+                      {q.my_claimed ? (
+                        <span className="pill success">Claimed</span>
+                      ) : q.can_claim ? (
+                        <button
+                          type="button"
+                          className="btn-gold !px-3 !py-1.5 !text-[10px]"
+                          disabled={questClaimKey === q.key}
+                          onClick={() => void onClaimQuest(q)}
+                        >
+                          {questClaimKey === q.key ? "…" : "Claim"}
+                        </button>
+                      ) : q.completed ? (
+                        <span className="pill violet">Complete</span>
+                      ) : (
+                        <span className="pill">{pct}%</span>
+                      )}
+                    </div>
+                    <div className="bar-track mt-3" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="bar-fill" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="font-mono text-[10px] text-[var(--text-muted)] mt-1">
+                      {q.current.toLocaleString()} / {q.target.toLocaleString()}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </Panel>
         ) : null}
 

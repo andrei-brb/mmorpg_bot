@@ -73,6 +73,18 @@ async def deposit(
 
     await db.execute("UPDATE guilds SET bank_gold = bank_gold + $2 WHERE id=$1", guild_id, amount)
     await append_ledger(db, guild_id, character_id, amount, "donation", {"amount": amount})
+    try:
+        from services.guild import guild_quests as guild_quests_mod
+
+        await guild_quests_mod.record_event(db, guild_id, "bank_deposit", amount, character_id)
+    except Exception:
+        pass
+    try:
+        from services.battle_pass.battle_pass_service import grant_bank_donate_xp
+
+        await grant_bank_donate_xp(db, character_id, amount)
+    except Exception:
+        pass
     return True, ""
 
 

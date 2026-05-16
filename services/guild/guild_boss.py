@@ -189,6 +189,13 @@ async def apply_hit(
     )
     await char_svc.set_cooldown(cid, "guild_boss_hit", HIT_COOLDOWN_S)
 
+    try:
+        from services.battle_pass.battle_pass_service import grant_guild_boss_hit_xp
+
+        await grant_guild_boss_hit_xp(db, cid, encounter_id)
+    except Exception:
+        pass
+
     if defeated:
         await settle_encounter(db, encounter_id, "defeated", discord_bot)
         enc2 = await get_encounter_row(db, encounter_id)
@@ -247,6 +254,12 @@ async def settle_encounter(db, encounter_id: UUID, how: str, discord_bot: Any = 
     totals: Dict[UUID, int] = {UUID(str(r["character_id"])): int(r["total"] or 0) for r in rows}
 
     if how == "defeated":
+        try:
+            from services.guild import guild_quests as guild_quests_mod
+
+            await guild_quests_mod.record_event(db, guild_id, "boss_defeat", 1)
+        except Exception:
+            pass
         pool = int(tpl["defeat_gold_pool"])
         gxp = int(tpl["defeat_guild_xp"])
     else:
@@ -265,6 +278,13 @@ async def settle_encounter(db, encounter_id: UUID, how: str, discord_bot: Any = 
     for char_id, gold in awards.items():
         if gold > 0:
             await char_svc.add_gold(char_id, gold, "guild_boss_reward")
+        if how == "defeated":
+            try:
+                from services.battle_pass.battle_pass_service import grant_guild_boss_defeat_xp
+
+                await grant_guild_boss_defeat_xp(db, char_id, encounter_id)
+            except Exception:
+                pass
 
     await post_system(
         db,

@@ -746,6 +746,31 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_guild_checkins_guild_day
                 ON guild_checkins(guild_id, checkin_day DESC);
             """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_quest_progress (
+                    guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    quest_key       VARCHAR(64) NOT NULL,
+                    period_key      VARCHAR(32) NOT NULL,
+                    current_value   BIGINT NOT NULL DEFAULT 0,
+                    completed_at    TIMESTAMPTZ,
+                    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, quest_key, period_key)
+                );
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_quest_claims (
+                    guild_id        UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    quest_key       VARCHAR(64) NOT NULL,
+                    period_key      VARCHAR(32) NOT NULL,
+                    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    claimed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (guild_id, quest_key, period_key, character_id)
+                );
+            """)
+            await c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_guild_quest_progress_guild
+                ON guild_quest_progress(guild_id, period_key);
+            """)
 
             # Social (friends, ignore, whispers)
             await c.execute("""
