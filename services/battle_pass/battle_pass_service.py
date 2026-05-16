@@ -81,6 +81,7 @@ class BattlePassService:
             now,
         )
         if row:
+            await self._seed_tier_rewards_if_empty(int(row["id"]))
             return dict(row)
 
         upcoming = await self.db.fetchrow(
