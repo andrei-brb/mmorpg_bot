@@ -2,6 +2,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -56,15 +57,15 @@ export function RewardRevealDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(calc(100vw-2rem),24rem)] sm:max-w-md gap-4 p-5 border border-[var(--border-default)] bg-[var(--bg-panel)]">
-        <DialogHeader className="space-y-2 text-center sm:text-center">
+      <DialogContent className="flex max-w-[min(calc(100vw-2rem),24rem)] flex-col gap-3 border border-[var(--border-default)] bg-[var(--bg-panel)] p-5 sm:max-w-md">
+        <DialogHeader className="space-y-1.5 text-center sm:text-center">
           <DialogTitle className="text-lg font-cinzel tracking-wide text-[var(--gold-200)]">{title}</DialogTitle>
           {description ? (
             <DialogDescription className="text-sm text-[var(--text-muted)]">{description}</DialogDescription>
           ) : null}
         </DialogHeader>
         {hasBody ? (
-          <div className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-4 space-y-3">
+          <div className="rounded-sm border border-[var(--border-default)] bg-[var(--bg-panel-raised)] p-3.5 space-y-3">
             {extraRows?.map((row) => (
               <div key={row.label} className="flex items-center justify-between text-sm">
                 <span className="text-[var(--text-muted)]">{row.label}</span>
@@ -116,9 +117,15 @@ export function RewardRevealDialog({
             ) : null}
           </div>
         ) : null}
-        <button type="button" className="btn-gold w-full" onClick={() => onOpenChange(false)}>
-          Collect
-        </button>
+        <DialogFooter className="mt-1 flex flex-row justify-end border-t border-[var(--border-default)] pt-3 sm:justify-end">
+          <button
+            type="button"
+            className="btn-gold !w-auto !min-w-[7.5rem] whitespace-nowrap !px-5 !py-2 !text-[11px]"
+            onClick={() => onOpenChange(false)}
+          >
+            Collect
+          </button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
