@@ -17,24 +17,26 @@ async def upsert_pending_invite(
 ) -> None:
     """Create or refresh a pending invite (expires prior pending rows for same pair)."""
     expires_at = datetime.now(timezone.utc) + timedelta(days=days)
-    await db.execute(
-        """
-        UPDATE guild_invites SET status='expired'
-        WHERE guild_id=$1 AND invitee_player_id=$2 AND status='pending'
-        """,
-        guild_id,
-        invitee_player_id,
-    )
-    await db.execute(
-        """
-        INSERT INTO guild_invites (guild_id, invitee_player_id, inviter_character_id, expires_at)
-        VALUES ($1, $2, $3, $4)
-        """,
-        guild_id,
-        invitee_player_id,
-        inviter_character_id,
-        expires_at,
-    )
+    # Expire-then-insert atomically so a concurrent call can't leave two pending rows.
+    async with db.transaction() as tx:
+        await tx.execute(
+            """
+            UPDATE guild_invites SET status='expired'
+            WHERE guild_id=$1 AND invitee_player_id=$2 AND status='pending'
+            """,
+            guild_id,
+            invitee_player_id,
+        )
+        await tx.execute(
+            """
+            INSERT INTO guild_invites (guild_id, invitee_player_id, inviter_character_id, expires_at)
+            VALUES ($1, $2, $3, $4)
+            """,
+            guild_id,
+            invitee_player_id,
+            inviter_character_id,
+            expires_at,
+        )
 
 
 async def get_valid_pending_invite(
