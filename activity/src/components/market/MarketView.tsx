@@ -36,7 +36,13 @@ import {
 import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import * as api from "@/lib/gameApi";
-import type { InvRow, MarketListingRow, ShopCatalogItem, AuctionListingRow } from "@/lib/apiTypes";
+import type {
+  InvRow,
+  MarketListingRow,
+  ShopCatalogItem,
+  AuctionListingRow,
+  MarketHistoryEntry,
+} from "@/lib/apiTypes";
 
 const RULES = {
   MAX_LISTINGS_PER_HERO: 10,
@@ -48,6 +54,19 @@ type ItemType = "weapon" | "armor" | "accessory" | "material" | "gear";
 type Mode = "auction" | "market" | "supplies";
 type SortKey = "newest" | "price-asc" | "price-desc" | "ending-soon";
 type View = "browse" | "mine" | "history";
+
+function historyKindLabel(kind: string): string {
+  const map: Record<string, string> = {
+    bought: "Bought",
+    sold: "Sold",
+    bid: "Bid placed",
+    outbid_refund: "Outbid refund",
+    buyout: "Buyout",
+    refund: "Refund",
+    trade: "Trade",
+  };
+  return map[kind] || kind.replace(/_/g, " ");
+}
 
 type MarketListingUI = {
   id: string;
@@ -1515,6 +1534,8 @@ export function MarketView() {
   const [historyTab, setHistoryTab] = useState(false);
   const [auctionListingsRaw, setAuctionListingsRaw] = useState<AuctionListingRow[]>([]);
   const [auctionLoading, setAuctionLoading] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<MarketHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (mode !== "market") setHistoryTab(false);
@@ -1591,6 +1612,25 @@ export function MarketView() {
     void refreshAuctions();
   }, [mode, accessToken, refreshAuctions]);
 
+  const refreshHistory = useCallback(async () => {
+    if (!accessToken) return;
+    setHistoryLoading(true);
+    try {
+      const j = await api.getMarketHistory(accessToken, guildId);
+      setHistoryEntries(j.entries || []);
+    } catch (e) {
+      console.warn(e);
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    if (!historyTab || !accessToken) return;
+    void refreshHistory();
+  }, [historyTab, accessToken, refreshHistory]);
+
   const handleBuy = useCallback(
     async (item: MarketListingUI) => {
       if (!accessToken) return;
@@ -1599,6 +1639,7 @@ export function MarketView() {
         if (res.ok) {
           toast.success(`Purchased ${item.name}!`, { description: res.message || `−${fmtGold(item.price)} 🪙` });
           await refreshAll();
+          if (historyTab) void refreshHistory();
         } else {
           toast.error(res.message || "Purchase failed.");
         }
@@ -1606,7 +1647,7 @@ export function MarketView() {
         toast.error("Purchase failed", { description: String(e) });
       }
     },
-    [accessToken, guildId, refreshAll],
+    [accessToken, guildId, refreshAll, historyTab, refreshHistory],
   );
 
   const setModeSafe = (m: Mode) => {
@@ -1782,11 +1823,55 @@ export function MarketView() {
           ) : null}
         </>
       ) : view === "history" ? (
-        <EmptyState
-          title="Trade history"
-          hint="A unified buy/sell/bid ledger will appear here once the backend exposes it."
-          cta={null}
-        />
+        <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
+          {historyLoading ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground text-xs">
+              <Loader2 className="h-8 w-8 animate-spin text-[color:var(--gold-bright)]" />
+              Loading trade history…
+            </div>
+          ) : historyEntries.length === 0 ? (
+            <EmptyState
+              title="No trades yet"
+              hint="Market purchases, sales, auction bids, and refunds appear here."
+              cta={null}
+            />
+          ) : (
+            <ul className="space-y-0 pb-4">
+              {historyEntries.map((h, i) => {
+                const delta = h.gold_delta ?? 0;
+                const sign = delta >= 0 ? "+" : "";
+                return (
+                  <li key={h.id || i}>
+                    <div className="flex flex-wrap items-start gap-2 py-2.5 text-xs">
+                      <span className="text-[color:var(--gold-bright)] font-semibold shrink-0">
+                        {historyKindLabel(h.kind)}
+                      </span>
+                      <span className="text-foreground flex-1 min-w-[120px]">
+                        {h.item_name || h.detail || "Trade"}
+                        {h.counterparty_name ? (
+                          <span className="text-muted-foreground"> · {h.counterparty_name}</span>
+                        ) : null}
+                      </span>
+                      <span
+                        className={cn(
+                          "tabular-nums font-semibold shrink-0",
+                          delta >= 0 ? "text-emerald-400" : "text-red-300",
+                        )}
+                      >
+                        {sign}
+                        {Math.abs(delta).toLocaleString()}🪙
+                      </span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums w-full sm:w-auto sm:ml-auto">
+                        {h.at ? new Date(h.at).toLocaleString() : ""}
+                      </span>
+                    </div>
+                    {i < historyEntries.length - 1 ? <div className="ornament-divider" /> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </ScrollArea>
       ) : (
         <>
           <OrnateFrame>

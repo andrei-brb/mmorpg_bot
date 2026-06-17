@@ -52,9 +52,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
+from collections import defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlencode
 from uuid import UUID
 
@@ -111,8 +113,27 @@ def _json_safe(obj: Any) -> Any:
     return obj
 
 
+def _is_production_deploy() -> bool:
+    env = (os.getenv("ENV") or "").strip().lower()
+    if env in ("production", "prod"):
+        return True
+    return bool((os.getenv("RAILWAY_ENVIRONMENT") or "").strip())
+
+
+def _dev_origin_allowed(origin: str) -> bool:
+    if not origin:
+        return False
+    low = origin.lower()
+    return (
+        low.startswith("http://localhost")
+        or low.startswith("https://localhost")
+        or low.startswith("http://127.0.0.1")
+        or low.startswith("https://127.0.0.1")
+    )
+
+
 def _cors_headers(request: web.Request) -> Dict[str, str]:
-    origin = request.headers.get("Origin", "*")
+    origin = request.headers.get("Origin", "")
     allowed = (
         (os.getenv("ACTIVITY_CORS_ORIGINS") or "").strip()
         or (os.getenv("ACTIVITY_ALLOWED_ORIGINS") or "").strip()
@@ -122,8 +143,11 @@ def _cors_headers(request: web.Request) -> Dict[str, str]:
         if origin in parts:
             allow_origin = origin
         else:
-            # Don't silently allow a different origin; browsers will block this anyway.
             allow_origin = "null"
+    elif _dev_origin_allowed(origin):
+        allow_origin = origin
+    elif _is_production_deploy():
+        allow_origin = "null"
     else:
         allow_origin = origin if origin else "*"
     return {
@@ -146,6 +170,78 @@ async def cors_middleware(request: web.Request, handler):
     for k, v in _cors_headers(request).items():
         response.headers.setdefault(k, v)
     return response
+
+
+_TOKEN_USER_CACHE: Dict[str, Tuple[int, float]] = {}
+_RATE_BUCKETS: Dict[int, Deque[float]] = defaultdict(deque)
+_RATE_WINDOW_S = 60.0
+
+
+def _rate_limit_per_min() -> int:
+    try:
+        return max(10, int(os.getenv("ACTIVITY_RATE_LIMIT_PER_MIN", "90")))
+    except ValueError:
+        return 90
+
+
+async def _discord_user_id_cached(token: str) -> Optional[int]:
+    now = time.time()
+    cached = _TOKEN_USER_CACHE.get(token)
+    if cached and cached[1] > now:
+        return cached[0]
+    user = await _discord_user_from_token(token)
+    if not user:
+        return None
+    uid = int(user["id"])
+    _TOKEN_USER_CACHE[token] = (uid, now + 60.0)
+    if len(_TOKEN_USER_CACHE) > 5000:
+        expired = [k for k, v in _TOKEN_USER_CACHE.items() if v[1] <= now]
+        for k in expired[:2500]:
+            _TOKEN_USER_CACHE.pop(k, None)
+    return uid
+
+
+def _rate_limit_retry_after_s(user_id: int) -> Optional[int]:
+    limit = _rate_limit_per_min()
+    now = time.monotonic()
+    bucket = _RATE_BUCKETS[user_id]
+    while bucket and bucket[0] <= now - _RATE_WINDOW_S:
+        bucket.popleft()
+    if len(bucket) >= limit:
+        wait = int(_RATE_WINDOW_S - (now - bucket[0])) + 1
+        return max(1, wait)
+    bucket.append(now)
+    return None
+
+
+@web.middleware
+async def rate_limit_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    path = request.path or ""
+    if not path.startswith("/api/game/"):
+        return await handler(request)
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return await handler(request)
+    token = auth_header[7:].strip()
+    if not token:
+        return await handler(request)
+    try:
+        user_id = await _discord_user_id_cached(token)
+    except Exception:
+        return await handler(request)
+    if user_id is None:
+        return await handler(request)
+    retry = _rate_limit_retry_after_s(user_id)
+    if retry is not None:
+        return web.Response(
+            status=429,
+            text=json.dumps({"error": "rate_limited", "retry_after_s": retry}),
+            content_type="application/json",
+            headers=_cors_headers(request),
+        )
+    return await handler(request)
 
 
 async def _discord_user_from_token(token: str) -> Optional[Dict[str, Any]]:
@@ -430,6 +526,21 @@ async def handle_inventory(request: web.Request) -> web.Response:
         spec = SPECIALIZATIONS.get(sk)
         if spec:
             char_dict["specialization_name"] = spec.name
+    lvl = int(char_dict.get("level") or 1)
+    total_xp = int(char_dict.get("xp") or 0)
+    floor_xp = CharacterService.total_xp_to_reach(lvl)
+    char_dict["xp_in_level"] = max(0, total_xp - floor_xp)
+    char_dict["xp_to_next"] = (
+        0 if lvl >= Settings.MAX_LEVEL else CharacterService.xp_for_next_level(lvl)
+    )
+    if char_dict.get("guild_id"):
+        g_row = await db.fetchrow(
+            "SELECT name, tag FROM guilds WHERE id=$1",
+            char_dict["guild_id"],
+        )
+        if g_row:
+            char_dict["guild_name"] = g_row["name"]
+            char_dict["guild_tag"] = g_row["tag"]
     return web.json_response(
         _json_safe(
             {
@@ -4103,6 +4214,96 @@ async def handle_shop_buy(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "message": f"Purchased {tmpl['name']} x{qty}."})
 
 
+async def handle_market_history(request: web.Request) -> web.Response:
+    """GET /api/game/market/history — Recent market and auction trades for this character."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(int(user["id"]))
+    if not char:
+        return web.json_response(_json_safe({"ok": True, "entries": []}))
+
+    try:
+        lim = int(request.rel_url.query.get("limit") or 40)
+    except (TypeError, ValueError):
+        lim = 40
+
+    from services.market.market_history import fetch_trade_history
+
+    entries = await fetch_trade_history(db, _uuid_from_any(char["id"]), limit=lim)
+    return web.json_response(_json_safe({"ok": True, "entries": entries}))
+
+
+async def handle_milestones(request: web.Request) -> web.Response:
+    """GET /api/game/milestones — Server milestone progress and active buffs."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    guild_id = _guild_id_from_request(request)
+    if not guild_id:
+        return web.json_response(
+            _json_safe({"ok": False, "error": "missing_guild_id", "message": "Open the game in a Discord server."}),
+            status=400,
+        )
+
+    from services.milestones.milestone_service import MilestoneService
+
+    svc = MilestoneService(db)
+    progress = await svc.get_progress(guild_id)
+    buffs = await svc.get_active_buffs(guild_id)
+    mult = await svc.get_active_multipliers(guild_id)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "progress": progress,
+                "buffs": buffs,
+                "multipliers": mult,
+            }
+        )
+    )
+
+
+async def handle_reputation(request: web.Request) -> web.Response:
+    """GET /api/game/reputation — Faction standings for the current character."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
+    token = auth_header[7:].strip()
+    user = await _discord_user_from_token(token)
+    if not user:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    char_svc = CharacterService(db)
+    char = await char_svc.get_character(int(user["id"]))
+    if not char:
+        return web.json_response(_json_safe({"ok": True, "factions": []}))
+
+    from services.quest.npc_quest_service import NPCQuestService
+
+    quest_svc = NPCQuestService(db)
+    factions = await quest_svc.get_all_reputation(_uuid_from_any(char["id"]))
+    return web.json_response(_json_safe({"ok": True, "factions": factions}))
+
+
 async def handle_market_listings(request: web.Request) -> web.Response:
     """Get active player market listings."""
     bot = request.app["bot"]
@@ -4244,6 +4445,15 @@ async def handle_list_item_on_market(request: web.Request) -> web.Response:
         )
 
 
+class _MarketTxAbort(Exception):
+    """Roll back a market transaction and return a JSON error to the Activity client."""
+    def __init__(self, error: str, message: str, status: int = 400):
+        super().__init__(message)
+        self.error = error
+        self.message = message
+        self.status = status
+
+
 async def handle_market_buy(request: web.Request) -> web.Response:
     """POST /api/game/market/buy — Buy a player listing (same logic as /market buy in Discord)."""
     bot = request.app["bot"]
@@ -4287,83 +4497,79 @@ async def handle_market_buy(request: web.Request) -> web.Response:
     if not char:
         return web.json_response({"ok": False, "error": "no_character", "message": "No character found."}, status=400)
 
-    listing = await db.fetchrow(
-        """SELECT ml.*, t.name, i.template_id,
-                  i.rarity, i.r_str, i.r_agi, i.r_int, i.r_spi, i.r_sta,
-                  i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating,
-                  COALESCE(i.enhancement_level, 0) as enhancement_level
-           FROM market_listings ml
-           JOIN inventory i ON ml.item_id = i.id
-           JOIN item_templates t ON i.template_id = t.id
-           WHERE ml.id = $1 AND ml.is_active = TRUE AND ml.expires_at > NOW()
-           AND COALESCE(ml.listing_kind, 'fixed') = 'fixed'""",
-        uid,
-    )
-    if not listing:
-        return web.json_response(
-            {"ok": False, "error": "listing_not_found", "message": "Listing not found or expired."},
-            status=404,
-        )
-    if listing["seller_id"] == char["id"]:
-        return web.json_response(
-            {"ok": False, "error": "own_listing", "message": "You cannot buy your own listing."},
-            status=400,
-        )
+    # Atomic purchase: lock the listing row so concurrent buyers can't both pass the
+    # is_active check (item dupe), and roll back gold if item delivery fails.
+    try:
+        async with db.transaction() as tx:
+            listing = await tx.fetchrow(
+                """SELECT ml.*, t.name, i.template_id,
+                          i.rarity, i.r_str, i.r_agi, i.r_int, i.r_spi, i.r_sta,
+                          i.r_haste, i.r_lifesteal, i.r_resistance, i.r_hit_rating,
+                          COALESCE(i.enhancement_level, 0) as enhancement_level
+                   FROM market_listings ml
+                   JOIN inventory i ON ml.item_id = i.id
+                   JOIN item_templates t ON i.template_id = t.id
+                   WHERE ml.id = $1 AND ml.is_active = TRUE AND ml.expires_at > NOW()
+                   AND COALESCE(ml.listing_kind, 'fixed') = 'fixed'
+                   FOR UPDATE OF ml""",
+                uid,
+            )
+            if not listing:
+                raise _MarketTxAbort("listing_not_found", "Listing not found or expired.", 404)
+            if listing["seller_id"] == char["id"]:
+                raise _MarketTxAbort("own_listing", "You cannot buy your own listing.", 400)
 
-    price = int(listing["price"] or 0)
-    paid = await char_svc.deduct_gold(char["id"], price, "market purchase")
-    if not paid:
-        return web.json_response(
-            {"ok": False, "error": "insufficient_gold", "message": f"You need {price:,} gold."},
-            status=400,
-        )
+            tx_char_svc = CharacterService(tx)
+            inv = InventoryService(tx)
 
-    await char_svc.add_gold(listing["seller_id"], price, "market sale")
+            price = int(listing["price"] or 0)
+            paid = await tx_char_svc.deduct_gold(char["id"], price, "market purchase")
+            if not paid:
+                raise _MarketTxAbort("insufficient_gold", f"You need {price:,} gold.", 400)
 
-    inv = InventoryService(db)
-    rarity = listing.get("rarity") or "common"
-    bonus = {
-        "r_str": listing.get("r_str", 0) or 0,
-        "r_agi": listing.get("r_agi", 0) or 0,
-        "r_int": listing.get("r_int", 0) or 0,
-        "r_spi": listing.get("r_spi", 0) or 0,
-        "r_sta": listing.get("r_sta", 0) or 0,
-        "r_haste": listing.get("r_haste", 0) or 0,
-        "r_lifesteal": listing.get("r_lifesteal", 0) or 0,
-        "r_resistance": listing.get("r_resistance", 0) or 0,
-        "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
-    }
-    enhancement_level = listing.get("enhancement_level", 0) or 0
-    add_ok, add_msg = await inv.add_item(
-        char["id"],
-        listing["template_id"],
-        rarity=rarity,
-        from_="market",
-        bonus=bonus,
-        enhancement_level=enhancement_level,
-    )
-    if not add_ok:
-        await char_svc.add_gold(char["id"], price, "refund: market purchase failed")
-        await char_svc.add_gold(listing["seller_id"], -price, "revert: market sale (buyer inventory full)")
-        return web.json_response(
-            {"ok": False, "error": "transfer_failed", "message": add_msg or "Could not add item to inventory."},
-            status=400,
-        )
+            rarity = listing.get("rarity") or "common"
+            bonus = {
+                "r_str": listing.get("r_str", 0) or 0,
+                "r_agi": listing.get("r_agi", 0) or 0,
+                "r_int": listing.get("r_int", 0) or 0,
+                "r_spi": listing.get("r_spi", 0) or 0,
+                "r_sta": listing.get("r_sta", 0) or 0,
+                "r_haste": listing.get("r_haste", 0) or 0,
+                "r_lifesteal": listing.get("r_lifesteal", 0) or 0,
+                "r_resistance": listing.get("r_resistance", 0) or 0,
+                "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
+            }
+            enhancement_level = listing.get("enhancement_level", 0) or 0
+            add_ok, add_msg = await inv.add_item(
+                char["id"],
+                listing["template_id"],
+                rarity=rarity,
+                from_="market",
+                bonus=bonus,
+                enhancement_level=enhancement_level,
+            )
+            if not add_ok:
+                # Rolls back the gold deduction — buyer keeps their gold, seller unpaid.
+                raise _MarketTxAbort("transfer_failed", add_msg or "Could not add item to inventory.", 400)
 
-    await db.execute("DELETE FROM inventory WHERE id=$1", listing["item_id"])
-    await db.execute(
-        "UPDATE market_listings SET is_active=FALSE, sold_at=NOW(), buyer_id=$2 WHERE id=$1",
-        uid,
-        char["id"],
-    )
+            await tx_char_svc.add_gold(listing["seller_id"], price, "market sale")
+            await tx.execute("DELETE FROM inventory WHERE id=$1", listing["item_id"])
+            await tx.execute(
+                "UPDATE market_listings SET is_active=FALSE, sold_at=NOW(), buyer_id=$2 WHERE id=$1",
+                uid,
+                char["id"],
+            )
+            bought_name, bought_price = listing["name"], price
+    except _MarketTxAbort as e:
+        return web.json_response({"ok": False, "error": e.error, "message": e.message}, status=e.status)
 
     return web.json_response(
         _json_safe(
             {
                 "ok": True,
-                "message": f"Purchased {listing['name']} for {price:,} gold.",
-                "item_name": listing["name"],
-                "price": price,
+                "message": f"Purchased {bought_name} for {bought_price:,} gold.",
+                "item_name": bought_name,
+                "price": bought_price,
             }
         )
     )
@@ -5129,7 +5335,7 @@ async def handle_guild_me(request: web.Request) -> web.Response:
                 {
                     "ok": True,
                     "in_guild": False,
-                    "message": "Found a hall from this tab, or use Discord /guild create or /guild join.",
+                    "message": "Found a hall from this tab, or use Discord /guild create. Join via an officer invite.",
                 }
             )
         )
@@ -5146,7 +5352,7 @@ async def handle_guild_me(request: web.Request) -> web.Response:
                 {
                     "ok": True,
                     "in_guild": False,
-                    "message": "Your previous guild no longer exists. Found a new hall here or use /guild join.",
+                    "message": "Your previous guild no longer exists. Create a hall here or accept a new invite.",
                 }
             )
         )
@@ -6056,12 +6262,19 @@ async def handle_guild_invite_send(request: web.Request) -> web.Response:
     if int(target["player_id"]) == int(char["player_id"]):
         return web.json_response(_json_safe({"ok": False, "message": "You can't invite your own account."}), status=400)
 
+    from services.guild import guild_invites as guild_invites_mod
     from services.guild.guild_invite_dm import GuildInviteView, build_guild_invite_embed
 
     char_svc = CharacterService(db)
+    target_discord_id = int(target["player_id"])
+    await guild_invites_mod.upsert_pending_invite(
+        db,
+        gid,
+        target_discord_id,
+        inviter_character_id=_uuid_from_any(char["id"]),
+    )
     embed = build_guild_invite_embed(dict(guild), char["name"])
     view = GuildInviteView(guild["id"], bot, char_svc)
-    target_discord_id = int(target["player_id"])
     try:
         user = await bot.fetch_user(target_discord_id)
         await user.send(embed=embed, view=view)
@@ -6189,7 +6402,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
         log.info("DISCORD_CLIENT_SECRET not set — Activity HTTP API disabled (set it to enable /api/token).")
         return None
 
-    app = web.Application(middlewares=[cors_middleware])
+    app = web.Application(middlewares=[cors_middleware, rate_limit_middleware])
     app["bot"] = bot
 
     app.router.add_post("/api/token", handle_token)
@@ -6234,8 +6447,11 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/shop/catalog", handle_shop_catalog)
     app.router.add_post("/api/game/shop/buy", handle_shop_buy)
     app.router.add_get("/api/game/market/listings", handle_market_listings)
+    app.router.add_get("/api/game/market/history", handle_market_history)
     app.router.add_post("/api/game/market/list-item", handle_list_item_on_market)
     app.router.add_post("/api/game/market/buy", handle_market_buy)
+    app.router.add_get("/api/game/milestones", handle_milestones)
+    app.router.add_get("/api/game/reputation", handle_reputation)
     app.router.add_get("/api/game/auction/listings", handle_auction_listings)
     app.router.add_post("/api/game/auction/create", handle_auction_create)
     app.router.add_post("/api/game/auction/bid", handle_auction_bid)

@@ -4,11 +4,45 @@ Combine server_config, milestone buffs, and guild live events for PvE rewards.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+import json
+from typing import Any, Optional, Tuple
 from uuid import UUID
 
 from services.live_events.live_event_service import LiveEventService
 from services.milestones.milestone_service import MilestoneService
+
+
+def _parse_world_event_multipliers(state: Any) -> Tuple[float, float]:
+    """Read xp/gold multipliers from world_events.state JSONB."""
+    if state is None:
+        return 1.0, 1.0
+    if isinstance(state, str):
+        try:
+            state = json.loads(state)
+        except (json.JSONDecodeError, TypeError):
+            return 1.0, 1.0
+    if not isinstance(state, dict):
+        return 1.0, 1.0
+    try:
+        xp = float(state.get("xp_multiplier") or 1.0)
+        gold = float(state.get("gold_multiplier") or 1.0)
+    except (TypeError, ValueError):
+        return 1.0, 1.0
+    return max(0.0, xp), max(0.0, gold)
+
+
+async def _active_world_event_multipliers(db) -> Tuple[float, float]:
+    row = await db.fetchrow(
+        """
+        SELECT state FROM world_events
+        WHERE is_active=TRUE AND ends_at > NOW()
+        ORDER BY started_at DESC
+        LIMIT 1
+        """
+    )
+    if not row:
+        return 1.0, 1.0
+    return _parse_world_event_multipliers(row.get("state"))
 
 
 async def get_combined_reward_multipliers(
@@ -61,5 +95,12 @@ async def get_combined_reward_multipliers(
             boss_add += tb
         except Exception:
             pass
+
+    try:
+        wx, wg = await _active_world_event_multipliers(db)
+        xp_mult *= wx
+        gold_mult *= wg
+    except Exception:
+        pass
 
     return xp_mult, gold_mult, boss_add

@@ -93,8 +93,21 @@ export function GameShell() {
     const crit = derivedStats ? `${derivedStats.crit_chance.toFixed(1)}%` : "—";
     const mastery = derivedStats?.class_mastery?.level ? `Lv ${derivedStats.class_mastery.level}` : "—";
 
-    const xp = "—"; // XP currently not provided by inventory payload
-    const guild = "—"; // guild info not available in inventory payload
+    const charLevel = Number(char?.level ?? 0);
+    const xpIn = char?.xp_in_level;
+    const xpNext = char?.xp_to_next;
+    const xp =
+      charLevel >= 60 || xpNext === 0
+        ? "Max level"
+        : xpIn != null && xpNext != null
+          ? `${xpIn.toLocaleString()} / ${xpNext.toLocaleString()}`
+          : "—";
+    const guild =
+      char?.guild_tag && char?.guild_name
+        ? `[${char.guild_tag}] ${char.guild_name}`
+        : char?.guild_name
+          ? String(char.guild_name)
+          : "—";
 
     const border = pvpStatus?.stats?.rank_tier ?? "—";
 

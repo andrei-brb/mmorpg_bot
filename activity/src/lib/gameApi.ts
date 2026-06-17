@@ -598,6 +598,33 @@ export async function getMarketListings(token: string, guildId?: string) {
   return res.json() as Promise<{ ok?: boolean; listings?: Array<{ id: string; price: number; quantity: number; listed_at: string; name: string; icon?: string | null; description?: string | null; rarity: string; enhancement_level?: number | null; seller_name: string }> }>;
 }
 
+export async function getMarketHistory(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").MarketHistoryPayload> {
+  const res = await fetch(apiUrl("/api/game/market/history"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`market-history ${res.status}`);
+  return res.json() as Promise<import("./apiTypes").MarketHistoryPayload>;
+}
+
+export async function getMilestones(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").MilestonesPayload> {
+  const res = await fetch(apiUrl("/api/game/milestones"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`milestones ${res.status}`);
+  return res.json() as Promise<import("./apiTypes").MilestonesPayload>;
+}
+
+export async function getReputation(
+  token: string,
+  guildId?: string,
+): Promise<import("./apiTypes").ReputationPayload> {
+  const res = await fetch(apiUrl("/api/game/reputation"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`reputation ${res.status}`);
+  return res.json() as Promise<import("./apiTypes").ReputationPayload>;
+}
+
 export async function postListItemOnMarket(
   token: string,
   itemId: string,

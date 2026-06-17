@@ -3,6 +3,7 @@
 ║      cogs/events/events_cog.py — World events, daily quests, timers        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
+import json
 import logging, random
 from datetime import datetime, timezone, timedelta
 import discord
@@ -74,13 +75,21 @@ class EventsCog(commands.Cog, name="Events"):
     @tasks.loop(hours=6)
     async def world_event_loop(self):
         """Start a random world event every 6 hours."""
+        await self.bot.db.execute(
+            "UPDATE world_events SET is_active=FALSE WHERE is_active=TRUE AND ends_at <= NOW()"
+        )
         key = random.choice(list(WORLD_EVENTS.keys()))
         event = WORLD_EVENTS[key]
         ends_at = datetime.now(timezone.utc) + timedelta(hours=event["duration_hours"])
+        state = json.dumps({
+            "xp_multiplier": 1.0 + float(event.get("xp_bonus") or 0.0),
+            "gold_multiplier": 1.0 + float(event.get("gold_bonus") or 0.0),
+        })
 
         await self.bot.db.execute(
-            "INSERT INTO world_events(event_key,name,description,is_active,ends_at) VALUES($1,$2,$3,TRUE,$4)",
-            key, event["name"], event["description"], ends_at,
+            """INSERT INTO world_events(event_key,name,description,is_active,ends_at,state)
+               VALUES($1,$2,$3,TRUE,$4,$5::jsonb)""",
+            key, event["name"], event["description"], ends_at, state,
         )
         self.active_event = {**event, "key": key, "ends_at": ends_at}
         log.info(f"World event started: {event['name']}")

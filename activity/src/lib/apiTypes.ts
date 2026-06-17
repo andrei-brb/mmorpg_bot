@@ -126,6 +126,11 @@ export type InventoryPayload = {
     max_hp?: number;
     crafting_level?: number;
     crafting_xp?: number;
+    xp?: number;
+    xp_in_level?: number;
+    xp_to_next?: number;
+    guild_name?: string | null;
+    guild_tag?: string | null;
   } | null;
   /** Bag capacity counts unequipped inventory rows (equipped gear doesn't count). */
   bag_slots_used?: number;
@@ -607,6 +612,68 @@ export type MarketListingRow = {
   rarity: string;
   enhancement_level?: number | null;
   seller_name: string;
+};
+
+/** GET /api/game/market/history */
+export type MarketHistoryEntry = {
+  id: string;
+  at?: string;
+  kind: string;
+  listing_kind?: string;
+  item_name?: string | null;
+  gold_delta: number;
+  detail?: string;
+  counterparty_name?: string | null;
+};
+
+export type MarketHistoryPayload = {
+  ok?: boolean;
+  entries?: MarketHistoryEntry[];
+};
+
+/** GET /api/game/milestones */
+export type MilestoneProgressRow = {
+  key: string;
+  title: string;
+  value: number;
+  unit: string;
+  tier: number;
+  next_target: number | null;
+  max_tier: number;
+};
+
+export type MilestoneBuffRow = {
+  buff_type: string;
+  buff_value: number;
+  expires_at?: string;
+};
+
+export type MilestonesPayload = {
+  ok?: boolean;
+  progress?: MilestoneProgressRow[];
+  buffs?: MilestoneBuffRow[];
+  multipliers?: {
+    xp_multiplier?: number;
+    gold_multiplier?: number;
+    xp_bonus_pct?: number;
+    gold_bonus_pct?: number;
+  };
+  error?: string;
+  message?: string;
+};
+
+/** GET /api/game/reputation */
+export type FactionReputationRow = {
+  faction_id: string;
+  name: string;
+  emoji: string;
+  reputation: number;
+  level?: { name?: string; emoji?: string; perks?: string };
+};
+
+export type ReputationPayload = {
+  ok?: boolean;
+  factions?: FactionReputationRow[];
 };
 
 /** Player auction from GET /api/game/auction/listings. */

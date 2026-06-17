@@ -562,7 +562,7 @@ export function GuildTab() {
                   <span style={{ color: "var(--gold-400)" }}>/guild create</span> — same as this form
                 </li>
                 <li style={{ marginBottom: 8 }}>
-                  <span style={{ color: "var(--gold-400)" }}>/guild join</span> — enlist by guild name
+                  <span style={{ color: "var(--gold-400)" }}>/guild invite</span> — officers invite you; accept in DMs or `/guild join` after invite
                 </li>
                 <li>Recruit members with invites once your hall stands.</li>
               </ul>

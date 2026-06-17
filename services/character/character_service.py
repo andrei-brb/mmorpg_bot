@@ -765,20 +765,27 @@ class CharacterService:
     # ── Gold ─────────────────────────────────────────────────────────────────
 
     async def add_gold(self, char_id: UUID, amount: int, reason: str = "", source: str = "drop"):
-        char = await self.get_by_id(char_id)
-        new_bal = char["gold"] + amount
-        await self.db.execute("UPDATE characters SET gold=$2 WHERE id=$1", char_id, new_bal)
+        # Atomic single-statement update avoids lost-update races on concurrent gold ops.
+        new_bal = await self.db.fetchval(
+            "UPDATE characters SET gold = gold + $2 WHERE id=$1 RETURNING gold",
+            char_id, amount,
+        )
+        if new_bal is None:
+            return  # character not found
         await self.db.execute(
             "INSERT INTO gold_log(character_id,amount,balance_after,reason) VALUES($1,$2,$3,$4)",
             char_id, amount, new_bal, reason,
         )
 
     async def deduct_gold(self, char_id: UUID, amount: int, reason: str = "") -> bool:
-        char = await self.get_by_id(char_id)
-        if char["gold"] < amount:
-            return False
-        new_bal = char["gold"] - amount
-        await self.db.execute("UPDATE characters SET gold=$2 WHERE id=$1", char_id, new_bal)
+        # Conditional atomic deduct: the WHERE guard makes the balance check and the
+        # write a single operation, so concurrent deducts can't overspend or go negative.
+        new_bal = await self.db.fetchval(
+            "UPDATE characters SET gold = gold - $2 WHERE id=$1 AND gold >= $2 RETURNING gold",
+            char_id, amount,
+        )
+        if new_bal is None:
+            return False  # not enough gold (or character not found)
         await self.db.execute(
             "INSERT INTO gold_log(character_id,amount,balance_after,reason) VALUES($1,$2,$3,$4)",
             char_id, -amount, new_bal, reason,

@@ -138,6 +138,16 @@ class GuildCog(commands.Cog, name="Guild"):
         guild = await self.bot.db.fetchrow("SELECT * FROM guilds WHERE id=$1", char["guild_id"])
         if guild["member_count"] >= guild["max_members"]:
             return await interaction.followup.send("❌ Guild is full.")
+
+        from services.guild import guild_invites as guild_invites_mod
+        from uuid import UUID
+
+        await guild_invites_mod.upsert_pending_invite(
+            self.bot.db,
+            UUID(str(guild["id"])),
+            int(member.id),
+            inviter_character_id=UUID(str(char["id"])),
+        )
         
         embed = build_guild_invite_embed(guild, char["name"])
         view = GuildInviteView(guild["id"], self.bot, self.svc)
@@ -165,10 +175,24 @@ class GuildCog(commands.Cog, name="Guild"):
         
         if guild["member_count"] >= guild["max_members"]:
             return await interaction.followup.send("❌ Guild is full.")
+
+        from services.guild import guild_invites as guild_invites_mod
+        from uuid import UUID
+
+        invite = await guild_invites_mod.get_valid_pending_invite(
+            self.bot.db, UUID(str(guild["id"])), int(interaction.user.id)
+        )
+        if not invite:
+            return await interaction.followup.send(
+                "❌ You need an invite from a guild officer. Ask them to use `/guild invite`."
+            )
         
         await self.bot.db.execute(
             "UPDATE characters SET guild_id=$1, guild_rank='member' WHERE id=$2",
             guild["id"], char["id"]
+        )
+        await guild_invites_mod.mark_invite_accepted(
+            self.bot.db, UUID(str(guild["id"])), int(interaction.user.id)
         )
         # Sync member count
         await self.bot.db.execute(

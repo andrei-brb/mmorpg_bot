@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
+import type { BattlePassStatePayload, MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import { ZONES } from "@/data/zones";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -130,6 +130,26 @@ export function QuestsTab() {
     resumeFight: () => Promise<{ ok: boolean; message?: string; error?: string }>;
   } | null>(null);
   const [travelFightBusy, setTravelFightBusy] = useState(false);
+  const [battlePass, setBattlePass] = useState<BattlePassStatePayload | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setBattlePass(null);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .getBattlePass(accessToken, guildId)
+      .then((j) => {
+        if (!cancelled) setBattlePass(j?.season ? j : null);
+      })
+      .catch(() => {
+        if (!cancelled) setBattlePass(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId]);
 
   useEffect(() => { void refreshQuests(); }, [refreshQuests]);
   useEffect(() => { setRows(quests?.quests || []); }, [quests]);
@@ -582,26 +602,51 @@ export function QuestsTab() {
               <span>Battle Pass</span>
               <span className="text-[10px] text-muted-foreground">{playerName || "Adventurer"}</span>
             </div>
-            <div className="p-4 pt-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-cinzel font-semibold text-foreground">
-                  Lv {playerLevel ?? "—"} / 50
-                </div>
-                <div className="text-[10px] text-muted-foreground tabular-nums">6400/10000</div>
-              </div>
-              <div className="mt-2 h-2 rounded-sm overflow-hidden" style={{ background: "hsl(226 30% 8% / 0.75)", border: "1px solid hsl(228 18% 22% / 0.8)" }}>
-                <div
-                  className="h-full"
-                  style={{
-                    width: "64%",
-                    background: "linear-gradient(90deg, hsl(180 70% 55%), hsl(200 78% 60%))",
-                    boxShadow: "0 0 12px hsl(190 78% 55% / 0.25)",
-                  }}
-                />
-              </div>
-              <div className="mt-2 text-[10px] text-muted-foreground">
-                Cosmetic UI for now — we can wire this to real progression later.
-              </div>
+                        <div className="p-4 pt-3">
+              {battlePass?.season && battlePass.progress ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-cinzel font-semibold text-foreground">
+                      Tier {battlePass.progress.tier ?? 0}
+                      {battlePass.season.max_tier != null ? ` / ${battlePass.season.max_tier}` : ""}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">
+                      {(battlePass.progress.xp_in_tier ?? 0).toLocaleString()}/
+                      {(battlePass.progress.xp_needed_for_next ?? 0) > 0
+                        ? (battlePass.progress.xp_needed_for_next ?? 0).toLocaleString()
+                        : "MAX"}
+                    </div>
+                  </div>
+                  <div
+                    className="mt-2 h-2 rounded-sm overflow-hidden"
+                    style={{
+                      background: "hsl(226 30% 8% / 0.75)",
+                      border: "1px solid hsl(228 18% 22% / 0.8)",
+                    }}
+                  >
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (battlePass.progress.xp_needed_for_next ?? 0) > 0
+                            ? ((battlePass.progress.xp_in_tier ?? 0) /
+                                (battlePass.progress.xp_needed_for_next ?? 1)) *
+                              100
+                            : 100,
+                        )}%`,
+                        background:
+                          "linear-gradient(90deg, hsl(180 70% 55%), hsl(200 78% 60%))",
+                        boxShadow: "0 0 12px hsl(190 78% 55% / 0.25)",
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">
+                  Open the Pass tab to view season rewards and progress.
+                </p>
+              )}
             </div>
           </WomPanel>
             </div>
