@@ -333,25 +333,32 @@ class TalentService:
             return False, "Not enough talent points.", None
 
         new_ranks = current + delta
-        await self.db.execute(
-            """
-            INSERT INTO character_talent_allocations (character_id, node_id, ranks)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (character_id, node_id) DO UPDATE SET ranks = $3
-            """,
-            char_id,
-            node_id,
-            new_ranks,
-        )
-        await self.db.execute(
-            """
-            UPDATE character_talent_meta
-            SET unspent_points = unspent_points - $2, updated_at = NOW()
-            WHERE character_id = $1
-            """,
-            char_id,
-            delta,
-        )
+        # Spend points and write the allocation atomically. The conditional decrement
+        # (WHERE unspent_points >= delta) is the authoritative guard, so concurrent
+        # allocations can never overspend below zero.
+        async with self.db.transaction() as tx:
+            spent_ok = await tx.fetchval(
+                """
+                UPDATE character_talent_meta
+                SET unspent_points = unspent_points - $2, updated_at = NOW()
+                WHERE character_id = $1 AND unspent_points >= $2
+                RETURNING unspent_points
+                """,
+                char_id,
+                delta,
+            )
+            if spent_ok is None:
+                return False, "Not enough talent points.", None
+            await tx.execute(
+                """
+                INSERT INTO character_talent_allocations (character_id, node_id, ranks)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (character_id, node_id) DO UPDATE SET ranks = $3
+                """,
+                char_id,
+                node_id,
+                new_ranks,
+            )
         state = await self.get_tree_state(char)
         return True, f"Rank {new_ranks}/{max_ranks}.", state
 
@@ -362,37 +369,37 @@ class TalentService:
         meta = await self._get_meta(char_id)
         respec_count = int(meta.get("respec_count") or 0)
 
-        if respec_count > 0:
-            cost = self._respec_gold_cost(level, meta)
-            gold = int(char.get("gold") or 0)
-            if gold < cost:
-                return False, f"Need {cost:,} gold to respec.", None
-            ok = await char_svc.deduct_gold(char_id, cost, reason="talent_respec")
-            if not ok:
-                return False, "Not enough gold.", None
-
-        # Clear allocations except starter
+        cost = self._respec_gold_cost(level, meta) if respec_count > 0 else 0
         starter_id = f"{class_key}_starter"
-        await self.db.execute(
-            "DELETE FROM character_talent_allocations WHERE character_id=$1 AND node_id <> $2",
-            char_id,
-            starter_id,
-        )
         earned = self.points_earned_for_level(level)
-        await self.db.execute(
-            """
-            INSERT INTO character_talent_meta (character_id, unspent_points, respec_count, foundation_locked, last_respec_at)
-            VALUES ($1, $2, 1, FALSE, NOW())
-            ON CONFLICT (character_id) DO UPDATE SET
-                unspent_points = $2,
-                respec_count = character_talent_meta.respec_count + 1,
-                foundation_locked = FALSE,
-                last_respec_at = NOW(),
-                updated_at = NOW()
-            """,
-            char_id,
-            max(0, earned - 1),  # starter rank still allocated
-        )
+
+        # Charge gold and reset allocations atomically — if anything fails the gold
+        # charge rolls back, so a player can never be charged without being reset.
+        from services.character.character_service import CharacterService
+        async with self.db.transaction() as tx:
+            if cost > 0:
+                ok = await CharacterService(tx).deduct_gold(char_id, cost, reason="talent_respec")
+                if not ok:
+                    return False, f"Need {cost:,} gold to respec.", None
+            await tx.execute(
+                "DELETE FROM character_talent_allocations WHERE character_id=$1 AND node_id <> $2",
+                char_id,
+                starter_id,
+            )
+            await tx.execute(
+                """
+                INSERT INTO character_talent_meta (character_id, unspent_points, respec_count, foundation_locked, last_respec_at)
+                VALUES ($1, $2, 1, FALSE, NOW())
+                ON CONFLICT (character_id) DO UPDATE SET
+                    unspent_points = $2,
+                    respec_count = character_talent_meta.respec_count + 1,
+                    foundation_locked = FALSE,
+                    last_respec_at = NOW(),
+                    updated_at = NOW()
+                """,
+                char_id,
+                max(0, earned - 1),  # starter rank still allocated
+            )
         await self.ensure_starter_granted(char_id, class_key)
         state = await self.get_tree_state(char)
         msg = "Talents reset." if respec_count == 0 else f"Talents reset ({cost:,} gold)."
