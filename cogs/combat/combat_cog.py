@@ -381,12 +381,18 @@ class CombatCog(commands.Cog, name="Combat"):
                 "⚔️ You're already fighting in the **Activity** (Embedded App). Finish or flee there first."
             )
 
-        # Check if stuck in combat (status says in_combat but no active session)
+        # Check if stuck in combat (status says in_combat but no active session of OURS).
+        # ACTIVE is keyed by channel, so a session there may belong to another player —
+        # only treat it as ours if our character is actually in that session, otherwise
+        # the flag is stale and we clear it (and fall through to the channel-busy check).
         if char["combat_status"] == "in_combat":
-            channel_has_combat = interaction.channel_id in ACTIVE
+            channel_session = ACTIVE.get(interaction.channel_id)
+            our_channel_combat = bool(channel_session and any(
+                getattr(p, "char_id", None) == char["id"] for p in channel_session.players
+            ))
             activity_has_combat = interaction.user.id in ACTIVE_ACTIVITY
-            if not channel_has_combat and not activity_has_combat:
-                # Stuck in combat - clear it automatically
+            if not our_channel_combat and not activity_has_combat:
+                # Stuck flag with no real session of ours — clear it automatically.
                 await self.bot.db.execute(
                     "UPDATE characters SET combat_status='idle' WHERE id=$1",
                     char["id"],
