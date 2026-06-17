@@ -9,6 +9,7 @@ import type {
   FactionReputationRow,
   MilestoneProgressRow,
   MilestoneBuffRow,
+  MilestonesPayload,
   ProgressPayload,
 } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
@@ -136,7 +137,7 @@ export function RealmTab() {
     void (async () => {
       try {
         const [ms, rep] = await Promise.all([
-          guildId ? api.getMilestones(accessToken, guildId) : Promise.resolve({ ok: false }),
+          guildId ? api.getMilestones(accessToken, guildId) : Promise.resolve<MilestonesPayload>({ ok: false }),
           api.getReputation(accessToken, guildId),
         ]);
         if (cancelled) return;
