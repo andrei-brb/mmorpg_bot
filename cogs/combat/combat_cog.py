@@ -798,6 +798,18 @@ class CombatCog(commands.Cog, name="Combat"):
             if ok:
                 loot_lines.append("🧪 **Health Potion** (refill)")
 
+        # Daily quest progress (non-blocking)
+        try:
+            from services.quest.daily_quest_service import DailyQuestService
+            daily_svc = DailyQuestService(self.bot.db)
+            daily_line = await daily_svc.record_event(self.char_svc, char["id"], "kill")
+            if session.is_boss:
+                daily_line = await daily_svc.record_event(self.char_svc, char["id"], "boss") or daily_line
+            if daily_line:
+                loot_lines.append(daily_line)
+        except Exception:
+            pass
+
         # Check achievements (non-blocking)
         try:
             from services.achievement.achievement_service import AchievementService

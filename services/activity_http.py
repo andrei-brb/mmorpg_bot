@@ -3397,6 +3397,16 @@ async def handle_explore(request: web.Request) -> web.Response:
         xp_res = await char_svc.award_xp(_uuid_from_any(char["id"]), xp0, xp_mult)
         reward = {"xp": int(xp_res.get("xp_gained") or 0), "base_xp": xp0}
 
+    # Daily quest progress (non-blocking)
+    daily_line = None
+    try:
+        from services.quest.daily_quest_service import DailyQuestService
+        daily_line = await DailyQuestService(db).record_event(
+            char_svc, _uuid_from_any(char["id"]), "explore"
+        )
+    except Exception:
+        pass
+
     npc_payload = None
     try:
         npc_encounter = await quest_svc.roll_npc_encounter(_uuid_from_any(char["id"]), char.get("current_zone"))
@@ -3443,6 +3453,7 @@ async def handle_explore(request: web.Request) -> web.Response:
                 },
                 "cooldown_s": cooldown,
                 "npc": npc_payload,
+                "daily_quest_complete": daily_line,
                 "character": dict(fresh) if fresh else None,
             }
         )

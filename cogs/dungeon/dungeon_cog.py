@@ -692,6 +692,18 @@ class DungeonCog(commands.Cog, name="Dungeon"):
             if m_xp.get("leveled_up"):
                 level_up_lines.append(f"**{m_name}**: {m_xp['old_level']} → {m_xp['new_level']}")
 
+            # Daily quest progress (non-blocking)
+            try:
+                from services.quest.daily_quest_service import DailyQuestService
+                daily_svc = DailyQuestService(self.bot.db)
+                daily_line = await daily_svc.record_event(self.char_svc, m_id, "kill")
+                if session.is_boss:
+                    daily_line = await daily_svc.record_event(self.char_svc, m_id, "boss") or daily_line
+                if daily_line:
+                    loot_lines.append(f"**{m_name}** — {daily_line}" if n > 1 else daily_line)
+            except Exception:
+                pass
+
             for _ in range(2 if session.is_boss else 1):  # Boss gives 2 loot rolls
                 loot = await inv_svc.generate_loot(run["dungeon_key"], m_level, session.is_boss, char_id=m_id)
                 if loot:

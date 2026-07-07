@@ -245,21 +245,13 @@ class EventsCog(commands.Cog, name="Events"):
         char = await self.svc.get_character(interaction.user.id)
         if not char: return await interaction.followup.send("❌ No character.")
 
-        # Check/create a daily quest for this character
-        quest = await self.bot.db.fetchrow(
-            """SELECT cq.*, qt.name, qt.description, qt.objectives, qt.rewards
-               FROM character_quests cq JOIN quest_templates qt ON cq.quest_id=qt.id
-               WHERE cq.character_id=$1 AND qt.quest_type='daily'
-               AND cq.started_at::date = CURRENT_DATE
-               LIMIT 1""", char["id"]
-        )
+        # Fetch today's daily quest, assigning a random one on first view
+        from services.quest.daily_quest_service import DailyQuestService
+        quest = await DailyQuestService(self.bot.db).get_or_assign_today(char["id"])
         if not quest:
             embed = discord.Embed(
                 title="📋 Daily Quest",
-                description=(
-                    "Rotating daily quests are coming in an upcoming update.\n"
-                    "Meanwhile: `/login` streak reward, `/guild checkin`, and NPC quests via `/quest npcs`."
-                ),
+                description="No daily quests are available right now. Check back soon!",
                 color=0x2F3136,
             )
         elif quest["is_complete"]:

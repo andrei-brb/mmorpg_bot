@@ -162,6 +162,15 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         except Exception as e:
             log.warning(f"NPC encounter roll failed: {e}")
 
+        # Daily quest progress (non-blocking)
+        try:
+            from services.quest.daily_quest_service import DailyQuestService
+            daily_line = await DailyQuestService(self.bot.db).record_event(self.svc, char["id"], "explore")
+            if daily_line:
+                embed.add_field(name="📋 Daily Quest", value=daily_line, inline=False)
+        except Exception:
+            pass
+
         embed.set_footer(text=f"Cooldown: {cooldown}s | Use /travel to change zones")
         await interaction.followup.send(embed=embed, ephemeral=True)
         

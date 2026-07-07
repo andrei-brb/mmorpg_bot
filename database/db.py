@@ -328,6 +328,36 @@ class Database:
                     crafting_xp_reward = EXCLUDED.crafting_xp_reward;
             """)
 
+            # Seed / upsert rotating daily quest templates (idempotent)
+            await c.execute("""
+                INSERT INTO quest_templates (id, name, description, quest_type, level_req, objectives, rewards, repeatable)
+                VALUES
+                    ('daily_slayer_3', 'Pest Control', 'Defeat 3 enemies anywhere in the world.', 'daily', 1,
+                     '[{"id": "kills", "kind": "kill", "description": "Defeat any enemies", "count": 3}]'::jsonb,
+                     '{"xp": 120, "gold": 60}'::jsonb, TRUE),
+                    ('daily_slayer_5', 'Cull the Horde', 'Defeat 5 enemies anywhere in the world.', 'daily', 1,
+                     '[{"id": "kills", "kind": "kill", "description": "Defeat any enemies", "count": 5}]'::jsonb,
+                     '{"xp": 200, "gold": 100}'::jsonb, TRUE),
+                    ('daily_wanderer', 'Restless Feet', 'Explore 5 times in any zone.', 'daily', 1,
+                     '[{"id": "explores", "kind": "explore", "description": "Explore any zone", "count": 5}]'::jsonb,
+                     '{"xp": 100, "gold": 50}'::jsonb, TRUE),
+                    ('daily_boss_hunter', 'Head of the Snake', 'Defeat 1 boss.', 'daily', 1,
+                     '[{"id": "boss", "kind": "boss", "description": "Defeat a boss", "count": 1}]'::jsonb,
+                     '{"xp": 250, "gold": 140}'::jsonb, TRUE),
+                    ('daily_veteran', 'No Rest for the Bold', 'Defeat 4 enemies and explore twice.', 'daily', 1,
+                     '[{"id": "kills", "kind": "kill", "description": "Defeat any enemies", "count": 4},
+                       {"id": "explores", "kind": "explore", "description": "Explore any zone", "count": 2}]'::jsonb,
+                     '{"xp": 260, "gold": 130}'::jsonb, TRUE)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    quest_type = EXCLUDED.quest_type,
+                    level_req = EXCLUDED.level_req,
+                    objectives = EXCLUDED.objectives,
+                    rewards = EXCLUDED.rewards,
+                    repeatable = EXCLUDED.repeatable;
+            """)
+
             # ── Forge: rarity rules, branch recipe columns, unified jobs, forge log ──
             await c.execute("""
                 CREATE TABLE IF NOT EXISTS forge_rarity_rules (

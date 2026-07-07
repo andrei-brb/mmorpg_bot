@@ -1782,6 +1782,18 @@ async def _finish_victory(
         if ok:
             loot_lines.append("🧪 **Health Potion** (refill)")
 
+    # Daily quest progress (non-blocking)
+    try:
+        from services.quest.daily_quest_service import DailyQuestService
+        daily_svc = DailyQuestService(db)
+        daily_line = await daily_svc.record_event(char_svc, char["id"], "kill")
+        if session.is_boss:
+            daily_line = await daily_svc.record_event(char_svc, char["id"], "boss") or daily_line
+        if daily_line:
+            loot_lines.append(daily_line)
+    except Exception:
+        pass
+
     try:
         ach_svc = AchievementService(db)
         newly_earned = await ach_svc.check_and_award(char["id"], "kill", {"is_boss": session.is_boss})
