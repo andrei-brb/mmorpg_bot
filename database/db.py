@@ -358,6 +358,43 @@ class Database:
                     repeatable = EXCLUDED.repeatable;
             """)
 
+            # Seed / upsert item-set gear (set bonuses already applied in
+            # CharacterService.total_stats: 2pc +15 armor, 4pc +10 str/agi/int)
+            await c.execute("""
+                INSERT INTO item_templates
+                    (id, name, description, item_type, rarity, equip_slot, level_req,
+                     s_str, s_agi, s_int, s_spi, s_sta, s_armor, s_dmg_min, s_dmg_max,
+                     effect_type, effect_value, effect_duration,
+                     vendor_buy, vendor_sell, icon, set_id)
+                VALUES
+                    ('gravewalker_hood','Gravewalker Hood','Night-dyed leather that never warms.','armor','rare','head',18,
+                     0,4,0,3,5,26,0,0, NULL,0,0, 0,45,'🪖','gravewalker'),
+                    ('gravewalker_shroud','Gravewalker Shroud','A chestpiece stitched with grave-moss.','armor','rare','chest',18,
+                     2,4,0,3,7,38,0,0, NULL,0,0, 0,60,'🥋','gravewalker'),
+                    ('gravewalker_grips','Gravewalker Grips','Grave-digger gloves, unnervingly steady.','armor','rare','hands',18,
+                     2,5,0,2,4,20,0,0, NULL,0,0, 0,40,'🧤','gravewalker'),
+                    ('gravewalker_treads','Gravewalker Treads','They make no sound on cemetery soil.','armor','rare','feet',18,
+                     0,6,0,2,4,22,0,0, NULL,0,0, 0,40,'🥾','gravewalker'),
+                    ('warplate_helm','Blackrock Warplate Helm','Forged in dragonfire.','armor','epic','head',50,
+                     6,0,0,0,12,70,0,0, NULL,0,0, 0,140,'🪖','blackrock_warplate'),
+                    ('warplate_cuirass','Blackrock Warplate Cuirass','Heavy plate scored by claw marks.','armor','epic','chest',50,
+                     8,0,0,0,16,105,0,0, NULL,0,0, 0,180,'🛡️','blackrock_warplate'),
+                    ('warplate_gauntlets','Blackrock Warplate Gauntlets','Knuckles of black iron.','armor','epic','hands',50,
+                     7,0,0,0,10,55,0,0, NULL,0,0, 0,120,'🧤','blackrock_warplate'),
+                    ('warplate_greaves','Blackrock Warplate Greaves','Each step rings like a war drum.','armor','epic','legs',50,
+                     6,0,0,0,12,75,0,0, NULL,0,0, 0,130,'🦵','blackrock_warplate')
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    rarity = EXCLUDED.rarity,
+                    level_req = EXCLUDED.level_req,
+                    s_str = EXCLUDED.s_str, s_agi = EXCLUDED.s_agi, s_int = EXCLUDED.s_int,
+                    s_spi = EXCLUDED.s_spi, s_sta = EXCLUDED.s_sta, s_armor = EXCLUDED.s_armor,
+                    vendor_sell = EXCLUDED.vendor_sell,
+                    icon = EXCLUDED.icon,
+                    set_id = EXCLUDED.set_id;
+            """)
+
             # ── Forge: rarity rules, branch recipe columns, unified jobs, forge log ──
             await c.execute("""
                 CREATE TABLE IF NOT EXISTS forge_rarity_rules (

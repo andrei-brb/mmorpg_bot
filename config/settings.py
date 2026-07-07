@@ -487,7 +487,8 @@ ZONES: Dict[str, ZoneConfig] = {
         description="A forest smothered in unnatural night. The dead here do not rest.",
         enemies=("duskwood_ghoul", "black_widow", "worgen_prowler", "skeletal_warrior", "dark_cultist", "rabid_dire_wolf", "haunted_scarecrow", "grave_robber"),
         bosses=("sir_morlan", "stalvan_forsaken", "nightmare_stag", "cult_hierophant", "grave_titan"),
-        loot_pool=("bone_club", "raptor_hide_vest", "stamina_draught", "silk_cloth", "bracelet_t2", "ring_t2", "necklace_t2", "trinket_t2"),
+        loot_pool=("bone_club", "raptor_hide_vest", "stamina_draught", "silk_cloth", "bracelet_t2", "ring_t2", "necklace_t2", "trinket_t2",
+                   "gravewalker_hood", "gravewalker_shroud", "gravewalker_grips", "gravewalker_treads"),
         ambients=(
             "The canopy blots out the sun. It is always midnight here.",
             "A raven watches you from a gallows-shaped branch.",
@@ -502,7 +503,8 @@ ZONES: Dict[str, ZoneConfig] = {
         description="Ash-choked foothills beneath the volcano, patrolled by Blackrock warbands.",
         enemies=("blackrock_orc", "blackrock_warlock", "ember_worg", "obsidian_golem", "flamekin_ravager", "steppes_chimera", "ash_drake", "blackrock_slaver"),
         bosses=("warlord_rendka", "pyrelord_ashmaul", "obsidian_colossus", "chimera_matriarch", "ash_dragon_prime"),
-        loot_pool=("sulfuron_blade", "shadowforge_plate", "flask_of_the_titans", "runecloth", "bracelet_t5", "ring_t5", "necklace_t5", "trinket_t5"),
+        loot_pool=("sulfuron_blade", "shadowforge_plate", "flask_of_the_titans", "runecloth", "bracelet_t5", "ring_t5", "necklace_t5", "trinket_t5",
+                   "warplate_helm", "warplate_cuirass", "warplate_gauntlets", "warplate_greaves"),
         ambients=(
             "Ash falls like grey snow, hissing where it lands.",
             "War drums echo down from the Blackrock foothills.",
