@@ -1440,6 +1440,22 @@ CREATE TABLE IF NOT EXISTS gold_log (
 
 CREATE INDEX IF NOT EXISTS idx_gold_log_char ON gold_log(character_id, created_at DESC);
 
+-- P2P trades: direct player-to-player item offers (accept path is atomic + dupe-safe)
+CREATE TABLE IF NOT EXISTS trades (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    from_character  UUID NOT NULL REFERENCES characters(id),
+    to_character    UUID NOT NULL REFERENCES characters(id),
+    item_id         UUID NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
+    gold_ask        INT NOT NULL DEFAULT 0 CHECK (gold_ask >= 0),
+    state           VARCHAR(16) NOT NULL DEFAULT 'open'
+                    CHECK (state IN ('open', 'accepted', 'cancelled', 'expired')),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ DEFAULT NOW() + INTERVAL '10 minutes',
+    resolved_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_open ON trades(state, expires_at) WHERE state = 'open';
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- WORLD STATE
 -- ─────────────────────────────────────────────────────────────────────────────
