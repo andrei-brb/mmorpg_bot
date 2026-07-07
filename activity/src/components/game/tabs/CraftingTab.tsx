@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { CraftRecipeRow, CraftJobRow, InvRow } from "@/lib/apiTypes";
 import { craftingXpToNextLevel } from "@/lib/craftingXp";
 import * as api from "@/lib/gameApi";
+import { ErrorState } from "@/components/ui/error-state";
 import { ItemIcon } from "../ItemIcon";
 import {
   WomGoldCoin,
@@ -169,7 +170,7 @@ function isGearRow(it: InvRow): boolean {
 }
 
 export function CraftingTab() {
-  const { inventory, refreshInventory, itemPost, accessToken, guildId } = useGameSession();
+  const { inventory, refreshInventory, refreshProgress, itemPost, accessToken, guildId } = useGameSession();
   const char = inventory?.character;
   const items = inventory?.items || [];
   const job = (inventory?.craft_job || null) as CraftJobRow | null;
@@ -201,6 +202,56 @@ export function CraftingTab() {
       ),
     [items],
   );
+
+  const [repairQuote, setRepairQuote] = useState<api.RepairQuotePayload | null>(null);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [repairError, setRepairError] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+
+  const loadRepairQuote = useCallback(async () => {
+    if (!accessToken) return;
+    setRepairLoading(true);
+    setRepairError(false);
+    try {
+      const j = await api.getRepairQuote(accessToken, guildId);
+      if (j.ok === false) throw new Error("repair quote unavailable");
+      setRepairQuote(j);
+    } catch (e) {
+      console.warn("repair quote", e);
+      setRepairError(true);
+    } finally {
+      setRepairLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    void loadRepairQuote();
+  }, [loadRepairQuote]);
+
+  const repairAll = useCallback(async () => {
+    if (!accessToken || repairing) return;
+    setRepairing(true);
+    try {
+      const j = await api.postRepairAll(accessToken, guildId);
+      if (j.ok) {
+        const n = j.repaired ?? 0;
+        toast.success(
+          `Repaired ${n} item${n === 1 ? "" : "s"} for ${(j.total ?? 0).toLocaleString()} 🪙.`,
+        );
+        await refreshInventory();
+        await refreshProgress();
+      } else if (j.error === "insufficient_gold") {
+        toast.error(`Not enough gold — repairs cost ${(j.total ?? 0).toLocaleString()} 🪙.`);
+      } else {
+        toast.error(j.message || j.error || "Could not repair gear.");
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setRepairing(false);
+    }
+    await loadRepairQuote();
+  }, [accessToken, guildId, repairing, refreshInventory, refreshProgress, loadRepairQuote]);
 
   const [selectedId, setSelectedId] = useState<string>("");
   const [forgeMode, setForgeMode] = useState<"a" | "b">("a");
@@ -426,6 +477,77 @@ export function CraftingTab() {
             Claim
           </button>
         </div>
+      </WomPanel>
+
+      <WomPanel className="p-5 sm:p-6" glow>
+        <WomSectionHeader kicker="Guild services" title="Repair gear" />
+        {(() => {
+          if (repairError) {
+            return <ErrorState message="Could not load the repair quote." onRetry={() => void loadRepairQuote()} />;
+          }
+          if (repairLoading && !repairQuote) {
+            return <p className="text-sm text-[var(--text-muted)]">Checking your gear for damage…</p>;
+          }
+          const quoteItems = repairQuote?.items || [];
+          const repairTotal = Math.max(0, Math.floor(Number(repairQuote?.total ?? 0)));
+          const repairGold = Math.max(0, Math.floor(Number(repairQuote?.gold ?? char?.gold ?? 0)));
+          const cantAfford = repairTotal > 0 && repairGold < repairTotal;
+          return (
+            <div className="space-y-4">
+              {quoteItems.length === 0 ? (
+                <p className="text-sm text-[var(--text-secondary)]">All gear is in fighting shape — nothing to repair.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {quoteItems.map((it) => (
+                    <li
+                      key={it.id}
+                      className="flex items-center gap-3 rounded-sm border border-[var(--border-default)] bg-[var(--bg-void)]/80 px-3 py-2"
+                    >
+                      <span className="shrink-0">
+                        <ItemIcon
+                          item={{ id: it.id, name: it.name, icon: it.icon, rarity: it.rarity } as InvRow}
+                          size={32}
+                        />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-foreground">{it.name}</span>
+                        <span className="block text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                          −{it.missing ?? 0} durability
+                        </span>
+                      </span>
+                      <span className="wom-font-mono shrink-0 text-sm tabular-nums text-[var(--gold-200)]">
+                        {(it.cost ?? 0).toLocaleString()} 🪙
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-default)]/60 pt-3">
+                <span className="wom-font-mono text-sm tabular-nums text-[var(--text-secondary)]">
+                  Total <span className="font-semibold text-[var(--gold-200)]">{repairTotal.toLocaleString()}</span>
+                  <span className="text-[var(--text-muted)]"> 🪙 · you have </span>
+                  <span className={cantAfford ? "font-semibold text-[var(--crimson-400)]" : "font-semibold text-[var(--verdant)]"}>
+                    {repairGold.toLocaleString()}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="btn-gold shrink-0 !px-6 !py-3 !text-[11px]"
+                  disabled={repairing || repairLoading || repairTotal === 0 || cantAfford}
+                  title={cantAfford ? "Not enough gold to cover the full repair bill." : undefined}
+                  onClick={() => void repairAll()}
+                >
+                  {repairing ? "Repairing…" : "Repair all"}
+                </button>
+              </div>
+              {cantAfford ? (
+                <p className="text-xs text-amber-400/95">
+                  You need {(repairTotal - repairGold).toLocaleString()} more gold to repair everything.
+                </p>
+              ) : null}
+            </div>
+          );
+        })()}
       </WomPanel>
 
       <WomPanel className="p-5 sm:p-6" glow>

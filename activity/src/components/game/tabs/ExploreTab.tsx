@@ -56,7 +56,7 @@ type ExploreResult = {
   id: string;
   type: OutcomeType;
   message: string;
-  reward?: { xp?: number; gold?: number };
+  reward?: { xp?: number; gold?: number; scrap?: { name?: string; quantity?: number } | null };
   npc?: Npc;
   enemyName?: string;
   /** Server enemy template key — required to jump straight into combat. */
@@ -126,8 +126,8 @@ function explorePayloadToExploreResult(json: ExploreResultPayload): ExploreResul
   const ts = new Date();
   const out = json.outcome;
   const reward =
-    json.reward && (json.reward.xp != null || json.reward.gold != null)
-      ? { xp: json.reward.xp, gold: json.reward.gold }
+    json.reward && (json.reward.xp != null || json.reward.gold != null || json.reward.scrap != null)
+      ? { xp: json.reward.xp, gold: json.reward.gold, scrap: json.reward.scrap }
       : undefined;
 
   if (out.type === "enemy" || out.type === "boss") {
@@ -330,10 +330,15 @@ function ResultPanel({
           {result.npc.discoveryQuote && <blockquote className="border-l-2 border-npc-teal/40 pl-3 italic text-xs text-muted-foreground leading-relaxed">{result.npc.discoveryQuote}</blockquote>}
         </div>
       )}
-      {result.reward && (result.reward.xp || result.reward.gold) && (
-        <div className="flex items-center gap-3 mt-2">
+      {result.reward && (result.reward.xp || result.reward.gold || result.reward.scrap) && (
+        <div className="flex flex-wrap items-center gap-3 mt-2">
           {result.reward.xp ? <span className="flex items-center gap-1 text-xs font-semibold text-xp-blue"><Zap className="h-3 w-3" />+{result.reward.xp} XP</span> : null}
           {result.reward.gold ? <span className="flex items-center gap-1 text-xs font-semibold text-gold"><Coins className="h-3 w-3" />+{result.reward.gold}g</span> : null}
+          {result.reward.scrap?.name ? (
+            <span className="flex items-center gap-1 text-xs font-semibold text-foreground/85">
+              +{result.reward.scrap.quantity ?? 1} 🔩 {result.reward.scrap.name}
+            </span>
+          ) : null}
         </div>
       )}
       {!isTimeline && (

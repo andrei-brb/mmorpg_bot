@@ -359,7 +359,12 @@ export type ExploreResultPayload = {
   cooldown_s?: number;
   zone?: { key: string; name: string; emoji: string; level_min?: number; level_max?: number };
   outcome?: ExploreOutcome;
-  reward?: { xp?: number; gold?: number };
+  reward?: {
+    xp?: number;
+    gold?: number;
+    /** Salvage-style bonus loot on `loot` outcomes (e.g. +2 Weapon Scrap). */
+    scrap?: { template_id?: string; name?: string; quantity?: number } | null;
+  };
   npc?: {
     npc_id?: string;
     name?: string;

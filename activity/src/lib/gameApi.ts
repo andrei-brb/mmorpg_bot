@@ -1343,3 +1343,152 @@ export async function postPvpChallenge(
   });
   return res.json() as Promise<{ ok?: boolean; message?: string; error?: string }>;
 }
+
+export async function getPvpPlayers(
+  token: string,
+  query: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; players?: Array<{ id: string; username: string }> }> {
+  const res = await fetch(
+    apiUrl(`/api/game/pvp/players?q=${encodeURIComponent(query)}`),
+    { headers: authHeaders(token, guildId) },
+  );
+  return res.json() as Promise<{ ok?: boolean; players?: Array<{ id: string; username: string }> }>;
+}
+
+// ── Repair ─────────────────────────────────────────────────────────────────────
+
+export type RepairQuoteItem = {
+  id: string;
+  name: string;
+  icon?: string | null;
+  rarity?: string;
+  durability?: number;
+  missing?: number;
+  cost?: number;
+};
+
+export type RepairQuotePayload = {
+  ok?: boolean;
+  total?: number;
+  items?: RepairQuoteItem[];
+  gold?: number;
+};
+
+export async function getRepairQuote(token: string, guildId?: string): Promise<RepairQuotePayload> {
+  const res = await fetch(apiUrl("/api/game/repair/quote"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`repair-quote ${res.status}`);
+  return res.json() as Promise<RepairQuotePayload>;
+}
+
+export async function postRepairAll(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string; repaired?: number; total?: number }> {
+  const res = await fetch(apiUrl("/api/game/repair"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: "{}",
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; repaired?: number; total?: number }>;
+}
+
+// ── Daily quest ────────────────────────────────────────────────────────────────
+
+export type DailyQuestPayload = {
+  ok?: boolean;
+  quest?: {
+    quest_id?: string;
+    name?: string;
+    description?: string;
+    objectives?: Array<{ id: string; kind?: string; description?: string; count?: number }>;
+    progress?: Record<string, number>;
+    rewards?: { xp?: number; gold?: number };
+    is_complete?: boolean;
+  } | null;
+};
+
+export async function getDailyQuest(token: string, guildId?: string): Promise<DailyQuestPayload> {
+  const res = await fetch(apiUrl("/api/game/daily"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`daily ${res.status}`);
+  return res.json() as Promise<DailyQuestPayload>;
+}
+
+// ── Prestige ───────────────────────────────────────────────────────────────────
+
+export type PrestigePayload = {
+  ok?: boolean;
+  prestige?: number;
+  max?: number;
+  xp_bonus_pct?: number;
+  next_xp_bonus_pct?: number;
+  eligible?: boolean;
+  required_level?: number;
+};
+
+export async function getPrestige(token: string, guildId?: string): Promise<PrestigePayload> {
+  const res = await fetch(apiUrl("/api/game/prestige"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`prestige ${res.status}`);
+  return res.json() as Promise<PrestigePayload>;
+}
+
+export async function postPrestige(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/prestige"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: true }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string }>;
+}
+
+// ── Trades ─────────────────────────────────────────────────────────────────────
+
+export type TradeOfferRow = {
+  id: string;
+  item_name?: string;
+  item_icon?: string | null;
+  gold_ask?: number;
+  expires_at?: string;
+  from_name?: string;
+  to_name?: string;
+  state?: string;
+};
+
+export async function getTrades(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; incoming?: TradeOfferRow[]; outgoing?: TradeOfferRow[] }> {
+  const res = await fetch(apiUrl("/api/game/trades"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) throw new Error(`trades ${res.status}`);
+  return res.json() as Promise<{ ok?: boolean; incoming?: TradeOfferRow[]; outgoing?: TradeOfferRow[] }>;
+}
+
+export async function postTradeOffer(
+  token: string,
+  body: { target_user_id: string; item_id: string; gold_ask: number },
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string; trade?: TradeOfferRow }> {
+  const res = await fetch(apiUrl("/api/game/trades/offer"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string; trade?: TradeOfferRow }>;
+}
+
+export async function postTradeAct(
+  token: string,
+  tradeId: string,
+  action: "accept" | "decline" | "cancel",
+  guildId?: string,
+): Promise<{ ok?: boolean; error?: string; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/trades/act"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ trade_id: tradeId, action }),
+  });
+  return res.json() as Promise<{ ok?: boolean; error?: string; message?: string }>;
+}

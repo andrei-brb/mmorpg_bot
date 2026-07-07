@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { BattlePassStatePayload, MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
@@ -6,6 +6,8 @@ import * as api from "@/lib/gameApi";
 import { ZONES } from "@/data/zones";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
 import { WomPanel } from "@/components/wom/WomUi";
 
 const STATE_STYLES: Record<string, string> = {
@@ -131,6 +133,28 @@ export function QuestsTab() {
   } | null>(null);
   const [travelFightBusy, setTravelFightBusy] = useState(false);
   const [battlePass, setBattlePass] = useState<BattlePassStatePayload | null>(null);
+  const [daily, setDaily] = useState<api.DailyQuestPayload | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyError, setDailyError] = useState(false);
+
+  const loadDaily = useCallback(async () => {
+    if (!accessToken) return;
+    setDailyLoading(true);
+    setDailyError(false);
+    try {
+      const j = await api.getDailyQuest(accessToken, guildId);
+      setDaily(j);
+    } catch (e) {
+      console.warn("daily quest", e);
+      setDailyError(true);
+    } finally {
+      setDailyLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    void loadDaily();
+  }, [loadDaily]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -586,6 +610,93 @@ export function QuestsTab() {
                   })
                 )}
               </div>
+            </div>
+          </WomPanel>
+
+          <WomPanel
+            glow
+            className="w-full min-w-0"
+            style={{
+              background: "linear-gradient(180deg, hsl(226 28% 14% / 0.85) 0%, hsl(230 32% 10% / 0.9) 100%)",
+              border: "1px solid hsl(43 50% 35% / 0.3)",
+              boxShadow: "0 8px 30px hsl(0 0% 0% / 0.25), inset 0 1px 0 hsl(228 14% 30% / 0.22)",
+            }}
+          >
+            <div className="game-panel-header flex items-center justify-between gap-2">
+              <span>Daily Quest</span>
+              {daily?.quest?.is_complete ? (
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/90">✅ Complete</span>
+              ) : null}
+            </div>
+            <div className="p-4 pt-3">
+              {dailyLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-2 w-full" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ) : dailyError ? (
+                <ErrorState
+                  className="p-4"
+                  message="Could not load today's daily quest."
+                  onRetry={() => void loadDaily()}
+                />
+              ) : !daily?.quest ? (
+                <p className="text-xs text-muted-foreground">No daily quest available right now — check back tomorrow.</p>
+              ) : (
+                <>
+                  <div className="text-sm font-cinzel font-semibold text-foreground">{daily.quest.name ?? "Daily quest"}</div>
+                  {daily.quest.description ? (
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{daily.quest.description}</p>
+                  ) : null}
+                  {(daily.quest.objectives || []).length > 0 ? (
+                    <div className="mt-3 space-y-2.5">
+                      {(daily.quest.objectives || []).map((obj) => {
+                        const need = Math.max(1, Number(obj.count ?? 1));
+                        const cur = Math.min(need, Math.max(0, Number(daily.quest?.progress?.[obj.id] ?? 0)));
+                        const pct = Math.min(100, (cur / need) * 100);
+                        return (
+                          <div key={obj.id}>
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              <span className="min-w-0 truncate text-foreground/90">{obj.description || obj.kind || obj.id}</span>
+                              <span className="shrink-0 tabular-nums text-muted-foreground">
+                                {cur}/{need}
+                              </span>
+                            </div>
+                            <div
+                              className="mt-1 h-1.5 rounded-sm overflow-hidden"
+                              style={{
+                                background: "hsl(226 30% 8% / 0.75)",
+                                border: "1px solid hsl(228 18% 22% / 0.8)",
+                              }}
+                            >
+                              <div
+                                className="h-full rounded-sm transition-all"
+                                style={{
+                                  width: `${pct}%`,
+                                  background:
+                                    pct >= 100
+                                      ? "linear-gradient(90deg, hsl(150 55% 40%), hsl(150 55% 50%))"
+                                      : "linear-gradient(90deg, hsl(43 78% 45%), hsl(43 78% 55%))",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {daily.quest.rewards && (daily.quest.rewards.xp || daily.quest.rewards.gold) ? (
+                    <p className="mt-3 text-[11px] text-muted-foreground tabular-nums">
+                      <span className="font-cinzel uppercase tracking-wider">Rewards:</span>{" "}
+                      {daily.quest.rewards.xp ? <span className="text-sky-200/90">⭐ {daily.quest.rewards.xp.toLocaleString()} XP</span> : null}
+                      {daily.quest.rewards.xp && daily.quest.rewards.gold ? " · " : null}
+                      {daily.quest.rewards.gold ? <span className="text-amber-200/90">🪙 {daily.quest.rewards.gold.toLocaleString()}</span> : null}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </div>
           </WomPanel>
 
