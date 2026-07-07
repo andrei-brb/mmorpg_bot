@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config.settings import Settings
 from services.milestones.milestone_service import MilestoneService
 
 log = logging.getLogger("cog.milestones")
@@ -43,7 +44,7 @@ class MilestonesCog(commands.Cog, name="Milestones"):
         embed = discord.Embed(
             title="🏁 Server Milestones",
             description="Shared progression for this server.",
-            color=0xF1C40F,
+            color=Settings.COLORS["reward"],
         )
 
         for row in progress:

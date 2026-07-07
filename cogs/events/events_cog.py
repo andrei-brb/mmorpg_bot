@@ -263,13 +263,13 @@ class EventsCog(commands.Cog, name="Events"):
             embed = discord.Embed(
                 title="📋 Daily Quest — ✅ Complete!",
                 description=f"**{quest['name']}** — Already completed today!\nReturns tomorrow at midnight UTC.",
-                color=0x00FF7F,
+                color=Settings.COLORS["success"],
             )
         else:
             embed = discord.Embed(
                 title=f"📋 Daily Quest: {quest['name']}",
                 description=quest["description"],
-                color=0xFFD700,
+                color=Settings.COLORS["reward"],
             )
             import json
             objectives = quest["objectives"] if isinstance(quest["objectives"], list) else json.loads(quest["objectives"])
@@ -301,7 +301,7 @@ class EventsCog(commands.Cog, name="Events"):
             embed = discord.Embed(
                 title="🎁 Daily Login",
                 description=result["message"],
-                color=0xFFD700,
+                color=Settings.COLORS["reward"],
             )
             if result.get("next_claim"):
                 embed.set_footer(text=f"Next claim: {result['next_claim']}")
@@ -323,7 +323,7 @@ class EventsCog(commands.Cog, name="Events"):
         embed = discord.Embed(
             title="🎁 Daily Login Reward Claimed!",
             description=streak_text,
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         
         embed.add_field(
@@ -366,7 +366,7 @@ class EventsCog(commands.Cog, name="Events"):
         embed = discord.Embed(
             title="🔥 Login Streak",
             description=f"**{char['name']}**'s login statistics",
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         
         embed.add_field(

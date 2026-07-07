@@ -181,7 +181,7 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         )
         await self.bot.db.execute("UPDATE characters SET current_zone=$2 WHERE id=$1", char["id"], zone)
 
-        embed = discord.Embed(title=f"🗺️ Arrived in {z.emoji} {z.name}", description=z.description, color=0x4488FF)
+        embed = discord.Embed(title=f"🗺️ Arrived in {z.emoji} {z.name}", description=z.description, color=Settings.COLORS["info"])
         embed.add_field(name="Level Range", value=f"{z.level_range[0]}–{z.level_range[1]}", inline=True)
         embed.add_field(name="Faction", value=z.faction.title(), inline=True)
         embed.add_field(name="Known Enemies", value=", ".join(k.replace("_"," ").title() for k in z.enemies), inline=False)

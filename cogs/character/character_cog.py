@@ -93,6 +93,11 @@ class SpecSelectView(discord.ui.View):
         except Exception:
             pass
 
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey, row=1)
+    async def cancel(self, interaction: discord.Interaction, _):
+        self.stop()
+        await interaction.response.edit_message(content="Cancelled.", view=None, embed=None)
+
 
 # ── Cog ───────────────────────────────────────────────────────────────────────
 
@@ -160,7 +165,7 @@ class CharacterCog(commands.Cog, name="Character"):
         embed = discord.Embed(
             title=f"🎉 Welcome to the world, **{name}**!",
             description=f"> *{cls.lore}*",
-            color=0x00FF7F,
+            color=Settings.COLORS["success"],
         )
         embed.add_field(name="Class",  value=f"{cls.emoji} {cls.name}", inline=True)
         embed.add_field(name="Role",   value=cls.role.title(),          inline=True)
@@ -220,7 +225,7 @@ class CharacterCog(commands.Cog, name="Character"):
             "frost": 0x00CED1,     # Cyan ice
             # Paladin specs  
             "retribution": 0xFF6347,   # Tomato red
-            "holy_paladin": 0xFFD700,  # Gold
+            "holy_paladin": Settings.COLORS["reward"],  # Gold
             # Priest specs
             "holy_priest": 0xFFFFE0,   # Light yellow
             "shadow": 0x8B008B,        # Dark magenta
@@ -735,7 +740,7 @@ class CharacterCog(commands.Cog, name="Character"):
                 f"As a **{cls.name}**, choose one path.\n"
                 f"⚠️ **This choice is permanent.** Choose wisely.\n\u200b"
             ),
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         for key, spec in specs.items():
             embed.add_field(
@@ -755,7 +760,7 @@ class CharacterCog(commands.Cog, name="Character"):
 
         ok, msg = await self.svc.choose_spec(char["id"], view.chosen)
         spec = SPECIALIZATIONS[view.chosen]
-        color = 0x00FF7F if ok else 0xFF0000
+        color = Settings.COLORS["success"] if ok else Settings.COLORS["error"]
         result = discord.Embed(
             title=f"{spec.emoji} {spec.name}" if ok else "❌ Error",
             description=msg,

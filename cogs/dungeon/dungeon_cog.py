@@ -36,6 +36,11 @@ class _DungeonSelectView(discord.ui.View):
             return False
         return True
 
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey, row=1)
+    async def cancel(self, interaction: discord.Interaction, _):
+        self.stop()
+        await interaction.response.edit_message(content="Cancelled.", view=None, embed=None)
+
 class _DungeonSelect(discord.ui.Select):
     def __init__(self):
         options = []
@@ -263,7 +268,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         embed = discord.Embed(
             title=f"🏰 Party Created: {dungeon_config.emoji} {dungeon_config.name}",
             description=f"**Leader:** {char['name']}\n**Members:** 1/{Settings.MAX_PARTY_SIZE}",
-            color=0x00FF00,
+            color=Settings.COLORS["success"],
         )
         embed.add_field(
             name="📋 Commands",
@@ -713,7 +718,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         embed = discord.Embed(
             title=f"✅ Floor {floor} Complete!",
             description=f"**{char['name']}** defeated {session.enemies[0].name}!",
-            color=0x00FF00,
+            color=Settings.COLORS["success"],
         )
         gold_txt = f"{gold_each:,}" + (f" each ({n}-way split)" if n > 1 else "")
         embed.add_field(name="💰 Gold", value=gold_txt, inline=True)
@@ -778,7 +783,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         embed = discord.Embed(
             title=f"🏆 Dungeon Complete!",
             description=f"**{dungeon_config.emoji} {dungeon_config.name}** cleared!",
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         embed.add_field(
             name="✨ Bonus Rewards",
@@ -819,7 +824,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
                 "• Use a **Health Potion** from your inventory\n"
                 "• Try again when you're stronger!"
             ),
-            color=0xFF0000,
+            color=Settings.COLORS["error"],
         )
         # Edit existing message instead of sending new one (saves API call)
         if msg:

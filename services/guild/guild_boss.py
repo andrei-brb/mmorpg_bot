@@ -23,6 +23,28 @@ BOSS_TEMPLATES: Dict[str, Dict[str, Any]] = {
         "expire_guild_xp": 80,
         "min_participation_gold": 25,
     },
+    # Sprint boss: smaller HP pool on a 3-day clock — for smaller/newer guilds.
+    "hollow_king": {
+        "name": "The Hollow King",
+        "hp_max": 150_000,
+        "duration_hours": 72,
+        "defeat_gold_pool": 1_800,
+        "defeat_guild_xp": 140,
+        "expire_gold_pool": 500,
+        "expire_guild_xp": 35,
+        "min_participation_gold": 25,
+    },
+    # Endurance boss: bigger pool and richer rewards for established guilds.
+    "ember_dread_wyrm": {
+        "name": "Ember Dread Wyrm",
+        "hp_max": 900_000,
+        "duration_hours": 168,
+        "defeat_gold_pool": 9_000,
+        "defeat_guild_xp": 650,
+        "expire_gold_pool": 2_500,
+        "expire_guild_xp": 160,
+        "min_participation_gold": 25,
+    },
 }
 
 MAX_HITS_PER_CHAR_PER_DAY = 50

@@ -1511,7 +1511,7 @@ async def _finish_party_victory(
             await char_svc.sync_combat_hp(ch["id"], pl.current_hp, pl.current_res)
 
         for _ in range(2 if session.is_boss else 1):
-            loot = await inv_svc.generate_loot(dungeon_key, ch["level"], session.is_boss)
+            loot = await inv_svc.generate_loot(dungeon_key, ch["level"], session.is_boss, char_id=ch["id"])
             if loot:
                 ok, _ = await inv_svc.add_item(
                     ch["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
@@ -1767,7 +1767,7 @@ async def _finish_victory(
 
     loot_lines: List[str] = []
     for _ in range(rewards["loot_rolls"]):
-        loot = await inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss)
+        loot = await inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss, char_id=char["id"])
         if loot:
             ok, _ = await inv_svc.add_item(
                 char["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]

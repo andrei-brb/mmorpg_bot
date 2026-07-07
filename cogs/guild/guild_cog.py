@@ -8,6 +8,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.settings import Settings
 from services.character.character_service import CharacterService
 from services.guild.guild_invite_dm import GuildInviteView, build_guild_invite_embed
 
@@ -37,8 +38,10 @@ class GuildCog(commands.Cog, name="Guild"):
         if not (3 <= len(name) <= 64):
             return await interaction.followup.send("❌ Guild name must be 3–64 characters.")
 
+        msg = await interaction.followup.send("⏳ Processing…", wait=True)
+
         exists = await self.bot.db.fetchrow("SELECT id FROM guilds WHERE name ILIKE $1 OR tag=$2", name, tag)
-        if exists: return await interaction.followup.send("❌ That name or tag is already taken.")
+        if exists: return await msg.edit(content="❌ That name or tag is already taken.")
 
         guild = await self.bot.db.fetchrow(
             "INSERT INTO guilds(name,tag,guildmaster_id,server_id) VALUES($1,$2,$3,$4) RETURNING *",
@@ -53,11 +56,11 @@ class GuildCog(commands.Cog, name="Guild"):
         ach_svc = AchievementService(self.bot.db)
         await ach_svc.check_and_award(char["id"], "guild_create", {})
         
-        embed = discord.Embed(title=f"🏰 [{tag}] {name} — Founded!", description=f"**{char['name']}** has founded a new guild!", color=0xFFD700)
+        embed = discord.Embed(title=f"🏰 [{tag}] {name} — Founded!", description=f"**{char['name']}** has founded a new guild!", color=Settings.COLORS["reward"])
         embed.add_field(name="Guildmaster", value=char["name"], inline=True)
         embed.add_field(name="Members", value="1", inline=True)
         embed.set_footer(text="Use /guild invite to recruit members")
-        await interaction.followup.send(embed=embed)
+        await msg.edit(content=None, embed=embed)
 
     async def _sync_member_count(self, guild_id):
         """Sync member_count with actual member count."""
@@ -96,7 +99,7 @@ class GuildCog(commands.Cog, name="Guild"):
             "SELECT name, level, class, guild_rank FROM characters WHERE guild_id=$1 ORDER BY guild_rank DESC, level DESC",
             guild["id"]
         )
-        embed = discord.Embed(title=f"🏰 [{guild['tag']}] {guild['name']}", description=guild["motd"] or "*No MOTD set.*", color=0xFFD700)
+        embed = discord.Embed(title=f"🏰 [{guild['tag']}] {guild['name']}", description=guild["motd"] or "*No MOTD set.*", color=Settings.COLORS["reward"])
         embed.add_field(name="Guildmaster", value=gm["name"] if gm else "Unknown", inline=True)
         embed.add_field(name="Level", value=str(guild["guild_level"]), inline=True)
         embed.add_field(name="Members", value=f"{actual_count}/{guild['max_members']}", inline=True)
@@ -278,7 +281,7 @@ class GuildCog(commands.Cog, name="Guild"):
         embed = discord.Embed(
             title=f"🔍 Debug: [{guild['tag']}] {guild['name']}",
             description=f"**Stored member_count:** {guild['member_count']}\n**Actual members found:** {len(all_members)}",
-            color=0x00FF00,
+            color=Settings.COLORS["success"],
         )
         
         member_list = []

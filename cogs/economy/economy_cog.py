@@ -31,7 +31,7 @@ class EconomyCog(commands.Cog, name="Economy"):
     async def browse(self, interaction: discord.Interaction):
         await interaction.response.defer()
         rows = await self.bot.db.fetch(
-            """SELECT ml.id, ml.price, ml.quantity, t.name, t.icon, c.name as seller,
+            """SELECT ml.id, ml.price, ml.quantity, ml.expires_at, t.name, t.icon, c.name as seller,
                       COALESCE(i.rarity, t.rarity) as rarity
                FROM market_listings ml
                JOIN inventory i ON ml.item_id=i.id
@@ -44,12 +44,13 @@ class EconomyCog(commands.Cog, name="Economy"):
         if not rows:
             return await interaction.followup.send(embed=discord.Embed(title="🏪 Marketplace", description="No items listed. Be first to sell!", color=0x2F3136))
 
-        embed = discord.Embed(title=f"🏪 Marketplace — {len(rows)} listings", description=f"Fee: **{Settings.MARKET_FEE_PERCENT}%** of sale price", color=0xFFD700)
+        embed = discord.Embed(title=f"🏪 Marketplace — {len(rows)} listings", description=f"Fee: **{Settings.MARKET_FEE_PERCENT}%** of sale price", color=Settings.COLORS["reward"])
         for r in rows:
             rc = RARITIES.get(r["rarity"])
+            expires = f" | expires <t:{int(r['expires_at'].timestamp())}:R>" if r["expires_at"] else ""
             embed.add_field(
                 name=f"{rc.emoji if rc else '📦'} {r['name']} [{r['rarity'].title()}]",
-                value=f"💰 **{r['price']:,}**🪙 × {r['quantity']} | By *{r['seller']}*\n`/market buy {r['id']}`",
+                value=f"💰 **{r['price']:,}**🪙 × {r['quantity']} | By *{r['seller']}*{expires}\n`/market buy {r['id']}`",
                 inline=False,
             )
         await interaction.followup.send(embed=embed)
@@ -65,6 +66,8 @@ class EconomyCog(commands.Cog, name="Economy"):
         except ValueError: return await interaction.followup.send("❌ Invalid item ID.")
 
         fee = max(1, int(price * Settings.MARKET_FEE_PERCENT / 100))
+
+        msg = await interaction.followup.send("⏳ Processing…", wait=True)
 
         # Lock the inventory row FOR UPDATE so re-validation, the duplicate-listing
         # guard, fee, and insert are atomic — prevents listing the same item twice
@@ -99,12 +102,12 @@ class EconomyCog(commands.Cog, name="Economy"):
                 )
                 item_name = item["name"]
         except _MarketAbort as e:
-            return await interaction.followup.send(e.message)
+            return await msg.edit(content=e.message)
 
-        await interaction.followup.send(embed=discord.Embed(
+        await msg.edit(content=None, embed=discord.Embed(
             title="🏪 Listed!",
-            description=f"**{item_name}** listed for **{price:,}**🪙\nFee paid: **{fee}**🪙 | Expires in 7 days.",
-            color=0x00FF7F,
+            description=f"**{item_name}** listed for **{price:,}**🪙\nFee: **{fee}**🪙 ({Settings.MARKET_FEE_PERCENT}% of {price:,}) | Expires in 7 days.",
+            color=Settings.COLORS["success"],
         ))
 
     @market.command(name="buy", description="Purchase a market listing")
@@ -117,6 +120,8 @@ class EconomyCog(commands.Cog, name="Economy"):
         except ValueError: return await interaction.followup.send("❌ Invalid listing ID.")
 
         from services.character.inventory_service import InventoryService
+
+        msg = await interaction.followup.send("⏳ Processing…", wait=True)
 
         # Whole purchase is atomic: the listing row is locked FOR UPDATE so two buyers
         # can't both pass the is_active check, and any failure rolls back gold + item.
@@ -176,10 +181,10 @@ class EconomyCog(commands.Cog, name="Economy"):
                 )
                 bought_name, bought_price = listing["name"], listing["price"]
         except _MarketAbort as e:
-            return await interaction.followup.send(e.message)
+            return await msg.edit(content=e.message)
 
-        await interaction.followup.send(embed=discord.Embed(
-            title="✅ Purchased!", description=f"You bought **{bought_name}** for **{bought_price:,}**🪙.", color=0x00FF7F,
+        await msg.edit(content=None, embed=discord.Embed(
+            title="✅ Purchased!", description=f"You bought **{bought_name}** for **{bought_price:,}**🪙.", color=Settings.COLORS["success"],
         ))
 
     @app_commands.command(name="leaderboard", description="View the server leaderboard")
@@ -215,7 +220,7 @@ class EconomyCog(commands.Cog, name="Economy"):
             )
             title = "💰 Gold Leaderboard"
             lines = [f"**{i+1}.** {r['name']} — **{r['gold']:,}**🪙 | *{r['username']}*" for i, r in enumerate(rows)]
-        embed = discord.Embed(title=title, description="\n".join(lines) or "No entries yet.", color=0xFFD700)
+        embed = discord.Embed(title=title, description="\n".join(lines) or "No entries yet.", color=Settings.COLORS["reward"])
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="gold", description="Check your gold balance")
@@ -223,7 +228,7 @@ class EconomyCog(commands.Cog, name="Economy"):
         char = await self.svc.get_character(interaction.user.id)
         if not char: return await interaction.response.send_message("❌ No character.", ephemeral=True)
         await interaction.response.send_message(embed=discord.Embed(
-            description=f"🪙 **{char['name']}** has **{char['gold']:,}** gold.", color=0xFFD700
+            description=f"🪙 **{char['name']}** has **{char['gold']:,}** gold.", color=Settings.COLORS["reward"]
         ))
 
 async def setup(bot): await bot.add_cog(EconomyCog(bot))

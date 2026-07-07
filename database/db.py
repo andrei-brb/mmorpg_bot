@@ -263,6 +263,12 @@ class Database:
                 ADD COLUMN IF NOT EXISTS crafting_xp INT DEFAULT 0;
             """)
 
+            # Loot pity: consecutive gear drops below rare (bad-luck protection)
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS loot_pity_counter SMALLINT DEFAULT 0;
+            """)
+
             # Crafting tables (older installs may predate _SCHEMA embed)
             await c.execute("""
                 CREATE TABLE IF NOT EXISTS craft_recipes (

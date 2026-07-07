@@ -194,6 +194,8 @@ class BoxInventoryView(discord.ui.View):
             return await interaction.followup.send("❌ Invalid item.", ephemeral=True)
         ok, msg, gold_gained = await self.inv_svc.sell(self.char_id, item_id)
         if ok:
+            if gold_gained:
+                await self.char_svc.add_gold(self.char_id, gold_gained, "vendor sale")
             self.gold += gold_gained
         await interaction.followup.send(f"{'✅' if ok else '❌'} {msg}", ephemeral=True)
         await self._reload_and_refresh(interaction)
@@ -270,7 +272,7 @@ class BoxInventoryView(discord.ui.View):
                     f"**You have NO protection items** (Blessing Scroll, Safety Charm, or Enhancement Fragments).\n\n"
                     f"⚠️ **Are you sure you want to proceed without protection?**"
                 ),
-                color=0xFF0000
+                color=Settings.COLORS["error"]
             )
             # Reuse existing enhancement message if available, otherwise create new one
             if self.enhancement_message:
@@ -304,7 +306,7 @@ class BoxInventoryView(discord.ui.View):
                 description=f"**{info['item']['name']}** is currently **+{info['current_level']}**\n"
                           f"Enhancing to **+{info['current_level'] + 1}** can break the item!\n\n"
                           f"Choose protection (or select 'None' to proceed without protection):",
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             # Reuse existing enhancement message if available, otherwise create new one
             if self.enhancement_message:
@@ -331,7 +333,7 @@ class BoxInventoryView(discord.ui.View):
                 error_msg = f"❌ {result['message']}"
                 if self.enhancement_message:
                     try:
-                        error_embed = discord.Embed(title="❌ Enhancement Failed", description=result['message'], color=0xFF0000)
+                        error_embed = discord.Embed(title="❌ Enhancement Failed", description=result['message'], color=Settings.COLORS["error"])
                         await self.enhancement_message.edit(embed=error_embed, view=None)
                         return
                     except Exception:
@@ -361,7 +363,7 @@ class BoxInventoryView(discord.ui.View):
                     announce_embed = discord.Embed(
                         title="🌟 LEGENDARY ACHIEVEMENT!",
                         description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
-                        color=0xFFD700
+                        color=Settings.COLORS["reward"]
                     )
                     try:
                         await interaction.channel.send(embed=announce_embed)
@@ -372,7 +374,7 @@ class BoxInventoryView(discord.ui.View):
         """Build enhancement result embed."""
         embed = discord.Embed(
             title="🔨 Enhancement Result",
-            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+            color=Settings.COLORS["success"] if result.get("success") else (Settings.COLORS["error"] if result.get("broke") else Settings.COLORS["warning"])
         )
         
         if result.get("success"):
@@ -385,13 +387,13 @@ class BoxInventoryView(discord.ui.View):
             )
         elif result.get("broke"):
             embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
-            embed.color = 0xFF0000
+            embed.color = Settings.COLORS["error"]
         elif result.get("downgraded"):
             embed.description = f"🛡️ **Protected!**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         else:
             embed.description = f"❌ **Failed**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         
         embed.add_field(
             name="💰 Cost",
@@ -678,7 +680,7 @@ class EquipmentView(discord.ui.View):
                 # Dynamic Colors by Class/Spec (same as character profile)
                 color_map = {
                     "fire": 0xFF4500, "frost": 0x00CED1,
-                    "retribution": 0xFF6347, "holy_paladin": 0xFFD700,
+                    "retribution": 0xFF6347, "holy_paladin": Settings.COLORS["reward"],
                     "holy_priest": 0xFFFFE0, "shadow": 0x8B008B,
                     "arms": 0xDC143C, "protection": 0x4682B4,
                     "assassination": 0x8B0000, "subtlety": 0x2F4F4F,
@@ -1000,7 +1002,7 @@ class EnhancementConfirmationView(discord.ui.View):
             embed = discord.Embed(
                 title="🔨 Enhancement Result",
                 description=result.get("message", "Enhancement completed."),
-                color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+                color=Settings.COLORS["success"] if result.get("success") else (Settings.COLORS["error"] if result.get("broke") else Settings.COLORS["warning"])
             )
         
         # Edit the existing message
@@ -1034,7 +1036,7 @@ class EnhancementConfirmationView(discord.ui.View):
                 announce_embed = discord.Embed(
                     title="🌟 LEGENDARY ACHIEVEMENT!",
                     description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
-                    color=0xFFD700
+                    color=Settings.COLORS["reward"]
                 )
                 try:
                     await interaction.channel.send(embed=announce_embed)
@@ -1132,7 +1134,7 @@ class EnhancementProtectionView(discord.ui.View):
                     error_embed = discord.Embed(
                         title="❌ Enhancement Failed",
                         description=result['message'],
-                        color=0xFF0000
+                        color=Settings.COLORS["error"]
                     )
                     await self.message.edit(embed=error_embed, view=None)
                 except Exception:
@@ -1188,7 +1190,7 @@ class EnhancementProtectionView(discord.ui.View):
                 announce_embed = discord.Embed(
                     title="🌟 LEGENDARY ACHIEVEMENT!",
                     description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
-                    color=0xFFD700
+                    color=Settings.COLORS["reward"]
                 )
                 try:
                     await interaction.channel.send(embed=announce_embed)
@@ -1199,7 +1201,7 @@ class EnhancementProtectionView(discord.ui.View):
         """Build enhancement result embed."""
         embed = discord.Embed(
             title="🔨 Enhancement Result",
-            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+            color=Settings.COLORS["success"] if result.get("success") else (Settings.COLORS["error"] if result.get("broke") else Settings.COLORS["warning"])
         )
         
         if result.get("success"):
@@ -1212,13 +1214,13 @@ class EnhancementProtectionView(discord.ui.View):
             )
         elif result.get("broke"):
             embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
-            embed.color = 0xFF0000
+            embed.color = Settings.COLORS["error"]
         elif result.get("downgraded"):
             embed.description = f"🛡️ **Protected!**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         else:
             embed.description = f"❌ **Failed**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         
         embed.add_field(
             name="💰 Cost",
@@ -1350,7 +1352,7 @@ class _EnhancementProtectionSelect(discord.ui.Select):
                     f"**Protection:** {protection_name}\n\n"
                     + ("Select fragments and click **Enhance Now** when ready!" if view.has_fragments else "Click **Enhance Now** to proceed!")
                 ),
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             if view.message:
                 await view.message.edit(embed=embed, view=view)
@@ -1404,7 +1406,7 @@ class _EnhancementFragmentSelect(discord.ui.Select):
                     f"**Fragments:** {fragment_text}\n\n"
                     f"Click **Enhance Now** to proceed!"
                 ),
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             if view.message:
                 await view.message.edit(embed=embed, view=view)
@@ -1544,7 +1546,7 @@ class EquipmentActionView(discord.ui.View):
                     f"**You have NO protection items** (Blessing Scroll, Safety Charm, or Enhancement Fragments).\n\n"
                     f"⚠️ **Are you sure you want to proceed without protection?**"
                 ),
-                color=0xFF0000
+                color=Settings.COLORS["error"]
             )
             # Reuse existing enhancement message if available, otherwise create new one
             if self.enhancement_message:
@@ -1578,7 +1580,7 @@ class EquipmentActionView(discord.ui.View):
                 description=f"**{info['item']['name']}** is currently **+{info['current_level']}**\n"
                           f"Enhancing to **+{info['current_level'] + 1}** can break the item!\n\n"
                           f"Choose protection (or select 'None' to proceed without protection):",
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             # Reuse existing enhancement message if available, otherwise create new one
             if self.enhancement_message:
@@ -1605,7 +1607,7 @@ class EquipmentActionView(discord.ui.View):
                 error_msg = f"❌ {result['message']}"
                 if self.enhancement_message:
                     try:
-                        error_embed = discord.Embed(title="❌ Enhancement Failed", description=result['message'], color=0xFF0000)
+                        error_embed = discord.Embed(title="❌ Enhancement Failed", description=result['message'], color=Settings.COLORS["error"])
                         await self.enhancement_message.edit(embed=error_embed, view=None)
                         return
                     except Exception:
@@ -1635,7 +1637,7 @@ class EquipmentActionView(discord.ui.View):
                     announce_embed = discord.Embed(
                         title="🌟 LEGENDARY ACHIEVEMENT!",
                         description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
-                        color=0xFFD700
+                        color=Settings.COLORS["reward"]
                     )
                     try:
                         await interaction.channel.send(embed=announce_embed)
@@ -1646,7 +1648,7 @@ class EquipmentActionView(discord.ui.View):
         """Build enhancement result embed."""
         embed = discord.Embed(
             title="🔨 Enhancement Result",
-            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+            color=Settings.COLORS["success"] if result.get("success") else (Settings.COLORS["error"] if result.get("broke") else Settings.COLORS["warning"])
         )
         
         if result.get("success"):
@@ -1659,13 +1661,13 @@ class EquipmentActionView(discord.ui.View):
             )
         elif result.get("broke"):
             embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
-            embed.color = 0xFF0000
+            embed.color = Settings.COLORS["error"]
         elif result.get("downgraded"):
             embed.description = f"🛡️ **Protected!**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         else:
             embed.description = f"❌ **Failed**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         
         embed.add_field(
             name="💰 Cost",
@@ -1817,7 +1819,7 @@ class _EquipItemSelect(discord.ui.Select):
         ok, msg = await view.inv_svc.equip(view.char_id, uid)
         embed = discord.Embed(
             description=f"{'✅' if ok else '❌'} {msg}",
-            color=0x00FF7F if ok else 0xFF0000,
+            color=Settings.COLORS["success"] if ok else Settings.COLORS["error"],
         )
         await interaction.edit_original_response(content=None, embed=embed, view=None)
 
@@ -1895,9 +1897,33 @@ class _SellItemSelect(discord.ui.Select):
 
         embed = discord.Embed(
             description=f"{'✅' if ok else '❌'} {msg}",
-            color=0xFFD700 if ok else 0xFF0000,
+            color=Settings.COLORS["reward"] if ok else Settings.COLORS["error"],
         )
         await interaction.edit_original_response(content=None, embed=embed, view=None)
+
+
+class _SellAllConfirmView(discord.ui.View):
+    def __init__(self, *, owner_id: int):
+        super().__init__(timeout=60)
+        self.owner_id = owner_id
+        self.confirmed = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Sell All", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, _):
+        self.confirmed = True
+        self.stop()
+        await interaction.response.defer()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, _):
+        self.stop()
+        await interaction.response.defer()
 
 
 class InventoryCog(commands.Cog, name="Inventory"):
@@ -2435,7 +2461,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
         try: uid = UUID(item_id)
         except ValueError: return await interaction.followup.send("❌ Invalid item ID.")
         ok, msg = await self.inv_svc.equip(char["id"], uid)
-        await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000))
+        await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=Settings.COLORS["success"] if ok else Settings.COLORS["error"]))
 
     @equip.autocomplete("item_id")
     async def equip_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -2507,7 +2533,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
             
             embed = discord.Embed(
                 description=f"{'✅' if ok else '❌'} {msg}",
-                color=0xFFD700 if ok else 0xFF0000
+                color=Settings.COLORS["reward"] if ok else Settings.COLORS["error"]
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
@@ -2538,6 +2564,69 @@ class InventoryCog(commands.Cog, name="Inventory"):
                 value=str(i["id"]),
             ))
         return choices
+
+    @app_commands.command(name="sell_all", description="Vendor-sell all unequipped, unlocked items of a rarity")
+    @app_commands.describe(rarity="Rarity to sell (default: Common)")
+    @app_commands.choices(rarity=[
+        app_commands.Choice(name=cfg.name, value=key) for key, cfg in RARITIES.items()
+    ])
+    async def sell_all(self, interaction: discord.Interaction, rarity: str = "common"):
+        from services.channel_manager import check_channel
+        if not await check_channel(interaction, "sell"):
+            return
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+
+        items = await self.inv_svc.get_all(char["id"])
+        sellable = [
+            i for i in items
+            if not i.get("is_equipped")
+            and not i.get("locked")
+            and not i.get("soulbound")
+            and int(i.get("vendor_sell") or 0) > 0
+            and (i.get("rarity") or "common") == rarity
+        ]
+        if not sellable:
+            return await interaction.followup.send(
+                f"❌ You have no sellable **{rarity.title()}** items right now.", ephemeral=True
+            )
+
+        rarity_cfg = RARITIES.get(rarity, RARITIES["common"])
+        embed = discord.Embed(
+            title="💰 Sell All — Confirm",
+            description=(
+                f"Sell **{len(sellable)}** {rarity_cfg.emoji} **{rarity_cfg.name}** item(s) to the vendor?\n"
+                f"Equipped, locked and soulbound items are skipped. This cannot be undone."
+            ),
+            color=Settings.COLORS["warning"],
+        )
+        view = _SellAllConfirmView(owner_id=interaction.user.id)
+        msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True, wait=True)
+        await view.wait()
+
+        if not view.confirmed:
+            return await msg.edit(content="Cancelled.", embed=None, view=None)
+
+        sold = 0
+        total_gold = 0
+        for i in sellable:
+            ok, _msg, gold = await self.inv_svc.sell(char["id"], i["id"])
+            if ok and gold:
+                await self.char_svc.add_gold(char["id"], gold, "vendor sale")
+                total_gold += gold
+            if ok:
+                sold += 1
+
+        result = discord.Embed(
+            title="💰 Bulk Sale Complete",
+            description=f"Sold **{sold}** {rarity_cfg.emoji} **{rarity_cfg.name}** item(s) for **{total_gold:,}**🪙.",
+            color=Settings.COLORS["reward"] if sold else Settings.COLORS["error"],
+        )
+        await msg.edit(content=None, embed=result, view=None)
 
     @app_commands.command(name="use", description="Use a consumable item")
     @app_commands.describe(item_id="Item UUID from /inventory")
@@ -2621,7 +2710,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
                     msg += f" {boost_msg}"
                 else:
                     msg = boost_msg
-        await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=0x00FF7F if ok else 0xFF0000))
+        await interaction.followup.send(embed=discord.Embed(description=f"{'✅' if ok else '❌'} {msg}", color=Settings.COLORS["success"] if ok else Settings.COLORS["error"]))
 
     # ── /shop ─────────────────────────────────────────────────────────────────
 
@@ -2643,7 +2732,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
         )
         if not rows:
             return await interaction.followup.send("🏪 Shop is empty for now.", ephemeral=True)
-        embed = discord.Embed(title="🏪 Vendor Shop", description="Buy items with gold.", color=0xFFD700)
+        embed = discord.Embed(title="🏪 Vendor Shop", description="Buy items with gold.", color=Settings.COLORS["reward"])
         for r in rows:
             embed.add_field(
                 name=f"{r['icon']} **{r['name']}** — {r['vendor_buy']:,}🪙",
@@ -2698,7 +2787,7 @@ class InventoryCog(commands.Cog, name="Inventory"):
             embed=discord.Embed(
                 title="✅ Purchased!",
                 description=f"You bought **{tmpl['icon']} {tmpl['name']}** for **{price:,}**🪙.",
-                color=0x00FF7F,
+                color=Settings.COLORS["success"],
             ),
             ephemeral=True,
         )

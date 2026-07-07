@@ -77,7 +77,7 @@ class _ProtectionSelectView(discord.ui.View):
         # Build response embed
         embed = discord.Embed(
             title="🔨 Enhancement Result",
-            color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+            color=Settings.COLORS["success"] if result.get("success") else (Settings.COLORS["error"] if result.get("broke") else Settings.COLORS["warning"])
         )
         
         if result.get("success"):
@@ -90,13 +90,13 @@ class _ProtectionSelectView(discord.ui.View):
             )
         elif result.get("broke"):
             embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
-            embed.color = 0xFF0000
+            embed.color = Settings.COLORS["error"]
         elif result.get("downgraded"):
             embed.description = f"🛡️ **Protected!**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         else:
             embed.description = f"❌ **Failed**\n{result['message']}"
-            embed.color = 0xFFA500
+            embed.color = Settings.COLORS["warning"]
         
         embed.add_field(
             name="💰 Cost",
@@ -122,7 +122,7 @@ class _ProtectionSelectView(discord.ui.View):
                 announce_embed = discord.Embed(
                     title="🌟 LEGENDARY ACHIEVEMENT!",
                     description=f"**{char_row['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
-                    color=0xFFD700
+                    color=Settings.COLORS["reward"]
                 )
                 await interaction.channel.send(embed=announce_embed)
 
@@ -236,7 +236,7 @@ class _ProtectionSelect(discord.ui.Select):
                     f"**Protection:** {protection_name}\n\n"
                     + ("Select fragments and click **Enhance Now** when ready!" if view.has_fragments else "Click **Enhance Now** to proceed!")
                 ),
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             # Try to edit the stored message
             if view.message:
@@ -292,7 +292,7 @@ class _FragmentSelect(discord.ui.Select):
                     f"**Fragments:** {fragment_text}\n\n"
                     f"Click **Enhance Now** to proceed!"
                 ),
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             # Try to edit the stored message
             if view.message:
@@ -367,7 +367,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
                 description=f"**{info['item']['name']}** is currently **+{info['current_level']}**\n"
                           f"Enhancing to **+{info['current_level'] + 1}** can break the item!\n\n"
                           f"Choose protection (or select 'None' to proceed without protection):",
-                color=0xFFA500
+                color=Settings.COLORS["warning"]
             )
             msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
             view.message = msg  # Store message reference
@@ -393,7 +393,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
             # Build response embed
             embed = discord.Embed(
                 title="🔨 Enhancement Result",
-                color=0x00FF7F if result.get("success") else (0xFF0000 if result.get("broke") else 0xFFA500)
+                color=Settings.COLORS["success"] if result.get("success") else (Settings.COLORS["error"] if result.get("broke") else Settings.COLORS["warning"])
             )
             
             if result.get("success"):
@@ -406,13 +406,13 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
                 )
             elif result.get("broke"):
                 embed.description = f"💥 **ENHANCEMENT FAILED!**\n{result['message']}"
-                embed.color = 0xFF0000
+                embed.color = Settings.COLORS["error"]
             elif result.get("downgraded"):
                 embed.description = f"🛡️ **Protected!**\n{result['message']}"
-                embed.color = 0xFFA500
+                embed.color = Settings.COLORS["warning"]
             else:
                 embed.description = f"❌ **Failed**\n{result['message']}"
-                embed.color = 0xFFA500
+                embed.color = Settings.COLORS["warning"]
             
             embed.add_field(
                 name="💰 Cost",
@@ -434,7 +434,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
                 announce_embed = discord.Embed(
                     title="🌟 LEGENDARY ACHIEVEMENT!",
                     description=f"**{char['name']}** has successfully enhanced a **{result.get('item_rarity', 'legendary').title()}** item to **+10**!",
-                    color=0xFFD700
+                    color=Settings.COLORS["reward"]
                 )
                 await interaction.channel.send(embed=announce_embed)
 
@@ -561,7 +561,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         embed = discord.Embed(
             title="🛒 Blacksmith Shop — Protection Items",
             description="Protect your items during enhancement!",
-            color=0xFFD700
+            color=Settings.COLORS["reward"]
         )
         
         for key, item in PROTECTION_ITEMS.items():
@@ -596,7 +596,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         
         embed = discord.Embed(
             description=f"{'✅' if ok else '❌'} {msg}",
-            color=0x00FF7F if ok else 0xFF0000
+            color=Settings.COLORS["success"] if ok else Settings.COLORS["error"]
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -659,7 +659,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         embed = discord.Embed(
             title="🏆 Enhancement Leaderboard",
             description="Top enhanced items on the server",
-            color=0xFFD700
+            color=Settings.COLORS["reward"]
         )
         
         lines = []
@@ -688,7 +688,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         
         embed = discord.Embed(
             description=f"{'✅' if ok else '❌'} {msg}",
-            color=0x00FF7F if ok else 0xFF0000
+            color=Settings.COLORS["success"] if ok else Settings.COLORS["error"]
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -724,7 +724,7 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         embed = discord.Embed(
             title="🔨 Gear Repaired",
             description="\n".join(lines),
-            color=0x00FF7F,
+            color=Settings.COLORS["success"],
         )
         embed.add_field(name="💰 Total", value=f"{total:,} {Settings.CURRENCY_SYMBOL}", inline=True)
         await interaction.followup.send(embed=embed, ephemeral=True)

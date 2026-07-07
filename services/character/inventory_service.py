@@ -131,14 +131,39 @@ class InventoryService:
         
         return bonus
 
+    # Bad-luck protection: a gear drop is upgraded to rare after this many
+    # consecutive sub-rare drops (tracked per character in loot_pity_counter).
+    LOOT_PITY_RARE_AFTER = 15
+
+    async def _apply_loot_pity(self, char_id: UUID, rarity: str) -> str:
+        if rarity in ("rare", "epic", "legendary", "artifact"):
+            await self.db.execute(
+                "UPDATE characters SET loot_pity_counter=0 WHERE id=$1", char_id
+            )
+            return rarity
+        counter = await self.db.fetchval(
+            "UPDATE characters SET loot_pity_counter = loot_pity_counter + 1 "
+            "WHERE id=$1 RETURNING loot_pity_counter",
+            char_id,
+        )
+        if counter is not None and counter >= self.LOOT_PITY_RARE_AFTER:
+            await self.db.execute(
+                "UPDATE characters SET loot_pity_counter=0 WHERE id=$1", char_id
+            )
+            return "rare"
+        return rarity
+
     async def generate_loot(
-        self, zone_key: str, char_level: int, is_boss: bool = False, luck: float = 0.0
+        self, zone_key: str, char_level: int, is_boss: bool = False, luck: float = 0.0,
+        char_id: Optional[UUID] = None,
     ) -> Optional[Dict]:
         drop_chance = 1.0 if is_boss else float(getattr(Settings, "LOOT_DROP_CHANCE_NORMAL", 0.5))
         if random.random() > drop_chance:
             return None
 
         rarity = self.roll_rarity(luck)
+        if char_id is not None:
+            rarity = await self._apply_loot_pity(char_id, rarity)
 
         band_lo, band_hi = loot_level_req_bounds(zone_key, char_level)
 

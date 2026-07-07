@@ -362,7 +362,7 @@ class AdminCog(commands.Cog, name="Admin"):
             )
 
         cfg = await self.bot.db.fetchrow("SELECT * FROM server_config WHERE server_id=$1", interaction.guild_id)
-        embed = discord.Embed(title="⚙️ Server Configuration", color=0x4488FF)
+        embed = discord.Embed(title="⚙️ Server Configuration", color=Settings.COLORS["info"])
         embed.add_field(name="XP Multiplier",   value=f"{cfg['xp_multiplier'] if cfg else 1.0:.1f}×", inline=True)
         embed.add_field(name="Gold Multiplier",  value=f"{cfg['gold_multiplier'] if cfg else 1.0:.1f}×", inline=True)
         embed.add_field(name="Premium",          value="✅ Yes" if (cfg and cfg["is_premium"]) else "❌ No", inline=True)
@@ -489,7 +489,7 @@ class AdminCog(commands.Cog, name="Admin"):
         market_count = await self.bot.db.fetchval("SELECT COUNT(*) FROM market_listings WHERE is_active=TRUE")
         active_fights = await self.bot.db.fetchval("SELECT COUNT(*) FROM characters WHERE combat_status='in_combat'")
 
-        embed = discord.Embed(title=f"📊 {interaction.guild.name} — Game Stats", color=0x4488FF)
+        embed = discord.Embed(title=f"📊 {interaction.guild.name} — Game Stats", color=Settings.COLORS["info"])
         embed.add_field(name="👥 Active Characters", value=str(total_chars),    inline=True)
         embed.add_field(name="🏰 Guilds",            value=str(total_guilds),   inline=True)
         embed.add_field(name="🏆 Highest Level",     value=str(top_level or 0), inline=True)

@@ -23,6 +23,15 @@ class Settings:
     DATABASE_URL        = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/mmorpg")
     REDIS_URL           = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    # Embed colors — semantic palette for cog embeds
+    COLORS = {
+        "success": 0x00FF7F,
+        "error":   0xFF0000,
+        "warning": 0xFFA500,
+        "info":    0x4488FF,
+        "reward":  0xFFD700,
+    }
+
     # Stripe (monetization)
     STRIPE_SECRET_KEY           = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET       = os.getenv("STRIPE_WEBHOOK_SECRET", "")

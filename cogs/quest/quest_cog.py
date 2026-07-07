@@ -20,6 +20,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config.settings import Settings
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.lore.lore_gate_service import LoreGateService
@@ -175,7 +176,7 @@ class QuestCog(commands.Cog, name="Quests"):
             embed = discord.Embed(
                 title=f"🎉 Quest Complete: {quest_data['name']}",
                 description=dialogue,
-                color=0x2ECC71,
+                color=Settings.COLORS["success"],
             )
 
             reward_text = []
@@ -492,7 +493,7 @@ class QuestCog(commands.Cog, name="Quests"):
             accept_embed = discord.Embed(
                 title="✅ Quest Accepted!",
                 description=next_quest["dialogue"]["accept"],
-                color=0x2ECC71,
+                color=Settings.COLORS["success"],
             )
             first_step = next_quest["steps"][0]
             accept_embed.add_field(
@@ -522,7 +523,7 @@ class QuestCog(commands.Cog, name="Quests"):
             info_embed = discord.Embed(
                 title=f"ℹ️ {next_quest['name']} — Details",
                 description=next_quest["description"],
-                color=0x3498DB,
+                color=Settings.COLORS["info"],
             )
             for i, step in enumerate(next_quest["steps"]):
                 info_embed.add_field(
@@ -641,7 +642,7 @@ class QuestCog(commands.Cog, name="Quests"):
         embed = discord.Embed(
             title="🏆 Completed Quests",
             description=f"You have completed **{len(completed)}** quest(s).",
-            color=0x2ECC71,
+            color=Settings.COLORS["success"],
         )
 
         for q in completed:
@@ -761,7 +762,7 @@ class QuestCog(commands.Cog, name="Quests"):
             keep_embed = discord.Embed(
                 title="✅ Quest Kept",
                 description=f"**{target['quest_name']}** is still active.",
-                color=0x2ECC71,
+                color=Settings.COLORS["success"],
             )
             await msg.edit(embed=keep_embed, view=None)
 

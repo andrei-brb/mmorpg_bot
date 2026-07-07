@@ -907,7 +907,7 @@ class CombatCog(commands.Cog, name="Combat"):
                     embed = discord.Embed(
                         title=f"🎉 Quest Complete: {qd.get('name', qid or 'Quest')}",
                         description=qd.get("dialogue", {}).get("completion", "Quest complete!"),
-                        color=0x2ECC71,
+                        color=Settings.COLORS["success"],
                     )
 
                     reward_text = []
@@ -955,7 +955,7 @@ class CombatCog(commands.Cog, name="Combat"):
         embed = discord.Embed(
             title="🏆 Victory!",
             description=f"You defeated **{session.enemies[0].name}**!",
-            color=0x00FF7F,
+            color=Settings.COLORS["success"],
         )
         xp_show = int(xp_result.get("xp_gained", rewards["xp"]))
         embed.add_field(
@@ -1106,7 +1106,7 @@ class CombatCog(commands.Cog, name="Combat"):
                 "• Use a **Health Potion** from your inventory\n"
                 "• Fight weaker enemies to build up"
             ),
-            color=0xFF0000,
+            color=Settings.COLORS["error"],
         )
         # Edit existing message instead of sending new one (saves API call)
         if msg:
@@ -1159,7 +1159,7 @@ class CombatCog(commands.Cog, name="Combat"):
         embed = discord.Embed(
             title="💤 Rested",
             description=f"**{char['name']}** rests and recovers fully.",
-            color=0x4488FF,
+            color=Settings.COLORS["info"],
         )
         embed.add_field(name="❤️ HP", value=f"**{char['max_hp']:,}/{char['max_hp']:,}**", inline=True)
         if char["max_res"] > 0:
@@ -1197,25 +1197,25 @@ class CombatCog(commands.Cog, name="Combat"):
                 embed = discord.Embed(
                     title="⚔️ Combat Status",
                     description="You were stuck in combat status (no active fight).\n**Status cleared!** You can now use commands again.",
-                    color=0x00FF00,
+                    color=Settings.COLORS["success"],
                 )
             elif activity_has_combat:
                 embed = discord.Embed(
                     title="⚔️ Combat Status",
                     description="You are in combat in the **Activity** (Embedded App). Continue there or flee.",
-                    color=0xFF4444,
+                    color=Settings.COLORS["error"],
                 )
             else:
                 embed = discord.Embed(
                     title="⚔️ Combat Status",
                     description="You are currently **in combat**.\nUse `/fight` to continue or flee from the fight.",
-                    color=0xFF4444,
+                    color=Settings.COLORS["error"],
                 )
         else:
             embed = discord.Embed(
                 title="⚔️ Combat Status",
                 description=f"Status: **{status.title()}**\nYou are not in combat.",
-                color=0x00FF00,
+                color=Settings.COLORS["success"],
             )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
