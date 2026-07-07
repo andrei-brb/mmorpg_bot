@@ -3,6 +3,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { WomPanel, WomSectionHeader } from "@/components/wom/WomUi";
 import type {
   CharacterDerivedStatsPayload,
@@ -290,7 +291,18 @@ export function RealmTab() {
             {!guildId ? (
               <p className="text-xs text-muted-foreground">Open the game in a Discord server to see shared milestones.</p>
             ) : worldMetaLoading ? (
-              <p className="text-xs text-muted-foreground">Loading milestones…</p>
+              <ul className="space-y-3" aria-busy="true" aria-label="Loading milestones">
+                {[1, 2, 3].map((i) => (
+                  <li key={i}>
+                    <div className="flex justify-between gap-2">
+                      <Skeleton className="h-3 w-2/5" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                    <Skeleton className="mt-2 h-1.5 w-full rounded-sm" />
+                    <Skeleton className="mt-2 h-3 w-1/3" />
+                  </li>
+                ))}
+              </ul>
             ) : milestones.length === 0 ? (
               <p className="text-xs text-muted-foreground">No milestone data yet — play in this server to contribute.</p>
             ) : (

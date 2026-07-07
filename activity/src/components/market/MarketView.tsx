@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -396,14 +398,14 @@ function SelectChip({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="relative inline-flex items-center">
+    <label className="relative inline-flex min-w-0 items-center">
       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-widest text-muted-foreground font-display pointer-events-none">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none rounded-md border border-[color:var(--gold)]/30 bg-black/40 pl-14 pr-8 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-[color:var(--gold)]/50 cursor-pointer max-w-[200px]"
+        className="appearance-none rounded-md border border-[color:var(--gold)]/30 bg-black/40 pl-14 pr-8 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-[color:var(--gold)]/50 cursor-pointer min-w-0 max-w-[200px]"
       >
         {options.map((o) => (
           <option key={o.v} value={o.v} className="bg-background">
@@ -418,8 +420,8 @@ function SelectChip({
 
 function FiltersBar({ state, onChange, mode }: { state: FilterState; onChange: (s: FilterState) => void; mode: Mode }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2">
-      <div className="relative">
+    <div className="flex flex-wrap gap-2">
+      <div className="relative w-full min-w-0 sm:w-auto sm:flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={state.q}
@@ -483,11 +485,12 @@ function MarketCard({
   gold,
 }: {
   item: MarketListingUI;
-  onBuy: (i: MarketListingUI) => void;
+  onBuy: (i: MarketListingUI) => Promise<void>;
   gold: number;
 }) {
   const cantAfford = gold < item.price;
   const [confirming, setConfirming] = useState(false);
+  const [buying, setBuying] = useState(false);
   const iconItem: Partial<InvRow> = {
     id: item.id,
     template_id: item.template_id ?? undefined,
@@ -545,11 +548,11 @@ function MarketCard({
           <Button
             size="sm"
             onClick={() => setConfirming(true)}
-            disabled={cantAfford || item.is_own}
+            disabled={cantAfford || item.is_own || buying}
             className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black hover:brightness-110 font-display tracking-wider"
           >
-            <ShoppingCart className="h-3.5 w-3.5" />
-            {item.is_own ? "Your listing" : cantAfford ? "Not enough gold" : "Buy"}
+            {buying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+            {item.is_own ? "Your listing" : cantAfford ? "Not enough gold" : buying ? "Buying…" : "Buy"}
           </Button>
         </div>
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
@@ -568,8 +571,10 @@ function MarketCard({
               <AlertDialogCancel className="border-[color:var(--gold)]/30">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
-                  void onBuy(item);
                   setConfirming(false);
+                  if (buying) return;
+                  setBuying(true);
+                  void onBuy(item).finally(() => setBuying(false));
                 }}
                 className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display tracking-wider"
               >
@@ -850,6 +855,7 @@ function AuctionCard({
   const { accessToken, guildId } = useGameSession();
   const [bidOpen, setBidOpen] = useState(false);
   const [buyConfirm, setBuyConfirm] = useState(false);
+  const [pending, setPending] = useState(false);
 
   const iconItem: Partial<InvRow> = {
     id: item.id,
@@ -867,7 +873,8 @@ function AuctionCard({
   const canBuyout = !item.is_own && buyout != null && buyout > 0 && gold >= buyout;
 
   const cancelMine = async () => {
-    if (!accessToken || !item.is_own) return;
+    if (!accessToken || !item.is_own || pending) return;
+    setPending(true);
     try {
       const j = await api.postAuctionCancel(accessToken, item.id, guildId);
       if (j.ok) {
@@ -878,11 +885,14 @@ function AuctionCard({
       }
     } catch (e) {
       toast.error("Cancel failed", { description: String(e) });
+    } finally {
+      setPending(false);
     }
   };
 
   const doBuyout = async () => {
-    if (!accessToken || buyout == null) return;
+    if (!accessToken || buyout == null || pending) return;
+    setPending(true);
     try {
       const j = await api.postAuctionBuyout(accessToken, item.id, guildId);
       if (j.ok) {
@@ -894,6 +904,8 @@ function AuctionCard({
       }
     } catch (e) {
       toast.error("Buyout failed", { description: String(e) });
+    } finally {
+      setPending(false);
     }
   };
 
@@ -967,11 +979,11 @@ function AuctionCard({
             type="button"
             size="sm"
             variant="outline"
-            disabled={item.bid_count > 0}
+            disabled={item.bid_count > 0 || pending}
             onClick={() => void cancelMine()}
             className="border-[color:var(--gold)]/30 font-display text-[10px]"
           >
-            Cancel auction
+            {pending ? "Cancelling…" : "Cancel auction"}
           </Button>
         ) : (
           <>
@@ -989,11 +1001,11 @@ function AuctionCard({
               <Button
                 type="button"
                 size="sm"
-                disabled={!canBuyout}
+                disabled={!canBuyout || pending}
                 onClick={() => setBuyConfirm(true)}
                 className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display text-[10px]"
               >
-                Buyout
+                {pending ? "Buying…" : "Buyout"}
               </Button>
             ) : null}
           </>
@@ -1105,6 +1117,35 @@ function SubTabBtn({
         <Badge className="bg-[color:var(--gold)]/25 text-[color:var(--gold-bright)] border-0 px-1.5 py-0 text-[10px]">{count}</Badge>
       ) : null}
     </button>
+  );
+}
+
+function ListingCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-[color:var(--gold)]/20 bg-gradient-to-b from-black/40 to-black/20 p-3">
+      <div className="flex gap-3">
+        <Skeleton className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-md" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[color:var(--gold)]/15 pt-3">
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-8 w-16" />
+      </div>
+    </div>
+  );
+}
+
+function ListingGridSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <ListingCardSkeleton key={i} />
+      ))}
+    </div>
   );
 }
 
@@ -1534,6 +1575,9 @@ export function MarketView() {
   const [historyTab, setHistoryTab] = useState(false);
   const [auctionListingsRaw, setAuctionListingsRaw] = useState<AuctionListingRow[]>([]);
   const [auctionLoading, setAuctionLoading] = useState(false);
+  const [auctionError, setAuctionError] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<MarketHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -1578,19 +1622,34 @@ export function MarketView() {
 
   const visibleAuction = useMemo(() => filterAndSortAuction(filteredAuctionBase, effectiveFilters), [filteredAuctionBase, effectiveFilters]);
 
+  const loadListings = useCallback(async () => {
+    setMarketLoading(true);
+    setMarketError(false);
+    try {
+      await refreshMarketListings();
+    } catch (e) {
+      console.warn(e);
+      setMarketError(true);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [refreshMarketListings]);
+
   const refreshAll = useCallback(async () => {
-    await refreshMarketListings();
+    await loadListings();
     await refreshInventory();
-  }, [refreshMarketListings, refreshInventory]);
+  }, [loadListings, refreshInventory]);
 
   const refreshAuctions = useCallback(async () => {
     if (!accessToken) return;
     setAuctionLoading(true);
+    setAuctionError(false);
     try {
       const j = await api.getAuctionListings(accessToken, guildId);
       setAuctionListingsRaw(j.listings || []);
     } catch (e) {
       console.warn(e);
+      setAuctionError(true);
       toast.error("Failed to load auctions");
     } finally {
       setAuctionLoading(false);
@@ -1604,8 +1663,8 @@ export function MarketView() {
 
   useEffect(() => {
     if (!accessToken) return;
-    void refreshMarketListings();
-  }, [accessToken, refreshMarketListings]);
+    void loadListings();
+  }, [accessToken, loadListings]);
 
   useEffect(() => {
     if (mode !== "auction" || !accessToken) return;
@@ -1779,11 +1838,10 @@ export function MarketView() {
           </OrnateFrame>
 
           <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
-            {auctionLoading ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground text-xs">
-                <Loader2 className="h-8 w-8 animate-spin text-[color:var(--gold-bright)]" />
-                Loading auctions…
-              </div>
+            {auctionLoading && mappedAuction.length === 0 ? (
+              <ListingGridSkeleton />
+            ) : auctionError && mappedAuction.length === 0 ? (
+              <ErrorState message="Could not load auctions." onRetry={() => void refreshAuctions()} />
             ) : visibleAuction.length === 0 ? (
               <EmptyState
                 title={auctionViewTab === "mine" ? "No auctions" : "No auctions match"}
@@ -1897,7 +1955,11 @@ export function MarketView() {
           </OrnateFrame>
 
           <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
-            {visibleMarket.length === 0 ? (
+            {marketLoading && mappedMarket.length === 0 ? (
+              <ListingGridSkeleton />
+            ) : marketError && mappedMarket.length === 0 ? (
+              <ErrorState message="Could not load market listings." onRetry={() => void loadListings()} />
+            ) : visibleMarket.length === 0 ? (
               <EmptyState
                 title={marketViewTab === "mine" ? "No listings" : "No listings match"}
                 hint={
@@ -1916,7 +1978,7 @@ export function MarketView() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                 {visibleMarket.map((it) => (
-                  <MarketCard key={it.id} item={it} gold={gold} onBuy={(i) => void handleBuy(i)} />
+                  <MarketCard key={it.id} item={it} gold={gold} onBuy={handleBuy} />
                 ))}
               </div>
             )}

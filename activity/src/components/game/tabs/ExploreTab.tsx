@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { ZONES as DATA_ZONES } from "@/data/zones";
 import { zoneMapImageUrl } from "@/data/zoneMapArt";
 import type { ExploreResultPayload } from "@/lib/apiTypes";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   Compass,
@@ -736,18 +737,33 @@ export function ExploreTab() {
             </span>
             <div className="h-px flex-1 bg-panel-border/50" />
           </div>
-          <ZoneMap
-            zones={zones}
-            currentZone={currentZone}
-            loreWindowTitle={activeLoreWindow?.title ?? null}
-            onSelectZone={(z) => setTravelTargetId(z.id)}
-            latestResult={latestResult}
-            exploring={exploring}
-            combatStarting={combatStarting}
-            npcInteracting={npcInteracting}
-            onGoToCombat={() => void handleGoToCombat()}
-            onInteractNPC={(id) => void handleNpcInteract(id)}
-          />
+          {accessToken && !map ? (
+            <div
+              className="flex min-h-0 flex-1 flex-col rounded-lg overflow-hidden border border-white/10"
+              aria-busy="true"
+              aria-label="Loading zone map"
+            >
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10 bg-black/30">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-9 w-14 shrink-0 rounded" />
+                ))}
+              </div>
+              <Skeleton className="flex-1 rounded-none" style={{ minHeight: "min(44vh, 580px)" }} />
+            </div>
+          ) : (
+            <ZoneMap
+              zones={zones}
+              currentZone={currentZone}
+              loreWindowTitle={activeLoreWindow?.title ?? null}
+              onSelectZone={(z) => setTravelTargetId(z.id)}
+              latestResult={latestResult}
+              exploring={exploring}
+              combatStarting={combatStarting}
+              npcInteracting={npcInteracting}
+              onGoToCombat={() => void handleGoToCombat()}
+              onInteractNPC={(id) => void handleNpcInteract(id)}
+            />
+          )}
           {travelTarget.id !== currentZone.id ? (
             <button
               onClick={() => void handleTravel()}

@@ -70,7 +70,7 @@ function TierLane({
                   <button
                     type="button"
                     className="btn-gold !px-2 !py-1 !text-[9px] w-full"
-                    disabled={claimingKey === key}
+                    disabled={claimingKey !== null}
                     onClick={() => onClaim(t.tier, t.track)}
                   >
                     {claimingKey === key ? "…" : "Claim"}
@@ -193,7 +193,7 @@ export function BattlePassTab() {
   };
 
   const claimTier = async (tier: number, track: string) => {
-    if (!accessToken) return;
+    if (!accessToken || claimingKey) return;
     const key = `${track}-${tier}`;
     setClaimingKey(key);
     try {

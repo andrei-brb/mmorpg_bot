@@ -451,6 +451,17 @@
   gap: 12px;
 }
 
+@media (max-width: 420px) {
+  .guild-root .guild-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guild-root .stat-tile {
+    min-width: 0;
+    padding: 10px 8px;
+  }
+}
+
 .guild-root .grid {
   display: grid;
   gap: 20px;

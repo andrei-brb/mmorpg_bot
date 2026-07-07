@@ -409,7 +409,14 @@ export function CombatEncounterView({
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-sm border border-border bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
                   {classKey ? (
-                    <img src={classIconUrl(classKey)} alt="" className="w-10 h-10 object-contain" />
+                    <img
+                      src={classIconUrl(classKey)}
+                      alt=""
+                      className="w-10 h-10 object-contain"
+                      onError={(ev) => {
+                        (ev.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
                   ) : (
                     <span className="text-xl text-muted-foreground" aria-hidden>
                       🛡️
@@ -566,6 +573,9 @@ export function CombatEncounterView({
                   width={18}
                   height={18}
                   className="w-[18px] h-[18px] object-contain rounded-[2px] opacity-90"
+                  onError={(ev) => {
+                    (ev.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
                 />
               </div>
             )}
@@ -606,7 +616,16 @@ export function CombatEncounterView({
                 >
                   <div className="flex justify-center mb-0.5">
                     {pk ? (
-                      <img src={classIconUrl(pk)} alt="" width={28} height={28} className="w-7 h-7 object-contain rounded-sm" />
+                      <img
+                        src={classIconUrl(pk)}
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="w-7 h-7 object-contain rounded-sm"
+                        onError={(ev) => {
+                          (ev.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
                     ) : (
                       <span className="text-lg">🧝</span>
                     )}

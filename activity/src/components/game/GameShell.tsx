@@ -256,6 +256,9 @@ export function GameShell() {
                             height={18}
                             className="w-[18px] h-[18px] object-contain shrink-0 rounded-[2px]"
                             style={{ filter: "drop-shadow(0 1px 2px hsl(0 0% 0% / 0.35))" }}
+                            onError={(ev) => {
+                              (ev.currentTarget as HTMLImageElement).style.display = "none";
+                            }}
                           />
                         )}
                         <span>{o.emoji} {o.name}</span>
