@@ -175,9 +175,19 @@ class CharacterCog(commands.Cog, name="Character"):
         embed.add_field(
             name="📋 Quick Start",
             value=f"• `/explore` — Enter the world\n"
-                  f"• `/fight` — Battle enemies\n"
+                  f"• `/fight` — Battle enemies, then `/inventory` + `/equip` your loot\n"
                   f"• `/character profile` — View your stats\n"
                   f"• Reach level **{Settings.SPEC_UNLOCK_LEVEL}** → choose a Specialization",
+            inline=False,
+        )
+        embed.add_field(
+            name="🔁 Come back daily",
+            value="`/login` streak reward • `/daily` quest • `/guild checkin` (once you join one)",
+            inline=False,
+        )
+        embed.add_field(
+            name="🎮 Prefer a full game UI?",
+            value="`/open_game` launches the interactive app — same character, same world.",
             inline=False,
         )
 

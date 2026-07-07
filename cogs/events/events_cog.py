@@ -282,6 +282,7 @@ class EventsCog(commands.Cog, name="Events"):
             rewards = quest["rewards"] if isinstance(quest["rewards"], dict) else json.loads(quest["rewards"])
             embed.add_field(name="Rewards", value=f"+{rewards.get('xp',0)} XP | +{rewards.get('gold',0)}🪙", inline=False)
 
+        embed.set_footer(text="Daily loop: /login streak reward • /daily quest • /guild checkin")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="login", description="Claim your daily login reward")
@@ -347,6 +348,11 @@ class EventsCog(commands.Cog, name="Events"):
         if bonuses:
             embed.add_field(name="✨ Milestones", value="\n".join(bonuses), inline=False)
         
+        embed.add_field(
+            name="📌 While you're here",
+            value="`/daily` quest • `/guild checkin` • `/battlepass status`",
+            inline=False,
+        )
         embed.set_footer(text=f"Next claim: {result['next_claim']}")
         await interaction.followup.send(embed=embed)
 

@@ -103,9 +103,23 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             gold = int(g0 * gold_mult)
             await self.svc.add_gold(char["id"], gold, "exploration")
             xp_eff = int(xp_result.get("xp_gained") or 0)
+            scrap_line = ""
+            # Gathering: crafting materials are farmable through exploration,
+            # not only via salvaging gear drops.
+            if random.random() < 0.35:
+                from services.character.inventory_service import InventoryService
+                scrap_tid = random.choice(("weapon_scrap", "armor_scrap", "accessory_scrap"))
+                scrap_qty = random.randint(1, 2)
+                inv_svc = InventoryService(self.bot.db)
+                ok, _ = await inv_svc.add_item(
+                    char["id"], scrap_tid, "common", quantity=scrap_qty, from_="gathering"
+                )
+                if ok:
+                    scrap_name = scrap_tid.replace("_", " ").title()
+                    scrap_line = f" | +**{scrap_qty}** 🔩 {scrap_name}"
             embed.add_field(
                 name="✨ Discovery!",
-                value=f"You find hidden resources!\n+**{xp_eff}** XP | +**{gold}**🪙",
+                value=f"You find hidden resources!\n+**{xp_eff}** XP | +**{gold}**🪙{scrap_line}",
                 inline=False,
             )
         else:

@@ -656,6 +656,28 @@ class QuestCog(commands.Cog, name="Quests"):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @interact.autocomplete("npc")
+    async def interact_npc_autocomplete(self, interaction: discord.Interaction, current: str):
+        """Suggest NPCs the player has actually discovered."""
+        try:
+            char = await self.char_svc.get_character(interaction.user.id)
+            if not char:
+                return []
+            npcs = await self.quest_svc.get_discovered_npcs(char["id"])
+        except Exception:
+            return []
+        cur = (current or "").lower()
+        choices = []
+        for n in npcs:
+            short = n["name"].split()[0].lower()
+            label = f"{n['title']} {n['name']}"
+            if cur and cur not in n["name"].lower() and cur not in short:
+                continue
+            choices.append(app_commands.Choice(name=label[:100], value=short))
+            if len(choices) >= 25:
+                break
+        return choices
+
     @quest_group.command(name="npcs", description="View NPCs you've discovered")
     async def quest_npcs(self, interaction: discord.Interaction):
         from services.channel_manager import check_channel
