@@ -709,6 +709,19 @@ DUNGEONS: Dict[str, DungeonConfig] = {
         xp_reward=500,
         gold_reward=(300, 600),
     ),
+    "sunken_temple": DungeonConfig(
+        key="sunken_temple",
+        name="The Sunken Temple",
+        emoji="🐍",
+        description="A drowned troll temple deep in the jungle. Something old stirs below.",
+        level_req=35,
+        floors=4,
+        enemies_per_floor=("jungle_troll", "basilisk", "jungle_stalker", "crocodile"),
+        floor_bosses=("jungle_lord", "bhag_thera", "kurzen_the_mad", "ghost_admiral"),
+        loot_pool=("corsair_blade", "jungle_leather_chest", "elixir_of_fortitude", "mageweave_cloth"),
+        xp_reward=380,
+        gold_reward=(200, 400),
+    ),
 }
 
 
