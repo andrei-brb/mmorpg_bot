@@ -15,6 +15,9 @@ from config.settings import Settings, CLASSES, SPECIALIZATIONS
 
 log = logging.getLogger("char_service")
 
+PRESTIGE_MAX = 10
+PRESTIGE_XP_BONUS = 0.02  # +2% XP per prestige level (permanent)
+
 
 class CharacterService:
     def __init__(self, db):
@@ -138,6 +141,11 @@ class CharacterService:
     async def award_xp(self, char_id: UUID, amount: int, xp_mult: float = 1.0) -> Dict:
         char = await self.get_by_id(char_id)
 
+        # Permanent prestige bonus: +2% XP per prestige level.
+        prestige = int(char.get("prestige") or 0)
+        if prestige > 0:
+            xp_mult *= 1.0 + PRESTIGE_XP_BONUS * prestige
+
         # Rested bonus
         rested_used = min(char["xp_rested"], amount)
         effective   = int((amount + rested_used) * xp_mult)
@@ -237,6 +245,63 @@ class CharacterService:
         else:
             max_res = (cls.base_resource + int_ * 12 + new_level * 5) if cls.base_resource else 0
         return {"max_hp": max_hp, "max_res": max_res}
+
+    # ── Prestige ──────────────────────────────────────────────────────────────
+
+    async def prestige_character(self, char_id: UUID) -> Dict[str, Any]:
+        """
+        Prestige at max level: prestige+1 (capped at PRESTIGE_MAX), reset to
+        level 1 with fresh level-1 HP/resources, free talent reset.
+        Gold, inventory and guild are kept.
+        """
+        char = await self.get_by_id(char_id)
+        if not char:
+            return {"ok": False, "error": "no_character"}
+        if int(char.get("prestige") or 0) >= PRESTIGE_MAX:
+            return {"ok": False, "error": "prestige_cap"}
+        if int(char["level"]) < Settings.MAX_LEVEL:
+            return {"ok": False, "error": "level_too_low"}
+
+        cls = CLASSES[char["class"]]
+        stats = self._leveled_stats(char, 1)
+        # Same resource rule as create_character: rage starts at 0, mana/energy full.
+        start_res = 0 if cls.resource == "rage" else stats["max_res"]
+
+        # Single conditional UPDATE: the WHERE guard makes the level/cap check and
+        # the reset one atomic operation, so a double-confirm can't double-prestige.
+        new_prestige = await self.db.fetchval(
+            """UPDATE characters SET
+               prestige = prestige + 1,
+               level = 1, xp = 0,
+               max_hp = $2, current_hp = $2,
+               max_res = $3, current_res = $4
+               WHERE id = $1 AND level >= $5 AND prestige < $6
+               RETURNING prestige""",
+            char_id,
+            int(stats["max_hp"]),
+            int(stats["max_res"]),
+            int(start_res),
+            int(Settings.MAX_LEVEL),
+            PRESTIGE_MAX,
+        )
+        if new_prestige is None:
+            return {"ok": False, "error": "not_eligible"}
+
+        # Free talent reset (no gold charge); best-effort like other talent hooks.
+        try:
+            from services.talents.talent_service import TalentService
+
+            reset_char = dict(char)
+            reset_char["level"] = 1
+            await TalentService(self.db).respec(reset_char, self, charge_gold=False)
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "prestige": int(new_prestige),
+            "xp_bonus_pct": int(round(int(new_prestige) * PRESTIGE_XP_BONUS * 100)),
+        }
 
     # ── Stats (with gear) ─────────────────────────────────────────────────────
 

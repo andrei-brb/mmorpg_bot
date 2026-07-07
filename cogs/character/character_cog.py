@@ -13,7 +13,11 @@ from discord import app_commands
 from discord.ext import commands
 
 from config.settings import CLASSES, SPECIALIZATIONS, Settings, RARITIES, ZONES
-from services.character.character_service import CharacterService
+from services.character.character_service import (
+    PRESTIGE_MAX,
+    PRESTIGE_XP_BONUS,
+    CharacterService,
+)
 
 log = logging.getLogger("cog.character")
 
@@ -779,6 +783,78 @@ class CharacterCog(commands.Cog, name="Character"):
         if ok:
             result.add_field(name="Passive", value=f"**{spec.passive_name}** — {spec.passive_desc}")
         await interaction.edit_original_response(embed=result, view=None)
+
+    # ── /character prestige ───────────────────────────────────────────────────
+
+    @char.command(name="prestige", description=f"Prestige at level {Settings.MAX_LEVEL}: reset to level 1 for a permanent XP bonus")
+    async def prestige(self, interaction: discord.Interaction):
+        char = await self.svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.response.send_message("❌ No character — use `/character create`.", ephemeral=True)
+
+        prestige = int(char["prestige"] or 0)
+        if prestige >= PRESTIGE_MAX:
+            return await interaction.response.send_message(
+                f"❌ You are already at the maximum prestige level (**{PRESTIGE_MAX}**).", ephemeral=True
+            )
+        if char["level"] < Settings.MAX_LEVEL:
+            return await interaction.response.send_message(
+                f"❌ Requires level **{Settings.MAX_LEVEL}**. You are level **{char['level']}**.", ephemeral=True
+            )
+
+        new_prestige = prestige + 1
+        bonus_pct = int(round(new_prestige * PRESTIGE_XP_BONUS * 100))
+        embed = discord.Embed(
+            title="✨ Prestige",
+            description=(
+                f"Reset **{char['name']}** to level 1 in exchange for a permanent XP bonus.\n"
+                f"⚠️ Level, XP and talents are reset. Gold, inventory and guild are kept."
+            ),
+            color=Settings.COLORS["warning"],
+        )
+        embed.add_field(
+            name="Permanent Bonus",
+            value=f"Prestige {prestige} → {new_prestige}: **+{bonus_pct}% XP** total",
+            inline=False,
+        )
+
+        owner_id = interaction.user.id
+
+        class ConfirmView(discord.ui.View):
+            def __init__(self): super().__init__(timeout=60); self.ok = False
+            async def interaction_check(self, i: discord.Interaction) -> bool:
+                if i.user.id != owner_id:
+                    await i.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+                    return False
+                return True
+            @discord.ui.button(label="Prestige", style=discord.ButtonStyle.danger)
+            async def yes(self, i, _): self.ok = True; self.stop(); await i.response.defer()
+            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+            async def no(self, i, _): self.stop(); await i.response.defer()
+
+        view = ConfirmView()
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await view.wait()
+        if not view.ok:
+            return
+
+        result = await self.svc.prestige_character(char["id"])
+        if not result.get("ok"):
+            return await interaction.edit_original_response(
+                content=f"❌ Prestige failed — requires level **{Settings.MAX_LEVEL}** and prestige below **{PRESTIGE_MAX}**.",
+                embed=None, view=None,
+            )
+
+        done = discord.Embed(
+            title=f"✨ Prestige {result['prestige']}",
+            description=(
+                f"**{char['name']}** is reborn at level 1!\n"
+                f"Permanent bonus: **+{result['xp_bonus_pct']}% XP**\n"
+                f"Talents reset for free — gold, inventory and guild kept."
+            ),
+            color=Settings.COLORS["success"],
+        )
+        await interaction.edit_original_response(content=None, embed=done, view=None)
 
     # ── /character delete ─────────────────────────────────────────────────────
 

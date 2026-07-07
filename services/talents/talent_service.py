@@ -362,14 +362,18 @@ class TalentService:
         state = await self.get_tree_state(char)
         return True, f"Rank {new_ranks}/{max_ranks}.", state
 
-    async def respec(self, char: Dict[str, Any], char_svc) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    async def respec(
+        self, char: Dict[str, Any], char_svc, charge_gold: bool = True
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        # charge_gold=False is used for system-initiated resets (e.g. prestige):
+        # no gold cost and the respec counter is not incremented.
         char_id = char["id"]
         class_key = str(char.get("class") or "warrior")
         level = int(char.get("level") or 1)
         meta = await self._get_meta(char_id)
         respec_count = int(meta.get("respec_count") or 0)
 
-        cost = self._respec_gold_cost(level, meta) if respec_count > 0 else 0
+        cost = self._respec_gold_cost(level, meta) if (charge_gold and respec_count > 0) else 0
         starter_id = f"{class_key}_starter"
         earned = self.points_earned_for_level(level)
 
@@ -389,20 +393,21 @@ class TalentService:
             await tx.execute(
                 """
                 INSERT INTO character_talent_meta (character_id, unspent_points, respec_count, foundation_locked, last_respec_at)
-                VALUES ($1, $2, 1, FALSE, NOW())
+                VALUES ($1, $2, $3, FALSE, NOW())
                 ON CONFLICT (character_id) DO UPDATE SET
                     unspent_points = $2,
-                    respec_count = character_talent_meta.respec_count + 1,
+                    respec_count = character_talent_meta.respec_count + $3,
                     foundation_locked = FALSE,
                     last_respec_at = NOW(),
                     updated_at = NOW()
                 """,
                 char_id,
                 max(0, earned - 1),  # starter rank still allocated
+                1 if charge_gold else 0,
             )
         await self.ensure_starter_granted(char_id, class_key)
         state = await self.get_tree_state(char)
-        msg = "Talents reset." if respec_count == 0 else f"Talents reset ({cost:,} gold)."
+        msg = "Talents reset." if cost == 0 else f"Talents reset ({cost:,} gold)."
         return True, msg, state
 
     def _respec_gold_cost(self, level: int, meta: Dict[str, Any]) -> int:
