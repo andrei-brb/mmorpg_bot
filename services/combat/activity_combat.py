@@ -1401,7 +1401,9 @@ async def _finish_party_defeat(
     acting_discord_id: int,
 ) -> Dict[str, Any]:
     from services.dungeon.dungeon_service import DungeonService
+    from services.character.inventory_service import InventoryService
 
+    inv_svc = InventoryService(db)
     session = ac.session
     for did in ac.party_discord_order:
         ch = await char_svc.get_character(did)
@@ -1425,6 +1427,10 @@ async def _finish_party_defeat(
             ch["id"],
             revive_hp,
         )
+        try:
+            await inv_svc.damage_equipped(ch["id"], Settings.DURABILITY_LOSS_ON_DEFEAT)
+        except Exception:
+            log.warning("party defeat durability loss failed char=%s", ch["id"], exc_info=True)
 
     run_id = ac.party_run_id
     if run_id:
@@ -1433,7 +1439,10 @@ async def _finish_party_defeat(
         except Exception as e:
             log.warning("party dungeon complete_run defeat: %s", e)
 
-    lines = log_lines[-8:] + ["💀 The party was defeated — everyone revives with ~20% HP."]
+    lines = log_lines[-8:] + [
+        "💀 The party was defeated — everyone revives with ~20% HP.",
+        f"Equipped gear lost {Settings.DURABILITY_LOSS_ON_DEFEAT} durability — repair it at the Forge.",
+    ]
     out = {
         "ok": True,
         "ended": True,
@@ -1649,8 +1658,16 @@ async def _finish_defeat(
         char["id"],
         revive_hp,
     )
+    try:
+        from services.character.inventory_service import InventoryService
+        await InventoryService(db).damage_equipped(char["id"], Settings.DURABILITY_LOSS_ON_DEFEAT)
+    except Exception:
+        log.warning("defeat durability loss failed char=%s", char["id"], exc_info=True)
     _clear_activity_session(discord_id)
-    lines = log_lines[-8:] + ["💀 You were defeated — you revive with 20% HP."]
+    lines = log_lines[-8:] + [
+        "💀 You were defeated — you revive with 20% HP.",
+        f"Equipped gear lost {Settings.DURABILITY_LOSS_ON_DEFEAT} durability — repair it at the Forge.",
+    ]
     return {
         "ok": True,
         "ended": True,

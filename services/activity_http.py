@@ -2788,6 +2788,228 @@ async def handle_idle_claim_post(request: web.Request) -> web.Response:
     )
 
 
+async def handle_repair_quote(request: web.Request) -> web.Response:
+    """Cost to restore all equipped gear to full durability (no mutation)."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    inv_svc = InventoryService(db)
+    total, items = await inv_svc.get_repair_quote(_uuid_from_any(char["id"]))
+    return web.json_response(_json_safe({"ok": True, "total": total, "items": items, "gold": char.get("gold")}))
+
+
+async def handle_repair_post(request: web.Request) -> web.Response:
+    """Charge rarity-scaled gold and restore all equipped gear to 100 durability."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    char_svc = CharacterService(db)
+    inv_svc = InventoryService(db)
+    char_id = _uuid_from_any(char["id"])
+    total, items = await inv_svc.get_repair_quote(char_id)
+    if total <= 0:
+        return web.json_response(_json_safe({"ok": True, "repaired": 0, "total": 0, "message": "Nothing to repair."}))
+    if not await char_svc.deduct_gold(char_id, total, "repair"):
+        return web.json_response(
+            _json_safe({"ok": False, "error": "insufficient_gold", "total": total}), status=400
+        )
+    await inv_svc.repair_all(char_id)
+    fresh = await char_svc.get_character(discord_id)
+    return web.json_response(_json_safe({
+        "ok": True, "repaired": len(items), "total": total,
+        "character": dict(fresh) if fresh else None,
+    }))
+
+
+async def handle_daily_quest_get(request: web.Request) -> web.Response:
+    """Today's rotating daily quest (assigns one on first view)."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    from services.quest.daily_quest_service import DailyQuestService
+
+    row = await DailyQuestService(db).get_or_assign_today(_uuid_from_any(char["id"]))
+    if not row:
+        return web.json_response(_json_safe({"ok": True, "quest": None}))
+    return web.json_response(_json_safe({"ok": True, "quest": {
+        "quest_id": row["quest_id"],
+        "name": row["name"],
+        "description": row["description"],
+        "objectives": row["objectives"],
+        "progress": row["progress"],
+        "rewards": row["rewards"],
+        "is_complete": row["is_complete"],
+    }}))
+
+
+async def handle_prestige_get(request: web.Request) -> web.Response:
+    """Prestige eligibility + current bonus preview."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    from services.character.character_service import PRESTIGE_MAX, PRESTIGE_XP_BONUS
+
+    prestige = int(char.get("prestige") or 0)
+    return web.json_response(_json_safe({
+        "ok": True,
+        "prestige": prestige,
+        "max": PRESTIGE_MAX,
+        "xp_bonus_pct": round(PRESTIGE_XP_BONUS * prestige * 100, 1),
+        "next_xp_bonus_pct": round(PRESTIGE_XP_BONUS * (prestige + 1) * 100, 1),
+        "eligible": int(char.get("level") or 1) >= Settings.MAX_LEVEL and prestige < PRESTIGE_MAX,
+        "required_level": Settings.MAX_LEVEL,
+    }))
+
+
+async def handle_prestige_post(request: web.Request) -> web.Response:
+    """Execute prestige (requires {"confirm": true})."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict) or body.get("confirm") is not True:
+        return web.json_response(_json_safe({"ok": False, "error": "confirm_required"}), status=400)
+
+    char_svc = CharacterService(db)
+    result = await char_svc.prestige_character(_uuid_from_any(char["id"]))
+    if not result.get("ok"):
+        return web.json_response(_json_safe(result), status=400)
+    fresh = await char_svc.get_character(discord_id)
+    return web.json_response(_json_safe({**result, "character": dict(fresh) if fresh else None}))
+
+
+async def handle_trades_get(request: web.Request) -> web.Response:
+    """Open trade offers involving this character (incoming + outgoing)."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    from services.trade.trade_service import TradeService
+
+    svc = TradeService(db)
+    await svc.expire_stale()
+    rows = await svc.list_for(_uuid_from_any(char["id"]))
+    me = str(char["id"])
+    return web.json_response(_json_safe({
+        "ok": True,
+        "incoming": [r for r in rows if str(r["to_character"]) == me],
+        "outgoing": [r for r in rows if str(r["from_character"]) == me],
+    }))
+
+
+async def handle_trade_offer_post(request: web.Request) -> web.Response:
+    """Create a trade offer: JSON { target_user_id, item_id, gold_ask? }."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    target_user = str(body.get("target_user_id") or "").strip()
+    item_id = _uuid_from_any(body.get("item_id"))
+    try:
+        gold_ask = max(0, int(body.get("gold_ask") or 0))
+    except (TypeError, ValueError):
+        gold_ask = 0
+    if not target_user or not item_id:
+        return web.json_response(_json_safe({"ok": False, "error": "bad_request"}), status=400)
+
+    char_svc = CharacterService(db)
+    try:
+        target_char = await char_svc.get_character(int(target_user))
+    except (TypeError, ValueError):
+        target_char = None
+    if not target_char:
+        return web.json_response(_json_safe({"ok": False, "error": "target_no_character",
+                                             "message": "That player has no character."}), status=400)
+
+    from services.trade.trade_service import TradeService
+
+    svc = TradeService(db)
+    await svc.expire_stale()
+    ok, msg, payload = await svc.create_offer(
+        _uuid_from_any(char["id"]), _uuid_from_any(target_char["id"]), item_id, gold_ask
+    )
+    status = 200 if ok else 400
+    return web.json_response(_json_safe({"ok": ok, "message": msg, "trade": payload}), status=status)
+
+
+async def handle_trade_act_post(request: web.Request) -> web.Response:
+    """Act on a trade: JSON { trade_id, action: accept | decline | cancel }."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    trade_id = _uuid_from_any(body.get("trade_id"))
+    action = str(body.get("action") or "").strip().lower()
+    if not trade_id or action not in ("accept", "decline", "cancel"):
+        return web.json_response(_json_safe({"ok": False, "error": "bad_request"}), status=400)
+
+    from services.trade.trade_service import TradeService
+
+    svc = TradeService(db)
+    await svc.expire_stale()
+    char_id = _uuid_from_any(char["id"])
+    payload = None
+    if action == "accept":
+        ok, msg, payload = await svc.accept(trade_id, char_id)
+    elif action == "decline":
+        ok, msg = await svc.decline(trade_id, char_id)
+    else:
+        ok, msg = await svc.cancel(trade_id, char_id)
+
+    fresh = await CharacterService(db).get_character(discord_id) if ok and action == "accept" else None
+    return web.json_response(
+        _json_safe({"ok": ok, "message": msg, "trade": payload,
+                    "character": dict(fresh) if fresh else None}),
+        status=200 if ok else 400,
+    )
+
+
 async def handle_pvp_status(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     try:
@@ -3392,6 +3614,20 @@ async def handle_explore(request: web.Request) -> web.Response:
         gold = int(g0 * gold_mult)
         await char_svc.add_gold(_uuid_from_any(char["id"]), gold, "exploration")
         reward = {"xp": int(xp_res.get("xp_gained") or 0), "gold": gold, "base_xp": xp0, "base_gold": g0}
+        # Gathering: crafting materials are farmable via exploration (parity with /explore)
+        if random.random() < 0.35:
+            from services.character.inventory_service import InventoryService
+            scrap_tid = random.choice(("weapon_scrap", "armor_scrap", "accessory_scrap"))
+            scrap_qty = random.randint(1, 2)
+            ok_s, _ = await InventoryService(db).add_item(
+                _uuid_from_any(char["id"]), scrap_tid, "common", quantity=scrap_qty, from_="gathering"
+            )
+            if ok_s:
+                reward["scrap"] = {
+                    "template_id": scrap_tid,
+                    "name": scrap_tid.replace("_", " ").title(),
+                    "quantity": scrap_qty,
+                }
     elif outcome["type"] == "safe":
         xp0 = random.randint(3, 8)
         xp_res = await char_svc.award_xp(_uuid_from_any(char["id"]), xp0, xp_mult)
@@ -6510,6 +6746,14 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/combat/start", handle_combat_start)
     app.router.add_post("/api/game/combat/action", handle_combat_action)
     app.router.add_post("/api/game/rest", handle_rest)
+    app.router.add_get("/api/game/repair/quote", handle_repair_quote)
+    app.router.add_post("/api/game/repair", handle_repair_post)
+    app.router.add_get("/api/game/daily", handle_daily_quest_get)
+    app.router.add_get("/api/game/prestige", handle_prestige_get)
+    app.router.add_post("/api/game/prestige", handle_prestige_post)
+    app.router.add_get("/api/game/trades", handle_trades_get)
+    app.router.add_post("/api/game/trades/offer", handle_trade_offer_post)
+    app.router.add_post("/api/game/trades/act", handle_trade_act_post)
     app.router.add_get("/api/game/idle/rewards", handle_idle_rewards_get)
     app.router.add_post("/api/game/idle/claim", handle_idle_claim_post)
     app.router.add_get("/api/game/pvp/status", handle_pvp_status)
