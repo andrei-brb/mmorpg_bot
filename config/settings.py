@@ -481,6 +481,36 @@ ZONES: Dict[str, ZoneConfig] = {
             "The smell of brimstone is overwhelming.",
         ),
     ),
+    "duskwood": ZoneConfig(
+        name="Duskwood", emoji="🌑", faction="alliance",
+        level_range=(10, 25),
+        description="A forest smothered in unnatural night. The dead here do not rest.",
+        enemies=("duskwood_ghoul", "black_widow", "worgen_prowler", "skeletal_warrior", "dark_cultist", "rabid_dire_wolf", "haunted_scarecrow", "grave_robber"),
+        bosses=("sir_morlan", "stalvan_forsaken", "nightmare_stag", "cult_hierophant", "grave_titan"),
+        loot_pool=("bone_club", "raptor_hide_vest", "stamina_draught", "silk_cloth", "bracelet_t2", "ring_t2", "necklace_t2", "trinket_t2"),
+        ambients=(
+            "The canopy blots out the sun. It is always midnight here.",
+            "A raven watches you from a gallows-shaped branch.",
+            "Somewhere in the dark, a shovel bites into grave soil.",
+            "Cold mist coils around your ankles like grasping fingers.",
+            "A distant church bell tolls, though no church still stands.",
+        ),
+    ),
+    "burning_steppes": ZoneConfig(
+        name="Burning Steppes", emoji="⚒️", faction="neutral",
+        level_range=(45, 55),
+        description="Ash-choked foothills beneath the volcano, patrolled by Blackrock warbands.",
+        enemies=("blackrock_orc", "blackrock_warlock", "ember_worg", "obsidian_golem", "flamekin_ravager", "steppes_chimera", "ash_drake", "blackrock_slaver"),
+        bosses=("warlord_rendka", "pyrelord_ashmaul", "obsidian_colossus", "chimera_matriarch", "ash_dragon_prime"),
+        loot_pool=("sulfuron_blade", "shadowforge_plate", "flask_of_the_titans", "runecloth", "bracelet_t5", "ring_t5", "necklace_t5", "trinket_t5"),
+        ambients=(
+            "Ash falls like grey snow, hissing where it lands.",
+            "War drums echo down from the Blackrock foothills.",
+            "The ground is warm through the soles of your boots.",
+            "A charred wagon smolders beside the cracked road.",
+            "Dragonfire has fused the hillside sand into black glass.",
+        ),
+    ),
 }
 
 
@@ -588,6 +618,36 @@ ENEMIES: Dict[str, EnemyTemplate] = {
     "magmadar":             EnemyTemplate("Magmadar",             "🔥",4500,105,175,170, 425, 15.0, 3250,550,1100, True, ("lava_breath", "molten_armor")),
     "golem_lord":           EnemyTemplate("Golem Lord",          "🤖",4200,100,170,165, 410, 14.0, 3100,520,1050, True, ("crush", "stomp")),
     "vaelkor_architect":    EnemyTemplate("Vaelkor the Architect", "🜁",5200,112,182,178, 445, 15.5, 3600,590,1180, True, ("frequency_lance", "obsidian_aegis", "enrage")),
+    # ── Duskwood (10-25) ──────────────────────────────────────────────────────
+    "duskwood_ghoul":       EnemyTemplate("Duskwood Ghoul",      "🧟", 170, 15, 27, 18,  52, 8.0,  85,  7,18),
+    "black_widow":          EnemyTemplate("Black Widow",          "🕷️", 155, 14, 25, 14,  47, 9.0,  78,  6,16),
+    "worgen_prowler":       EnemyTemplate("Worgen Prowler",       "🐺", 185, 17, 30, 20,  57, 10.0,  95,  8,21),
+    "skeletal_warrior":     EnemyTemplate("Skeletal Warrior",     "💀", 175, 16, 28, 22,  54, 8.0,  88,  7,19),
+    "dark_cultist":         EnemyTemplate("Dark Cultist",         "🕯️", 150, 15, 26, 13,  48, 8.0,  80,  7,17),
+    "rabid_dire_wolf":      EnemyTemplate("Rabid Dire Wolf",      "🐕", 165, 16, 28, 16,  51, 9.0,  84,  6,17),
+    "haunted_scarecrow":    EnemyTemplate("Haunted Scarecrow",    "🎃", 190, 15, 26, 24,  50, 7.0,  92,  7,20),
+    "grave_robber":         EnemyTemplate("Grave Robber",         "🪦", 160, 15, 27, 15,  50, 9.0,  82,  8,20),
+    # ── Duskwood Bosses ───────────────────────────────────────────────────────
+    "sir_morlan":           EnemyTemplate("Sir Morlan the Restless", "⚰️", 920, 31, 51, 52, 122, 13.0, 560, 82,165, True, ("cleave", "enrage")),
+    "stalvan_forsaken":     EnemyTemplate("Stalvan the Forsaken", "👤", 900, 30, 50, 48, 118, 13.0, 545, 80,160, True, ("backstab", "poison")),
+    "nightmare_stag":       EnemyTemplate("Nightmare Stag",       "🦌", 940, 32, 52, 50, 125, 14.0, 575, 85,170, True, ("charge", "frenzy")),
+    "cult_hierophant":      EnemyTemplate("Cult Hierophant",      "🔮", 890, 30, 49, 46, 116, 13.0, 540, 80,158, True, ("summon", "poison")),
+    "grave_titan":          EnemyTemplate("Grave Titan",          "🗿",2100, 37, 60, 56, 140, 14.0, 700, 98,195, True, ("stomp", "earthquake", "enrage")),
+    # ── Burning Steppes (45-55) ───────────────────────────────────────────────
+    "blackrock_orc":        EnemyTemplate("Blackrock Orc",        "👹", 480, 44, 70, 55, 140, 12.0, 280, 38, 80),
+    "blackrock_warlock":    EnemyTemplate("Blackrock Warlock",    "🔮", 440, 42, 66, 48, 130, 12.0, 265, 36, 76),
+    "ember_worg":           EnemyTemplate("Ember Worg",           "🐺", 460, 43, 68, 50, 134, 13.0, 270, 36, 78),
+    "obsidian_golem":       EnemyTemplate("Obsidian Golem",       "🗿", 560, 48, 76, 68, 155, 10.0, 320, 44, 92),
+    "flamekin_ravager":     EnemyTemplate("Flamekin Ravager",     "🔥", 470, 44, 69, 52, 137, 12.0, 275, 37, 79),
+    "steppes_chimera":      EnemyTemplate("Steppes Chimera",      "🐉", 520, 46, 73, 58, 146, 13.0, 300, 41, 87),
+    "ash_drake":            EnemyTemplate("Ash Drake",            "🐲", 540, 47, 75, 60, 150, 13.0, 310, 42, 90),
+    "blackrock_slaver":     EnemyTemplate("Blackrock Slaver",     "⛓️", 450, 42, 67, 49, 132, 12.0, 268, 36, 77),
+    # ── Burning Steppes Bosses ────────────────────────────────────────────────
+    "warlord_rendka":       EnemyTemplate("Warlord Rend'ka",      "👑",2800, 80,132,120, 310, 14.0,1900,320,640, True, ("war_cry", "charge", "enrage")),
+    "pyrelord_ashmaul":     EnemyTemplate("Pyrelord Ashmaul",     "🔥",2700, 78,128,115, 300, 14.0,1850,310,620, True, ("flame_nova", "inferno")),
+    "obsidian_colossus":    EnemyTemplate("Obsidian Colossus",    "🗿",3100, 84,138,135, 330, 13.0,2050,350,700, True, ("crush", "stomp")),
+    "chimera_matriarch":    EnemyTemplate("Chimera Matriarch",    "🐉",2850, 81,134,122, 315, 15.0,1950,330,660, True, ("beast_call", "frenzy")),
+    "ash_dragon_prime":     EnemyTemplate("Ash Dragon Prime",     "🐲",3300, 86,142,130, 340, 15.0,2200,380,760, True, ("lava_breath", "shadowflame", "enrage")),
 }
 
 

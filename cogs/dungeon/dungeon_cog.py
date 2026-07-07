@@ -693,7 +693,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
                 level_up_lines.append(f"**{m_name}**: {m_xp['old_level']} → {m_xp['new_level']}")
 
             for _ in range(2 if session.is_boss else 1):  # Boss gives 2 loot rolls
-                loot = await inv_svc.generate_loot(run["dungeon_key"], m_level, session.is_boss)
+                loot = await inv_svc.generate_loot(run["dungeon_key"], m_level, session.is_boss, char_id=m_id)
                 if loot:
                     ok, _ = await inv_svc.add_item(
                         m_id, loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]

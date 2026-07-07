@@ -782,7 +782,7 @@ class CombatCog(commands.Cog, name="Combat"):
         # Loot rolls
         loot_lines = []
         for _ in range(rewards["loot_rolls"]):
-            loot = await self.inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss)
+            loot = await self.inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss, char_id=char["id"])
             if loot:
                 ok, _ = await self.inv_svc.add_item(
                     char["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
