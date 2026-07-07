@@ -9,6 +9,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.settings import Settings
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.blacksmith.blacksmith_service import BlacksmithService, ENHANCEMENT_CONFIG, PROTECTION_ITEMS
@@ -689,6 +690,43 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
             description=f"{'✅' if ok else '❌'} {msg}",
             color=0x00FF7F if ok else 0xFF0000
         )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @blacksmith.command(name="repair", description="Repair all equipped gear (cost scales with rarity)")
+    async def repair(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+        char = await self.char_svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.followup.send("❌ No character.", ephemeral=True)
+
+        total, items = await self.inv_svc.get_repair_quote(char["id"])
+        if total <= 0:
+            return await interaction.followup.send(
+                "✅ All your equipped gear is already at full durability.", ephemeral=True
+            )
+
+        ok = await self.char_svc.deduct_gold(char["id"], total, "repair")
+        if not ok:
+            return await interaction.followup.send(
+                f"❌ Repairs cost **{total:,}** {Settings.CURRENCY_SYMBOL} but you have "
+                f"**{char['gold']:,}** {Settings.CURRENCY_SYMBOL}.",
+                ephemeral=True,
+            )
+
+        await self.inv_svc.repair_all(char["id"])
+        lines = [
+            f"{it.get('icon', '📦')} **{it['name']}** +{it['missing']} durability — "
+            f"{it['cost']:,} {Settings.CURRENCY_SYMBOL}"
+            for it in items
+        ]
+        embed = discord.Embed(
+            title="🔨 Gear Repaired",
+            description="\n".join(lines),
+            color=0x00FF7F,
+        )
+        embed.add_field(name="💰 Total", value=f"{total:,} {Settings.CURRENCY_SYMBOL}", inline=True)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 

@@ -68,6 +68,11 @@ class Settings:
     CURRENCY_SYMBOL         = "🪙"
     MARKET_FEE_PERCENT      = 5
     REPAIR_COST_PER_POINT   = 2
+    # Repair cost scales with item rarity: cost = points_missing × REPAIR_COST_PER_POINT × mult
+    REPAIR_RARITY_MULT      = {
+        "common": 1, "uncommon": 2, "rare": 4, "epic": 8, "legendary": 16, "artifact": 32,
+    }
+    DURABILITY_LOSS_ON_DEFEAT = 10  # equipped items lose this much durability when a fight is lost
 
     # Cooldowns (seconds)
     EXPLORE_COOLDOWN        = 30
@@ -80,6 +85,9 @@ class Settings:
     IDLE_XP_PER_HOUR_PER_LEVEL    = 1
     IDLE_GOLD_PER_HOUR_BASE       = 4
     IDLE_GOLD_PER_HOUR_PER_LEVEL  = 1
+    # Hard ceiling on the idle gold rate so offline accrual can't outpace active play
+    # (uncapped, a L60 earned 64/hr = 1,536/day passively). 12/hr → max 288/day.
+    IDLE_GOLD_PER_HOUR_CAP        = 12
 
     # World events
     WORLD_EVENT_INTERVAL    = 21_600       # 6 hours in seconds

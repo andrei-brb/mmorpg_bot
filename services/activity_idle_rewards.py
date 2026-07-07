@@ -52,6 +52,7 @@ def compute_idle_pending(char: Dict[str, Any]) -> IdlePending:
     effective_hours = capped_s / 3600.0
     xp_rate = float(Settings.IDLE_XP_PER_HOUR_BASE) + float(Settings.IDLE_XP_PER_HOUR_PER_LEVEL) * float(level)
     gold_rate = float(Settings.IDLE_GOLD_PER_HOUR_BASE) + float(Settings.IDLE_GOLD_PER_HOUR_PER_LEVEL) * float(level)
+    gold_rate = min(gold_rate, float(Settings.IDLE_GOLD_PER_HOUR_CAP))
     pending_xp = int(effective_hours * xp_rate)
     pending_gold = int(effective_hours * gold_rate)
     return IdlePending(

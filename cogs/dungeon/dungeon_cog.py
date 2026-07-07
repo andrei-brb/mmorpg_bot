@@ -666,26 +666,43 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         xp_mult = server_cfg["xp_multiplier"] if server_cfg else 1.0
         gold_mult = server_cfg["gold_multiplier"] if server_cfg else 1.0
         
-        xp_result = await self.char_svc.award_xp(char["id"], int(base_xp), xp_mult)
-        await self.char_svc.add_gold(char["id"], int(base_gold * gold_mult), "dungeon_reward")
-        await self.char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
+        # Distribute rewards to every party member in the session: full XP each,
+        # gold split evenly, one loot roll each (two on boss floors), HP/resource synced.
+        participants = {str(p["id"]): p for p in run.get("participants", [])}
+        members = [p for p in session.players if p.char_id is not None]
+        n = max(1, len(members))
+        gold_each = max(1, int(base_gold * gold_mult) // n)
+
+        level_up_lines = []
+        loot_lines = []
+        for member in members:
+            m_id = member.char_id
+            m_info = participants.get(str(m_id), {})
+            m_name = m_info.get("name") or member.name
+            m_level = int(m_info.get("level") or char["level"])
+
+            m_xp = await self.char_svc.award_xp(m_id, int(base_xp), xp_mult)
+            await self.char_svc.add_gold(m_id, gold_each, "dungeon_reward")
+            await self.char_svc.sync_combat_hp(m_id, member.current_hp, member.current_res)
+            if m_xp.get("leveled_up"):
+                level_up_lines.append(f"**{m_name}**: {m_xp['old_level']} → {m_xp['new_level']}")
+
+            for _ in range(2 if session.is_boss else 1):  # Boss gives 2 loot rolls
+                loot = await inv_svc.generate_loot(run["dungeon_key"], m_level, session.is_boss)
+                if loot:
+                    ok, _ = await inv_svc.add_item(
+                        m_id, loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
+                    )
+                    if ok:
+                        prefix = f"**{m_name}** — " if n > 1 else ""
+                        loot_lines.append(f"✨ {prefix}{loot['template']['name']} ({loot['rarity']})")
+
         # Class mastery progression (victory-based; boss fights grant more).
         try:
             base_gain = 8 + (6 if session.is_boss else 0)
             await self.char_svc.award_class_mastery_xp(char["id"], char.get("class") or "", base_gain)
         except Exception:
             pass
-        
-        # Loot
-        loot_lines = []
-        for _ in range(2 if session.is_boss else 1):  # Boss gives 2 loot rolls
-            loot = await inv_svc.generate_loot(run["dungeon_key"], char["level"], session.is_boss)
-            if loot:
-                ok, _ = await inv_svc.add_item(
-                    char["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
-                )
-                if ok:
-                    loot_lines.append(f"✨ {loot['template']['name']} ({loot['rarity']})")
 
         # Chance to refill health potion (35% dungeon)
         if random.random() < 0.35:
@@ -698,16 +715,17 @@ class DungeonCog(commands.Cog, name="Dungeon"):
             description=f"**{char['name']}** defeated {session.enemies[0].name}!",
             color=0x00FF00,
         )
-        embed.add_field(name="💰 Gold", value=f"{int(base_gold * gold_mult):,}", inline=True)
-        embed.add_field(name="⭐ XP", value=f"{int(base_xp * xp_mult):,}", inline=True)
-        
+        gold_txt = f"{gold_each:,}" + (f" each ({n}-way split)" if n > 1 else "")
+        embed.add_field(name="💰 Gold", value=gold_txt, inline=True)
+        embed.add_field(name="⭐ XP", value=f"{int(base_xp * xp_mult):,}" + (" each" if n > 1 else ""), inline=True)
+
         if loot_lines:
-            embed.add_field(name="📦 Loot", value="\n".join(loot_lines), inline=False)
-        
-        if xp_result["leveled_up"]:
+            embed.add_field(name="📦 Loot", value="\n".join(loot_lines)[:1024], inline=False)
+
+        if level_up_lines:
             embed.add_field(
                 name="🎉 LEVEL UP!",
-                value=f"**{xp_result['old_level']} → {xp_result['new_level']}**",
+                value="\n".join(level_up_lines),
                 inline=False,
             )
         
@@ -771,18 +789,31 @@ class DungeonCog(commands.Cog, name="Dungeon"):
 
     async def _dungeon_defeat(self, interaction, char, player, run_id: UUID, msg=None):
         """Handle dungeon defeat."""
-        revive_hp = max(1, char["max_hp"] // 5)
+        # Revive and clear combat state for ALL participants, not just the invoker.
         await self.bot.db.execute(
-            "UPDATE characters SET current_hp=$2, combat_status='idle' WHERE id=$1",
-            char["id"], revive_hp,
+            """
+            UPDATE characters SET current_hp = GREATEST(1, max_hp / 5), combat_status='idle'
+            WHERE id IN (SELECT character_id FROM dungeon_participants WHERE run_id=$1)
+            """,
+            run_id,
         )
-        
+        await self.bot.db.execute(
+            """
+            UPDATE inventory SET durability = GREATEST(0, durability - $2)
+            WHERE is_equipped=TRUE
+              AND character_id IN (SELECT character_id FROM dungeon_participants WHERE run_id=$1)
+            """,
+            run_id, Settings.DURABILITY_LOSS_ON_DEFEAT,
+        )
+
         await self.dungeon_svc.complete_run(run_id, "defeat")
-        
+
         embed = discord.Embed(
             title="💀 Defeated!",
             description=(
-                "You have been slain in the dungeon. You revive at the entrance.\n\n"
+                "Your party has been slain in the dungeon. Everyone revives at the entrance.\n"
+                f"Equipped gear lost **{Settings.DURABILITY_LOSS_ON_DEFEAT} durability** — "
+                "repair it with `/blacksmith repair`.\n\n"
                 "**Recovery tips:**\n"
                 "• Use `/rest` to fully recover\n"
                 "• Use a **Health Potion** from your inventory\n"

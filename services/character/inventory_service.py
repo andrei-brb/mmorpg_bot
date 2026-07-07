@@ -547,6 +547,45 @@ class InventoryService:
         )
         return {r["equip_slot"]: dict(r) for r in rows}
 
+    # ── Durability & repair ───────────────────────────────────────────────────
+
+    async def damage_equipped(self, char_id: UUID, points: int) -> None:
+        """Reduce durability on all equipped items (floored at 0). Used on combat defeat."""
+        await self.db.execute(
+            "UPDATE inventory SET durability = GREATEST(0, durability - $2) "
+            "WHERE character_id=$1 AND is_equipped=TRUE",
+            char_id, points,
+        )
+
+    async def get_repair_quote(self, char_id: UUID) -> Tuple[int, List[dict]]:
+        """Total gold cost to restore all equipped items to 100 durability, plus per-item lines."""
+        from config.settings import Settings
+
+        rows = await self.db.fetch(
+            """SELECT i.id, i.durability, t.name, t.icon,
+                      COALESCE(i.rarity, t.rarity) AS rarity
+               FROM inventory i JOIN item_templates t ON i.template_id=t.id
+               WHERE i.character_id=$1 AND i.is_equipped=TRUE AND i.durability < 100""",
+            char_id,
+        )
+        total = 0
+        items = []
+        for r in rows:
+            missing = 100 - int(r["durability"])
+            mult = Settings.REPAIR_RARITY_MULT.get(str(r["rarity"] or "common").lower(), 1)
+            cost = missing * Settings.REPAIR_COST_PER_POINT * mult
+            total += cost
+            items.append({**dict(r), "missing": missing, "cost": cost})
+        return total, items
+
+    async def repair_all(self, char_id: UUID) -> None:
+        """Restore all equipped items to full durability (charge gold before calling)."""
+        await self.db.execute(
+            "UPDATE inventory SET durability = 100 "
+            "WHERE character_id=$1 AND is_equipped=TRUE AND durability < 100",
+            char_id,
+        )
+
     # ── Use consumable ────────────────────────────────────────────────────────
 
     async def use_consumable(self, char_id: UUID, item_id: UUID) -> Tuple[bool, str, Optional[Dict]]:

@@ -1094,10 +1094,13 @@ class CombatCog(commands.Cog, name="Combat"):
             "UPDATE characters SET current_hp=$2, combat_status='idle' WHERE id=$1",
             char["id"], revive_hp,
         )
+        await self.inv_svc.damage_equipped(char["id"], Settings.DURABILITY_LOSS_ON_DEFEAT)
         embed = discord.Embed(
             title="💀 Defeated!",
             description=(
-                "You have been slain. You revive at the graveyard with **20% HP**.\n\n"
+                "You have been slain. You revive at the graveyard with **20% HP**.\n"
+                f"Your equipped gear lost **{Settings.DURABILITY_LOSS_ON_DEFEAT} durability** — "
+                "repair it with `/blacksmith repair`.\n\n"
                 "**Recovery tips:**\n"
                 "• Use `/rest` to fully recover (60s cooldown)\n"
                 "• Use a **Health Potion** from your inventory\n"
