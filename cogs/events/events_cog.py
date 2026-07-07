@@ -256,7 +256,10 @@ class EventsCog(commands.Cog, name="Events"):
         if not quest:
             embed = discord.Embed(
                 title="📋 Daily Quest",
-                description="No daily quest assigned yet. Explore to receive daily quests!",
+                description=(
+                    "Rotating daily quests are coming in an upcoming update.\n"
+                    "Meanwhile: `/login` streak reward, `/guild checkin`, and NPC quests via `/quest npcs`."
+                ),
                 color=0x2F3136,
             )
         elif quest["is_complete"]:
