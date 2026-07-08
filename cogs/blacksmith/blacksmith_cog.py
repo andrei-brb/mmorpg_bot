@@ -701,13 +701,13 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
         if not char:
             return await interaction.followup.send("❌ No character.", ephemeral=True)
 
-        total, items = await self.inv_svc.get_repair_quote(char["id"])
-        if total <= 0:
+        # Quote + charge + repair happen in one transaction (no double-charge,
+        # no gold eaten if the repair step fails).
+        ok, _err, total, items = await self.inv_svc.repair_all_charged(char["id"])
+        if ok and total <= 0:
             return await interaction.followup.send(
                 "✅ All your equipped gear is already at full durability.", ephemeral=True
             )
-
-        ok = await self.char_svc.deduct_gold(char["id"], total, "repair")
         if not ok:
             return await interaction.followup.send(
                 f"❌ Repairs cost **{total:,}** {Settings.CURRENCY_SYMBOL} but you have "
@@ -715,7 +715,6 @@ class BlacksmithCog(commands.Cog, name="Blacksmith"):
                 ephemeral=True,
             )
 
-        await self.inv_svc.repair_all(char["id"])
         lines = [
             f"{it.get('icon', '📦')} **{it['name']}** +{it['missing']} durability — "
             f"{it['cost']:,} {Settings.CURRENCY_SYMBOL}"

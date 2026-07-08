@@ -1544,6 +1544,18 @@ async def _finish_party_victory(
         except Exception:
             pass
 
+        # Daily quest progress (non-blocking) — party dungeon kills count too.
+        try:
+            from services.quest.daily_quest_service import DailyQuestService
+            daily_svc = DailyQuestService(db)
+            daily_line = await daily_svc.record_event(char_svc, ch["id"], "kill")
+            if session.is_boss:
+                daily_line = await daily_svc.record_event(char_svc, ch["id"], "boss") or daily_line
+            if daily_line:
+                loot_lines_all.append(f"{ch['name']}: {daily_line}")
+        except Exception:
+            pass
+
         try:
             quest_svc = NPCQuestService(db)
             qn = await quest_svc.check_kill_progress(

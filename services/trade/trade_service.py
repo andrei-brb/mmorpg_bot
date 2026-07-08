@@ -17,6 +17,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from config.settings import Settings
 from services.character.character_service import CharacterService
 
 log = logging.getLogger("trade_service")
@@ -200,6 +201,28 @@ class TradeService:
                 err = self._item_error(item)
                 if err:
                     raise TradeAbort(f"Trade is no longer valid: {err}.")
+
+                # Enforce the same bag cap add_item applies on every other
+                # item-acquisition path (market buys are rejected+refunded when full).
+                player_row = await tx.fetchrow(
+                    """SELECT p.is_premium FROM players p
+                       JOIN characters c ON c.player_id=p.id WHERE c.id=$1""",
+                    buyer_id,
+                )
+                max_slots = (
+                    Settings.PREMIUM_INVENTORY_SLOTS
+                    if (player_row and player_row["is_premium"])
+                    else Settings.FREE_INVENTORY_SLOTS
+                )
+                bag_count = await tx.fetchval(
+                    "SELECT COUNT(*) FROM inventory "
+                    "WHERE character_id=$1 AND COALESCE(is_equipped,FALSE)=FALSE",
+                    buyer_id,
+                )
+                if int(bag_count or 0) >= max_slots:
+                    raise TradeAbort(
+                        f"Your bag is full ({bag_count}/{max_slots}) — make room first."
+                    )
 
                 char_svc = CharacterService(tx)
 

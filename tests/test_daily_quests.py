@@ -24,7 +24,16 @@ def _row(kind="kill", count=3, progress=None, is_complete=False):
 
 def _svc(row, execute_result="UPDATE 1"):
     db = MagicMock()
-    db.execute = AsyncMock(return_value=execute_result)
+    # record_event locks the row inside db.transaction(); mock the context
+    # manager so `async with db.transaction() as tx` yields a tx mock.
+    tx = MagicMock()
+    tx.fetchrow = AsyncMock(return_value=row)
+    tx.execute = AsyncMock(return_value=execute_result)
+    tx_ctx = MagicMock()
+    tx_ctx.__aenter__ = AsyncMock(return_value=tx)
+    tx_ctx.__aexit__ = AsyncMock(return_value=False)
+    db.transaction = MagicMock(return_value=tx_ctx)
+    db.execute = tx.execute  # single execute mock for assertions
     svc = DailyQuestService(db)
     svc._today_row = AsyncMock(return_value=row)
     char_svc = MagicMock()

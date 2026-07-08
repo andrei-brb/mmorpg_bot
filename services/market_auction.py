@@ -89,7 +89,23 @@ async def _settle_one_auction(db, listing_id: UUID) -> bool:
             listing_id,
         )
         if not listing:
-            # Bidder set but bid/item data missing — just close it out.
+            # Bidder set but bid/item data missing (e.g. the item row vanished).
+            # The winner's gold was escrowed at bid time — refund it before closing,
+            # otherwise the escrow is destroyed.
+            refund_row = await tx.fetchrow(
+                "SELECT current_bidder_id, current_bid FROM market_listings WHERE id = $1",
+                listing_id,
+            )
+            if refund_row and refund_row["current_bidder_id"] and int(refund_row["current_bid"] or 0) > 0:
+                await CharacterService(tx).add_gold(
+                    refund_row["current_bidder_id"],
+                    int(refund_row["current_bid"]),
+                    "auction refund: listing data missing at settlement",
+                )
+                log.error(
+                    "Auction settlement refunded winner (missing item data): listing=%s winner=%s amount=%s",
+                    listing_id, refund_row["current_bidder_id"], refund_row["current_bid"],
+                )
             await tx.execute(
                 "UPDATE market_listings SET is_active = FALSE WHERE id = $1",
                 listing_id,

@@ -74,21 +74,30 @@ class DailyQuestService:
         )
         return await self._today_row(char_id)
 
+    _TODAY_SQL = """
+        SELECT cq.character_id, cq.quest_id, cq.progress, cq.is_complete,
+               qt.name, qt.description, qt.objectives, qt.rewards
+        FROM character_quests cq
+        JOIN quest_templates qt ON cq.quest_id = qt.id
+        WHERE cq.character_id = $1
+          AND qt.quest_type = 'daily'
+          AND cq.started_at::date = CURRENT_DATE
+        LIMIT 1
+    """
+
+    @staticmethod
+    def _coerce(row) -> Optional[dict]:
+        """asyncpg returns jsonb as str (no json codec configured) — coerce once here."""
+        if not row:
+            return None
+        out = dict(row)
+        out["objectives"] = _as_list(out.get("objectives"))
+        out["progress"] = _as_dict(out.get("progress"))
+        out["rewards"] = _as_dict(out.get("rewards"))
+        return out
+
     async def _today_row(self, char_id: UUID) -> Optional[dict]:
-        row = await self.db.fetchrow(
-            """
-            SELECT cq.character_id, cq.quest_id, cq.progress, cq.is_complete,
-                   qt.name, qt.description, qt.objectives, qt.rewards
-            FROM character_quests cq
-            JOIN quest_templates qt ON cq.quest_id = qt.id
-            WHERE cq.character_id = $1
-              AND qt.quest_type = 'daily'
-              AND cq.started_at::date = CURRENT_DATE
-            LIMIT 1
-            """,
-            char_id,
-        )
-        return dict(row) if row else None
+        return self._coerce(await self.db.fetchrow(self._TODAY_SQL, char_id))
 
     async def record_event(self, char_svc, char_id: UUID, kind: str, n: int = 1) -> Optional[str]:
         """Bump today's daily progress for `kind`. On completion, grant rewards
@@ -102,53 +111,70 @@ class DailyQuestService:
             log.warning("daily record_event failed char=%s kind=%s", char_id, kind, exc_info=True)
             return None
 
+    @staticmethod
+    def _obj_key(obj: dict) -> str:
+        # Single source of truth for the progress-dict key so increments and
+        # the completion check can never disagree on templates without an "id".
+        return str(obj.get("id") or obj.get("kind") or "")
+
     async def _record_event_inner(self, char_svc, char_id: UUID, kind: str, n: int) -> Optional[str]:
-        row = await self._today_row(char_id)
-        if not row or row["is_complete"]:
+        # Fast path: skip the transaction when there's no active daily to bump.
+        peek = await self._today_row(char_id)
+        if not peek or peek["is_complete"]:
             return None
 
-        objectives = _as_list(row["objectives"])
-        progress = _as_dict(row["progress"])
-        changed = False
-        for obj in objectives:
-            if obj.get("kind") != kind:
-                continue
-            oid = str(obj.get("id") or kind)
-            need = int(obj.get("count") or 1)
-            cur = int(progress.get(oid) or 0)
-            if cur < need:
-                progress[oid] = min(need, cur + n)
-                changed = True
-        if not changed:
-            return None
+        # Lock the row for the read-modify-write so concurrent events from
+        # Discord and the Activity can't lose increments. The conditional
+        # is_complete flip below keeps the reward grant exactly-once.
+        async with self.db.transaction() as tx:
+            row = self._coerce(await tx.fetchrow(self._TODAY_SQL + " FOR UPDATE OF cq", char_id))
+            if not row or row["is_complete"]:
+                return None
 
-        complete = all(
-            int(progress.get(str(o.get("id") or ""), 0)) >= int(o.get("count") or 1)
-            for o in objectives
-        )
-        if not complete:
-            await self.db.execute(
+            objectives = row["objectives"]
+            progress = row["progress"]
+            changed = False
+            for obj in objectives:
+                if obj.get("kind") != kind:
+                    continue
+                oid = self._obj_key(obj)
+                need = int(obj.get("count") or 1)
+                cur = int(progress.get(oid) or 0)
+                if cur < need:
+                    progress[oid] = min(need, cur + n)
+                    changed = True
+            if not changed:
+                return None
+
+            complete = all(
+                int(progress.get(self._obj_key(o), 0)) >= int(o.get("count") or 1)
+                for o in objectives
+            )
+            if not complete:
+                await tx.execute(
+                    """
+                    UPDATE character_quests SET progress = $3::jsonb
+                    WHERE character_id = $1 AND quest_id = $2 AND is_complete = FALSE
+                    """,
+                    char_id, row["quest_id"], json.dumps(progress),
+                )
+                return None
+
+            # Idempotent completion: only the update that flips is_complete grants rewards.
+            res = await tx.execute(
                 """
-                UPDATE character_quests SET progress = $3::jsonb
+                UPDATE character_quests
+                SET progress = $3::jsonb, is_complete = TRUE, completed_at = NOW()
                 WHERE character_id = $1 AND quest_id = $2 AND is_complete = FALSE
                 """,
                 char_id, row["quest_id"], json.dumps(progress),
             )
-            return None
+            if not str(res).endswith("1"):
+                return None
 
-        # Idempotent completion: only the update that flips is_complete grants rewards.
-        res = await self.db.execute(
-            """
-            UPDATE character_quests
-            SET progress = $3::jsonb, is_complete = TRUE, completed_at = NOW()
-            WHERE character_id = $1 AND quest_id = $2 AND is_complete = FALSE
-            """,
-            char_id, row["quest_id"], json.dumps(progress),
-        )
-        if not str(res).endswith("1"):
-            return None
-
-        rewards = _as_dict(row["rewards"])
+        # Grant after the flip commits — only the caller that won the
+        # conditional UPDATE reaches this point.
+        rewards = row["rewards"]
         xp = int(rewards.get("xp") or 0)
         gold = int(rewards.get("gold") or 0)
         if xp > 0:

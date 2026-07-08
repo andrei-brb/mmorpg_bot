@@ -73,7 +73,12 @@ class _Tx:
             return self._deduct_result
         if "gold = gold + $2" in sql:  # seller credit
             return 1000
+        if "COUNT(*)" in sql:  # buyer bag-capacity check
+            return 0
         return None
+
+    def gold_fetchvals(self):
+        return [c for c in self.fetchval.await_args_list if "gold" in c[0][0]]
 
     def _execute(self, sql, *args):
         self.executed_sql.append(sql)
@@ -101,7 +106,7 @@ class TestTradeAccept(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ok)
         self.assertIsNotNone(payload)
         # Buyer deducted with the conditional guard
-        deduct_sql = tx.fetchval.await_args_list[0][0][0]
+        deduct_sql = tx.gold_fetchvals()[0][0][0]
         self.assertIn("gold >= $2", deduct_sql)
         # Item transferred to the buyer
         transfer = [s for s in tx.executed_sql if "UPDATE inventory SET character_id" in s]
@@ -144,14 +149,14 @@ class TestTradeAccept(unittest.IsolatedAsyncioTestCase):
             ok, msg, payload = await _svc(tx).accept(TRADE, BUYER)
             self.assertFalse(ok, f"accept should fail for item={bad_item}")
             self.assertIsNone(payload)
-            tx.fetchval.assert_not_awaited()  # no gold ever deducted
-            tx.execute.assert_not_awaited()   # no transfer / no flip
+            self.assertEqual(tx.gold_fetchvals(), [])  # no gold ever deducted
+            tx.execute.assert_not_awaited()            # no transfer / no flip
 
     async def test_zero_gold_gift_skips_deduct_but_transfers_and_flips(self):
         tx = _Tx(trade_row=_trade_row(gold_ask=0), item_row=_item_row())
         ok, msg, payload = await _svc(tx).accept(TRADE, BUYER)
         self.assertTrue(ok)
-        tx.fetchval.assert_not_awaited()  # no gold movement either way
+        self.assertEqual(tx.gold_fetchvals(), [])  # no gold movement either way
         self.assertTrue(any("UPDATE inventory SET character_id" in s for s in tx.executed_sql))
         self.assertIn("state='accepted'", tx.executed_sql[-1])
 
@@ -159,7 +164,7 @@ class TestTradeAccept(unittest.IsolatedAsyncioTestCase):
         tx = _Tx(trade_row=_trade_row(gold_ask=100), item_row=_item_row())
         ok, msg, payload = await _svc(tx).accept(TRADE, uuid4())
         self.assertFalse(ok)
-        tx.fetchval.assert_not_awaited()
+        self.assertEqual(tx.gold_fetchvals(), [])
         tx.execute.assert_not_awaited()
 
 

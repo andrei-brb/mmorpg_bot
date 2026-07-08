@@ -196,12 +196,10 @@ class EventsCog(commands.Cog, name="Events"):
 
     @tasks.loop(hours=24)
     async def daily_reset_loop(self):
-        """Reset daily quests and zone kill counts."""
+        """Reset zone kill counts. Daily quest rollover is owned by
+        DailyQuestService (date-scoped rows, stale rows cleared on assignment);
+        re-arming completed rows here would re-grant their rewards."""
         await self.bot.db.execute("UPDATE zone_state SET kills_today=0")
-        await self.bot.db.execute(
-            "UPDATE character_quests SET is_complete=FALSE, progress='{}', completed_at=NULL "
-            "WHERE quest_id IN (SELECT id FROM quest_templates WHERE quest_type='daily')"
-        )
         log.info("Daily reset complete.")
 
     @world_event_loop.before_loop

@@ -2814,14 +2814,15 @@ async def handle_repair_post(request: web.Request) -> web.Response:
     char_svc = CharacterService(db)
     inv_svc = InventoryService(db)
     char_id = _uuid_from_any(char["id"])
-    total, items = await inv_svc.get_repair_quote(char_id)
-    if total <= 0:
+    # Quote + charge + repair happen in one transaction (no double-charge,
+    # no gold eaten if the repair step fails).
+    ok, err, total, items = await inv_svc.repair_all_charged(char_id)
+    if ok and total <= 0:
         return web.json_response(_json_safe({"ok": True, "repaired": 0, "total": 0, "message": "Nothing to repair."}))
-    if not await char_svc.deduct_gold(char_id, total, "repair"):
+    if not ok:
         return web.json_response(
-            _json_safe({"ok": False, "error": "insufficient_gold", "total": total}), status=400
+            _json_safe({"ok": False, "error": err or "insufficient_gold", "total": total}), status=400
         )
-    await inv_svc.repair_all(char_id)
     fresh = await char_svc.get_character(discord_id)
     return web.json_response(_json_safe({
         "ok": True, "repaired": len(items), "total": total,

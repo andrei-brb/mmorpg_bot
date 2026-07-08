@@ -162,8 +162,6 @@ class InventoryService:
             return None
 
         rarity = self.roll_rarity(luck)
-        if char_id is not None:
-            rarity = await self._apply_loot_pity(char_id, rarity)
 
         band_lo, band_hi = loot_level_req_bounds(zone_key, char_level)
 
@@ -212,6 +210,11 @@ class InventoryService:
             if not row:
                 return None
             tmpl = dict(row)
+
+        # Pity applies only once we know a GEAR item is actually dropping —
+        # otherwise a None drop or a consumable would consume the guaranteed rare.
+        if char_id is not None and tmpl.get("equip_slot"):
+            rarity = await self._apply_loot_pity(char_id, rarity)
 
         tier = zone_tier_for_loot(zone_key)
         bonus = self.roll_bonus_stats(tmpl, rarity, zone_tier=tier)
@@ -611,6 +614,46 @@ class InventoryService:
             char_id,
         )
 
+    async def repair_all_charged(self, char_id: UUID) -> Tuple[bool, str, int, List[dict]]:
+        """Quote, charge, and repair in ONE transaction. The FOR UPDATE lock
+        freezes durability between quote and repair, and the conditional gold
+        deduct means concurrent repair requests can't double-charge (the loser
+        re-quotes 0 damaged items and pays nothing).
+
+        Returns (ok, error_code, total_charged, item_lines). error_code is
+        "" on success or "insufficient_gold".
+        """
+        from config.settings import Settings
+        from services.character.character_service import CharacterService
+
+        async with self.db.transaction() as tx:
+            rows = await tx.fetch(
+                """SELECT i.id, i.durability, t.name, t.icon,
+                          COALESCE(i.rarity, t.rarity) AS rarity
+                   FROM inventory i JOIN item_templates t ON i.template_id=t.id
+                   WHERE i.character_id=$1 AND i.is_equipped=TRUE AND i.durability < 100
+                   FOR UPDATE OF i""",
+                char_id,
+            )
+            total = 0
+            items = []
+            for r in rows:
+                missing = 100 - int(r["durability"])
+                mult = Settings.REPAIR_RARITY_MULT.get(str(r["rarity"] or "common").lower(), 1)
+                cost = missing * Settings.REPAIR_COST_PER_POINT * mult
+                total += cost
+                items.append({**dict(r), "missing": missing, "cost": cost})
+            if total <= 0:
+                return True, "", 0, []
+            if not await CharacterService(tx).deduct_gold(char_id, total, "repair"):
+                return False, "insufficient_gold", total, items
+            ids = [r["id"] for r in rows]
+            await tx.execute(
+                "UPDATE inventory SET durability = 100 WHERE id = ANY($1::uuid[])",
+                ids,
+            )
+            return True, "", total, items
+
     # ── Use consumable ────────────────────────────────────────────────────────
 
     async def use_consumable(self, char_id: UUID, item_id: UUID) -> Tuple[bool, str, Optional[Dict]]:
@@ -809,13 +852,21 @@ class InventoryService:
     # ── Sell ─────────────────────────────────────────────────────────────────
 
     async def sell(self, char_id: UUID, item_id: UUID) -> Tuple[bool, str, int]:
+        """Vendor-sell an item. Delete + gold credit are one transaction: the
+        FOR UPDATE lock serializes concurrent sells of the same row, so an item
+        can never pay out twice or be destroyed without payment. The returned
+        gold amount is informational — the credit has already been applied."""
+        from services.character.character_service import CharacterService
+
         try:
-            item = await self.db.fetchrow(
+          async with self.db.transaction() as tx:
+            item = await tx.fetchrow(
                 """SELECT i.*, t.vendor_sell, t.name, t.soulbound, t.rarity as template_rarity,
                           COALESCE(i.rarity, t.rarity) as rarity,
                           COALESCE(i.enhancement_level, 0) as enhancement_level
                    FROM inventory i JOIN item_templates t ON i.template_id=t.id
-                   WHERE i.id=$1 AND i.character_id=$2""",
+                   WHERE i.id=$1 AND i.character_id=$2
+                   FOR UPDATE OF i""",
                 item_id, char_id,
             )
             if not item:         return False, "Item not found.", 0
@@ -855,8 +906,11 @@ class InventoryService:
                 value = int(value * (1 + enhancement_level * 0.10))
             
             gold = value * item["quantity"]
-            
-            await self.db.execute("DELETE FROM inventory WHERE id=$1", item_id)
+
+            res = await tx.execute("DELETE FROM inventory WHERE id=$1 AND character_id=$2", item_id, char_id)
+            if not str(res).endswith("1"):
+                return False, "Item not found.", 0
+            await CharacterService(tx).add_gold(char_id, gold, "vendor sale")
             return True, f"Sold **{item['name']}** [{actual_rarity.title()}]" + (f" +{enhancement_level}" if enhancement_level > 0 else "") + f" for **{gold}**🪙.", gold
         except Exception as e:
             log.error(f"Error selling item {item_id}: {e}", exc_info=True)

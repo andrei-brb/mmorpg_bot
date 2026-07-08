@@ -192,10 +192,9 @@ class BoxInventoryView(discord.ui.View):
             item_id = UUID(self.selected_item_id)
         except (ValueError, TypeError):
             return await interaction.followup.send("❌ Invalid item.", ephemeral=True)
+        # sell() credits the gold itself (atomic with the item delete).
         ok, msg, gold_gained = await self.inv_svc.sell(self.char_id, item_id)
         if ok:
-            if gold_gained:
-                await self.char_svc.add_gold(self.char_id, gold_gained, "vendor sale")
             self.gold += gold_gained
         await interaction.followup.send(f"{'✅' if ok else '❌'} {msg}", ephemeral=True)
         await self._reload_and_refresh(interaction)
@@ -1891,9 +1890,8 @@ class _SellItemSelect(discord.ui.Select):
         except ValueError:
             return await interaction.edit_original_response(content="❌ Invalid item ID.", view=None)
 
+        # sell() credits the gold itself (atomic with the item delete).
         ok, msg, gold = await view.inv_svc.sell(view.char_id, uid)
-        if ok and gold:
-            await view.char_svc.add_gold(view.char_id, gold, "vendor sale")
 
         embed = discord.Embed(
             description=f"{'✅' if ok else '❌'} {msg}",
@@ -2527,10 +2525,9 @@ class InventoryCog(commands.Cog, name="Inventory"):
             return await interaction.followup.send("❌ Invalid item ID.", ephemeral=True)
         
         try:
+            # sell() credits the gold itself (atomic with the item delete).
             ok, msg, gold = await self.inv_svc.sell(char["id"], uid)
-            if ok and gold:
-                await self.char_svc.add_gold(char["id"], gold, "vendor sale")
-            
+
             embed = discord.Embed(
                 description=f"{'✅' if ok else '❌'} {msg}",
                 color=Settings.COLORS["reward"] if ok else Settings.COLORS["error"]
@@ -2614,11 +2611,10 @@ class InventoryCog(commands.Cog, name="Inventory"):
         sold = 0
         total_gold = 0
         for i in sellable:
+            # sell() credits the gold itself (atomic with the item delete).
             ok, _msg, gold = await self.inv_svc.sell(char["id"], i["id"])
-            if ok and gold:
-                await self.char_svc.add_gold(char["id"], gold, "vendor sale")
-                total_gold += gold
             if ok:
+                total_gold += gold
                 sold += 1
 
         result = discord.Embed(

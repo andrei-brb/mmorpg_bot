@@ -332,33 +332,47 @@ class TalentService:
         if int(meta.get("unspent_points") or 0) < delta:
             return False, "Not enough talent points.", None
 
-        new_ranks = current + delta
-        # Spend points and write the allocation atomically. The conditional decrement
-        # (WHERE unspent_points >= delta) is the authoritative guard, so concurrent
-        # allocations can never overspend below zero.
-        async with self.db.transaction() as tx:
-            spent_ok = await tx.fetchval(
-                """
-                UPDATE character_talent_meta
-                SET unspent_points = unspent_points - $2, updated_at = NOW()
-                WHERE character_id = $1 AND unspent_points >= $2
-                RETURNING unspent_points
-                """,
-                char_id,
-                delta,
-            )
-            if spent_ok is None:
-                return False, "Not enough talent points.", None
-            await tx.execute(
-                """
-                INSERT INTO character_talent_allocations (character_id, node_id, ranks)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (character_id, node_id) DO UPDATE SET ranks = $3
-                """,
-                char_id,
-                node_id,
-                new_ranks,
-            )
+        # Write the allocation as a RELATIVE increment guarded by max_ranks, then
+        # spend the points — both in one transaction. A stale absolute write here
+        # previously let two concurrent allocations spend 2 points but land on
+        # rank 1; the relative increment + RETURNING makes each spend count.
+        class _AllocAbort(Exception):
+            def __init__(self, msg: str):
+                self.msg = msg
+
+        try:
+            async with self.db.transaction() as tx:
+                new_ranks = await tx.fetchval(
+                    """
+                    INSERT INTO character_talent_allocations (character_id, node_id, ranks)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (character_id, node_id) DO UPDATE
+                    SET ranks = character_talent_allocations.ranks + $3
+                    WHERE character_talent_allocations.ranks + $3 <= $4
+                    RETURNING ranks
+                    """,
+                    char_id,
+                    node_id,
+                    delta,
+                    max_ranks,
+                )
+                if new_ranks is None:
+                    raise _AllocAbort(f"Max {max_ranks} rank(s) for this node.")
+                spent_ok = await tx.fetchval(
+                    """
+                    UPDATE character_talent_meta
+                    SET unspent_points = unspent_points - $2, updated_at = NOW()
+                    WHERE character_id = $1 AND unspent_points >= $2
+                    RETURNING unspent_points
+                    """,
+                    char_id,
+                    delta,
+                )
+                if spent_ok is None:
+                    # Rolls back the rank increment too.
+                    raise _AllocAbort("Not enough talent points.")
+        except _AllocAbort as e:
+            return False, e.msg, None
         state = await self.get_tree_state(char)
         return True, f"Rank {new_ranks}/{max_ranks}.", state
 

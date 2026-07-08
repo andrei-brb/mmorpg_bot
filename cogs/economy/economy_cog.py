@@ -164,13 +164,13 @@ class EconomyCog(commands.Cog, name="Economy"):
                     "r_hit_rating": listing.get("r_hit_rating", 0) or 0,
                 }
                 enhancement_level = listing.get("enhancement_level", 0) or 0
-                ok, msg = await inv.add_item(
+                ok, add_msg = await inv.add_item(
                     char["id"], listing["template_id"], rarity=rarity,
                     from_="market", bonus=bonus, enhancement_level=enhancement_level,
                 )
                 if not ok:
                     # Rolls back the gold deduction too — buyer keeps their gold.
-                    raise _MarketAbort(f"❌ Couldn't receive the item: {msg}")
+                    raise _MarketAbort(f"❌ Couldn't receive the item: {add_msg}")
 
                 # Pay the seller and finalize only after the item is safely delivered.
                 await char_svc.add_gold(listing["seller_id"], listing["price"], "market sale")

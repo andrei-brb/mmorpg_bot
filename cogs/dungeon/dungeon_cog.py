@@ -676,18 +676,23 @@ class DungeonCog(commands.Cog, name="Dungeon"):
         participants = {str(p["id"]): p for p in run.get("participants", [])}
         members = [p for p in session.players if p.char_id is not None]
         n = max(1, len(members))
-        gold_each = max(1, int(base_gold * gold_mult) // n)
+        # Exact split: base share each, remainder to the first members — the
+        # total paid out always equals the rolled floor gold (no mint, no burn).
+        gold_total = int(base_gold * gold_mult)
+        gold_share, gold_extra = divmod(gold_total, n)
 
         level_up_lines = []
         loot_lines = []
-        for member in members:
+        for idx, member in enumerate(members):
             m_id = member.char_id
             m_info = participants.get(str(m_id), {})
             m_name = m_info.get("name") or member.name
             m_level = int(m_info.get("level") or char["level"])
+            gold_each = gold_share + (1 if idx < gold_extra else 0)
 
             m_xp = await self.char_svc.award_xp(m_id, int(base_xp), xp_mult)
-            await self.char_svc.add_gold(m_id, gold_each, "dungeon_reward")
+            if gold_each > 0:
+                await self.char_svc.add_gold(m_id, gold_each, "dungeon_reward")
             await self.char_svc.sync_combat_hp(m_id, member.current_hp, member.current_res)
             if m_xp.get("leveled_up"):
                 level_up_lines.append(f"**{m_name}**: {m_xp['old_level']} → {m_xp['new_level']}")
@@ -732,7 +737,7 @@ class DungeonCog(commands.Cog, name="Dungeon"):
             description=f"**{char['name']}** defeated {session.enemies[0].name}!",
             color=Settings.COLORS["success"],
         )
-        gold_txt = f"{gold_each:,}" + (f" each ({n}-way split)" if n > 1 else "")
+        gold_txt = f"{gold_total:,}" + (f" ({n}-way split, ~{gold_share:,} each)" if n > 1 else "")
         embed.add_field(name="💰 Gold", value=gold_txt, inline=True)
         embed.add_field(name="⭐ XP", value=f"{int(base_xp * xp_mult):,}" + (" each" if n > 1 else ""), inline=True)
 
