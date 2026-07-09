@@ -184,15 +184,23 @@ def _rate_limit_per_min() -> int:
         return 90
 
 
-async def _discord_user_id_cached(token: str) -> Optional[int]:
+async def _rate_limit_player_id(token: str) -> Optional[int]:
+    """Player id for rate-limit bucketing. Our own session JWT verifies locally
+    (no network); otherwise fall back to the cached Discord `/users/@me` lookup."""
+    from services.auth.session_tokens import verify_session
+
+    claims = verify_session(token)
+    if claims is not None:
+        return int(claims["sub"])
+
     now = time.time()
     cached = _TOKEN_USER_CACHE.get(token)
     if cached and cached[1] > now:
         return cached[0]
-    user = await _discord_user_from_token(token)
-    if not user:
+    du = await _discord_user_from_token(token)
+    if not du:
         return None
-    uid = int(user["id"])
+    uid = int(du["id"])
     _TOKEN_USER_CACHE[token] = (uid, now + 60.0)
     if len(_TOKEN_USER_CACHE) > 5000:
         expired = [k for k, v in _TOKEN_USER_CACHE.items() if v[1] <= now]
@@ -228,7 +236,7 @@ async def rate_limit_middleware(request: web.Request, handler):
     if not token:
         return await handler(request)
     try:
-        user_id = await _discord_user_id_cached(token)
+        user_id = await _rate_limit_player_id(token)
     except Exception:
         return await handler(request)
     if user_id is None:
@@ -466,6 +474,62 @@ async def handle_token(request: web.Request) -> web.Response:
     return web.json_response({"access_token": access_token})
 
 
+async def handle_auth_discord_exchange(request: web.Request) -> web.Response:
+    """Standalone Discord login (mobile / standalone web): exchange a Discord
+    OAuth code for OUR session JWT, so the client authenticates without the
+    embedded Discord host and without a Discord round-trip per request.
+
+    Cross-play: the resulting player is keyed on the Discord user id exactly like
+    the embedded Activity, so it's the same character/world.
+    """
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "database_unavailable"}), content_type="application/json")
+    secret = (os.getenv("DISCORD_CLIENT_SECRET") or "").strip()
+    client_id = _client_id_for_app(bot)
+    if not secret or not client_id:
+        raise web.HTTPServiceUnavailable(
+            text=json.dumps({"error": "server_misconfigured", "hint": "Set DISCORD_CLIENT_SECRET and DISCORD_APPLICATION_ID"}),
+            content_type="application/json",
+        )
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "invalid_json"}), content_type="application/json")
+    code = (body or {}).get("code")
+    if not code or not isinstance(code, str):
+        raise web.HTTPBadRequest(text=json.dumps({"error": "missing_code"}), content_type="application/json")
+    redirect_hint = (body or {}).get("redirect_uri")
+    redirect_hint = redirect_hint.strip() if isinstance(redirect_hint, str) and redirect_hint.strip() else None
+
+    token_payload = await _exchange_oauth_code(code, client_id, secret, redirect_hint)
+    discord_token = token_payload.get("access_token")
+    if not discord_token:
+        raise web.HTTPBadRequest(text=json.dumps({"error": "no_access_token"}), content_type="application/json")
+
+    du = await _discord_user_from_token(discord_token)
+    if not du:
+        raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+
+    discord_id = int(du["id"])
+    char_svc = CharacterService(db)
+    await char_svc.ensure_player(discord_id, du.get("username") or du.get("global_name") or f"user{discord_id}")
+
+    from services.auth.session_tokens import issue_session
+
+    session_jwt = issue_session(
+        discord_id,
+        "discord",
+        identity={
+            "username": du.get("username"),
+            "global_name": du.get("global_name"),
+            "avatar": du.get("avatar"),
+        },
+    )
+    return web.json_response({"access_token": session_jwt, "player_id": str(discord_id)})
+
+
 async def handle_inventory(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -477,7 +541,7 @@ async def handle_inventory(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -574,7 +638,7 @@ async def handle_item_salvage(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -636,7 +700,7 @@ async def handle_craft_start(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -680,7 +744,7 @@ async def handle_craft_claim(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -707,7 +771,7 @@ async def handle_forge_options(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -741,7 +805,7 @@ async def handle_forge_start(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -786,7 +850,7 @@ async def handle_forge_claim(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -964,7 +1028,7 @@ async def handle_character_stats(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1025,7 +1089,7 @@ async def handle_character_create(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1149,7 +1213,7 @@ async def handle_combat_enemies(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1177,7 +1241,7 @@ async def handle_game_dungeons(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1228,7 +1292,7 @@ async def handle_dungeon_party_create(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1297,7 +1361,7 @@ async def handle_dungeon_party_invite(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1413,7 +1477,7 @@ async def handle_dungeon_party_join(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1717,7 +1781,7 @@ async def handle_dungeon_party_enter(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1825,7 +1889,7 @@ async def handle_dungeon_party_leave(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1861,7 +1925,7 @@ async def handle_dungeon_party_status(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1911,7 +1975,7 @@ async def handle_combat_state(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1932,7 +1996,7 @@ async def handle_combat_state_ack(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -1952,7 +2016,7 @@ async def handle_combat_start(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2011,7 +2075,7 @@ async def handle_combat_action(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2042,7 +2106,7 @@ async def handle_equipment(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2069,7 +2133,7 @@ async def handle_progress(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2210,7 +2274,7 @@ async def handle_deeds(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2237,7 +2301,7 @@ async def handle_specializations(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2294,7 +2358,7 @@ async def handle_specialization_choose(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -2333,6 +2397,35 @@ async def handle_specialization_choose(request: web.Request) -> web.Response:
     )
 
 
+async def _resolve_session(token: str) -> Optional[tuple[int, dict]]:
+    """Resolve a bearer token to (player_id, user_dict).
+
+    Tries our own session JWT first (local verify, no network) so standalone /
+    mobile clients skip Discord; falls back to treating the token as a Discord
+    bearer (the embedded Activity path — unchanged). `user_dict` is a
+    Discord-user-shaped dict so existing handlers work for both. Returns None if
+    neither path authenticates.
+    """
+    from services.auth.session_tokens import verify_session, identity_from_claims
+
+    claims = verify_session(token)
+    if claims is not None:
+        return int(claims["sub"]), identity_from_claims(claims)
+
+    discord_user = await _discord_user_from_token(token)
+    if discord_user:
+        return int(discord_user["id"]), discord_user
+    return None
+
+
+async def _user_from_bearer(token: str) -> Optional[dict]:
+    """Session-aware replacement for inline `_discord_user_from_token(token)` in
+    handlers: returns a Discord-user-shaped dict (id/username/...) for either our
+    session JWT or a Discord bearer, or None. `user["id"]` is the player id."""
+    resolved = await _resolve_session(token)
+    return resolved[1] if resolved else None
+
+
 async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int, dict, Any]:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -2344,17 +2437,17 @@ async def _authed_discord_user_and_char(request: web.Request) -> tuple[dict, int
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
-    if not user:
+    resolved = await _resolve_session(token)
+    if not resolved:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
+    player_id, user = resolved
 
-    discord_id = int(user["id"])
     from services.social.social_service import SocialService
 
-    await SocialService(db).touch_presence(discord_id)
+    await SocialService(db).touch_presence(player_id)
     char_svc = CharacterService(db)
-    char = await char_svc.get_character(discord_id)
-    return user, discord_id, dict(char) if char else None, db
+    char = await char_svc.get_character(player_id)
+    return user, player_id, dict(char) if char else None, db
 
 
 async def _json_body(request: web.Request) -> dict:
@@ -4027,7 +4120,7 @@ async def handle_item_equip(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4069,7 +4162,7 @@ async def handle_item_sell(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4113,7 +4206,7 @@ async def handle_item_use(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4208,7 +4301,7 @@ async def handle_item_unequip(request: web.Request) -> web.Response:
         )
     token = auth_header[7:].strip()
 
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(
             text=json.dumps({"error": "invalid_token"}), content_type="application/json"
@@ -4251,7 +4344,7 @@ async def handle_item_enhance(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4331,7 +4424,7 @@ async def handle_item_enhance_info(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4378,7 +4471,7 @@ async def handle_shop_catalog(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4406,7 +4499,7 @@ async def handle_shop_buy(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4473,7 +4566,7 @@ async def handle_market_history(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4536,7 +4629,7 @@ async def handle_reputation(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4563,7 +4656,7 @@ async def handle_market_listings(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4602,7 +4695,7 @@ async def handle_list_item_on_market(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4713,7 +4806,7 @@ async def handle_market_buy(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4873,7 +4966,7 @@ async def handle_auction_listings(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -4927,7 +5020,7 @@ async def handle_auction_create(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -5044,7 +5137,7 @@ async def handle_auction_bid(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -5252,7 +5345,7 @@ async def handle_auction_buyout(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -5381,7 +5474,7 @@ async def handle_auction_cancel(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -5434,7 +5527,7 @@ async def handle_buy_protection(request: web.Request) -> web.Response:
     if not auth_header.startswith("Bearer "):
         raise web.HTTPUnauthorized(text=json.dumps({"error": "missing_bearer"}), content_type="application/json")
     token = auth_header[7:].strip()
-    user = await _discord_user_from_token(token)
+    user = await _user_from_bearer(token)
     if not user:
         raise web.HTTPUnauthorized(text=json.dumps({"error": "invalid_token"}), content_type="application/json")
 
@@ -6654,6 +6747,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app["bot"] = bot
 
     app.router.add_post("/api/token", handle_token)
+    app.router.add_post("/api/auth/discord/exchange", handle_auth_discord_exchange)
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/character/stats", handle_character_stats)
     app.router.add_get("/api/game/character/class-options", handle_character_class_options)

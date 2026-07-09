@@ -5,15 +5,21 @@ import App from "@/App";
 import "@/index.css";
 import "@/styles/wom-emergent.css";
 import "@/style.css";
+import { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 
 const queryClient = new QueryClient();
 
-// Phase 0: mounts the shared App with the default (Discord Activity) provider,
-// which proves the code-sharing build. Phase 1 injects `authProvider={new
-// DiscordOAuthAuth(...)}` here so the app authenticates standalone on device;
-// Phase 2 adds a login screen that also offers NativeAuth (Apple/Google/email).
+// Standalone Discord login (works on device and in a plain browser). Phase 2
+// adds a login screen that also offers NativeAuth (Apple/Google/email); for now
+// the app signs in with Discord and lands on the same cross-play character.
+const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID as string | undefined;
+const redirectUri =
+  (import.meta.env.VITE_DISCORD_REDIRECT_URI as string | undefined) ??
+  "com.wold.mmo://auth/discord";
+const authProvider = clientId ? new DiscordOAuthAuth(clientId, redirectUri) : undefined;
+
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
-    <App />
+    <App authProvider={authProvider} />
   </QueryClientProvider>,
 );
