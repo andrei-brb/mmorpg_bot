@@ -3,13 +3,16 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { GameSessionProvider } from "@/context/GameSessionContext";
+import type { AuthProvider } from "@/context/auth/types";
 import { ActivityGate } from "@/components/ActivityGate";
 import Index from "./pages/Index.tsx";
 import BattlePreviewDemo from "./pages/BattlePreviewDemo.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
-const App = () => (
-  <GameSessionProvider>
+/** authProvider is injected by non-Discord shells (mobile). Omitted → the
+ *  provider defaults to the embedded Discord Activity login. */
+const App = ({ authProvider }: { authProvider?: AuthProvider } = {}) => (
+  <GameSessionProvider authProvider={authProvider}>
     <TooltipProvider>
       <Toaster />
       <Sonner position="top-right" />

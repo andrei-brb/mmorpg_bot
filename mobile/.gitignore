@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# The iOS native project IS committed (Capacitor best practice) so native config
+# — Info.plist URL scheme, signing, capabilities, icons — persists. Its own
+# ios/.gitignore excludes Pods/, build output, DerivedData, and copied web assets.
+# Android isn't generated yet; add + commit it the same way when needed.
+android/
+
+# Xcode / Android Studio
+*.xcuserstate
+.gradle/
+local.properties

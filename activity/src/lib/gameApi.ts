@@ -119,6 +119,39 @@ export async function exchangeToken(code: string, redirectUri?: string): Promise
   return j.access_token;
 }
 
+/**
+ * Standalone Discord login (mobile / standalone web): exchange a Discord OAuth
+ * code for OUR session token (a JWT the backend verifies locally). Used by
+ * DiscordOAuthAuth outside the embedded Discord host. `redirectUri` must match
+ * the redirect registered in the Discord Developer Portal.
+ */
+export async function exchangeDiscordCodeForSession(
+  code: string,
+  redirectUri: string,
+): Promise<string> {
+  const res = await fetch(apiUrl("/api/auth/discord/exchange"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+  const text = await res.text();
+  let j: { access_token?: string; error?: string; detail?: string; hint?: string } = {};
+  try {
+    j = JSON.parse(text) as typeof j;
+  } catch {
+    /* not json */
+  }
+  if (!res.ok) {
+    const parts = [`auth ${res.status}`];
+    if (j.detail) parts.push(j.detail);
+    else if (text) parts.push(text.length > 280 ? `${text.slice(0, 280)}…` : text);
+    if (j.hint) parts.push(j.hint);
+    throw new Error(parts.join(" — "));
+  }
+  if (!j.access_token) throw new Error("no access_token");
+  return j.access_token;
+}
+
 export async function getInventory(token: string, guildId?: string): Promise<InventoryPayload> {
   const res = await fetch(apiUrl("/api/game/inventory"), { headers: authHeaders(token, guildId) });
   if (!res.ok) throw new Error(`inventory ${res.status}`);

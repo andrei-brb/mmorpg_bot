@@ -25,6 +25,10 @@ activity/.vite/
 **/*.tsbuildinfo
 activity/playwright-report/
 activity/test-results/
+
+# Mobile app (Capacitor) — a separate client build; the bot/backend never uses it.
+# Excluded entirely so it can't bloat the Railway build context or image.
+mobile/
 # Design references / vendored samples — not imported by the app
 activity/realm-whispers-client-main/
 activity/explore tab v2/
