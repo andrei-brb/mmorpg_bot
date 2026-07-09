@@ -56,15 +56,31 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 Or open `android/` in Android Studio and press Run with your phone connected.
 
-### iOS (needs a Mac + Xcode)
-```bash
-npm install @capacitor/ios
-npx cap add ios
-npm run build && npx cap sync ios
-npx cap open ios       # in Xcode: select your iPhone, set a signing team, Run
-```
-A free Apple ID runs on your own device (7-day cert). A paid Apple Developer
-account ($99/yr) unlocks TestFlight for wider testing.
+### iOS (needs a Mac + Xcode) — already scaffolded
 
-> The generated `android/` and `ios/` folders are gitignored — they're
-> environment-specific and regenerated with `npx cap add`.
+The Xcode project is committed at `ios/` (with the `com.wold.mmo://` deep-link
+scheme registered in Info.plist for Discord login). To run on your iPhone:
+
+```bash
+cd mobile
+npm run build && npx cap sync ios   # copy the latest web build into the app
+npx cap open ios                    # opens ios/App/App.xcworkspace in Xcode
+```
+In Xcode:
+1. Select the **App** target → **Signing & Capabilities** → pick your Team
+   (a free Apple ID works — "Personal Team").
+2. Plug in your iPhone, select it as the run destination, press **Run** (▶).
+3. First run: on the phone, trust the developer cert under
+   Settings → General → VPN & Device Management.
+
+A free Apple ID runs on your own device (7-day cert; re-run to renew). A paid
+Apple Developer account ($99/yr) unlocks TestFlight for wider testing.
+
+> Prerequisites for login to actually work on device:
+> - Discord Developer Portal → OAuth2 → Redirects: add `com.wold.mmo://auth/discord`.
+> - Railway backend: set `SESSION_JWT_SECRET` (any long random string).
+> - `mobile/.env`: set `VITE_DISCORD_CLIENT_ID` (your Discord app id).
+
+### Android
+The `android/` folder isn't generated yet. When you want it:
+`npm install @capacitor/android@^6 && npx cap add android` … then commit it like `ios/`.
