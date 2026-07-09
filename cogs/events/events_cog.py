@@ -3,6 +3,7 @@
 ║      cogs/events/events_cog.py — World events, daily quests, timers        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
+import json
 import logging, random
 from datetime import datetime, timezone, timedelta
 import discord
@@ -74,13 +75,21 @@ class EventsCog(commands.Cog, name="Events"):
     @tasks.loop(hours=6)
     async def world_event_loop(self):
         """Start a random world event every 6 hours."""
+        await self.bot.db.execute(
+            "UPDATE world_events SET is_active=FALSE WHERE is_active=TRUE AND ends_at <= NOW()"
+        )
         key = random.choice(list(WORLD_EVENTS.keys()))
         event = WORLD_EVENTS[key]
         ends_at = datetime.now(timezone.utc) + timedelta(hours=event["duration_hours"])
+        state = json.dumps({
+            "xp_multiplier": 1.0 + float(event.get("xp_bonus") or 0.0),
+            "gold_multiplier": 1.0 + float(event.get("gold_bonus") or 0.0),
+        })
 
         await self.bot.db.execute(
-            "INSERT INTO world_events(event_key,name,description,is_active,ends_at) VALUES($1,$2,$3,TRUE,$4)",
-            key, event["name"], event["description"], ends_at,
+            """INSERT INTO world_events(event_key,name,description,is_active,ends_at,state)
+               VALUES($1,$2,$3,TRUE,$4,$5::jsonb)""",
+            key, event["name"], event["description"], ends_at, state,
         )
         self.active_event = {**event, "key": key, "ends_at": ends_at}
         log.info(f"World event started: {event['name']}")
@@ -187,12 +196,10 @@ class EventsCog(commands.Cog, name="Events"):
 
     @tasks.loop(hours=24)
     async def daily_reset_loop(self):
-        """Reset daily quests and zone kill counts."""
+        """Reset zone kill counts. Daily quest rollover is owned by
+        DailyQuestService (date-scoped rows, stale rows cleared on assignment);
+        re-arming completed rows here would re-grant their rewards."""
         await self.bot.db.execute("UPDATE zone_state SET kills_today=0")
-        await self.bot.db.execute(
-            "UPDATE character_quests SET is_complete=FALSE, progress='{}', completed_at=NULL "
-            "WHERE quest_id IN (SELECT id FROM quest_templates WHERE quest_type='daily')"
-        )
         log.info("Daily reset complete.")
 
     @world_event_loop.before_loop
@@ -236,31 +243,26 @@ class EventsCog(commands.Cog, name="Events"):
         char = await self.svc.get_character(interaction.user.id)
         if not char: return await interaction.followup.send("❌ No character.")
 
-        # Check/create a daily quest for this character
-        quest = await self.bot.db.fetchrow(
-            """SELECT cq.*, qt.name, qt.description, qt.objectives, qt.rewards
-               FROM character_quests cq JOIN quest_templates qt ON cq.quest_id=qt.id
-               WHERE cq.character_id=$1 AND qt.quest_type='daily'
-               AND cq.started_at::date = CURRENT_DATE
-               LIMIT 1""", char["id"]
-        )
+        # Fetch today's daily quest, assigning a random one on first view
+        from services.quest.daily_quest_service import DailyQuestService
+        quest = await DailyQuestService(self.bot.db).get_or_assign_today(char["id"])
         if not quest:
             embed = discord.Embed(
                 title="📋 Daily Quest",
-                description="No daily quest assigned yet. Explore to receive daily quests!",
+                description="No daily quests are available right now. Check back soon!",
                 color=0x2F3136,
             )
         elif quest["is_complete"]:
             embed = discord.Embed(
                 title="📋 Daily Quest — ✅ Complete!",
                 description=f"**{quest['name']}** — Already completed today!\nReturns tomorrow at midnight UTC.",
-                color=0x00FF7F,
+                color=Settings.COLORS["success"],
             )
         else:
             embed = discord.Embed(
                 title=f"📋 Daily Quest: {quest['name']}",
                 description=quest["description"],
-                color=0xFFD700,
+                color=Settings.COLORS["reward"],
             )
             import json
             objectives = quest["objectives"] if isinstance(quest["objectives"], list) else json.loads(quest["objectives"])
@@ -273,6 +275,7 @@ class EventsCog(commands.Cog, name="Events"):
             rewards = quest["rewards"] if isinstance(quest["rewards"], dict) else json.loads(quest["rewards"])
             embed.add_field(name="Rewards", value=f"+{rewards.get('xp',0)} XP | +{rewards.get('gold',0)}🪙", inline=False)
 
+        embed.set_footer(text="Daily loop: /login streak reward • /daily quest • /guild checkin")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="login", description="Claim your daily login reward")
@@ -292,7 +295,7 @@ class EventsCog(commands.Cog, name="Events"):
             embed = discord.Embed(
                 title="🎁 Daily Login",
                 description=result["message"],
-                color=0xFFD700,
+                color=Settings.COLORS["reward"],
             )
             if result.get("next_claim"):
                 embed.set_footer(text=f"Next claim: {result['next_claim']}")
@@ -314,7 +317,7 @@ class EventsCog(commands.Cog, name="Events"):
         embed = discord.Embed(
             title="🎁 Daily Login Reward Claimed!",
             description=streak_text,
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         
         embed.add_field(
@@ -338,6 +341,11 @@ class EventsCog(commands.Cog, name="Events"):
         if bonuses:
             embed.add_field(name="✨ Milestones", value="\n".join(bonuses), inline=False)
         
+        embed.add_field(
+            name="📌 While you're here",
+            value="`/daily` quest • `/guild checkin` • `/battlepass status`",
+            inline=False,
+        )
         embed.set_footer(text=f"Next claim: {result['next_claim']}")
         await interaction.followup.send(embed=embed)
 
@@ -357,7 +365,7 @@ class EventsCog(commands.Cog, name="Events"):
         embed = discord.Embed(
             title="🔥 Login Streak",
             description=f"**{char['name']}**'s login statistics",
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         
         embed.add_field(

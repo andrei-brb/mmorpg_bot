@@ -20,6 +20,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from config.settings import Settings
 from services.character.character_service import CharacterService
 from services.character.inventory_service import InventoryService
 from services.lore.lore_gate_service import LoreGateService
@@ -175,7 +176,7 @@ class QuestCog(commands.Cog, name="Quests"):
             embed = discord.Embed(
                 title=f"🎉 Quest Complete: {quest_data['name']}",
                 description=dialogue,
-                color=0x2ECC71,
+                color=Settings.COLORS["success"],
             )
 
             reward_text = []
@@ -492,7 +493,7 @@ class QuestCog(commands.Cog, name="Quests"):
             accept_embed = discord.Embed(
                 title="✅ Quest Accepted!",
                 description=next_quest["dialogue"]["accept"],
-                color=0x2ECC71,
+                color=Settings.COLORS["success"],
             )
             first_step = next_quest["steps"][0]
             accept_embed.add_field(
@@ -522,7 +523,7 @@ class QuestCog(commands.Cog, name="Quests"):
             info_embed = discord.Embed(
                 title=f"ℹ️ {next_quest['name']} — Details",
                 description=next_quest["description"],
-                color=0x3498DB,
+                color=Settings.COLORS["info"],
             )
             for i, step in enumerate(next_quest["steps"]):
                 info_embed.add_field(
@@ -641,7 +642,7 @@ class QuestCog(commands.Cog, name="Quests"):
         embed = discord.Embed(
             title="🏆 Completed Quests",
             description=f"You have completed **{len(completed)}** quest(s).",
-            color=0x2ECC71,
+            color=Settings.COLORS["success"],
         )
 
         for q in completed:
@@ -654,6 +655,28 @@ class QuestCog(commands.Cog, name="Quests"):
             )
 
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @interact.autocomplete("npc")
+    async def interact_npc_autocomplete(self, interaction: discord.Interaction, current: str):
+        """Suggest NPCs the player has actually discovered."""
+        try:
+            char = await self.char_svc.get_character(interaction.user.id)
+            if not char:
+                return []
+            npcs = await self.quest_svc.get_discovered_npcs(char["id"])
+        except Exception:
+            return []
+        cur = (current or "").lower()
+        choices = []
+        for n in npcs:
+            short = n["name"].split()[0].lower()
+            label = f"{n['title']} {n['name']}"
+            if cur and cur not in n["name"].lower() and cur not in short:
+                continue
+            choices.append(app_commands.Choice(name=label[:100], value=short))
+            if len(choices) >= 25:
+                break
+        return choices
 
     @quest_group.command(name="npcs", description="View NPCs you've discovered")
     async def quest_npcs(self, interaction: discord.Interaction):
@@ -761,7 +784,7 @@ class QuestCog(commands.Cog, name="Quests"):
             keep_embed = discord.Embed(
                 title="✅ Quest Kept",
                 description=f"**{target['quest_name']}** is still active.",
-                color=0x2ECC71,
+                color=Settings.COLORS["success"],
             )
             await msg.edit(embed=keep_embed, view=None)
 

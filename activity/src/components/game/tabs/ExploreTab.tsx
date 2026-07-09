@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { ZONES as DATA_ZONES } from "@/data/zones";
 import { zoneMapImageUrl } from "@/data/zoneMapArt";
 import type { ExploreResultPayload } from "@/lib/apiTypes";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   Compass,
@@ -55,7 +56,7 @@ type ExploreResult = {
   id: string;
   type: OutcomeType;
   message: string;
-  reward?: { xp?: number; gold?: number };
+  reward?: { xp?: number; gold?: number; scrap?: { name?: string; quantity?: number } | null };
   npc?: Npc;
   enemyName?: string;
   /** Server enemy template key — required to jump straight into combat. */
@@ -125,8 +126,8 @@ function explorePayloadToExploreResult(json: ExploreResultPayload): ExploreResul
   const ts = new Date();
   const out = json.outcome;
   const reward =
-    json.reward && (json.reward.xp != null || json.reward.gold != null)
-      ? { xp: json.reward.xp, gold: json.reward.gold }
+    json.reward && (json.reward.xp != null || json.reward.gold != null || json.reward.scrap != null)
+      ? { xp: json.reward.xp, gold: json.reward.gold, scrap: json.reward.scrap }
       : undefined;
 
   if (out.type === "enemy" || out.type === "boss") {
@@ -329,10 +330,15 @@ function ResultPanel({
           {result.npc.discoveryQuote && <blockquote className="border-l-2 border-npc-teal/40 pl-3 italic text-xs text-muted-foreground leading-relaxed">{result.npc.discoveryQuote}</blockquote>}
         </div>
       )}
-      {result.reward && (result.reward.xp || result.reward.gold) && (
-        <div className="flex items-center gap-3 mt-2">
+      {result.reward && (result.reward.xp || result.reward.gold || result.reward.scrap) && (
+        <div className="flex flex-wrap items-center gap-3 mt-2">
           {result.reward.xp ? <span className="flex items-center gap-1 text-xs font-semibold text-xp-blue"><Zap className="h-3 w-3" />+{result.reward.xp} XP</span> : null}
           {result.reward.gold ? <span className="flex items-center gap-1 text-xs font-semibold text-gold"><Coins className="h-3 w-3" />+{result.reward.gold}g</span> : null}
+          {result.reward.scrap?.name ? (
+            <span className="flex items-center gap-1 text-xs font-semibold text-foreground/85">
+              +{result.reward.scrap.quantity ?? 1} 🔩 {result.reward.scrap.name}
+            </span>
+          ) : null}
         </div>
       )}
       {!isTimeline && (
@@ -736,18 +742,33 @@ export function ExploreTab() {
             </span>
             <div className="h-px flex-1 bg-panel-border/50" />
           </div>
-          <ZoneMap
-            zones={zones}
-            currentZone={currentZone}
-            loreWindowTitle={activeLoreWindow?.title ?? null}
-            onSelectZone={(z) => setTravelTargetId(z.id)}
-            latestResult={latestResult}
-            exploring={exploring}
-            combatStarting={combatStarting}
-            npcInteracting={npcInteracting}
-            onGoToCombat={() => void handleGoToCombat()}
-            onInteractNPC={(id) => void handleNpcInteract(id)}
-          />
+          {accessToken && !map ? (
+            <div
+              className="flex min-h-0 flex-1 flex-col rounded-lg overflow-hidden border border-white/10"
+              aria-busy="true"
+              aria-label="Loading zone map"
+            >
+              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10 bg-black/30">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-9 w-14 shrink-0 rounded" />
+                ))}
+              </div>
+              <Skeleton className="flex-1 rounded-none" style={{ minHeight: "min(44vh, 580px)" }} />
+            </div>
+          ) : (
+            <ZoneMap
+              zones={zones}
+              currentZone={currentZone}
+              loreWindowTitle={activeLoreWindow?.title ?? null}
+              onSelectZone={(z) => setTravelTargetId(z.id)}
+              latestResult={latestResult}
+              exploring={exploring}
+              combatStarting={combatStarting}
+              npcInteracting={npcInteracting}
+              onGoToCombat={() => void handleGoToCombat()}
+              onInteractNPC={(id) => void handleNpcInteract(id)}
+            />
+          )}
           {travelTarget.id !== currentZone.id ? (
             <button
               onClick={() => void handleTravel()}

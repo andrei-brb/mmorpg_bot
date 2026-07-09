@@ -50,6 +50,18 @@ class GuildInviteView(discord.ui.View):
         if guild["member_count"] >= guild["max_members"]:
             return await interaction.followup.send("❌ Guild is now full.")
 
+        from uuid import UUID
+
+        from services.guild import guild_invites as guild_invites_mod
+
+        invite = await guild_invites_mod.get_valid_pending_invite(
+            self.bot.db, UUID(str(self.guild_id)), int(interaction.user.id)
+        )
+        if not invite:
+            return await interaction.followup.send(
+                "❌ This invitation has expired. Ask a guild officer to send a new `/guild invite`."
+            )
+
         await self.bot.db.execute(
             "UPDATE characters SET guild_id=$1, guild_rank='member' WHERE id=$2",
             self.guild_id,
@@ -62,6 +74,11 @@ class GuildInviteView(discord.ui.View):
             ) WHERE id=$1
             """,
             self.guild_id,
+        )
+        await guild_invites_mod.mark_invite_accepted(
+            self.bot.db,
+            UUID(str(self.guild_id)),
+            int(interaction.user.id),
         )
         await interaction.followup.send(f"✅ You joined **[{guild['tag']}] {guild['name']}**!")
         self.stop()

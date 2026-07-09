@@ -103,9 +103,23 @@ class ExplorationCog(commands.Cog, name="Exploration"):
             gold = int(g0 * gold_mult)
             await self.svc.add_gold(char["id"], gold, "exploration")
             xp_eff = int(xp_result.get("xp_gained") or 0)
+            scrap_line = ""
+            # Gathering: crafting materials are farmable through exploration,
+            # not only via salvaging gear drops.
+            if random.random() < 0.35:
+                from services.character.inventory_service import InventoryService
+                scrap_tid = random.choice(("weapon_scrap", "armor_scrap", "accessory_scrap"))
+                scrap_qty = random.randint(1, 2)
+                inv_svc = InventoryService(self.bot.db)
+                ok, _ = await inv_svc.add_item(
+                    char["id"], scrap_tid, "common", quantity=scrap_qty, from_="gathering"
+                )
+                if ok:
+                    scrap_name = scrap_tid.replace("_", " ").title()
+                    scrap_line = f" | +**{scrap_qty}** 🔩 {scrap_name}"
             embed.add_field(
                 name="✨ Discovery!",
-                value=f"You find hidden resources!\n+**{xp_eff}** XP | +**{gold}**🪙",
+                value=f"You find hidden resources!\n+**{xp_eff}** XP | +**{gold}**🪙{scrap_line}",
                 inline=False,
             )
         else:
@@ -148,6 +162,15 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         except Exception as e:
             log.warning(f"NPC encounter roll failed: {e}")
 
+        # Daily quest progress (non-blocking)
+        try:
+            from services.quest.daily_quest_service import DailyQuestService
+            daily_line = await DailyQuestService(self.bot.db).record_event(self.svc, char["id"], "explore")
+            if daily_line:
+                embed.add_field(name="📋 Daily Quest", value=daily_line, inline=False)
+        except Exception:
+            pass
+
         embed.set_footer(text=f"Cooldown: {cooldown}s | Use /travel to change zones")
         await interaction.followup.send(embed=embed, ephemeral=True)
         
@@ -181,7 +204,7 @@ class ExplorationCog(commands.Cog, name="Exploration"):
         )
         await self.bot.db.execute("UPDATE characters SET current_zone=$2 WHERE id=$1", char["id"], zone)
 
-        embed = discord.Embed(title=f"🗺️ Arrived in {z.emoji} {z.name}", description=z.description, color=0x4488FF)
+        embed = discord.Embed(title=f"🗺️ Arrived in {z.emoji} {z.name}", description=z.description, color=Settings.COLORS["info"])
         embed.add_field(name="Level Range", value=f"{z.level_range[0]}–{z.level_range[1]}", inline=True)
         embed.add_field(name="Faction", value=z.faction.title(), inline=True)
         embed.add_field(name="Known Enemies", value=", ".join(k.replace("_"," ").title() for k in z.enemies), inline=False)

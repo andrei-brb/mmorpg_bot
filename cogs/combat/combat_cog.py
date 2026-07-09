@@ -381,12 +381,18 @@ class CombatCog(commands.Cog, name="Combat"):
                 "⚔️ You're already fighting in the **Activity** (Embedded App). Finish or flee there first."
             )
 
-        # Check if stuck in combat (status says in_combat but no active session)
+        # Check if stuck in combat (status says in_combat but no active session of OURS).
+        # ACTIVE is keyed by channel, so a session there may belong to another player —
+        # only treat it as ours if our character is actually in that session, otherwise
+        # the flag is stale and we clear it (and fall through to the channel-busy check).
         if char["combat_status"] == "in_combat":
-            channel_has_combat = interaction.channel_id in ACTIVE
+            channel_session = ACTIVE.get(interaction.channel_id)
+            our_channel_combat = bool(channel_session and any(
+                getattr(p, "char_id", None) == char["id"] for p in channel_session.players
+            ))
             activity_has_combat = interaction.user.id in ACTIVE_ACTIVITY
-            if not channel_has_combat and not activity_has_combat:
-                # Stuck in combat - clear it automatically
+            if not our_channel_combat and not activity_has_combat:
+                # Stuck flag with no real session of ours — clear it automatically.
                 await self.bot.db.execute(
                     "UPDATE characters SET combat_status='idle' WHERE id=$1",
                     char["id"],
@@ -776,7 +782,7 @@ class CombatCog(commands.Cog, name="Combat"):
         # Loot rolls
         loot_lines = []
         for _ in range(rewards["loot_rolls"]):
-            loot = await self.inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss)
+            loot = await self.inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss, char_id=char["id"])
             if loot:
                 ok, _ = await self.inv_svc.add_item(
                     char["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
@@ -791,6 +797,18 @@ class CombatCog(commands.Cog, name="Combat"):
             ok, _ = await self.inv_svc.add_item(char["id"], "health_potion", "common", from_="combat_drop")
             if ok:
                 loot_lines.append("🧪 **Health Potion** (refill)")
+
+        # Daily quest progress (non-blocking)
+        try:
+            from services.quest.daily_quest_service import DailyQuestService
+            daily_svc = DailyQuestService(self.bot.db)
+            daily_line = await daily_svc.record_event(self.char_svc, char["id"], "kill")
+            if session.is_boss:
+                daily_line = await daily_svc.record_event(self.char_svc, char["id"], "boss") or daily_line
+            if daily_line:
+                loot_lines.append(daily_line)
+        except Exception:
+            pass
 
         # Check achievements (non-blocking)
         try:
@@ -901,7 +919,7 @@ class CombatCog(commands.Cog, name="Combat"):
                     embed = discord.Embed(
                         title=f"🎉 Quest Complete: {qd.get('name', qid or 'Quest')}",
                         description=qd.get("dialogue", {}).get("completion", "Quest complete!"),
-                        color=0x2ECC71,
+                        color=Settings.COLORS["success"],
                     )
 
                     reward_text = []
@@ -949,7 +967,7 @@ class CombatCog(commands.Cog, name="Combat"):
         embed = discord.Embed(
             title="🏆 Victory!",
             description=f"You defeated **{session.enemies[0].name}**!",
-            color=0x00FF7F,
+            color=Settings.COLORS["success"],
         )
         xp_show = int(xp_result.get("xp_gained", rewards["xp"]))
         embed.add_field(
@@ -1088,16 +1106,19 @@ class CombatCog(commands.Cog, name="Combat"):
             "UPDATE characters SET current_hp=$2, combat_status='idle' WHERE id=$1",
             char["id"], revive_hp,
         )
+        await self.inv_svc.damage_equipped(char["id"], Settings.DURABILITY_LOSS_ON_DEFEAT)
         embed = discord.Embed(
             title="💀 Defeated!",
             description=(
-                "You have been slain. You revive at the graveyard with **20% HP**.\n\n"
+                "You have been slain. You revive at the graveyard with **20% HP**.\n"
+                f"Your equipped gear lost **{Settings.DURABILITY_LOSS_ON_DEFEAT} durability** — "
+                "repair it with `/blacksmith repair`.\n\n"
                 "**Recovery tips:**\n"
                 "• Use `/rest` to fully recover (60s cooldown)\n"
                 "• Use a **Health Potion** from your inventory\n"
                 "• Fight weaker enemies to build up"
             ),
-            color=0xFF0000,
+            color=Settings.COLORS["error"],
         )
         # Edit existing message instead of sending new one (saves API call)
         if msg:
@@ -1150,7 +1171,7 @@ class CombatCog(commands.Cog, name="Combat"):
         embed = discord.Embed(
             title="💤 Rested",
             description=f"**{char['name']}** rests and recovers fully.",
-            color=0x4488FF,
+            color=Settings.COLORS["info"],
         )
         embed.add_field(name="❤️ HP", value=f"**{char['max_hp']:,}/{char['max_hp']:,}**", inline=True)
         if char["max_res"] > 0:
@@ -1188,25 +1209,25 @@ class CombatCog(commands.Cog, name="Combat"):
                 embed = discord.Embed(
                     title="⚔️ Combat Status",
                     description="You were stuck in combat status (no active fight).\n**Status cleared!** You can now use commands again.",
-                    color=0x00FF00,
+                    color=Settings.COLORS["success"],
                 )
             elif activity_has_combat:
                 embed = discord.Embed(
                     title="⚔️ Combat Status",
                     description="You are in combat in the **Activity** (Embedded App). Continue there or flee.",
-                    color=0xFF4444,
+                    color=Settings.COLORS["error"],
                 )
             else:
                 embed = discord.Embed(
                     title="⚔️ Combat Status",
                     description="You are currently **in combat**.\nUse `/fight` to continue or flee from the fight.",
-                    color=0xFF4444,
+                    color=Settings.COLORS["error"],
                 )
         else:
             embed = discord.Embed(
                 title="⚔️ Combat Status",
                 description=f"Status: **{status.title()}**\nYou are not in combat.",
-                color=0x00FF00,
+                color=Settings.COLORS["success"],
             )
         
         await interaction.followup.send(embed=embed, ephemeral=True)

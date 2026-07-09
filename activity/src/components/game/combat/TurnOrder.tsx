@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 interface Fighter {
   name: string;
   icon: string;
@@ -8,6 +10,27 @@ interface Fighter {
 
 interface Props {
   fighters: Fighter[];
+}
+
+/** Portrait with emoji fallback when the image fails to load (e.g. missing mob PNG). */
+function FighterIcon({ icon, iconSrc }: { icon: string; iconSrc?: string | null }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [iconSrc]);
+
+  if (!iconSrc || failed) {
+    return <span className="text-sm leading-none">{icon}</span>;
+  }
+  return (
+    <img
+      src={iconSrc}
+      alt=""
+      className="w-[22px] h-[22px] object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export function TurnOrder({ fighters }: Props) {
@@ -42,11 +65,7 @@ export function TurnOrder({ fighters }: Props) {
           }}
           title={f.name}
         >
-          {f.iconSrc ? (
-            <img src={f.iconSrc} alt="" className="w-[22px] h-[22px] object-contain" />
-          ) : (
-            <span className="text-sm leading-none">{f.icon}</span>
-          )}
+          <FighterIcon icon={f.icon} iconSrc={f.iconSrc} />
           {f.isCurrent && (
             <div
               className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"

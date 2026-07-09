@@ -4,7 +4,25 @@ import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import type { CharacterDerivedStatsPayload, EnhanceInfoPayload, IdleRewardsPayload, InvRow } from "@/lib/apiTypes";
 import { classIconUrl } from "@/lib/classAndSpecIconUrl";
-import { getCharacterDerivedStats, getIdleRewards, postIdleClaim, publicBaseUrl } from "@/lib/gameApi";
+import {
+  getCharacterDerivedStats,
+  getIdleRewards,
+  getPrestige,
+  postIdleClaim,
+  postPrestige,
+  publicBaseUrl,
+  type PrestigePayload,
+} from "@/lib/gameApi";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { hasSpecPortrait, specPortraitKey } from "@/lib/specPortraitCatalog";
 import { BlacksmithModal, type BlacksmithProtection } from "../modals/BlacksmithModal";
 import { ListItemModal } from "../modals/ListItemModal";
@@ -187,6 +205,9 @@ export function HeroTab() {
   const [salvageIds, setSalvageIds] = useState<Set<string>>(() => new Set());
   const [salvaging, setSalvaging] = useState(false);
   const [inventoryPage, setInventoryPage] = useState(0);
+  const [prestige, setPrestige] = useState<PrestigePayload | null>(null);
+  const [prestigeConfirmOpen, setPrestigeConfirmOpen] = useState(false);
+  const [prestiging, setPrestiging] = useState(false);
 
   const char = inventory?.character;
   const items = inventory?.items || [];
@@ -259,6 +280,45 @@ export function HeroTab() {
       cancelled = true;
     };
   }, [accessToken, guildId, char?.name, char?.level, items]);
+
+  useEffect(() => {
+    if (!accessToken || !char) {
+      setPrestige(null);
+      return;
+    }
+    let cancelled = false;
+    void getPrestige(accessToken, guildId)
+      .then((p) => {
+        if (!cancelled) setPrestige(p.ok === false ? null : p);
+      })
+      .catch(() => {
+        if (!cancelled) setPrestige(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId, char?.name, char?.level]);
+
+  const confirmPrestige = useCallback(async () => {
+    if (!accessToken || prestiging) return;
+    setPrestiging(true);
+    try {
+      const j = await postPrestige(accessToken, guildId);
+      if (j.ok) {
+        toast.success(j.message || "Prestige! Your legend grows — level reset, permanent XP bonus earned.");
+        await refreshInventory();
+        await refreshProgress();
+        const p = await getPrestige(accessToken, guildId).catch(() => null);
+        if (p && p.ok !== false) setPrestige(p);
+      } else {
+        toast.error(j.message || j.error || "Could not prestige.");
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setPrestiging(false);
+    }
+  }, [accessToken, guildId, prestiging, refreshInventory, refreshProgress]);
 
   const claimIdleRewards = useCallback(async () => {
     if (!accessToken || idleClaiming) return;
@@ -878,6 +938,44 @@ export function HeroTab() {
                       return null;
                     })()}
                   </div>
+
+                  {/* Prestige — hidden entirely until first prestige or first eligibility. */}
+                  {prestige && ((prestige.prestige ?? 0) > 0 || prestige.eligible) ? (
+                    <div className="mt-2 border border-gold/25 tex-forge hero-forge-clip-blade-sm hero-forge-edge-gold p-3 sm:p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-display text-[11px] tracking-[0.22em] text-gold-200 sm:text-xs sm:tracking-[0.28em]">
+                            PRESTIGE
+                            {(prestige.prestige ?? 0) > 0 ? (
+                              <span className="ml-2 text-gold" aria-label={`Prestige ${prestige.prestige}`}>
+                                {"★".repeat(Math.min(prestige.prestige ?? 0, prestige.max ?? 5))}
+                              </span>
+                            ) : null}
+                          </h3>
+                          <p className="mt-0.5 text-[9px] leading-snug text-gold-dim sm:text-[10px]">
+                            Rank {prestige.prestige ?? 0}/{prestige.max ?? 0} · permanent{" "}
+                            <span className="text-gold-200">+{prestige.xp_bonus_pct ?? 0}% XP</span>
+                          </p>
+                        </div>
+                        {prestige.eligible ? (
+                          <button
+                            type="button"
+                            disabled={prestiging}
+                            onClick={() => setPrestigeConfirmOpen(true)}
+                            className="hero-forge-clip-tag w-full shrink-0 bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] px-4 py-2.5 font-display text-[11px] tracking-[0.28em] text-black transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[7.5rem] sm:py-2"
+                          >
+                            {prestiging ? "…" : "PRESTIGE"}
+                          </button>
+                        ) : (prestige.prestige ?? 0) >= (prestige.max ?? 0) ? (
+                          <span className="shrink-0 text-[10px] uppercase tracking-[0.2em] text-gold-dim">Max prestige</span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] uppercase tracking-[0.2em] text-gold-dim">
+                            Reach level {prestige.required_level ?? "—"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="border-b border-gold/20 px-6 py-3 text-[11px] text-muted-foreground">
@@ -1284,6 +1382,46 @@ export function HeroTab() {
           />
         );
       })()}
+
+      {/* Prestige confirm */}
+      <AlertDialog open={prestigeConfirmOpen} onOpenChange={setPrestigeConfirmOpen}>
+        <AlertDialogContent className="border-gold/40 max-w-[min(100vw-2rem,28rem)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display tracking-wider text-gold-200">
+              Prestige — reset your level?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <span className="block">
+                Your level resets to <span className="font-semibold text-foreground">1</span>. You keep your{" "}
+                <span className="font-semibold text-foreground">gold, gear, and guild</span>.
+              </span>
+              <span className="block">
+                In exchange you gain a <span className="font-semibold text-gold-200">permanent +2% XP</span> bonus
+                {prestige?.next_xp_bonus_pct != null ? (
+                  <> (total +{prestige.next_xp_bonus_pct}% after this prestige)</>
+                ) : null}
+                .
+              </span>
+              <span className="block text-xs italic">This cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-gold/30" disabled={prestiging}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={prestiging}
+              onClick={() => {
+                setPrestigeConfirmOpen(false);
+                void confirmPrestige();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-display tracking-wider"
+            >
+              Prestige
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* List Item Modal */}
       {listItemId && (() => {

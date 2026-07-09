@@ -546,19 +546,6 @@ class BattlePassService:
         if tier > tier_from_xp(xp, xp_per, max_tier):
             return False, "Tier not unlocked yet.", None
 
-        existing = await self.db.fetchval(
-            """
-            SELECT 1 FROM battle_pass_claims
-            WHERE character_id=$1 AND season_id=$2 AND tier=$3 AND track=$4
-            """,
-            character_id,
-            season_id,
-            tier,
-            track,
-        )
-        if existing:
-            return False, "Already claimed.", None
-
         row = await self.db.fetchrow(
             """
             SELECT reward FROM battle_pass_tier_rewards
@@ -577,22 +564,30 @@ class BattlePassService:
         from services.character.character_service import CharacterService
         from services.character.inventory_service import InventoryService
 
-        char_svc = CharacterService(self.db)
-        inv_svc = InventoryService(self.db)
-        craft_svc = CraftingService(self.db)
-        delivery = await self.apply_reward_json(character_id, reward, char_svc, inv_svc, craft_svc)
+        # Claim and grant atomically. Inserting the claim row first (ON CONFLICT DO
+        # NOTHING) means a concurrent duplicate claim is rejected by the primary key
+        # BEFORE any reward is granted — eliminates the double-grant race.
+        async with self.db.transaction() as tx:
+            claimed = await tx.fetchval(
+                """
+                INSERT INTO battle_pass_claims (character_id, season_id, tier, track)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (character_id, season_id, tier, track) DO NOTHING
+                RETURNING 1
+                """,
+                character_id,
+                season_id,
+                tier,
+                track,
+            )
+            if not claimed:
+                return False, "Already claimed.", None
 
-        await self.db.execute(
-            """
-            INSERT INTO battle_pass_claims (character_id, season_id, tier, track)
-            VALUES ($1, $2, $3, $4)
-            """,
-            character_id,
-            season_id,
-            tier,
-            track,
-        )
-        return True, "Reward claimed.", delivery
+            char_svc = CharacterService(tx)
+            inv_svc = InventoryService(tx)
+            craft_svc = CraftingService(tx)
+            delivery = await self.apply_reward_json(character_id, reward, char_svc, inv_svc, craft_svc)
+            return True, "Reward claimed.", delivery
 
     async def apply_reward_json(
         self,

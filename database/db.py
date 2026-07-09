@@ -5,6 +5,7 @@
 """
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Any, List, Optional
 
 import asyncpg
@@ -72,6 +73,34 @@ async def _merge_stackable_inventory_rows(conn: asyncpg.Connection) -> None:
         log.warning("Stackable inventory merge skipped: %s", e)
 
 
+class _ConnExecutor:
+    """Wraps a single asyncpg connection, exposing the same query-helper interface
+    as Database (fetch/fetchrow/fetchval/execute/executemany).
+
+    Yielded by Database.transaction() so that service classes — which take an
+    injected ``db`` and call ``db.execute(...)`` etc. — can run every statement on
+    one connection inside a single transaction without code changes.
+    """
+
+    def __init__(self, conn: asyncpg.Connection):
+        self._conn = conn
+
+    async def fetch(self, query: str, *args) -> List[asyncpg.Record]:
+        return await self._conn.fetch(query, *args)
+
+    async def fetchrow(self, query: str, *args) -> Optional[asyncpg.Record]:
+        return await self._conn.fetchrow(query, *args)
+
+    async def fetchval(self, query: str, *args) -> Any:
+        return await self._conn.fetchval(query, *args)
+
+    async def execute(self, query: str, *args) -> str:
+        return await self._conn.execute(query, *args)
+
+    async def executemany(self, query: str, args_list: list) -> None:
+        await self._conn.executemany(query, args_list)
+
+
 class Database:
     """Thin wrapper around asyncpg pool with convenience methods."""
 
@@ -111,6 +140,24 @@ class Database:
         async with self.pool.acquire() as c:
             await c.executemany(query, args_list)
 
+    # ── Transactions ──────────────────────────────────────────────────────────
+
+    @asynccontextmanager
+    async def transaction(self):
+        """Run multiple statements atomically on a single connection.
+
+        Usage:
+            async with db.transaction() as tx:
+                await tx.execute(...)          # all-or-nothing
+                row = await tx.fetchrow(...)   # SELECT ... FOR UPDATE locks hold
+                svc = CharacterService(tx)     # services accept the wrapper as `db`
+
+        The block commits on clean exit and rolls back if an exception propagates.
+        """
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                yield _ConnExecutor(conn)
+
     # ── Schema ────────────────────────────────────────────────────────────────
 
     async def initialize_schema(self):
@@ -141,6 +188,18 @@ class Database:
                 ALTER TABLE characters
                 ADD COLUMN IF NOT EXISTS pending_encounter VARCHAR(64);
             """)
+
+            # Gold must never be negative. Clamp any pre-existing negatives (from the old
+            # non-atomic deduct path) before adding the CHECK so the constraint can apply.
+            try:
+                await c.execute("UPDATE characters SET gold = 0 WHERE gold < 0;")
+                await c.execute("""
+                    ALTER TABLE characters
+                    ADD CONSTRAINT gold_non_negative CHECK (gold >= 0);
+                """)
+            except Exception:
+                # Constraint already present (or being added concurrently) — safe to ignore.
+                pass
 
             # Ensure only one active character per player (older installs may have multiple TRUE rows).
             # Keep the newest active and deactivate the rest.
@@ -204,6 +263,12 @@ class Database:
                 ADD COLUMN IF NOT EXISTS crafting_xp INT DEFAULT 0;
             """)
 
+            # Loot pity: consecutive gear drops below rare (bad-luck protection)
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS loot_pity_counter SMALLINT DEFAULT 0;
+            """)
+
             # Crafting tables (older installs may predate _SCHEMA embed)
             await c.execute("""
                 CREATE TABLE IF NOT EXISTS craft_recipes (
@@ -261,6 +326,73 @@ class Database:
                     gold_cost = EXCLUDED.gold_cost,
                     costs = EXCLUDED.costs,
                     crafting_xp_reward = EXCLUDED.crafting_xp_reward;
+            """)
+
+            # Seed / upsert rotating daily quest templates (idempotent)
+            await c.execute("""
+                INSERT INTO quest_templates (id, name, description, quest_type, level_req, objectives, rewards, repeatable)
+                VALUES
+                    ('daily_slayer_3', 'Pest Control', 'Defeat 3 enemies anywhere in the world.', 'daily', 1,
+                     '[{"id": "kills", "kind": "kill", "description": "Defeat any enemies", "count": 3}]'::jsonb,
+                     '{"xp": 120, "gold": 60}'::jsonb, TRUE),
+                    ('daily_slayer_5', 'Cull the Horde', 'Defeat 5 enemies anywhere in the world.', 'daily', 1,
+                     '[{"id": "kills", "kind": "kill", "description": "Defeat any enemies", "count": 5}]'::jsonb,
+                     '{"xp": 200, "gold": 100}'::jsonb, TRUE),
+                    ('daily_wanderer', 'Restless Feet', 'Explore 5 times in any zone.', 'daily', 1,
+                     '[{"id": "explores", "kind": "explore", "description": "Explore any zone", "count": 5}]'::jsonb,
+                     '{"xp": 100, "gold": 50}'::jsonb, TRUE),
+                    ('daily_boss_hunter', 'Head of the Snake', 'Defeat 1 boss.', 'daily', 1,
+                     '[{"id": "boss", "kind": "boss", "description": "Defeat a boss", "count": 1}]'::jsonb,
+                     '{"xp": 250, "gold": 140}'::jsonb, TRUE),
+                    ('daily_veteran', 'No Rest for the Bold', 'Defeat 4 enemies and explore twice.', 'daily', 1,
+                     '[{"id": "kills", "kind": "kill", "description": "Defeat any enemies", "count": 4},
+                       {"id": "explores", "kind": "explore", "description": "Explore any zone", "count": 2}]'::jsonb,
+                     '{"xp": 260, "gold": 130}'::jsonb, TRUE)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    quest_type = EXCLUDED.quest_type,
+                    level_req = EXCLUDED.level_req,
+                    objectives = EXCLUDED.objectives,
+                    rewards = EXCLUDED.rewards,
+                    repeatable = EXCLUDED.repeatable;
+            """)
+
+            # Seed / upsert item-set gear (set bonuses already applied in
+            # CharacterService.total_stats: 2pc +15 armor, 4pc +10 str/agi/int)
+            await c.execute("""
+                INSERT INTO item_templates
+                    (id, name, description, item_type, rarity, equip_slot, level_req,
+                     s_str, s_agi, s_int, s_spi, s_sta, s_armor, s_dmg_min, s_dmg_max,
+                     effect_type, effect_value, effect_duration,
+                     vendor_buy, vendor_sell, icon, set_id)
+                VALUES
+                    ('gravewalker_hood','Gravewalker Hood','Night-dyed leather that never warms.','armor','rare','head',18,
+                     0,4,0,3,5,26,0,0, NULL,0,0, 0,45,'🪖','gravewalker'),
+                    ('gravewalker_shroud','Gravewalker Shroud','A chestpiece stitched with grave-moss.','armor','rare','chest',18,
+                     2,4,0,3,7,38,0,0, NULL,0,0, 0,60,'🥋','gravewalker'),
+                    ('gravewalker_grips','Gravewalker Grips','Grave-digger gloves, unnervingly steady.','armor','rare','hands',18,
+                     2,5,0,2,4,20,0,0, NULL,0,0, 0,40,'🧤','gravewalker'),
+                    ('gravewalker_treads','Gravewalker Treads','They make no sound on cemetery soil.','armor','rare','feet',18,
+                     0,6,0,2,4,22,0,0, NULL,0,0, 0,40,'🥾','gravewalker'),
+                    ('warplate_helm','Blackrock Warplate Helm','Forged in dragonfire.','armor','epic','head',50,
+                     6,0,0,0,12,70,0,0, NULL,0,0, 0,140,'🪖','blackrock_warplate'),
+                    ('warplate_cuirass','Blackrock Warplate Cuirass','Heavy plate scored by claw marks.','armor','epic','chest',50,
+                     8,0,0,0,16,105,0,0, NULL,0,0, 0,180,'🛡️','blackrock_warplate'),
+                    ('warplate_gauntlets','Blackrock Warplate Gauntlets','Knuckles of black iron.','armor','epic','hands',50,
+                     7,0,0,0,10,55,0,0, NULL,0,0, 0,120,'🧤','blackrock_warplate'),
+                    ('warplate_greaves','Blackrock Warplate Greaves','Each step rings like a war drum.','armor','epic','legs',50,
+                     6,0,0,0,12,75,0,0, NULL,0,0, 0,130,'🦵','blackrock_warplate')
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    rarity = EXCLUDED.rarity,
+                    level_req = EXCLUDED.level_req,
+                    s_str = EXCLUDED.s_str, s_agi = EXCLUDED.s_agi, s_int = EXCLUDED.s_int,
+                    s_spi = EXCLUDED.s_spi, s_sta = EXCLUDED.s_sta, s_armor = EXCLUDED.s_armor,
+                    vendor_sell = EXCLUDED.vendor_sell,
+                    icon = EXCLUDED.icon,
+                    set_id = EXCLUDED.set_id;
             """)
 
             # ── Forge: rarity rules, branch recipe columns, unified jobs, forge log ──
@@ -619,6 +751,22 @@ class Database:
             await c.execute("""
                 CREATE INDEX IF NOT EXISTS idx_guild_feed_guild
                 ON guild_feed_messages(guild_id, created_at DESC);
+            """)
+            await c.execute("""
+                CREATE TABLE IF NOT EXISTS guild_invites (
+                    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    guild_id                UUID NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                    invitee_player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    inviter_character_id    UUID REFERENCES characters(id) ON DELETE SET NULL,
+                    status                  VARCHAR(16) NOT NULL DEFAULT 'pending',
+                    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    expires_at              TIMESTAMPTZ NOT NULL
+                );
+            """)
+            await c.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_invites_pending
+                ON guild_invites(guild_id, invitee_player_id)
+                WHERE status = 'pending';
             """)
             await c.execute("""
                 CREATE TABLE IF NOT EXISTS guild_boss_encounters (
@@ -1328,6 +1476,22 @@ CREATE TABLE IF NOT EXISTS gold_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_gold_log_char ON gold_log(character_id, created_at DESC);
+
+-- P2P trades: direct player-to-player item offers (accept path is atomic + dupe-safe)
+CREATE TABLE IF NOT EXISTS trades (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    from_character  UUID NOT NULL REFERENCES characters(id),
+    to_character    UUID NOT NULL REFERENCES characters(id),
+    item_id         UUID NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
+    gold_ask        INT NOT NULL DEFAULT 0 CHECK (gold_ask >= 0),
+    state           VARCHAR(16) NOT NULL DEFAULT 'open'
+                    CHECK (state IN ('open', 'accepted', 'cancelled', 'expired')),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ DEFAULT NOW() + INTERVAL '10 minutes',
+    resolved_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_open ON trades(state, expires_at) WHERE state = 'open';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- WORLD STATE

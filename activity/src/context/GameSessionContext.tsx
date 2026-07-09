@@ -575,6 +575,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       setMarketListings(r.listings || []);
     } catch (e) {
       console.warn("refreshMarketListings", e);
+      throw e;
     }
   }, [accessToken, guildId]);
 
@@ -584,7 +585,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       const res = await api.postListItemOnMarket(accessToken, itemId, price, guildId);
       const j = (await res.json()) as { ok?: boolean; listing_id?: string; message?: string };
       await refreshInventory();
-      await refreshMarketListings();
+      // Listing already succeeded/failed above — a failed refresh must not surface as a listing error.
+      await refreshMarketListings().catch(() => undefined);
       return j;
     },
     [accessToken, guildId, refreshInventory, refreshMarketListings],

@@ -1401,7 +1401,9 @@ async def _finish_party_defeat(
     acting_discord_id: int,
 ) -> Dict[str, Any]:
     from services.dungeon.dungeon_service import DungeonService
+    from services.character.inventory_service import InventoryService
 
+    inv_svc = InventoryService(db)
     session = ac.session
     for did in ac.party_discord_order:
         ch = await char_svc.get_character(did)
@@ -1425,6 +1427,10 @@ async def _finish_party_defeat(
             ch["id"],
             revive_hp,
         )
+        try:
+            await inv_svc.damage_equipped(ch["id"], Settings.DURABILITY_LOSS_ON_DEFEAT)
+        except Exception:
+            log.warning("party defeat durability loss failed char=%s", ch["id"], exc_info=True)
 
     run_id = ac.party_run_id
     if run_id:
@@ -1433,7 +1439,10 @@ async def _finish_party_defeat(
         except Exception as e:
             log.warning("party dungeon complete_run defeat: %s", e)
 
-    lines = log_lines[-8:] + ["💀 The party was defeated — everyone revives with ~20% HP."]
+    lines = log_lines[-8:] + [
+        "💀 The party was defeated — everyone revives with ~20% HP.",
+        f"Equipped gear lost {Settings.DURABILITY_LOSS_ON_DEFEAT} durability — repair it at the Forge.",
+    ]
     out = {
         "ok": True,
         "ended": True,
@@ -1511,7 +1520,7 @@ async def _finish_party_victory(
             await char_svc.sync_combat_hp(ch["id"], pl.current_hp, pl.current_res)
 
         for _ in range(2 if session.is_boss else 1):
-            loot = await inv_svc.generate_loot(dungeon_key, ch["level"], session.is_boss)
+            loot = await inv_svc.generate_loot(dungeon_key, ch["level"], session.is_boss, char_id=ch["id"])
             if loot:
                 ok, _ = await inv_svc.add_item(
                     ch["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
@@ -1532,6 +1541,18 @@ async def _finish_party_victory(
                 ach = await ach_svc.get_achievement(ach_id)
                 if ach:
                     loot_lines_all.append(f"{ch['name']}: 🏆 {ach.get('icon', '🏆')} {ach['name']}!")
+        except Exception:
+            pass
+
+        # Daily quest progress (non-blocking) — party dungeon kills count too.
+        try:
+            from services.quest.daily_quest_service import DailyQuestService
+            daily_svc = DailyQuestService(db)
+            daily_line = await daily_svc.record_event(char_svc, ch["id"], "kill")
+            if session.is_boss:
+                daily_line = await daily_svc.record_event(char_svc, ch["id"], "boss") or daily_line
+            if daily_line:
+                loot_lines_all.append(f"{ch['name']}: {daily_line}")
         except Exception:
             pass
 
@@ -1649,8 +1670,16 @@ async def _finish_defeat(
         char["id"],
         revive_hp,
     )
+    try:
+        from services.character.inventory_service import InventoryService
+        await InventoryService(db).damage_equipped(char["id"], Settings.DURABILITY_LOSS_ON_DEFEAT)
+    except Exception:
+        log.warning("defeat durability loss failed char=%s", char["id"], exc_info=True)
     _clear_activity_session(discord_id)
-    lines = log_lines[-8:] + ["💀 You were defeated — you revive with 20% HP."]
+    lines = log_lines[-8:] + [
+        "💀 You were defeated — you revive with 20% HP.",
+        f"Equipped gear lost {Settings.DURABILITY_LOSS_ON_DEFEAT} durability — repair it at the Forge.",
+    ]
     return {
         "ok": True,
         "ended": True,
@@ -1767,7 +1796,7 @@ async def _finish_victory(
 
     loot_lines: List[str] = []
     for _ in range(rewards["loot_rolls"]):
-        loot = await inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss)
+        loot = await inv_svc.generate_loot(char["current_zone"], char["level"], session.is_boss, char_id=char["id"])
         if loot:
             ok, _ = await inv_svc.add_item(
                 char["id"], loot["template"]["id"], loot["rarity"], bonus=loot["bonus"]
@@ -1781,6 +1810,18 @@ async def _finish_victory(
         ok, _ = await inv_svc.add_item(char["id"], "health_potion", "common", from_="combat_drop")
         if ok:
             loot_lines.append("🧪 **Health Potion** (refill)")
+
+    # Daily quest progress (non-blocking)
+    try:
+        from services.quest.daily_quest_service import DailyQuestService
+        daily_svc = DailyQuestService(db)
+        daily_line = await daily_svc.record_event(char_svc, char["id"], "kill")
+        if session.is_boss:
+            daily_line = await daily_svc.record_event(char_svc, char["id"], "boss") or daily_line
+        if daily_line:
+            loot_lines.append(daily_line)
+    except Exception:
+        pass
 
     try:
         ach_svc = AchievementService(db)

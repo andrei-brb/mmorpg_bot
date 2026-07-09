@@ -70,7 +70,7 @@ function TierLane({
                   <button
                     type="button"
                     className="btn-gold !px-2 !py-1 !text-[9px] w-full"
-                    disabled={claimingKey === key}
+                    disabled={claimingKey !== null}
                     onClick={() => onClaim(t.tier, t.track)}
                   >
                     {claimingKey === key ? "…" : "Claim"}
@@ -193,7 +193,7 @@ export function BattlePassTab() {
   };
 
   const claimTier = async (tier: number, track: string) => {
-    if (!accessToken) return;
+    if (!accessToken || claimingKey) return;
     const key = `${track}-${tier}`;
     setClaimingKey(key);
     try {
@@ -335,11 +335,13 @@ export function BattlePassTab() {
         {!premiumOk ? (
           <div className="mt-4 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
             <p className="text-xs text-[var(--text-muted)] text-center sm:text-left">
-              Premium lane unlocks with supporter status or a season unlock.
+              Premium lane unlocks with supporter status when available for this season.
             </p>
-            <button type="button" className="btn-ghost !text-[11px]" onClick={() => void unlockPremium()}>
-              Unlock premium (test)
-            </button>
+            {import.meta.env.DEV || import.meta.env.VITE_BATTLE_PASS_TEST_UNLOCK === "true" ? (
+              <button type="button" className="btn-ghost !text-[11px]" onClick={() => void unlockPremium()}>
+                Unlock premium (dev)
+              </button>
+            ) : null}
           </div>
         ) : null}
       </WomPanel>

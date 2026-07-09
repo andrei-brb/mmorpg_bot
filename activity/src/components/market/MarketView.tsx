@@ -16,6 +16,8 @@ import {
   X,
   History as HistoryIcon,
   Package,
+  ArrowLeftRight,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,7 +40,13 @@ import {
 import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import * as api from "@/lib/gameApi";
-import type { InvRow, MarketListingRow, ShopCatalogItem, AuctionListingRow } from "@/lib/apiTypes";
+import type {
+  InvRow,
+  MarketListingRow,
+  ShopCatalogItem,
+  AuctionListingRow,
+  MarketHistoryEntry,
+} from "@/lib/apiTypes";
 
 const RULES = {
   MAX_LISTINGS_PER_HERO: 10,
@@ -45,9 +55,22 @@ const RULES = {
 
 type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 type ItemType = "weapon" | "armor" | "accessory" | "material" | "gear";
-type Mode = "auction" | "market" | "supplies";
+type Mode = "auction" | "market" | "supplies" | "trades";
 type SortKey = "newest" | "price-asc" | "price-desc" | "ending-soon";
 type View = "browse" | "mine" | "history";
+
+function historyKindLabel(kind: string): string {
+  const map: Record<string, string> = {
+    bought: "Bought",
+    sold: "Sold",
+    bid: "Bid placed",
+    outbid_refund: "Outbid refund",
+    buyout: "Buyout",
+    refund: "Refund",
+    trade: "Trade",
+  };
+  return map[kind] || kind.replace(/_/g, " ");
+}
 
 type MarketListingUI = {
   id: string;
@@ -377,14 +400,14 @@ function SelectChip({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="relative inline-flex items-center">
+    <label className="relative inline-flex min-w-0 items-center">
       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-widest text-muted-foreground font-display pointer-events-none">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none rounded-md border border-[color:var(--gold)]/30 bg-black/40 pl-14 pr-8 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-[color:var(--gold)]/50 cursor-pointer max-w-[200px]"
+        className="appearance-none rounded-md border border-[color:var(--gold)]/30 bg-black/40 pl-14 pr-8 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-[color:var(--gold)]/50 cursor-pointer min-w-0 max-w-[200px]"
       >
         {options.map((o) => (
           <option key={o.v} value={o.v} className="bg-background">
@@ -399,8 +422,8 @@ function SelectChip({
 
 function FiltersBar({ state, onChange, mode }: { state: FilterState; onChange: (s: FilterState) => void; mode: Mode }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2">
-      <div className="relative">
+    <div className="flex flex-wrap gap-2">
+      <div className="relative w-full min-w-0 sm:w-auto sm:flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={state.q}
@@ -464,11 +487,12 @@ function MarketCard({
   gold,
 }: {
   item: MarketListingUI;
-  onBuy: (i: MarketListingUI) => void;
+  onBuy: (i: MarketListingUI) => Promise<void>;
   gold: number;
 }) {
   const cantAfford = gold < item.price;
   const [confirming, setConfirming] = useState(false);
+  const [buying, setBuying] = useState(false);
   const iconItem: Partial<InvRow> = {
     id: item.id,
     template_id: item.template_id ?? undefined,
@@ -526,11 +550,11 @@ function MarketCard({
           <Button
             size="sm"
             onClick={() => setConfirming(true)}
-            disabled={cantAfford || item.is_own}
+            disabled={cantAfford || item.is_own || buying}
             className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black hover:brightness-110 font-display tracking-wider"
           >
-            <ShoppingCart className="h-3.5 w-3.5" />
-            {item.is_own ? "Your listing" : cantAfford ? "Not enough gold" : "Buy"}
+            {buying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+            {item.is_own ? "Your listing" : cantAfford ? "Not enough gold" : buying ? "Buying…" : "Buy"}
           </Button>
         </div>
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
@@ -549,8 +573,10 @@ function MarketCard({
               <AlertDialogCancel className="border-[color:var(--gold)]/30">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
-                  void onBuy(item);
                   setConfirming(false);
+                  if (buying) return;
+                  setBuying(true);
+                  void onBuy(item).finally(() => setBuying(false));
                 }}
                 className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display tracking-wider"
               >
@@ -831,6 +857,7 @@ function AuctionCard({
   const { accessToken, guildId } = useGameSession();
   const [bidOpen, setBidOpen] = useState(false);
   const [buyConfirm, setBuyConfirm] = useState(false);
+  const [pending, setPending] = useState(false);
 
   const iconItem: Partial<InvRow> = {
     id: item.id,
@@ -848,7 +875,8 @@ function AuctionCard({
   const canBuyout = !item.is_own && buyout != null && buyout > 0 && gold >= buyout;
 
   const cancelMine = async () => {
-    if (!accessToken || !item.is_own) return;
+    if (!accessToken || !item.is_own || pending) return;
+    setPending(true);
     try {
       const j = await api.postAuctionCancel(accessToken, item.id, guildId);
       if (j.ok) {
@@ -859,11 +887,14 @@ function AuctionCard({
       }
     } catch (e) {
       toast.error("Cancel failed", { description: String(e) });
+    } finally {
+      setPending(false);
     }
   };
 
   const doBuyout = async () => {
-    if (!accessToken || buyout == null) return;
+    if (!accessToken || buyout == null || pending) return;
+    setPending(true);
     try {
       const j = await api.postAuctionBuyout(accessToken, item.id, guildId);
       if (j.ok) {
@@ -875,6 +906,8 @@ function AuctionCard({
       }
     } catch (e) {
       toast.error("Buyout failed", { description: String(e) });
+    } finally {
+      setPending(false);
     }
   };
 
@@ -948,11 +981,11 @@ function AuctionCard({
             type="button"
             size="sm"
             variant="outline"
-            disabled={item.bid_count > 0}
+            disabled={item.bid_count > 0 || pending}
             onClick={() => void cancelMine()}
             className="border-[color:var(--gold)]/30 font-display text-[10px]"
           >
-            Cancel auction
+            {pending ? "Cancelling…" : "Cancel auction"}
           </Button>
         ) : (
           <>
@@ -970,11 +1003,11 @@ function AuctionCard({
               <Button
                 type="button"
                 size="sm"
-                disabled={!canBuyout}
+                disabled={!canBuyout || pending}
                 onClick={() => setBuyConfirm(true)}
                 className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display text-[10px]"
               >
-                Buyout
+                {pending ? "Buying…" : "Buyout"}
               </Button>
             ) : null}
           </>
@@ -1086,6 +1119,35 @@ function SubTabBtn({
         <Badge className="bg-[color:var(--gold)]/25 text-[color:var(--gold-bright)] border-0 px-1.5 py-0 text-[10px]">{count}</Badge>
       ) : null}
     </button>
+  );
+}
+
+function ListingCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-[color:var(--gold)]/20 bg-gradient-to-b from-black/40 to-black/20 p-3">
+      <div className="flex gap-3">
+        <Skeleton className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-md" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[color:var(--gold)]/15 pt-3">
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-8 w-16" />
+      </div>
+    </div>
+  );
+}
+
+function ListingGridSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <ListingCardSkeleton key={i} />
+      ))}
+    </div>
   );
 }
 
@@ -1309,6 +1371,373 @@ function SuppliesPanel({ playerGold }: { playerGold: number }) {
   );
 }
 
+function TradeOfferCard({
+  row,
+  direction,
+  gold,
+  actingId,
+  onAct,
+}: {
+  row: api.TradeOfferRow;
+  direction: "incoming" | "outgoing";
+  gold: number;
+  actingId: string | null;
+  onAct: (tradeId: string, action: "accept" | "decline" | "cancel") => Promise<void>;
+}) {
+  const pending = actingId === row.id;
+  const busy = actingId != null;
+  const ask = Math.max(0, Math.floor(Number(row.gold_ask ?? 0)));
+  const cantAfford = direction === "incoming" && gold < ask;
+  const iconItem: Partial<InvRow> = {
+    id: row.id,
+    name: row.item_name || "Item",
+    icon: row.item_icon,
+  };
+
+  return (
+    <div className="rounded-lg border border-[color:var(--gold)]/20 bg-gradient-to-b from-black/40 to-black/20 p-3">
+      <div className="flex items-center gap-3">
+        <div className="h-12 w-12 shrink-0 rounded-md ring-1 ring-muted/40 grid place-items-center bg-gradient-to-br from-black/60 to-black/20">
+          <ItemIcon item={iconItem as InvRow} size={40} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-sm font-semibold text-foreground truncate">{row.item_name || "Item"}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Coins className="h-3 w-3 text-[color:var(--gold-bright)]" />
+              <span className="font-display text-[color:var(--gold-bright)] tabular-nums">{fmtGold(ask)}</span>
+            </span>
+            <span>
+              {direction === "incoming" ? "from " : "to "}
+              <span className="text-foreground/80 font-medium">
+                {(direction === "incoming" ? row.from_name : row.to_name) || "?"}
+              </span>
+            </span>
+            {row.expires_at ? (
+              <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-200 font-display">
+                {formatTimeRemaining(row.expires_at)} left
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+          {direction === "incoming" ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || cantAfford}
+                onClick={() => void onAct(row.id, "accept")}
+                className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display text-[10px]"
+              >
+                {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                Accept
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void onAct(row.id, "decline")}
+                className="border-[color:var(--gold)]/30 font-display text-[10px]"
+              >
+                Decline
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void onAct(row.id, "cancel")}
+              className="border-[color:var(--gold)]/30 font-display text-[10px]"
+            >
+              {pending ? "Cancelling…" : "Cancel"}
+            </Button>
+          )}
+        </div>
+      </div>
+      {cantAfford ? (
+        <p className="mt-2 text-[10px] text-amber-400 text-right">Not enough gold to accept this offer.</p>
+      ) : null}
+    </div>
+  );
+}
+
+function TradesPanel() {
+  const { accessToken, guildId, inventory, refreshInventory, refreshProgress } = useGameSession();
+  const [incoming, setIncoming] = useState<api.TradeOfferRow[]>([]);
+  const [outgoing, setOutgoing] = useState<api.TradeOfferRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
+
+  // New offer form
+  const [targetQuery, setTargetQuery] = useState("");
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; username: string }>>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [offerItemId, setOfferItemId] = useState("");
+  const [goldAsk, setGoldAsk] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+
+  const gold = inventory?.character?.gold ?? 0;
+  const bagItems = useMemo(
+    () => (inventory?.items ?? []).filter((it) => !it.is_equipped),
+    [inventory?.items],
+  );
+
+  useEffect(() => {
+    if (offerItemId && !bagItems.some((it) => it.id === offerItemId)) setOfferItemId("");
+  }, [bagItems, offerItemId]);
+
+  const loadTrades = useCallback(async () => {
+    if (!accessToken) return;
+    setLoading(true);
+    setError(false);
+    try {
+      const j = await api.getTrades(accessToken, guildId);
+      setIncoming(j.incoming || []);
+      setOutgoing(j.outgoing || []);
+      setLoaded(true);
+    } catch (e) {
+      console.warn(e);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    void loadTrades();
+  }, [loadTrades]);
+
+  const debouncedQuery = useDebounced(targetQuery.trim(), 250);
+  useEffect(() => {
+    if (!accessToken || debouncedQuery.length < 1 || targetId) {
+      setSuggestions([]);
+      setSuggestOpen(false);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .getPvpPlayers(accessToken, debouncedQuery, guildId)
+      .then((j) => {
+        if (cancelled) return;
+        const rows = (j.players || [])
+          .map((r) => ({ id: String(r.id ?? ""), username: String(r.username ?? "") }))
+          .filter((r) => r.id && r.username);
+        setSuggestions(rows);
+        setSuggestOpen(rows.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSuggestions([]);
+          setSuggestOpen(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId, debouncedQuery, targetId]);
+
+  const act = useCallback(
+    async (tradeId: string, action: "accept" | "decline" | "cancel") => {
+      if (!accessToken || actingId) return;
+      setActingId(tradeId);
+      try {
+        const j = await api.postTradeAct(accessToken, tradeId, action, guildId);
+        if (j.ok) {
+          toast.success(
+            j.message ||
+              (action === "accept" ? "Trade accepted!" : action === "decline" ? "Trade declined." : "Offer cancelled."),
+          );
+          await loadTrades();
+          await refreshInventory();
+          if (action === "accept") await refreshProgress();
+        } else {
+          toast.error(j.message || j.error || "Trade action failed.");
+        }
+      } catch (e) {
+        toast.error("Trade action failed", { description: String(e) });
+      } finally {
+        setActingId(null);
+      }
+    },
+    [accessToken, guildId, actingId, loadTrades, refreshInventory, refreshProgress],
+  );
+
+  const submitOffer = useCallback(async () => {
+    if (!accessToken || submitting) return;
+    if (!targetId || !offerItemId) return;
+    setSubmitting(true);
+    try {
+      const j = await api.postTradeOffer(
+        accessToken,
+        { target_user_id: targetId, item_id: offerItemId, gold_ask: Math.max(0, Math.floor(goldAsk)) },
+        guildId,
+      );
+      if (j.ok) {
+        toast.success(j.message || "Trade offer sent.");
+        setTargetQuery("");
+        setTargetId(null);
+        setOfferItemId("");
+        setGoldAsk(0);
+        await loadTrades();
+        await refreshInventory();
+      } else {
+        toast.error(j.message || j.error || "Could not send offer.");
+      }
+    } catch (e) {
+      toast.error("Could not send offer", { description: String(e) });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [accessToken, guildId, submitting, targetId, offerItemId, goldAsk, loadTrades, refreshInventory]);
+
+  const offerInvalid = !targetId || !offerItemId || goldAsk < 0;
+
+  return (
+    <div className="space-y-4">
+      <OrnateFrame>
+        <h3 className="text-sm font-display font-semibold text-[color:var(--gold-bright)] px-1 mb-3 tracking-wider uppercase">
+          New offer
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="relative">
+            <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Player</label>
+            <div className="relative mt-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={targetQuery}
+                onChange={(e) => {
+                  setTargetQuery(e.target.value);
+                  setTargetId(null);
+                }}
+                onFocus={() => {
+                  if (suggestions.length) setSuggestOpen(true);
+                }}
+                onBlur={() => {
+                  window.setTimeout(() => setSuggestOpen(false), 120);
+                }}
+                placeholder="Search players…"
+                className="pl-8 bg-black/40 border-[color:var(--gold)]/30 focus-visible:ring-[color:var(--gold)]/50"
+              />
+            </div>
+            {suggestOpen && suggestions.length > 0 ? (
+              <div
+                className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 overflow-hidden rounded-md border border-[color:var(--gold)]/25 bg-black/90 shadow-lg"
+                role="listbox"
+              >
+                {suggestions.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-[color:var(--gold)]/10"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setTargetId(p.id);
+                      setTargetQuery(p.username);
+                      setSuggestOpen(false);
+                    }}
+                  >
+                    <span className="truncate text-foreground">{p.username}</span>
+                    <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">{p.id}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Item</label>
+            <div className="relative mt-1">
+              <select
+                value={offerItemId}
+                onChange={(e) => setOfferItemId(e.target.value)}
+                className="w-full appearance-none rounded-md border border-[color:var(--gold)]/30 bg-black/40 px-3 pr-8 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-[color:var(--gold)]/50 cursor-pointer"
+              >
+                <option value="" className="bg-background">
+                  Choose bag item…
+                </option>
+                {bagItems.map((it) => (
+                  <option key={it.id} value={it.id} className="bg-background">
+                    {it.name} ({normalizeRarity(it.rarity || "common")})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-muted-foreground font-display">Gold ask</label>
+            <div className="relative mt-1">
+              <Coins className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--gold-bright)]" />
+              <Input
+                type="number"
+                min={0}
+                value={goldAsk}
+                onChange={(e) => setGoldAsk(Math.max(0, Number(e.target.value || 0)))}
+                className="pl-8 bg-black/40 border-[color:var(--gold)]/30 font-display tabular-nums"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button
+            type="button"
+            onClick={() => void submitOffer()}
+            disabled={offerInvalid || submitting}
+            className="bg-gradient-to-b from-[color:var(--gold-bright)] to-[color:var(--gold-dim)] text-black font-display tracking-wider"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Send offer
+          </Button>
+        </div>
+      </OrnateFrame>
+
+      {loading && !loaded ? (
+        <ListingGridSkeleton count={2} />
+      ) : error && !loaded ? (
+        <ErrorState message="Could not load trade offers." onRetry={() => void loadTrades()} />
+      ) : (
+        <>
+          <OrnateFrame>
+            <h3 className="text-sm font-display font-semibold text-[color:var(--gold-bright)] px-1 mb-3 tracking-wider uppercase">
+              Incoming offers
+            </h3>
+            {incoming.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">No incoming trade offers.</p>
+            ) : (
+              <div className="space-y-2">
+                {incoming.map((row) => (
+                  <TradeOfferCard key={row.id} row={row} direction="incoming" gold={gold} actingId={actingId} onAct={act} />
+                ))}
+              </div>
+            )}
+          </OrnateFrame>
+
+          <OrnateFrame>
+            <h3 className="text-sm font-display font-semibold text-[color:var(--gold-bright)] px-1 mb-3 tracking-wider uppercase">
+              Outgoing offers
+            </h3>
+            {outgoing.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">No outgoing trade offers.</p>
+            ) : (
+              <div className="space-y-2">
+                {outgoing.map((row) => (
+                  <TradeOfferCard key={row.id} row={row} direction="outgoing" gold={gold} actingId={actingId} onAct={act} />
+                ))}
+              </div>
+            )}
+          </OrnateFrame>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ListMarketModal({
   onClose,
   items,
@@ -1515,6 +1944,11 @@ export function MarketView() {
   const [historyTab, setHistoryTab] = useState(false);
   const [auctionListingsRaw, setAuctionListingsRaw] = useState<AuctionListingRow[]>([]);
   const [auctionLoading, setAuctionLoading] = useState(false);
+  const [auctionError, setAuctionError] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<MarketHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (mode !== "market") setHistoryTab(false);
@@ -1557,19 +1991,34 @@ export function MarketView() {
 
   const visibleAuction = useMemo(() => filterAndSortAuction(filteredAuctionBase, effectiveFilters), [filteredAuctionBase, effectiveFilters]);
 
+  const loadListings = useCallback(async () => {
+    setMarketLoading(true);
+    setMarketError(false);
+    try {
+      await refreshMarketListings();
+    } catch (e) {
+      console.warn(e);
+      setMarketError(true);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [refreshMarketListings]);
+
   const refreshAll = useCallback(async () => {
-    await refreshMarketListings();
+    await loadListings();
     await refreshInventory();
-  }, [refreshMarketListings, refreshInventory]);
+  }, [loadListings, refreshInventory]);
 
   const refreshAuctions = useCallback(async () => {
     if (!accessToken) return;
     setAuctionLoading(true);
+    setAuctionError(false);
     try {
       const j = await api.getAuctionListings(accessToken, guildId);
       setAuctionListingsRaw(j.listings || []);
     } catch (e) {
       console.warn(e);
+      setAuctionError(true);
       toast.error("Failed to load auctions");
     } finally {
       setAuctionLoading(false);
@@ -1583,13 +2032,32 @@ export function MarketView() {
 
   useEffect(() => {
     if (!accessToken) return;
-    void refreshMarketListings();
-  }, [accessToken, refreshMarketListings]);
+    void loadListings();
+  }, [accessToken, loadListings]);
 
   useEffect(() => {
     if (mode !== "auction" || !accessToken) return;
     void refreshAuctions();
   }, [mode, accessToken, refreshAuctions]);
+
+  const refreshHistory = useCallback(async () => {
+    if (!accessToken) return;
+    setHistoryLoading(true);
+    try {
+      const j = await api.getMarketHistory(accessToken, guildId);
+      setHistoryEntries(j.entries || []);
+    } catch (e) {
+      console.warn(e);
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    if (!historyTab || !accessToken) return;
+    void refreshHistory();
+  }, [historyTab, accessToken, refreshHistory]);
 
   const handleBuy = useCallback(
     async (item: MarketListingUI) => {
@@ -1599,6 +2067,7 @@ export function MarketView() {
         if (res.ok) {
           toast.success(`Purchased ${item.name}!`, { description: res.message || `−${fmtGold(item.price)} 🪙` });
           await refreshAll();
+          if (historyTab) void refreshHistory();
         } else {
           toast.error(res.message || "Purchase failed.");
         }
@@ -1606,7 +2075,7 @@ export function MarketView() {
         toast.error("Purchase failed", { description: String(e) });
       }
     },
-    [accessToken, guildId, refreshAll],
+    [accessToken, guildId, refreshAll, historyTab, refreshHistory],
   );
 
   const setModeSafe = (m: Mode) => {
@@ -1636,7 +2105,7 @@ export function MarketView() {
           <GoldPill amount={gold} />
         </div>
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg border border-[color:var(--gold)]/30 bg-black/40 p-1">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 rounded-lg border border-[color:var(--gold)]/30 bg-black/40 p-1">
           <SegmentBtn
             active={mode === "auction"}
             onClick={() => setModeSafe("auction")}
@@ -1657,6 +2126,13 @@ export function MarketView() {
             icon={<Package className="h-4 w-4" />}
             title="Supplies"
             tag="NPC shop · Blacksmith"
+          />
+          <SegmentBtn
+            active={mode === "trades"}
+            onClick={() => setModeSafe("trades")}
+            icon={<ArrowLeftRight className="h-4 w-4" />}
+            title="Trades"
+            tag="Direct player offers"
           />
         </div>
 
@@ -1713,6 +2189,12 @@ export function MarketView() {
             <SuppliesPanel playerGold={gold} />
           </div>
         </ScrollArea>
+      ) : mode === "trades" ? (
+        <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
+          <div className="pb-4">
+            <TradesPanel />
+          </div>
+        </ScrollArea>
       ) : mode === "auction" ? (
         <>
           <OrnateFrame>
@@ -1738,11 +2220,10 @@ export function MarketView() {
           </OrnateFrame>
 
           <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
-            {auctionLoading ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground text-xs">
-                <Loader2 className="h-8 w-8 animate-spin text-[color:var(--gold-bright)]" />
-                Loading auctions…
-              </div>
+            {auctionLoading && mappedAuction.length === 0 ? (
+              <ListingGridSkeleton />
+            ) : auctionError && mappedAuction.length === 0 ? (
+              <ErrorState message="Could not load auctions." onRetry={() => void refreshAuctions()} />
             ) : visibleAuction.length === 0 ? (
               <EmptyState
                 title={auctionViewTab === "mine" ? "No auctions" : "No auctions match"}
@@ -1782,11 +2263,55 @@ export function MarketView() {
           ) : null}
         </>
       ) : view === "history" ? (
-        <EmptyState
-          title="Trade history"
-          hint="A unified buy/sell/bid ledger will appear here once the backend exposes it."
-          cta={null}
-        />
+        <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
+          {historyLoading ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground text-xs">
+              <Loader2 className="h-8 w-8 animate-spin text-[color:var(--gold-bright)]" />
+              Loading trade history…
+            </div>
+          ) : historyEntries.length === 0 ? (
+            <EmptyState
+              title="No trades yet"
+              hint="Market purchases, sales, auction bids, and refunds appear here."
+              cta={null}
+            />
+          ) : (
+            <ul className="space-y-0 pb-4">
+              {historyEntries.map((h, i) => {
+                const delta = h.gold_delta ?? 0;
+                const sign = delta >= 0 ? "+" : "";
+                return (
+                  <li key={h.id || i}>
+                    <div className="flex flex-wrap items-start gap-2 py-2.5 text-xs">
+                      <span className="text-[color:var(--gold-bright)] font-semibold shrink-0">
+                        {historyKindLabel(h.kind)}
+                      </span>
+                      <span className="text-foreground flex-1 min-w-[120px]">
+                        {h.item_name || h.detail || "Trade"}
+                        {h.counterparty_name ? (
+                          <span className="text-muted-foreground"> · {h.counterparty_name}</span>
+                        ) : null}
+                      </span>
+                      <span
+                        className={cn(
+                          "tabular-nums font-semibold shrink-0",
+                          delta >= 0 ? "text-emerald-400" : "text-red-300",
+                        )}
+                      >
+                        {sign}
+                        {Math.abs(delta).toLocaleString()}🪙
+                      </span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums w-full sm:w-auto sm:ml-auto">
+                        {h.at ? new Date(h.at).toLocaleString() : ""}
+                      </span>
+                    </div>
+                    {i < historyEntries.length - 1 ? <div className="ornament-divider" /> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </ScrollArea>
       ) : (
         <>
           <OrnateFrame>
@@ -1812,7 +2337,11 @@ export function MarketView() {
           </OrnateFrame>
 
           <ScrollArea className="max-h-[60vh] pr-2 flex-1 min-h-[200px]">
-            {visibleMarket.length === 0 ? (
+            {marketLoading && mappedMarket.length === 0 ? (
+              <ListingGridSkeleton />
+            ) : marketError && mappedMarket.length === 0 ? (
+              <ErrorState message="Could not load market listings." onRetry={() => void loadListings()} />
+            ) : visibleMarket.length === 0 ? (
               <EmptyState
                 title={marketViewTab === "mine" ? "No listings" : "No listings match"}
                 hint={
@@ -1831,7 +2360,7 @@ export function MarketView() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
                 {visibleMarket.map((it) => (
-                  <MarketCard key={it.id} item={it} gold={gold} onBuy={(i) => void handleBuy(i)} />
+                  <MarketCard key={it.id} item={it} gold={gold} onBuy={handleBuy} />
                 ))}
               </div>
             )}

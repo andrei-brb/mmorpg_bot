@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ErrorState } from "@/components/ui/error-state";
 import { RewardRevealDialog } from "@/components/game/RewardRevealDialog";
 import * as api from "@/lib/gameApi";
 import type {
@@ -122,10 +123,12 @@ export function GuildTab() {
   const { accessToken, guildId, refreshInventory } = useGameSession();
   const [data, setData] = useState<GuildMePayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [depositStr, setDepositStr] = useState("100");
   const [withdrawStr, setWithdrawStr] = useState("100");
   const [chatDraft, setChatDraft] = useState("");
   const [feed, setFeed] = useState<GuildFeedMessage[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
   const [feedCursor, setFeedCursor] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteQuery, setInviteQuery] = useState("");
@@ -138,6 +141,7 @@ export function GuildTab() {
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [techBranch, setTechBranch] = useState<"economy" | "war" | "accord">("economy");
   const [techDonateStr, setTechDonateStr] = useState("100");
+  const [techBusyId, setTechBusyId] = useState<string | null>(null);
   const [raidTemplateKey, setRaidTemplateKey] = useState("gnoll_warren_raid");
   const [raidRewardOpen, setRaidRewardOpen] = useState(false);
   const [raidRewards, setRaidRewards] = useState<GuildRaidRewards | null>(null);
@@ -157,6 +161,7 @@ export function GuildTab() {
     if (!accessToken) return;
     const showFullSpinner = !hasLoadedGuildHubRef.current;
     if (showFullSpinner) setLoading(true);
+    setLoadError(false);
     try {
       const j = await api.getGuildMe(accessToken, guildId);
       if (j.in_guild && j.ok) {
@@ -166,6 +171,7 @@ export function GuildTab() {
       }
       setData(j);
       if (j.in_guild && j.ok) {
+        setFeedLoading(true);
         try {
           const f = await api.getGuildFeed(accessToken, guildId);
           if (f.ok && Array.isArray(f.messages)) {
@@ -180,6 +186,8 @@ export function GuildTab() {
           setFeed([]);
           setFeedCursor(null);
           toast.message("Hall chat could not load — the rest of the guild hub is still available.", { duration: 4500 });
+        } finally {
+          setFeedLoading(false);
         }
       } else {
         setFeed([]);
@@ -187,6 +195,7 @@ export function GuildTab() {
       }
     } catch (e) {
       toast.error(api.describeFetchError(e, api.apiUrl("/api/game/guild/me")));
+      setLoadError(true);
       setData((prev) => prev);
     } finally {
       setLoading(false);
@@ -396,28 +405,38 @@ export function GuildTab() {
   };
 
   const onContributeTech = async (nodeId: string) => {
-    if (!accessToken) return;
+    if (!accessToken || techBusyId) return;
     const amount = parseInt(techDonateStr, 10);
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error("Enter a valid donation amount");
       return;
     }
-    const r = await api.postGuildTechContribute(accessToken, nodeId, amount, guildId);
-    if (!r.ok) toast.error(r.message || "Donation failed");
-    else {
-      toast.success(r.message || "Donated to research");
-      await refreshInventory();
-      await loadMe();
+    setTechBusyId(nodeId);
+    try {
+      const r = await api.postGuildTechContribute(accessToken, nodeId, amount, guildId);
+      if (!r.ok) toast.error(r.message || "Donation failed");
+      else {
+        toast.success(r.message || "Donated to research");
+        await refreshInventory();
+        await loadMe();
+      }
+    } finally {
+      setTechBusyId(null);
     }
   };
 
   const onFinalizeTech = async (nodeId: string) => {
-    if (!accessToken) return;
-    const r = await api.postGuildTechFinalize(accessToken, nodeId, guildId);
-    if (!r.ok) toast.error(r.message || "Could not finalize research");
-    else {
-      toast.success("Research complete — node unlocked");
-      await loadMe();
+    if (!accessToken || techBusyId) return;
+    setTechBusyId(nodeId);
+    try {
+      const r = await api.postGuildTechFinalize(accessToken, nodeId, guildId);
+      if (!r.ok) toast.error(r.message || "Could not finalize research");
+      else {
+        toast.success("Research complete — node unlocked");
+        await loadMe();
+      }
+    } finally {
+      setTechBusyId(null);
     }
   };
 
@@ -433,6 +452,16 @@ export function GuildTab() {
 
   if (loading) {
     return <GuildHallSkeleton />;
+  }
+
+  if (!data && loadError) {
+    return (
+      <div className="guild-root">
+        <div className="guild-container">
+          <ErrorState message="Could not load the guild hub." onRetry={() => void loadMe()} />
+        </div>
+      </div>
+    );
   }
 
   if (!data?.in_guild) {
@@ -562,7 +591,7 @@ export function GuildTab() {
                   <span style={{ color: "var(--gold-400)" }}>/guild create</span> — same as this form
                 </li>
                 <li style={{ marginBottom: 8 }}>
-                  <span style={{ color: "var(--gold-400)" }}>/guild join</span> — enlist by guild name
+                  <span style={{ color: "var(--gold-400)" }}>/guild invite</span> — officers invite you; accept in DMs or `/guild join` after invite
                 </li>
                 <li>Recruit members with invites once your hall stands.</li>
               </ul>
@@ -1193,13 +1222,23 @@ export function GuildTab() {
                       {!has && !blocked ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                           {!fundFull ? (
-                            <button type="button" className="btn-ghost" onClick={() => void onContributeTech(node.id)}>
-                              Donate
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              disabled={techBusyId !== null}
+                              onClick={() => void onContributeTech(node.id)}
+                            >
+                              {techBusyId === node.id ? "…" : "Donate"}
                             </button>
                           ) : null}
                           {canFinalize ? (
-                            <button type="button" className="btn-gold" onClick={() => void onFinalizeTech(node.id)}>
-                              Finalize research
+                            <button
+                              type="button"
+                              className="btn-gold"
+                              disabled={techBusyId !== null}
+                              onClick={() => void onFinalizeTech(node.id)}
+                            >
+                              {techBusyId === node.id ? "…" : "Finalize research"}
                             </button>
                           ) : null}
                         </div>
@@ -1363,7 +1402,16 @@ export function GuildTab() {
           <Panel className="col-12" style={{ display: "flex", flexDirection: "column", minHeight: "min(52vh, 440px)", maxHeight: "min(60vh, 560px)" }}>
             <SectionHeader kicker="Guild channel" title="Hall Chat" />
             <div className="guild-feed-scroll">
-              {feed.length === 0 ? (
+              {feedLoading && feed.length === 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }} aria-busy="true" aria-label="Loading hall chat">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i}>
+                      <div className="guild-skel-block h-3 w-32 mb-2" />
+                      <div className="guild-skel-block h-4 w-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : feed.length === 0 ? (
                 <p style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", margin: 0 }}>No messages yet — greet your guild.</p>
               ) : null}
               {feed.map((m) => (

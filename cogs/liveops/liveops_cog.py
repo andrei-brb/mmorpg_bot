@@ -380,6 +380,60 @@ class LiveopsCog(commands.Cog, name="Liveops"):
         )
         await interaction.response.send_message(f"✅ Scheduled **`{slug}`**.", ephemeral=True)
 
+    @liveops_group.command(
+        name="rotation",
+        description="Schedule the automatic weekend Double XP rotation (idempotent)",
+    )
+    @app_commands.describe(weeks="How many upcoming weekends to schedule (1-8)")
+    async def liveops_rotation(
+        self,
+        interaction: discord.Interaction,
+        weeks: app_commands.Range[int, 1, 8] = 4,
+    ):
+        if not interaction.guild:
+            return await interaction.response.send_message("❌ Use this in a server.", ephemeral=True)
+        if not await interaction_user_is_guild_administrator(interaction):
+            return await interaction.response.send_message(
+                "❌ **Administrator** permission required (or you must be the server owner).", ephemeral=True
+            )
+
+        svc = LiveEventService(self.bot.db)
+        now = datetime.now(timezone.utc)
+        # This (or next) Saturday 00:00 UTC → Monday 00:00 UTC. Past-started
+        # windows are fine: an event is live while ends_at > NOW().
+        sat = (now + timedelta(days=(5 - now.weekday()) % 7)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        if sat + timedelta(days=2) <= now:  # weekend already over → start next week
+            sat += timedelta(weeks=1)
+
+        lines = []
+        for i in range(int(weeks)):
+            st = sat + timedelta(weeks=i)
+            en = st + timedelta(days=2)
+            iso_year, iso_week, _ = st.isocalendar()
+            slug = f"auto-weekend-{iso_year}w{iso_week:02d}"
+            await svc.create_event(
+                interaction.guild_id,
+                slug,
+                "🎉 Weekend Double XP",
+                description="Automatic weekend rotation: double XP, +25% gold, extra boss sightings.",
+                starts_at=st,
+                ends_at=en,
+                config={"xp_multiplier": 2.0, "gold_multiplier": 1.25, "explore_boss_chance_add": 0.05},
+                announce_on_start=True,
+                announce_on_end=True,
+                created_by=interaction.user.id,
+            )
+            lines.append(f"`{slug}` — starts <t:{int(st.timestamp())}:F>")
+
+        embed = discord.Embed(
+            title="🔁 Weekend rotation scheduled",
+            description="\n".join(lines) + "\n\nRe-run this command anytime — existing weekends are updated, not duplicated.",
+            color=0xFF8C00,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @liveops_group.command(name="delete", description="Remove an event by slug")
     async def liveops_delete(self, interaction: discord.Interaction, slug: str):
         if not interaction.guild:

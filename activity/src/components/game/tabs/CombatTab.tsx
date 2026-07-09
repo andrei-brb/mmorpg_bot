@@ -4,6 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import type { CombatEnemy, CombatEnemiesMeta, CombatStatePayload } from "@/lib/apiTypes";
 import { CombatEncounterView } from "@/components/game/CombatEncounterView";
 import { DungeonPanel } from "@/components/game/panels/DungeonPanel";
+import { ErrorState } from "@/components/ui/error-state";
 import { enemyPortraitSrc, isBossKind } from "@/lib/enemyPortraitUrl";
 import { ZONES as ZONES_DATA } from "@/data/zones";
 import { cn } from "@/lib/utils";
@@ -362,6 +363,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [enemyPick, setEnemyPick] = useState("");
   const [outcome, setOutcome] = useState<RichOutcome | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [combatTabMode, setCombatTabMode] = useState<CombatTabMode>("overworld");
   const [activeEnemy, setActiveEnemy] = useState<{ key: string; kind: "enemy" | "boss" } | null>(null);
   /** DungeonPanel sets this while `phase === "fight"` so we can hide the Overworld/Dungeon segment. */
@@ -447,6 +449,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
 
   const refresh = useCallback(async (opts?: { enemiesZoneKey?: string }) => {
     setLoading(true);
+    setLoadError(false);
     try {
       if (pendingCombatEnemyKey.current && curZone) {
         setFoesListZoneId((z) => (z !== curZone ? curZone : z));
@@ -502,6 +505,9 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       } else {
         setEnemyPick("");
       }
+    } catch (e) {
+      console.warn("combat refresh failed", e);
+      setLoadError(true);
     } finally { setLoading(false); }
   }, [
     accessToken,
@@ -675,6 +681,15 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
       <div className="w-full min-w-0">
         {showSubModeToggle && modeSegment}
         <p className="text-sm text-muted-foreground">Loading combat…</p>
+      </div>
+    );
+  }
+
+  if (loadError && mode === "pick" && !enemies.length) {
+    return (
+      <div className="w-full min-w-0">
+        {showSubModeToggle && modeSegment}
+        <ErrorState message="Could not load the enemy list." onRetry={() => void refresh()} />
       </div>
     );
   }

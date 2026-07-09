@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
+import type { BattlePassStatePayload, MainQuestPointerPayload, QuestLogRow } from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import { ZONES } from "@/data/zones";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
 import { WomPanel } from "@/components/wom/WomUi";
 
 const STATE_STYLES: Record<string, string> = {
@@ -130,6 +132,48 @@ export function QuestsTab() {
     resumeFight: () => Promise<{ ok: boolean; message?: string; error?: string }>;
   } | null>(null);
   const [travelFightBusy, setTravelFightBusy] = useState(false);
+  const [battlePass, setBattlePass] = useState<BattlePassStatePayload | null>(null);
+  const [daily, setDaily] = useState<api.DailyQuestPayload | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyError, setDailyError] = useState(false);
+
+  const loadDaily = useCallback(async () => {
+    if (!accessToken) return;
+    setDailyLoading(true);
+    setDailyError(false);
+    try {
+      const j = await api.getDailyQuest(accessToken, guildId);
+      setDaily(j);
+    } catch (e) {
+      console.warn("daily quest", e);
+      setDailyError(true);
+    } finally {
+      setDailyLoading(false);
+    }
+  }, [accessToken, guildId]);
+
+  useEffect(() => {
+    void loadDaily();
+  }, [loadDaily]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setBattlePass(null);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .getBattlePass(accessToken, guildId)
+      .then((j) => {
+        if (!cancelled) setBattlePass(j?.season ? j : null);
+      })
+      .catch(() => {
+        if (!cancelled) setBattlePass(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId]);
 
   useEffect(() => { void refreshQuests(); }, [refreshQuests]);
   useEffect(() => { setRows(quests?.quests || []); }, [quests]);
@@ -578,30 +622,142 @@ export function QuestsTab() {
               boxShadow: "0 8px 30px hsl(0 0% 0% / 0.25), inset 0 1px 0 hsl(228 14% 30% / 0.22)",
             }}
           >
+            <div className="game-panel-header flex items-center justify-between gap-2">
+              <span>Daily Quest</span>
+              {daily?.quest?.is_complete ? (
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/90">✅ Complete</span>
+              ) : null}
+            </div>
+            <div className="p-4 pt-3">
+              {dailyLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-2 w-full" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ) : dailyError ? (
+                <ErrorState
+                  className="p-4"
+                  message="Could not load today's daily quest."
+                  onRetry={() => void loadDaily()}
+                />
+              ) : !daily?.quest ? (
+                <p className="text-xs text-muted-foreground">No daily quest available right now — check back tomorrow.</p>
+              ) : (
+                <>
+                  <div className="text-sm font-cinzel font-semibold text-foreground">{daily.quest.name ?? "Daily quest"}</div>
+                  {daily.quest.description ? (
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{daily.quest.description}</p>
+                  ) : null}
+                  {(daily.quest.objectives || []).length > 0 ? (
+                    <div className="mt-3 space-y-2.5">
+                      {(daily.quest.objectives || []).map((obj) => {
+                        const need = Math.max(1, Number(obj.count ?? 1));
+                        const cur = Math.min(need, Math.max(0, Number(daily.quest?.progress?.[obj.id] ?? 0)));
+                        const pct = Math.min(100, (cur / need) * 100);
+                        return (
+                          <div key={obj.id}>
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              <span className="min-w-0 truncate text-foreground/90">{obj.description || obj.kind || obj.id}</span>
+                              <span className="shrink-0 tabular-nums text-muted-foreground">
+                                {cur}/{need}
+                              </span>
+                            </div>
+                            <div
+                              className="mt-1 h-1.5 rounded-sm overflow-hidden"
+                              style={{
+                                background: "hsl(226 30% 8% / 0.75)",
+                                border: "1px solid hsl(228 18% 22% / 0.8)",
+                              }}
+                            >
+                              <div
+                                className="h-full rounded-sm transition-all"
+                                style={{
+                                  width: `${pct}%`,
+                                  background:
+                                    pct >= 100
+                                      ? "linear-gradient(90deg, hsl(150 55% 40%), hsl(150 55% 50%))"
+                                      : "linear-gradient(90deg, hsl(43 78% 45%), hsl(43 78% 55%))",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {daily.quest.rewards && (daily.quest.rewards.xp || daily.quest.rewards.gold) ? (
+                    <p className="mt-3 text-[11px] text-muted-foreground tabular-nums">
+                      <span className="font-cinzel uppercase tracking-wider">Rewards:</span>{" "}
+                      {daily.quest.rewards.xp ? <span className="text-sky-200/90">⭐ {daily.quest.rewards.xp.toLocaleString()} XP</span> : null}
+                      {daily.quest.rewards.xp && daily.quest.rewards.gold ? " · " : null}
+                      {daily.quest.rewards.gold ? <span className="text-amber-200/90">🪙 {daily.quest.rewards.gold.toLocaleString()}</span> : null}
+                    </p>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </WomPanel>
+
+          <WomPanel
+            glow
+            className="w-full min-w-0"
+            style={{
+              background: "linear-gradient(180deg, hsl(226 28% 14% / 0.85) 0%, hsl(230 32% 10% / 0.9) 100%)",
+              border: "1px solid hsl(43 50% 35% / 0.3)",
+              boxShadow: "0 8px 30px hsl(0 0% 0% / 0.25), inset 0 1px 0 hsl(228 14% 30% / 0.22)",
+            }}
+          >
             <div className="game-panel-header flex items-center justify-between">
               <span>Battle Pass</span>
               <span className="text-[10px] text-muted-foreground">{playerName || "Adventurer"}</span>
             </div>
-            <div className="p-4 pt-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-cinzel font-semibold text-foreground">
-                  Lv {playerLevel ?? "—"} / 50
-                </div>
-                <div className="text-[10px] text-muted-foreground tabular-nums">6400/10000</div>
-              </div>
-              <div className="mt-2 h-2 rounded-sm overflow-hidden" style={{ background: "hsl(226 30% 8% / 0.75)", border: "1px solid hsl(228 18% 22% / 0.8)" }}>
-                <div
-                  className="h-full"
-                  style={{
-                    width: "64%",
-                    background: "linear-gradient(90deg, hsl(180 70% 55%), hsl(200 78% 60%))",
-                    boxShadow: "0 0 12px hsl(190 78% 55% / 0.25)",
-                  }}
-                />
-              </div>
-              <div className="mt-2 text-[10px] text-muted-foreground">
-                Cosmetic UI for now — we can wire this to real progression later.
-              </div>
+                        <div className="p-4 pt-3">
+              {battlePass?.season && battlePass.progress ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-cinzel font-semibold text-foreground">
+                      Tier {battlePass.progress.tier ?? 0}
+                      {battlePass.season.max_tier != null ? ` / ${battlePass.season.max_tier}` : ""}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">
+                      {(battlePass.progress.xp_in_tier ?? 0).toLocaleString()}/
+                      {(battlePass.progress.xp_needed_for_next ?? 0) > 0
+                        ? (battlePass.progress.xp_needed_for_next ?? 0).toLocaleString()
+                        : "MAX"}
+                    </div>
+                  </div>
+                  <div
+                    className="mt-2 h-2 rounded-sm overflow-hidden"
+                    style={{
+                      background: "hsl(226 30% 8% / 0.75)",
+                      border: "1px solid hsl(228 18% 22% / 0.8)",
+                    }}
+                  >
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (battlePass.progress.xp_needed_for_next ?? 0) > 0
+                            ? ((battlePass.progress.xp_in_tier ?? 0) /
+                                (battlePass.progress.xp_needed_for_next ?? 1)) *
+                              100
+                            : 100,
+                        )}%`,
+                        background:
+                          "linear-gradient(90deg, hsl(180 70% 55%), hsl(200 78% 60%))",
+                        boxShadow: "0 0 12px hsl(190 78% 55% / 0.25)",
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">
+                  Open the Pass tab to view season rewards and progress.
+                </p>
+              )}
             </div>
           </WomPanel>
             </div>

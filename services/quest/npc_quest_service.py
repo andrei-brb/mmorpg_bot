@@ -3500,10 +3500,16 @@ class NPCQuestService:
                 )
                 return None
 
-        await self.db.execute(
-            "UPDATE quest_progress SET state = 'completed', completed_at = NOW() WHERE character_id = $1 AND quest_id = $2",
+        # Atomically flip active → completed; only the caller that performs the
+        # transition receives the rewards, so concurrent turn-ins can't double-grant.
+        row = await self.db.fetchrow(
+            """UPDATE quest_progress SET state = 'completed', completed_at = NOW()
+               WHERE character_id = $1 AND quest_id = $2 AND state = 'active'
+               RETURNING quest_id""",
             char_id, quest_id,
         )
+        if not row:
+            return None
         return quest_data["rewards"]
 
     async def abandon_quest(self, char_id: UUID, quest_id: str) -> bool:

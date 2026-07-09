@@ -39,6 +39,12 @@ export function BattleFighter({
   const hpPercent = Math.max(0, (hp / maxHp) * 100);
   const mpPercent = mp && maxMp ? Math.max(0, (mp / maxMp) * 100) : 0;
   const [displayHp, setDisplayHp] = useState(hp);
+  const [iconFailed, setIconFailed] = useState(false);
+
+  // A missing portrait PNG (404) falls back to the emoji `icon`.
+  useEffect(() => {
+    setIconFailed(false);
+  }, [iconSrc]);
 
   // Animate HP drain
   useEffect(() => {
@@ -83,7 +89,7 @@ export function BattleFighter({
           background: "radial-gradient(ellipse, hsl(0 0% 0% / 0.4) 0%, transparent 70%)",
         }}
       >
-        {iconSrc ? (
+        {iconSrc && !iconFailed ? (
           <img
             src={iconSrc}
             alt=""
@@ -94,6 +100,7 @@ export function BattleFighter({
               filter: "drop-shadow(0 4px 8px hsl(0 0% 0% / 0.7))",
               transform: isPlayer ? "scaleX(1)" : "scaleX(-1)",
             }}
+            onError={() => setIconFailed(true)}
           />
         ) : (
           <span

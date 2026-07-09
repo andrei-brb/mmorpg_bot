@@ -13,7 +13,11 @@ from discord import app_commands
 from discord.ext import commands
 
 from config.settings import CLASSES, SPECIALIZATIONS, Settings, RARITIES, ZONES
-from services.character.character_service import CharacterService
+from services.character.character_service import (
+    PRESTIGE_MAX,
+    PRESTIGE_XP_BONUS,
+    CharacterService,
+)
 
 log = logging.getLogger("cog.character")
 
@@ -93,6 +97,11 @@ class SpecSelectView(discord.ui.View):
         except Exception:
             pass
 
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey, row=1)
+    async def cancel(self, interaction: discord.Interaction, _):
+        self.stop()
+        await interaction.response.edit_message(content="Cancelled.", view=None, embed=None)
+
 
 # ── Cog ───────────────────────────────────────────────────────────────────────
 
@@ -160,7 +169,7 @@ class CharacterCog(commands.Cog, name="Character"):
         embed = discord.Embed(
             title=f"🎉 Welcome to the world, **{name}**!",
             description=f"> *{cls.lore}*",
-            color=0x00FF7F,
+            color=Settings.COLORS["success"],
         )
         embed.add_field(name="Class",  value=f"{cls.emoji} {cls.name}", inline=True)
         embed.add_field(name="Role",   value=cls.role.title(),          inline=True)
@@ -170,9 +179,19 @@ class CharacterCog(commands.Cog, name="Character"):
         embed.add_field(
             name="📋 Quick Start",
             value=f"• `/explore` — Enter the world\n"
-                  f"• `/fight` — Battle enemies\n"
+                  f"• `/fight` — Battle enemies, then `/inventory` + `/equip` your loot\n"
                   f"• `/character profile` — View your stats\n"
                   f"• Reach level **{Settings.SPEC_UNLOCK_LEVEL}** → choose a Specialization",
+            inline=False,
+        )
+        embed.add_field(
+            name="🔁 Come back daily",
+            value="`/login` streak reward • `/daily` quest • `/guild checkin` (once you join one)",
+            inline=False,
+        )
+        embed.add_field(
+            name="🎮 Prefer a full game UI?",
+            value="`/open_game` launches the interactive app — same character, same world.",
             inline=False,
         )
 
@@ -220,7 +239,7 @@ class CharacterCog(commands.Cog, name="Character"):
             "frost": 0x00CED1,     # Cyan ice
             # Paladin specs  
             "retribution": 0xFF6347,   # Tomato red
-            "holy_paladin": 0xFFD700,  # Gold
+            "holy_paladin": Settings.COLORS["reward"],  # Gold
             # Priest specs
             "holy_priest": 0xFFFFE0,   # Light yellow
             "shadow": 0x8B008B,        # Dark magenta
@@ -735,7 +754,7 @@ class CharacterCog(commands.Cog, name="Character"):
                 f"As a **{cls.name}**, choose one path.\n"
                 f"⚠️ **This choice is permanent.** Choose wisely.\n\u200b"
             ),
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         for key, spec in specs.items():
             embed.add_field(
@@ -755,7 +774,7 @@ class CharacterCog(commands.Cog, name="Character"):
 
         ok, msg = await self.svc.choose_spec(char["id"], view.chosen)
         spec = SPECIALIZATIONS[view.chosen]
-        color = 0x00FF7F if ok else 0xFF0000
+        color = Settings.COLORS["success"] if ok else Settings.COLORS["error"]
         result = discord.Embed(
             title=f"{spec.emoji} {spec.name}" if ok else "❌ Error",
             description=msg,
@@ -764,6 +783,78 @@ class CharacterCog(commands.Cog, name="Character"):
         if ok:
             result.add_field(name="Passive", value=f"**{spec.passive_name}** — {spec.passive_desc}")
         await interaction.edit_original_response(embed=result, view=None)
+
+    # ── /character prestige ───────────────────────────────────────────────────
+
+    @char.command(name="prestige", description=f"Prestige at level {Settings.MAX_LEVEL}: reset to level 1 for a permanent XP bonus")
+    async def prestige(self, interaction: discord.Interaction):
+        char = await self.svc.get_character(interaction.user.id)
+        if not char:
+            return await interaction.response.send_message("❌ No character — use `/character create`.", ephemeral=True)
+
+        prestige = int(char["prestige"] or 0)
+        if prestige >= PRESTIGE_MAX:
+            return await interaction.response.send_message(
+                f"❌ You are already at the maximum prestige level (**{PRESTIGE_MAX}**).", ephemeral=True
+            )
+        if char["level"] < Settings.MAX_LEVEL:
+            return await interaction.response.send_message(
+                f"❌ Requires level **{Settings.MAX_LEVEL}**. You are level **{char['level']}**.", ephemeral=True
+            )
+
+        new_prestige = prestige + 1
+        bonus_pct = int(round(new_prestige * PRESTIGE_XP_BONUS * 100))
+        embed = discord.Embed(
+            title="✨ Prestige",
+            description=(
+                f"Reset **{char['name']}** to level 1 in exchange for a permanent XP bonus.\n"
+                f"⚠️ Level, XP and talents are reset. Gold, inventory and guild are kept."
+            ),
+            color=Settings.COLORS["warning"],
+        )
+        embed.add_field(
+            name="Permanent Bonus",
+            value=f"Prestige {prestige} → {new_prestige}: **+{bonus_pct}% XP** total",
+            inline=False,
+        )
+
+        owner_id = interaction.user.id
+
+        class ConfirmView(discord.ui.View):
+            def __init__(self): super().__init__(timeout=60); self.ok = False
+            async def interaction_check(self, i: discord.Interaction) -> bool:
+                if i.user.id != owner_id:
+                    await i.response.send_message("❌ This menu isn't for you.", ephemeral=True)
+                    return False
+                return True
+            @discord.ui.button(label="Prestige", style=discord.ButtonStyle.danger)
+            async def yes(self, i, _): self.ok = True; self.stop(); await i.response.defer()
+            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+            async def no(self, i, _): self.stop(); await i.response.defer()
+
+        view = ConfirmView()
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await view.wait()
+        if not view.ok:
+            return
+
+        result = await self.svc.prestige_character(char["id"])
+        if not result.get("ok"):
+            return await interaction.edit_original_response(
+                content=f"❌ Prestige failed — requires level **{Settings.MAX_LEVEL}** and prestige below **{PRESTIGE_MAX}**.",
+                embed=None, view=None,
+            )
+
+        done = discord.Embed(
+            title=f"✨ Prestige {result['prestige']}",
+            description=(
+                f"**{char['name']}** is reborn at level 1!\n"
+                f"Permanent bonus: **+{result['xp_bonus_pct']}% XP**\n"
+                f"Talents reset for free — gold, inventory and guild kept."
+            ),
+            color=Settings.COLORS["success"],
+        )
+        await interaction.edit_original_response(content=None, embed=done, view=None)
 
     # ── /character delete ─────────────────────────────────────────────────────
 

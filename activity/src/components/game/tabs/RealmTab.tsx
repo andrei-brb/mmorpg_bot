@@ -3,8 +3,16 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { WomPanel, WomSectionHeader } from "@/components/wom/WomUi";
-import type { CharacterDerivedStatsPayload, ProgressPayload } from "@/lib/apiTypes";
+import type {
+  CharacterDerivedStatsPayload,
+  FactionReputationRow,
+  MilestoneProgressRow,
+  MilestoneBuffRow,
+  MilestonesPayload,
+  ProgressPayload,
+} from "@/lib/apiTypes";
 import * as api from "@/lib/gameApi";
 import { cn } from "@/lib/utils";
 import { SocialPanel } from "@/components/game/panels/SocialPanel";
@@ -105,6 +113,10 @@ export function RealmTab() {
   const [derived, setDerived] = useState<CharacterDerivedStatsPayload | null>(null);
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [goalDraft, setGoalDraft] = useState("");
+  const [milestones, setMilestones] = useState<MilestoneProgressRow[]>([]);
+  const [milestoneBuffs, setMilestoneBuffs] = useState<MilestoneBuffRow[]>([]);
+  const [factions, setFactions] = useState<FactionReputationRow[]>([]);
+  const [worldMetaLoading, setWorldMetaLoading] = useState(false);
 
   useEffect(() => {
     setGoals(loadGoals());
@@ -118,6 +130,35 @@ export function RealmTab() {
     void refreshProgress();
     void refreshMap();
   }, [refreshProgress, refreshMap]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    setWorldMetaLoading(true);
+    void (async () => {
+      try {
+        const [ms, rep] = await Promise.all([
+          guildId ? api.getMilestones(accessToken, guildId) : Promise.resolve<MilestonesPayload>({ ok: false }),
+          api.getReputation(accessToken, guildId),
+        ]);
+        if (cancelled) return;
+        setMilestones(ms.ok ? ms.progress || [] : []);
+        setMilestoneBuffs(ms.ok ? ms.buffs || [] : []);
+        setFactions(rep.ok ? rep.factions || [] : []);
+      } catch {
+        if (!cancelled) {
+          setMilestones([]);
+          setMilestoneBuffs([]);
+          setFactions([]);
+        }
+      } finally {
+        if (!cancelled) setWorldMetaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId]);
 
   const derivedStatsKey = useMemo(() => {
     const items = inventory?.items || [];
@@ -246,18 +287,97 @@ export function RealmTab() {
           </WomPanel>
 
           <WomPanel glow>
-            <WomSectionHeader kicker="Coming later" title="Milestones" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Server-wide milestone boards (community goals, unlock tiers) will plug in here when the API is ready.
-            </p>
+            <WomSectionHeader kicker="Server" title="Milestones" />
+            {!guildId ? (
+              <p className="text-xs text-muted-foreground">Open the game in a Discord server to see shared milestones.</p>
+            ) : worldMetaLoading ? (
+              <ul className="space-y-3" aria-busy="true" aria-label="Loading milestones">
+                {[1, 2, 3].map((i) => (
+                  <li key={i}>
+                    <div className="flex justify-between gap-2">
+                      <Skeleton className="h-3 w-2/5" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                    <Skeleton className="mt-2 h-1.5 w-full rounded-sm" />
+                    <Skeleton className="mt-2 h-3 w-1/3" />
+                  </li>
+                ))}
+              </ul>
+            ) : milestones.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No milestone data yet — play in this server to contribute.</p>
+            ) : (
+              <ul className="space-y-3 text-xs">
+                {milestones.map((m) => {
+                  const pct =
+                    m.next_target && m.next_target > 0
+                      ? Math.min(100, Math.round((m.value / m.next_target) * 100))
+                      : 100;
+                  return (
+                    <li key={m.key}>
+                      <div className="flex justify-between gap-2 text-foreground font-medium">
+                        <span>{m.title}</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          Tier {m.tier}/{m.max_tier}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 rounded-sm overflow-hidden bg-muted/40">
+                        <div className="h-full bg-primary/80" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="mt-1 text-muted-foreground tabular-nums">
+                        {m.value.toLocaleString()}
+                        {m.next_target != null ? ` / ${m.next_target.toLocaleString()} ${m.unit}` : ` ${m.unit} (max)`}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {milestoneBuffs.length > 0 ? (
+              <div className="mt-3 pt-3 border-t border-border/40">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Active buffs</p>
+                <ul className="space-y-1 text-xs text-emerald-200/90">
+                  {milestoneBuffs.map((b, i) => (
+                    <li key={i}>
+                      {b.buff_type === "xp_multiplier" ? "XP" : "Gold"}{" "}
+                      +{Math.round(Number(b.buff_value || 0) * 100)}%
+                      {b.expires_at ? ` · until ${new Date(b.expires_at).toLocaleString()}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </WomPanel>
 
           <WomPanel glow>
             <WomSectionHeader kicker="Factions" title="Reputation" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Faction reputation will surface here when we aggregate it from quests and world events. For now, check
-              quest rewards for rep gains.
-            </p>
+            {worldMetaLoading ? (
+              <p className="text-xs text-muted-foreground">Loading reputation…</p>
+            ) : factions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Complete quests to earn faction reputation.</p>
+            ) : (
+              <ul className="space-y-2 text-xs">
+                {factions
+                  .filter((f) => f.reputation > 0)
+                  .slice(0, 8)
+                  .map((f) => (
+                    <li
+                      key={f.faction_id}
+                      className="flex items-center justify-between gap-2 border-b border-border/30 pb-2 last:border-0"
+                    >
+                      <span>
+                        {f.emoji} <span className="font-semibold text-foreground">{f.name}</span>
+                      </span>
+                      <span className="text-muted-foreground tabular-nums shrink-0">
+                        {f.reputation.toLocaleString()}
+                        {f.level?.name ? ` · ${f.level.name}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                {factions.every((f) => f.reputation <= 0) ? (
+                  <li className="text-muted-foreground">No standing yet — talk to NPCs on the Quests tab.</li>
+                ) : null}
+              </ul>
+            )}
           </WomPanel>
         </TabsContent>
 

@@ -9,6 +9,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+from config.settings import Settings
 from services.achievement.achievement_service import AchievementService
 from services.character.character_service import CharacterService
 
@@ -70,7 +71,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed = discord.Embed(
             title=f"🏆 Achievements — {char['name']}",
             description=f"**{earned_count}/{total_count}** earned • **{total_points}** points • **{completion}%** complete",
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         
         # Group by category
@@ -141,7 +142,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed = discord.Embed(
             title=f"🎖️ Badges — {char['name']}",
             description=f"**{len(earned)}** badges earned",
-            color=0xFFD700,
+            color=Settings.COLORS["reward"],
         )
         
         # Display badges in a grid (3 columns)

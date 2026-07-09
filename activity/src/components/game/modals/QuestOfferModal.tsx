@@ -238,7 +238,14 @@ export function QuestOfferModal({
                   {playerAvatarUrl ? (
                     playerInitials(playerName || undefined)
                   ) : (
-                    <img src={classIcon} alt="" className="h-10 w-10 object-contain sm:h-12 sm:w-12" />
+                    <img
+                      src={classIcon}
+                      alt=""
+                      className="h-10 w-10 object-contain sm:h-12 sm:w-12"
+                      onError={(ev) => {
+                        (ev.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
                   )}
                 </AvatarFallback>
               </Avatar>

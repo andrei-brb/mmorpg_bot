@@ -112,6 +112,7 @@ class MMORPGBot(commands.Bot):
             "cogs.inventory.inventory_cog",
             "cogs.guild.guild_cog",
             "cogs.economy.economy_cog",
+            "cogs.trade.trade_cog",
             "cogs.events.events_cog",
             "cogs.battlepass.battlepass_cog",
             "cogs.talents.talents_cog",
