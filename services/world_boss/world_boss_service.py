@@ -202,7 +202,7 @@ class WorldBossService:
 
     @staticmethod
     async def distinct_activity_guild_ids(db) -> List[int]:
-        rows = await self.db.fetch(
+        rows = await db.fetch(
             """
             SELECT DISTINCT last_discord_guild_id AS gid
             FROM characters
