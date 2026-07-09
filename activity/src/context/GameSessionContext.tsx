@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { DiscordSDK } from "@discord/embedded-app-sdk";
+import type { AuthProvider } from "./auth/types";
+import { AUTH_ERRORS } from "./auth/types";
+import { DiscordActivityAuth } from "./auth/DiscordActivityAuth";
 import type {
   CombatEnemy,
   CombatEnemiesMeta,
@@ -122,97 +124,16 @@ type GameSessionValue = {
 
 const GameSessionContext = createContext<GameSessionValue | null>(null);
 
-function runWithTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
-  return new Promise((resolve) => {
-    const t = setTimeout(() => resolve("timeout"), ms);
-    p.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (err) => {
-        clearTimeout(t);
-        console.error(err);
-        resolve("timeout");
-      },
-    );
-  });
-}
-
-type DiscordOAuthResult = {
-  token: string;
-  guildId?: string;
-  channelId?: string;
-};
-
-/**
- * Single-flight OAuth: React 18 Strict Mode (dev) mounts twice; without this we can
- * `authorize()` + exchange the code twice — the second call gets invalid_grant / Invalid code.
- */
-let oauthFlight: { clientId: string; promise: Promise<DiscordOAuthResult> } | null = null;
-
-async function runDiscordOAuthOnce(
-  clientId: string,
-  sdkRef: MutableRefObject<DiscordSDK | null>,
-): Promise<DiscordOAuthResult> {
-  if (oauthFlight?.clientId === clientId) {
-    return oauthFlight.promise;
-  }
-
-  // Reserve synchronously before any await — React Strict Mode can invoke this twice
-  // in the same tick; a second call must see oauthFlight and await the same promise.
-  let resolve!: (v: DiscordOAuthResult) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<DiscordOAuthResult>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  oauthFlight = { clientId, promise };
-  promise.catch(() => {
-    oauthFlight = null;
-  });
-
-  void (async () => {
-    try {
-      const sdk = new DiscordSDK(clientId);
-      sdkRef.current = sdk;
-      const raced = await runWithTimeout(sdk.ready(), 12000);
-      if (raced === "timeout") {
-        throw new Error("sdk_ready_timeout");
-      }
-      let auth: Awaited<ReturnType<DiscordSDK["commands"]["authorize"]>>;
-      try {
-        auth = await sdk.commands.authorize({
-          client_id: clientId,
-          response_type: "code",
-          state: "",
-          prompt: "none",
-          scope: ["identify", "applications.commands"],
-        });
-      } catch (e) {
-        console.error(e);
-        throw new Error("authorization_cancelled");
-      }
-      const token = await api.exchangeToken(auth.code, window.location.origin);
-      try {
-        await sdk.commands.authenticate({ access_token: token });
-      } catch (e) {
-        console.warn("authenticate", e);
-      }
-      resolve({
-        token,
-        guildId: sdk.guildId ?? undefined,
-        channelId: sdk.channelId ?? undefined,
-      });
-    } catch (e) {
-      reject(e);
-    }
-  })();
-
-  return promise;
-}
-
-export function GameSessionProvider({ children }: { children: ReactNode }) {
+export function GameSessionProvider({
+  children,
+  authProvider,
+}: {
+  children: ReactNode;
+  /** Injected by the host shell. Defaults to the embedded Discord Activity
+   *  login so the Discord app behaves exactly as before. Mobile shells pass
+   *  DiscordOAuthAuth or NativeAuth. */
+  authProvider?: AuthProvider;
+}) {
   const [phase, setPhase] = useState<Phase>("boot");
   const [errorHtml, setErrorHtml] = useState<string | undefined>();
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -244,9 +165,15 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const pendingCombatEnemyKey = useRef<string | null>(null);
   const quickFightIntentRef = useRef<{ kind: "enemy"; enemyKey: string } | { kind: "zone_any" } | { kind: "zone_boss" } | null>(null);
   const lastStartedEnemy = useRef<{ key: string; kind: "enemy" | "boss" } | null>(null);
-  const sdkRef = useRef<DiscordSDK | null>(null);
 
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
+  // Default to the embedded Discord Activity login when no provider is injected
+  // (the Discord app). Null only if the Discord path is selected but its client
+  // id is missing → the "no_client" setup error below.
+  const provider = useMemo<AuthProvider | null>(
+    () => authProvider ?? (clientId ? new DiscordActivityAuth(clientId) : null),
+    [authProvider, clientId],
+  );
 
   const refreshInventory = useCallback(async () => {
     if (!accessToken) return;
@@ -729,7 +656,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     async function boot() {
-      if (!clientId) {
+      if (!provider) {
         setPhase("no_client");
         setErrorHtml(
           "Missing <code>VITE_DISCORD_CLIENT_ID</code>. Copy <code>activity/.env.example</code> to <code>activity/.env</code>.",
@@ -738,7 +665,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       }
       setPhase("loading");
       try {
-        const { token, guildId: gid, channelId: cid } = await runDiscordOAuthOnce(clientId, sdkRef);
+        const { token, guildId: gid, channelId: cid } = await provider.authenticate();
         if (cancelled) return;
         setAccessToken(token);
         setGuildId(gid);
@@ -751,14 +678,14 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         if (cancelled) return;
         const msg = e instanceof Error ? e.message : String(e);
-        if (msg === "sdk_ready_timeout") {
+        if (msg === AUTH_ERRORS.SDK_READY_TIMEOUT) {
           setPhase("error");
           setErrorHtml(
             "Could not connect to Discord. Open this app <strong>inside Discord</strong> as an Activity, or use dev proxy + ngrok.",
           );
           return;
         }
-        if (msg === "authorization_cancelled") {
+        if (msg === AUTH_ERRORS.AUTHORIZATION_CANCELLED) {
           setPhase("error");
           setErrorHtml("Authorization was cancelled or failed.");
           return;
@@ -773,7 +700,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [provider]);
 
   useEffect(() => {
     if (phase !== "ready" || !accessToken) return;
