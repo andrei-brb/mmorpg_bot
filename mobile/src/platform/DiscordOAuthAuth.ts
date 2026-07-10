@@ -19,16 +19,27 @@ import { AUTH_ERRORS } from "@/context/auth/types";
 const DISCORD_AUTHORIZE = "https://discord.com/api/oauth2/authorize";
 
 export class DiscordOAuthAuth implements AuthProvider {
+  /**
+   * @param clientId          Discord application id.
+   * @param oauthRedirectUri  The https redirect registered in Discord (Discord
+   *                          rejects custom schemes). Sent to authorize AND the
+   *                          token exchange — they must match. Its page bounces
+   *                          the ?code back into the app via `appDeepLink`.
+   * @param appDeepLink       The app's custom-scheme URL the OS routes back to
+   *                          (e.g. com.wold.mmo://auth/discord). What we listen for.
+   */
   constructor(
     private readonly clientId: string,
-    private readonly redirectUri: string,
+    private readonly oauthRedirectUri: string,
+    private readonly appDeepLink: string,
   ) {}
 
   async authenticate(): Promise<AuthSession> {
     const code = Capacitor.isNativePlatform()
       ? await this.nativeCodeFlow()
       : await this.webCodeFlow();
-    const token = await api.exchangeDiscordCodeForSession(code, this.redirectUri);
+    // Discord validates that the exchange redirect_uri matches the authorize one.
+    const token = await api.exchangeDiscordCodeForSession(code, this.oauthRedirectUri);
     return { token, provider: "discord-oauth" };
   }
 
@@ -37,7 +48,7 @@ export class DiscordOAuthAuth implements AuthProvider {
       client_id: this.clientId,
       response_type: "code",
       scope: "identify",
-      redirect_uri: this.redirectUri,
+      redirect_uri: this.oauthRedirectUri,
       prompt: "consent",
     });
     return `${DISCORD_AUTHORIZE}?${params.toString()}`;
@@ -58,7 +69,7 @@ export class DiscordOAuthAuth implements AuthProvider {
         finish(() => reject(e instanceof Error ? e : new Error(String(e))));
 
       void App.addListener("appUrlOpen", ({ url }) => {
-        if (!url.startsWith(this.redirectUri)) return;
+        if (!url.startsWith(this.appDeepLink)) return;
         void Browser.close().catch(() => {});
         try {
           const code = new URL(url).searchParams.get("code");

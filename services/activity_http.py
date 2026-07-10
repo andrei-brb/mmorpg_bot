@@ -474,6 +474,32 @@ async def handle_token(request: web.Request) -> web.Response:
     return web.json_response({"access_token": access_token})
 
 
+async def handle_auth_mobile_callback(request: web.Request) -> web.Response:
+    """OAuth bounce page for the mobile app.
+
+    Discord only accepts http(s) redirect URIs, not custom schemes. The mobile
+    app registers THIS https URL as its Discord redirect; after login Discord
+    sends the browser here with ?code=..., and this page immediately forwards to
+    the app's custom-scheme deep link (com.wold.mmo://auth/discord?code=...),
+    which iOS/Android route back into the app.
+    """
+    qs = request.query_string
+    deep_link = "com.wold.mmo://auth/discord" + (("?" + qs) if qs else "")
+    dl_js = json.dumps(deep_link)
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Signing in…</title>"
+        f"<script>location.replace({dl_js});</script></head>"
+        "<body style='background:#0b0b0f;color:#cbb680;font-family:-apple-system,system-ui,sans-serif;"
+        "text-align:center;padding-top:30vh'>"
+        "<p>Returning to the game…</p>"
+        f"<p><a href={dl_js} style='color:#cbb680'>Tap here if it doesn't open automatically</a></p>"
+        "</body></html>"
+    )
+    return web.Response(text=html, content_type="text/html", headers=_cors_headers(request))
+
+
 async def handle_auth_discord_exchange(request: web.Request) -> web.Response:
     """Standalone Discord login (mobile / standalone web): exchange a Discord
     OAuth code for OUR session JWT, so the client authenticates without the
@@ -6748,6 +6774,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
 
     app.router.add_post("/api/token", handle_token)
     app.router.add_post("/api/auth/discord/exchange", handle_auth_discord_exchange)
+    app.router.add_get("/auth/mobile-callback", handle_auth_mobile_callback)
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/character/stats", handle_character_stats)
     app.router.add_get("/api/game/character/class-options", handle_character_class_options)
