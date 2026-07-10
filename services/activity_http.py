@@ -132,13 +132,23 @@ def _dev_origin_allowed(origin: str) -> bool:
     )
 
 
+# Capacitor/native mobile WebView origins. The mobile app makes DIRECT
+# cross-origin requests to this API (the Discord Activity instead proxies
+# same-origin via Vercel), so these must always be allowed for cross-play.
+_NATIVE_APP_ORIGINS = frozenset(
+    {"capacitor://localhost", "ionic://localhost", "http://localhost", "https://localhost"}
+)
+
+
 def _cors_headers(request: web.Request) -> Dict[str, str]:
     origin = request.headers.get("Origin", "")
     allowed = (
         (os.getenv("ACTIVITY_CORS_ORIGINS") or "").strip()
         or (os.getenv("ACTIVITY_ALLOWED_ORIGINS") or "").strip()
     )
-    if allowed:
+    if origin in _NATIVE_APP_ORIGINS:
+        allow_origin = origin
+    elif allowed:
         parts = [x.strip() for x in allowed.split(",") if x.strip()]
         if origin in parts:
             allow_origin = origin
