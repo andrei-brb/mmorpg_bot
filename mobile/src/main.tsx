@@ -13,10 +13,17 @@ const queryClient = new QueryClient();
 // adds a login screen that also offers NativeAuth (Apple/Google/email); for now
 // the app signs in with Discord and lands on the same cross-play character.
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID as string | undefined;
-const redirectUri =
+// Discord only accepts https redirects, so we register a backend bounce page
+// there and it forwards the code into the app via the custom-scheme deep link.
+const oauthRedirectUri =
   (import.meta.env.VITE_DISCORD_REDIRECT_URI as string | undefined) ??
+  "https://worker-production-1427.up.railway.app/auth/mobile-callback";
+const appDeepLink =
+  (import.meta.env.VITE_DISCORD_APP_DEEPLINK as string | undefined) ??
   "com.wold.mmo://auth/discord";
-const authProvider = clientId ? new DiscordOAuthAuth(clientId, redirectUri) : undefined;
+const authProvider = clientId
+  ? new DiscordOAuthAuth(clientId, oauthRedirectUri, appDeepLink)
+  : undefined;
 
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>

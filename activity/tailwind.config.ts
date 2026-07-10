@@ -4,6 +4,9 @@ export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
+  // Only apply `hover:` utilities on devices that actually support hover, so they
+  // don't "stick" after a tap on touchscreens (phones). No effect on desktop/Discord.
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     container: {
       center: true,

@@ -165,8 +165,12 @@ export function GameTabs({ shellChromeHidden, combatFocusActive, chrome }: GameT
           />
           <div
             className={cn(
-              "fixed z-50 left-3 sm:left-6 top-3 sm:top-6",
-              "w-[min(92vw,380px)] max-h-[calc(100vh-2rem)] overflow-y-auto",
+              "fixed z-50",
+              // Clear the notch/Dynamic Island: this is a fixed element, so it sits
+              // outside the .app-bg safe-area padding and needs its own insets.
+              "[top:calc(0.75rem+env(safe-area-inset-top))] sm:[top:calc(1.5rem+env(safe-area-inset-top))]",
+              "[left:calc(0.75rem+env(safe-area-inset-left))] sm:[left:calc(1.5rem+env(safe-area-inset-left))]",
+              "w-[min(92vw,380px)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto",
               "tex-forge hero-forge-edge-gold-strong p-[2px]",
               "animate-in fade-in slide-in-from-left-4 duration-200",
             )}

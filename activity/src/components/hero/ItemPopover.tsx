@@ -4,6 +4,7 @@ import { ItemIcon } from "@/components/game/ItemIcon";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import type { InvRow } from "@/lib/apiTypes";
 import { itemPopoverDetailRows, itemTooltipSubtitle } from "@/lib/itemStatLines";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import { cn } from "@/lib/utils";
 
 type PopoverRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
@@ -131,6 +132,7 @@ export function ItemPopover({
 }: ItemPopoverProps) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const coarsePointer = useCoarsePointer();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const [autoSide, setAutoSide] = useState<PopSide>("right");
@@ -179,6 +181,10 @@ export function ItemPopover({
 
   if (disabled) return <>{children}</>;
 
+  // On touch, tap-to-pin (the onClick below) is the only open path — hover-open
+  // fires synthesized mouse events that flicker/stick, so gate it to fine pointers.
+  const hoverHandlers = coarsePointer ? {} : { onMouseEnter: onEnter, onMouseLeave: onLeave };
+
   const flavor = itemTooltipSubtitle(item) || "Forged for the realm—handle with ambition.";
 
   const visible: Array<{ label: string; accent?: boolean; onClick?: () => void }> = [];
@@ -204,8 +210,7 @@ export function ItemPopover({
         <div
           ref={anchorRef}
           className="block"
-          onMouseEnter={onEnter}
-          onMouseLeave={onLeave}
+          {...hoverHandlers}
           onClick={(e) => {
             e.stopPropagation();
             refreshPlacement();
@@ -231,8 +236,7 @@ export function ItemPopover({
         avoidCollisions
         sticky="partial"
         hideWhenDetached={false}
-        onMouseEnter={onEnter}
-        onMouseLeave={onLeave}
+        {...hoverHandlers}
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
           "w-[14.5rem] max-w-[min(15rem,85vw)] p-0 rounded-md",
