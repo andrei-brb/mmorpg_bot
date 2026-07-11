@@ -177,15 +177,20 @@ async def cors_middleware(request: web.Request, handler):
     except web.HTTPException as ex:
         ex.headers.update(_cors_headers(request))
         raise
-    except Exception:
+    except Exception as e:
         # A non-HTTP exception would otherwise become a bare aiohttp 500 with
         # no CORS headers, which a cross-origin (capacitor://localhost) client
         # sees as an opaque "Load failed" TypeError. Attach CORS and surface a
         # readable JSON 500 instead — and log the traceback so the real cause
         # is visible.
         log.exception("activity_http handler crashed: %s %s", request.method, request.path)
+        # TEMP-DEBUG: include the exception detail in the response so the mobile
+        # client surfaces it. Revert to a generic message once diagnosed.
         resp = web.HTTPInternalServerError(
-            text=json.dumps({"ok": False, "error": "internal_error"}),
+            text=json.dumps({
+                "ok": False,
+                "error": f"internal_error [{request.path}]: {type(e).__name__}: {str(e)[:300]}",
+            }),
             content_type="application/json",
         )
         resp.headers.update(_cors_headers(request))
