@@ -877,8 +877,8 @@ export function HeroTab() {
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
-                      <div className="hero-forge-clip-tag border border-gold/25 bg-black/35 px-2.5 py-2 sm:px-3 sm:py-2.5">
-                        <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-gold-dim">
+                      <div className="hero-forge-clip-tag min-w-0 border border-gold/25 bg-black/35 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[9px] uppercase tracking-[0.2em] text-gold-dim">
                           <Sparkles className="h-3 w-3 shrink-0 text-gold-200/90" aria-hidden />
                           Pending XP
                         </div>
@@ -890,15 +890,15 @@ export function HeroTab() {
                           </p>
                         )}
                       </div>
-                      <div className="hero-forge-clip-tag border border-gold/25 bg-black/35 px-2.5 py-2 sm:px-3 sm:py-2.5">
-                        <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-gold-dim">
+                      <div className="hero-forge-clip-tag min-w-0 border border-gold/25 bg-black/35 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[9px] uppercase tracking-[0.2em] text-gold-dim">
                           <Coins className="h-3 w-3 shrink-0 text-gold/90" aria-hidden />
                           Pending gold
                         </div>
                         {idleLoading ? (
                           <div className="mt-1.5 h-7 w-16 animate-pulse rounded-sm bg-gold/10 sm:h-8" />
                         ) : (
-                          <p className="mt-1 flex items-baseline gap-1 font-display text-lg tabular-nums leading-none text-gold sm:text-xl">
+                          <p className="mt-1 flex flex-wrap items-baseline gap-x-1 min-w-0 font-display text-lg tabular-nums leading-none text-gold sm:text-xl">
                             {idleRewards?.pending_gold ?? 0}
                             <span className="text-sm" aria-hidden>
                               🪙
@@ -996,7 +996,7 @@ export function HeroTab() {
                         setSalvageIds(new Set());
                         setInventoryView(v === "consumables" ? "consumables" : v === "materials" ? "materials" : "gear");
                       }}
-                      className={`relative flex-1 py-3 font-display text-xs tracking-[0.28em] transition-colors sm:py-4 sm:text-sm ${active ? "text-gold-200" : "text-gold-600 hover:text-gold"} `}
+                      className={`relative min-w-0 flex-1 truncate px-1 py-3 font-display text-[9px] tracking-normal transition-colors sm:px-2 sm:py-4 sm:text-sm sm:tracking-[0.28em] ${active ? "text-gold-200" : "text-gold-600 hover:text-gold"} `}
                     >
                       {labels[v].toUpperCase()}
                       {active ? (

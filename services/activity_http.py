@@ -177,6 +177,19 @@ async def cors_middleware(request: web.Request, handler):
     except web.HTTPException as ex:
         ex.headers.update(_cors_headers(request))
         raise
+    except Exception:
+        # A non-HTTP exception would otherwise become a bare aiohttp 500 with
+        # no CORS headers, which a cross-origin (capacitor://localhost) client
+        # sees as an opaque "Load failed" TypeError. Attach CORS and surface a
+        # readable JSON 500 instead — and log the traceback so the real cause
+        # is visible.
+        log.exception("activity_http handler crashed: %s %s", request.method, request.path)
+        resp = web.HTTPInternalServerError(
+            text=json.dumps({"ok": False, "error": "internal_error"}),
+            content_type="application/json",
+        )
+        resp.headers.update(_cors_headers(request))
+        raise resp
     for k, v in _cors_headers(request).items():
         response.headers.setdefault(k, v)
     return response
@@ -3718,7 +3731,10 @@ async def handle_explore(request: web.Request) -> web.Response:
     ig = _uuid_from_any(char["guild_id"]) if char.get("guild_id") else None
     xp_mult, gold_mult, boss_add = await get_combined_reward_multipliers(db, guild_id, ingame_guild_id=ig)
     wbs = WorldBossService(db)
-    zone_patrol = await WorldBossService.fetch_zone_patrol_boss_alive(db, char.get("current_zone"))
+    try:
+        zone_patrol = await WorldBossService.fetch_zone_patrol_boss_alive(db, char.get("current_zone"))
+    except Exception:
+        zone_patrol = True  # safe default (matches world_boss_service.py:31)
     world_key = await wbs.active_window_boss_for_zone(guild_id, char.get("current_zone") or "")
     if world_key:
         boss_add = min(boss_add + 0.08, 0.15)
@@ -3744,20 +3760,24 @@ async def handle_explore(request: web.Request) -> web.Response:
         gold = int(g0 * gold_mult)
         await char_svc.add_gold(_uuid_from_any(char["id"]), gold, "exploration")
         reward = {"xp": int(xp_res.get("xp_gained") or 0), "gold": gold, "base_xp": xp0, "base_gold": g0}
-        # Gathering: crafting materials are farmable via exploration (parity with /explore)
-        if random.random() < 0.35:
-            from services.character.inventory_service import InventoryService
-            scrap_tid = random.choice(("weapon_scrap", "armor_scrap", "accessory_scrap"))
-            scrap_qty = random.randint(1, 2)
-            ok_s, _ = await InventoryService(db).add_item(
-                _uuid_from_any(char["id"]), scrap_tid, "common", quantity=scrap_qty, from_="gathering"
-            )
-            if ok_s:
-                reward["scrap"] = {
-                    "template_id": scrap_tid,
-                    "name": scrap_tid.replace("_", " ").title(),
-                    "quantity": scrap_qty,
-                }
+        # Gathering: crafting materials are farmable via exploration (parity with
+        # /explore). Best-effort bonus — never fail the explore action over it.
+        try:
+            if random.random() < 0.35:
+                from services.character.inventory_service import InventoryService
+                scrap_tid = random.choice(("weapon_scrap", "armor_scrap", "accessory_scrap"))
+                scrap_qty = random.randint(1, 2)
+                ok_s, _ = await InventoryService(db).add_item(
+                    _uuid_from_any(char["id"]), scrap_tid, "common", quantity=scrap_qty, from_="gathering"
+                )
+                if ok_s:
+                    reward["scrap"] = {
+                        "template_id": scrap_tid,
+                        "name": scrap_tid.replace("_", " ").title(),
+                        "quantity": scrap_qty,
+                    }
+        except Exception:
+            log.warning("explore gathering scrap failed", exc_info=True)
     elif outcome["type"] == "safe":
         xp0 = random.randint(3, 8)
         xp_res = await char_svc.award_xp(_uuid_from_any(char["id"]), xp0, xp_mult)

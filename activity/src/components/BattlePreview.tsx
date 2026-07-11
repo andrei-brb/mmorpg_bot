@@ -365,7 +365,7 @@ function PanelOrnament({ className }: { className?: string }) {
 function StatPanel({ character }: { character: CharacterData }) {
   return (
     <div
-      className={cn("relative flex min-w-[240px] max-w-xs flex-col gap-1 rounded-sm border border-amber-900/40 px-4 py-3")}
+      className={cn("relative flex w-full min-w-0 max-w-xs flex-col gap-1 rounded-sm border border-amber-900/40 px-2.5 py-3 sm:min-w-[240px] sm:px-4")}
       style={{
         background: "linear-gradient(180deg, rgba(20,15,25,0.92) 0%, rgba(30,20,35,0.95) 100%)",
         boxShadow: "inset 0 1px 0 rgba(255,215,0,0.08), 0 4px 20px rgba(0,0,0,0.5)",
@@ -383,8 +383,9 @@ function StatPanel({ character }: { character: CharacterData }) {
           </span>
         )}
         <h3
-          className="min-w-[120px] flex-1 text-sm font-bold uppercase tracking-wider"
+          className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wider sm:min-w-[120px]"
           style={{ color: "#e8dcc8", textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
+          title={character.name}
         >
           {character.name}
         </h3>

@@ -162,7 +162,7 @@ export function GameShell() {
   }
 
   return (
-    <div className="app-bg min-h-[100dvh] flex flex-col text-foreground">
+    <div className="app-bg min-h-[100dvh] flex flex-col text-foreground overflow-x-clip">
       <MailModal
         open={mailOpen}
         onOpenChange={setMailOpen}
@@ -282,7 +282,7 @@ export function GameShell() {
       )}
 
       <div
-        className={`mx-auto w-full max-w-[min(100%,1400px)] px-3 sm:px-4 flex-1 min-h-0 flex flex-col ${
+        className={`mx-auto w-full max-w-[min(100%,1400px)] px-3 sm:px-4 flex-1 min-h-0 flex flex-col overflow-x-clip ${
           shellChromeHidden ? "py-2 sm:py-3" : "py-3 sm:py-4"
         }`}
       >
