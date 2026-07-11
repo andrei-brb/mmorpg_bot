@@ -1107,14 +1107,14 @@ function SubTabBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs font-display tracking-wider transition cursor-pointer",
+        "flex min-w-0 items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs font-display tracking-wider transition cursor-pointer",
         active
           ? "bg-[color:var(--gold)]/20 text-[color:var(--gold-bright)] ring-1 ring-[color:var(--gold)]/50"
           : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
       )}
     >
       {icon}
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
       {count != null && count > 0 ? (
         <Badge className="bg-[color:var(--gold)]/25 text-[color:var(--gold-bright)] border-0 px-1.5 py-0 text-[10px]">{count}</Badge>
       ) : null}

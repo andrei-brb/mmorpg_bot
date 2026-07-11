@@ -131,7 +131,7 @@ export function PvpHub({
           <div className="flex min-w-0 flex-col gap-4 hero-forge-edge-gold hero-forge-clip-blade-sm tex-forge p-4 sm:flex-row sm:items-center">
             <ArenaPlayerAvatar name={player.character_name || player.username} src={player.portrait_url} size={56} />
             <div className="min-w-0 flex-1">
-              <p className="font-display text-lg leading-none tracking-[0.18em] text-gold-bright">
+              <p className="break-words font-display text-lg leading-none tracking-[0.18em] text-gold-bright">
                 {(player.character_name || player.username).toUpperCase()}{" "}
                 <span className="text-gold">LV.{player.level}</span>
               </p>

@@ -821,7 +821,7 @@ export function HeroTab() {
                     <p className="text-[9px] uppercase tracking-[0.22em] text-gold-dim sm:text-[10px] sm:tracking-[0.28em]">
                       Combat power
                     </p>
-                    <p className="w-full min-w-0 text-center font-display text-base tabular-nums leading-none text-gold-200 sm:text-xl md:text-2xl">
+                    <p className="w-full min-w-0 break-all text-center font-display text-base tabular-nums leading-none text-gold-200 sm:text-xl md:text-2xl">
                       {combatPowerDisplay}
                     </p>
                   </div>
@@ -1271,10 +1271,10 @@ export function HeroTab() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-gold-dim via-gold-200 to-gold-dim" />
                   <div className="absolute inset-0 opacity-30 mix-blend-overlay [background-image:repeating-linear-gradient(135deg,oklch(0_0_0/0.4)_0_2px,transparent_2px_5px)]" />
-                  <div className="relative flex items-center justify-center gap-3 py-3.5 text-background sm:py-4">
-                    <Hammer className="h-5 w-5 shrink-0" />
-                    <span className="font-display text-lg tracking-[0.35em] sm:text-xl">OPEN BLACKSMITH</span>
-                    <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
+                  <div className="relative flex items-center justify-center gap-1.5 py-3.5 text-background sm:gap-3 sm:py-4">
+                    <Hammer className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
+                    <span className="font-display text-sm tracking-[0.12em] sm:text-xl sm:tracking-[0.35em]">OPEN BLACKSMITH</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1 sm:h-5 sm:w-5" />
                   </div>
                   <div className="absolute top-0 -left-full h-full w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-[300%]" />
                 </button>

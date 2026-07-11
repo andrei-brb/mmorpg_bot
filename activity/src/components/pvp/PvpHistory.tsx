@@ -50,7 +50,7 @@ function ArenaHistoryRow({ match: m }: { match: PvpHistoryEntry }) {
       <ArenaPlayerAvatar name={m.opponent_name} size={38} />
 
       <div className="min-w-0 flex-1">
-        <p className="font-display text-sm leading-none tracking-[0.18em] text-parchment">
+        <p className="break-words font-display text-sm leading-none tracking-[0.18em] text-parchment">
           vs <span className="text-gold-bright">{m.opponent_name}</span>
         </p>
         <p className="mt-1 text-[10px] font-display uppercase tracking-[0.3em] text-gold-dim">

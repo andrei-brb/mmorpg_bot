@@ -1046,7 +1046,7 @@ export function GuildTab() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr auto",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
                     alignItems: "start",
                     gap: 16,
                     marginTop: 20,
@@ -1060,7 +1060,7 @@ export function GuildTab() {
                       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>No strikes logged yet.</p>
                     ) : (
                       lb.slice(0, 8).map((row, i) => (
-                        <div key={`${row.name}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4 }}>
+                        <div key={`${row.name}-${i}`} style={{ display: "flex", flexWrap: "wrap", minWidth: 0, alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4 }}>
                           <span style={{ fontFamily: "Cinzel, serif", color: "var(--gold-400)" }}>{i + 1}.</span>
                           <span style={{ color: "var(--text-primary)" }}>{row.name}</span>
                           <span style={{ color: "var(--text-muted)" }}>—</span>
