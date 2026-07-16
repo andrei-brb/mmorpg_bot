@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CombatStatePayload, ExploreZone, InventoryPayload, PartyCombatRow } from "@/lib/apiTypes";
 import { buildBattlePreviewDataFromCombat } from "@/lib/combatBattlePreviewData";
 import { classIconUrl, specIconUrl } from "@/lib/classAndSpecIconUrl";
-import BattlePreview from "@/components/BattlePreview";
+import { useBattleRenderer } from "@/context/BattleRenderer";
 import { BattleBackground } from "@/components/game/combat/BattleBackground";
 import { BattlefieldSkillGrid } from "@/components/game/combat/BattlefieldSkillGrid";
 import { CombatSkillButton } from "@/components/game/combat/CombatSkillButton";
@@ -149,6 +149,9 @@ export function CombatEncounterView({
   battlePreviewPlayerPortraitUrl,
   battlePreviewEnemyPortraitUrl,
 }: CombatEncounterViewProps) {
+  // Defaults to BattlePreview — the Discord Activity is unaffected. The native
+  // mobile shell injects a phone-native layout instead.
+  const BattleRenderer = useBattleRenderer();
   const [showLogModal, setShowLogModal] = useState(false);
   const classKey = state.player.class || inventory?.character?.class || "";
   const specKey = state.player.specialization || inventory?.character?.specialization || "";
@@ -349,6 +352,34 @@ export function CombatEncounterView({
 
   const potionInBattleGrid = useBattlePreview && showPotionButton && state.can_potion;
 
+  // Flee / Potion, built once and used twice: the default layout renders them in
+  // its own row below the arena, while an alternative renderer can place them
+  // inside its action panel via `extraActions`.
+  const combatExtraActions = (
+    <>
+      {showFleeButton && (
+        <button
+          type="button"
+          onClick={() => void onFlee()}
+          disabled={loading || !canAct}
+          className="game-btn-secondary px-3 py-1.5 text-xs"
+        >
+          🏃 Flee
+        </button>
+      )}
+      {showPotionButton && state.can_potion && !potionInBattleGrid && (
+        <button
+          type="button"
+          onClick={() => void onPotion()}
+          disabled={loading || !canAct}
+          className="game-btn-secondary px-3 py-1.5 text-xs"
+        >
+          🧪 Potion
+        </button>
+      )}
+    </>
+  );
+
   return (
     <div
       className={cn(
@@ -513,11 +544,12 @@ export function CombatEncounterView({
         </div>
       ) : useBattlePreview && battlePreviewData ? (
         <div className={focusMode ? "flex w-full min-h-0 flex-1 flex-col justify-center" : "mx-auto w-full max-w-6xl"}>
-          <BattlePreview
+          <BattleRenderer
             data={{
               ...battlePreviewData,
               onCommence: () => setShowLogModal(true),
             }}
+            extraActions={combatExtraActions}
             combatGrid={
               <BattlefieldSkillGrid
                 abilities={gridAbilities}
@@ -748,27 +780,13 @@ export function CombatEncounterView({
       )}
 
       {(showFleeButton || (showPotionButton && state.can_potion && !potionInBattleGrid)) && (
-        <div className="flex gap-2">
-          {showFleeButton && (
-            <button
-              type="button"
-              onClick={() => void onFlee()}
-              disabled={loading || !canAct}
-              className="game-btn-secondary px-3 py-1.5 text-xs"
-            >
-              🏃 Flee
-            </button>
-          )}
-          {showPotionButton && state.can_potion && !potionInBattleGrid && (
-            <button
-              type="button"
-              onClick={() => void onPotion()}
-              disabled={loading || !canAct}
-              className="game-btn-secondary px-3 py-1.5 text-xs"
-            >
-              🧪 Potion
-            </button>
-          )}
+        // combat-actions: inert hook. This row renders after the battle view, so
+        // on a phone it is the first thing pushed off the bottom of the screen —
+        // and Flee is not something you can lose mid-fight. The same buttons are
+        // handed to the renderer as `extraActions`; a shell that places them
+        // itself (the mobile drawer does) hides this row.
+        <div className="combat-actions flex gap-2">
+          {combatExtraActions}
         </div>
       )}
 

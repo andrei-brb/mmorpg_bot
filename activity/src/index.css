@@ -62,6 +62,23 @@
     --rarity-epic: 270 85% 72%;
     --rarity-legendary: 43 96% 60%;
 
+    /* Battle arena (BattlePreview) palette.
+       These hold the EXACT literal values the component used inline before, so
+       this theme renders byte-identically. They are separate from --gold/--
+       parchment on purpose: the arena's tan-vellum ramp is its own look and does
+       not match those tokens (its gold is #B48232; --gold is #BF9A4F). Mapping
+       one onto the other would have silently restyled this theme.
+       Stored as RGB triplets so the component can vary alpha:
+       rgb(var(--bp-gold-rgb) / 0.2). */
+    --bp-ink: #e0d6c2;        /* primary vellum text */
+    --bp-ink-bright: #e8dcc8; /* emphasis */
+    --bp-ink-dim: #b4a27a;    /* secondary */
+    --bp-ink-muted: #9a8e7a;  /* labels */
+    --bp-ink-faint: #7a6e5a;  /* disabled */
+    --bp-gold-rgb: 180 130 50;
+    --bp-gold-bright-rgb: 255 215 0;
+    --bp-panel-rgb: 20 14 8;
+
     --sidebar-background: 240 6% 4%;
     --sidebar-foreground: 40 33% 94%;
     --sidebar-primary: 40 47% 53%;

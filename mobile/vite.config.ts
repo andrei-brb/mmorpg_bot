@@ -11,6 +11,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: "/",
+    // Ship the Activity's public assets — mobs, bosses, character portraits,
+    // skills, zone maps, textures. Vite defaults publicDir to <root>/public,
+    // i.e. mobile/public, which does not exist: the alias above shares the game's
+    // CODE but nothing shared its ART, so every URL-referenced image (e.g.
+    // /mobs/ice_claw_bear.png, /portraits/characters/warrior_arms.png) 404'd on
+    // device and fell back to placeholder.svg — the "?" boxes in combat, and the
+    // blank zone map in Explore. Asset-imported images were unaffected because
+    // Vite bundles those, which is why the paperdoll rendered but portraits did not.
+    publicDir: path.resolve(__dirname, "../activity/public"),
     server: {
       port: 5174,
       strictPort: true,

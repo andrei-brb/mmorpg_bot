@@ -301,8 +301,8 @@ const KEYFRAMES_CSS = `
   100% { background-position: -200% 0; }
 }
 @keyframes skill-pulse {
-  0%, 100% { box-shadow: 0 0 4px rgba(255,215,0,0.2); }
-  50% { box-shadow: 0 0 12px rgba(255,215,0,0.5), 0 0 20px rgba(255,215,0,0.15); }
+  0%, 100% { box-shadow: 0 0 4px rgb(var(--bp-gold-bright-rgb) / 0.2); }
+  50% { box-shadow: 0 0 12px rgb(var(--bp-gold-bright-rgb) / 0.5), 0 0 20px rgb(var(--bp-gold-bright-rgb) / 0.15); }
 }
 @keyframes tab-fade-in {
   0% { opacity: 0; transform: translateY(6px); }
@@ -368,7 +368,7 @@ function StatPanel({ character }: { character: CharacterData }) {
       className={cn("relative flex w-full min-w-0 max-w-xs flex-col gap-1 rounded-sm border border-amber-900/40 px-2.5 py-3 sm:min-w-[240px] sm:px-4")}
       style={{
         background: "linear-gradient(180deg, rgba(20,15,25,0.92) 0%, rgba(30,20,35,0.95) 100%)",
-        boxShadow: "inset 0 1px 0 rgba(255,215,0,0.08), 0 4px 20px rgba(0,0,0,0.5)",
+        boxShadow: "inset 0 1px 0 rgb(var(--bp-gold-bright-rgb) / 0.08), 0 4px 20px rgba(0,0,0,0.5)",
       }}
     >
       <PanelOrnament className="absolute left-0 top-0" />
@@ -384,7 +384,7 @@ function StatPanel({ character }: { character: CharacterData }) {
         )}
         <h3
           className="min-w-0 flex-1 truncate text-sm font-bold uppercase tracking-wider sm:min-w-[120px]"
-          style={{ color: "#e8dcc8", textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
+          style={{ color: "var(--bp-ink-bright)", textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}
           title={character.name}
         >
           {character.name}
@@ -434,10 +434,10 @@ function StatPanel({ character }: { character: CharacterData }) {
           return (
             <div key={stat.label}>
               <div className="flex items-baseline justify-between text-xs">
-                <span style={{ color: "#9a8e7a" }} className="tracking-wide">
+                <span style={{ color: "var(--bp-ink-muted)" }} className="tracking-wide">
                   {stat.label}
                 </span>
-                <span className={cn("font-bold tabular-nums", hp ? "text-sm" : "text-xs")} style={{ color: "#e0d6c2" }}>
+                <span className={cn("font-bold tabular-nums", hp ? "text-sm" : "text-xs")} style={{ color: "var(--bp-ink)" }}>
                   {hp ? (
                     <>
                       <AnimatedNumber value={hp.current} /> / {hp.max}
@@ -497,7 +497,7 @@ function GridPreview({
               loading="lazy"
             />
           ) : unit?.label ? (
-            <span style={{ color: "#e0d6c2", textShadow: "0 1px 4px rgba(0,0,0,0.8)" }} className="font-medium">
+            <span style={{ color: "var(--bp-ink)", textShadow: "0 1px 4px rgba(0,0,0,0.8)" }} className="font-medium">
               {unit.label}
             </span>
           ) : null}
@@ -555,16 +555,16 @@ function SkillGrid({
         style={
           skill
             ? {
-                background: isSelected ? "rgba(255,215,0,0.15)" : "rgba(30,20,15,0.7)",
+                background: isSelected ? "rgb(var(--bp-gold-bright-rgb) / 0.15)" : "rgba(30,20,15,0.7)",
                 borderColor: isSelected
-                  ? "rgba(255,215,0,0.7)"
+                  ? "rgb(var(--bp-gold-bright-rgb) / 0.7)"
                   : elem
                     ? elem.glow.replace("0.65", "0.4").replace("0.6", "0.35")
-                    : "rgba(180,130,50,0.35)",
+                    : "rgb(var(--bp-gold-rgb) / 0.35)",
                 boxShadow: isSelected
-                  ? "0 0 12px rgba(255,215,0,0.3), inset 0 0 8px rgba(255,215,0,0.1)"
+                  ? "0 0 12px rgb(var(--bp-gold-bright-rgb) / 0.3), inset 0 0 8px rgb(var(--bp-gold-bright-rgb) / 0.1)"
                   : isReady
-                    ? `0 0 6px ${elem ? elem.glow.replace("0.65", "0.15").replace("0.6", "0.12") : "rgba(180,130,50,0.1)"}`
+                    ? `0 0 6px ${elem ? elem.glow.replace("0.65", "0.15").replace("0.6", "0.12") : "rgb(var(--bp-gold-rgb) / 0.1)"}`
                     : "none",
                 animation: isReady && !isSelected ? "skill-pulse 2.5s ease-in-out infinite" : undefined,
               }
@@ -603,7 +603,7 @@ function SkillGrid({
             {skill.keybind && (
               <span
                 className="absolute right-0 top-0 z-20 rounded-bl-sm px-0.5 text-[7px] font-bold"
-                style={{ background: "rgba(20,14,8,0.85)", color: "#b4a27a" }}
+                style={{ background: "rgb(var(--bp-panel-rgb) / 0.85)", color: "var(--bp-ink-dim)" }}
               >
                 {skill.keybind}
               </span>
@@ -622,18 +622,18 @@ function SkillGrid({
               <div
                 className="rounded-sm px-3 py-2 text-left"
                 style={{
-                  background: "linear-gradient(180deg, rgba(30,22,12,0.97) 0%, rgba(20,14,8,0.98) 100%)",
-                  border: "1px solid rgba(180,130,50,0.4)",
+                  background: "linear-gradient(180deg, rgba(30,22,12,0.97) 0%, rgb(var(--bp-panel-rgb) / 0.98) 100%)",
+                  border: "1px solid rgb(var(--bp-gold-rgb) / 0.4)",
                   boxShadow: "0 4px 20px rgba(0,0,0,0.7)",
                 }}
               >
                 <div className="mb-1 flex items-center gap-1.5">
                   <span className="text-sm">{skill.icon}</span>
-                  <span className="text-xs font-bold" style={{ color: "#e8dcc8" }}>
+                  <span className="text-xs font-bold" style={{ color: "var(--bp-ink-bright)" }}>
                     {skill.name}
                   </span>
                   {skill.level != null && (
-                    <span className="ml-auto text-[9px]" style={{ color: "#7a6e5a" }}>
+                    <span className="ml-auto text-[9px]" style={{ color: "var(--bp-ink-faint)" }}>
                       Lv.{skill.level}
                     </span>
                   )}
@@ -643,17 +643,17 @@ function SkillGrid({
                     className="mb-1 inline-block rounded-sm px-1.5 py-0.5 text-[9px]"
                     style={{
                       background: ELEMENT_THEME[skill.element].glow.replace("0.65", "0.15").replace("0.6", "0.12"),
-                      color: "#e0d6c2",
+                      color: "var(--bp-ink)",
                       border: `1px solid ${ELEMENT_THEME[skill.element].glow.replace("0.65", "0.28")}`,
                     }}
                   >
                     {skill.element}
                   </span>
                 )}
-                <p className="mt-1 text-[10px] leading-tight" style={{ color: "#9a8e7a" }}>
+                <p className="mt-1 text-[10px] leading-tight" style={{ color: "var(--bp-ink-muted)" }}>
                   {skill.description}
                 </p>
-                <div className="mt-1.5 flex gap-3" style={{ color: "#b4a27a" }}>
+                <div className="mt-1.5 flex gap-3" style={{ color: "var(--bp-ink-dim)" }}>
                   {skill.damage != null && (
                     <span className="text-[9px]">⚔️ {skill.damage}</span>
                   )}
@@ -696,19 +696,19 @@ function RPGTab({ label, isActive, onClick }: { label: string; isActive: boolean
         background: isActive
           ? "linear-gradient(180deg, rgba(50,35,15,0.95) 0%, rgba(30,20,10,0.98) 100%)"
           : "linear-gradient(180deg, rgba(25,18,10,0.9) 0%, rgba(15,10,5,0.95) 100%)",
-        color: isActive ? "#ffd700" : "#7a6e5a",
-        borderTop: `2px solid ${isActive ? "rgba(255,215,0,0.6)" : "rgba(180,130,50,0.2)"}`,
-        borderLeft: "1px solid rgba(180,130,50,0.2)",
-        borderRight: "1px solid rgba(180,130,50,0.2)",
-        borderBottom: isActive ? "2px solid transparent" : "2px solid rgba(180,130,50,0.2)",
-        boxShadow: isActive ? "0 -4px 12px rgba(255,215,0,0.15)" : "none",
+        color: isActive ? "#ffd700" : "var(--bp-ink-faint)",
+        borderTop: `2px solid ${isActive ? "rgb(var(--bp-gold-bright-rgb) / 0.6)" : "rgb(var(--bp-gold-rgb) / 0.2)"}`,
+        borderLeft: "1px solid rgb(var(--bp-gold-rgb) / 0.2)",
+        borderRight: "1px solid rgb(var(--bp-gold-rgb) / 0.2)",
+        borderBottom: isActive ? "2px solid transparent" : "2px solid rgb(var(--bp-gold-rgb) / 0.2)",
+        boxShadow: isActive ? "0 -4px 12px rgb(var(--bp-gold-bright-rgb) / 0.15)" : "none",
       }}
     >
       {label}
       {isActive && (
         <div
           className="absolute bottom-0 left-2 right-2 h-[2px]"
-          style={{ background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.6), transparent)" }}
+          style={{ background: "linear-gradient(90deg, transparent, rgb(var(--bp-gold-bright-rgb) / 0.6), transparent)" }}
         />
       )}
     </button>
@@ -731,19 +731,19 @@ function ItemsTabContent({ items }: { items: Item[] }) {
           className="group/item relative flex cursor-pointer flex-col items-center rounded-sm p-2 transition-all duration-200 hover:scale-105"
           style={{
             background: "linear-gradient(180deg, rgba(25,18,10,0.95) 0%, rgba(18,12,8,0.98) 100%)",
-            border: "1px solid rgba(180,130,50,0.25)",
+            border: "1px solid rgb(var(--bp-gold-rgb) / 0.25)",
           }}
         >
           <span className="text-xl">{item.icon}</span>
-          <span className="mt-1 w-full truncate text-center text-[9px]" style={{ color: "#b4a27a" }}>
+          <span className="mt-1 w-full truncate text-center text-[9px]" style={{ color: "var(--bp-ink-dim)" }}>
             {item.name}
           </span>
           <span
             className="absolute right-0.5 top-0.5 rounded-sm px-1 text-[8px] font-bold"
             style={{
               background: "rgba(30,20,10,0.9)",
-              color: "#e0d6c2",
-              border: "1px solid rgba(180,130,50,0.3)",
+              color: "var(--bp-ink)",
+              border: "1px solid rgb(var(--bp-gold-rgb) / 0.3)",
             }}
           >
             x{item.quantity}
@@ -753,14 +753,14 @@ function ItemsTabContent({ items }: { items: Item[] }) {
               className="rounded-sm px-2 py-1.5 text-center"
               style={{
                 background: "rgba(25,18,10,0.97)",
-                border: "1px solid rgba(180,130,50,0.4)",
+                border: "1px solid rgb(var(--bp-gold-rgb) / 0.4)",
                 boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
               }}
             >
-              <span className="block text-[10px] font-bold" style={{ color: "#e8dcc8" }}>
+              <span className="block text-[10px] font-bold" style={{ color: "var(--bp-ink-bright)" }}>
                 {item.name}
               </span>
-              <span className="text-[9px]" style={{ color: "#9a8e7a" }}>
+              <span className="text-[9px]" style={{ color: "var(--bp-ink-muted)" }}>
                 {item.description}
               </span>
             </div>
@@ -780,26 +780,26 @@ function StatusTabContent({ character, buffs }: { character: CharacterData; buff
           <div
             key={stat.label}
             className="flex justify-between rounded-sm px-1.5 py-1 text-[11px]"
-            style={{ background: "rgba(20,14,8,0.6)" }}
+            style={{ background: "rgb(var(--bp-panel-rgb) / 0.6)" }}
           >
-            <span style={{ color: "#9a8e7a" }}>{stat.label}</span>
-            <span className="font-bold" style={{ color: "#e0d6c2" }}>
+            <span style={{ color: "var(--bp-ink-muted)" }}>{stat.label}</span>
+            <span className="font-bold" style={{ color: "var(--bp-ink)" }}>
               {String(stat.value)}
             </span>
           </div>
         ))}
         {character.element && (
-          <div className="flex justify-between rounded-sm px-1.5 py-1 text-[11px]" style={{ background: "rgba(20,14,8,0.6)" }}>
-            <span style={{ color: "#9a8e7a" }}>Element</span>
-            <span className="font-bold" style={{ color: "#e0d6c2" }}>
+          <div className="flex justify-between rounded-sm px-1.5 py-1 text-[11px]" style={{ background: "rgb(var(--bp-panel-rgb) / 0.6)" }}>
+            <span style={{ color: "var(--bp-ink-muted)" }}>Element</span>
+            <span className="font-bold" style={{ color: "var(--bp-ink)" }}>
               {elem?.icon} {character.element}
             </span>
           </div>
         )}
         {character.class && (
-          <div className="flex justify-between rounded-sm px-1.5 py-1 text-[11px]" style={{ background: "rgba(20,14,8,0.6)" }}>
-            <span style={{ color: "#9a8e7a" }}>Class</span>
-            <span className="font-bold" style={{ color: "#e0d6c2" }}>
+          <div className="flex justify-between rounded-sm px-1.5 py-1 text-[11px]" style={{ background: "rgb(var(--bp-panel-rgb) / 0.6)" }}>
+            <span style={{ color: "var(--bp-ink-muted)" }}>Class</span>
+            <span className="font-bold" style={{ color: "var(--bp-ink)" }}>
               {character.class}
             </span>
           </div>
@@ -807,7 +807,7 @@ function StatusTabContent({ character, buffs }: { character: CharacterData; buff
       </div>
       {buffs.length > 0 && (
         <div>
-          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: "#7a6e5a" }}>
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--bp-ink-faint)" }}>
             Active Effects
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -823,7 +823,7 @@ function StatusTabContent({ character, buffs }: { character: CharacterData; buff
               >
                 <span>{b.icon}</span>
                 <span className="font-bold">{b.name}</span>
-                {b.duration && <span style={{ color: "#9a8e7a" }}>{b.duration}</span>}
+                {b.duration && <span style={{ color: "var(--bp-ink-muted)" }}>{b.duration}</span>}
               </div>
             ))}
           </div>
@@ -842,8 +842,8 @@ function BattleTabPanel({ data }: { data: BattlePreviewData }) {
     <div
       className="relative mt-3 w-full overflow-hidden rounded-sm"
       style={{
-        background: "linear-gradient(180deg, rgba(20,14,8,0.95) 0%, rgba(15,10,6,0.98) 100%)",
-        border: "1px solid rgba(180,130,50,0.25)",
+        background: "linear-gradient(180deg, rgb(var(--bp-panel-rgb) / 0.95) 0%, rgba(15,10,6,0.98) 100%)",
+        border: "1px solid rgb(var(--bp-gold-rgb) / 0.25)",
         boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
       }}
     >
@@ -852,7 +852,7 @@ function BattleTabPanel({ data }: { data: BattlePreviewData }) {
       <PanelOrnament className="absolute bottom-0 left-0 z-10 -scale-y-100" />
       <PanelOrnament className="absolute bottom-0 right-0 z-10 scale-[-1]" />
 
-      <div className="flex border-b" style={{ borderColor: "rgba(180,130,50,0.2)" }}>
+      <div className="flex border-b" style={{ borderColor: "rgb(var(--bp-gold-rgb) / 0.2)" }}>
         <RPGTab label="🎒 Items" isActive={activeTab === "items"} onClick={() => setActiveTab("items")} />
         <RPGTab label="📊 Status" isActive={activeTab === "status"} onClick={() => setActiveTab("status")} />
       </div>

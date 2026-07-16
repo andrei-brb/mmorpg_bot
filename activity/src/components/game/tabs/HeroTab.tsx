@@ -747,9 +747,13 @@ export function HeroTab() {
           <span className="corner-ornament corner-bl" aria-hidden />
           <span className="corner-ornament corner-br" aria-hidden />
 
-          {/* Always row: Activity iframe is often under 640px wide, so Tailwind sm/md never split columns. */}
-          <div className="relative flex min-h-0 flex-1 flex-row gap-px border border-gold/30 bg-black/60">
-            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto tex-leather">
+          {/* Always row: Activity iframe is often under 640px wide, so Tailwind sm/md never split columns.
+              The `hero-*` class names below are inert layout hooks — no stylesheet in this app
+              targets them, so they change nothing here. The native mobile shell overrides them
+              under [data-platform="mobile"] to stack these columns, which Tailwind breakpoints
+              cannot express (a phone and this iframe are both under 640px). */}
+          <div className="hero-split relative flex min-h-0 flex-1 flex-row gap-px border border-gold/30 bg-black/60">
+            <section className="hero-col-main relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto tex-leather">
               <div className="flex items-center justify-between px-5 pt-4">
                 <div className="hero-forge-clip-tag border border-gold/40 bg-gold/15 px-3 py-1">
                   <span className="font-display text-[10px] tracking-[0.3em] text-gold-200">
@@ -780,7 +784,7 @@ export function HeroTab() {
                 <div className="divider-ornate mb-2 mt-4" />
               </div>
 
-              <div className="relative mx-auto mt-2 w-full max-w-[min(460px,100%)] aspect-[4/5] max-h-[min(420px,calc(100dvh-14rem))] shrink-0 sm:max-h-[min(480px,calc(100dvh-16rem))]">
+              <div className="hero-paperdoll relative mx-auto mt-2 w-full max-w-[min(460px,100%)] aspect-[4/5] max-h-[min(420px,calc(100dvh-14rem))] shrink-0 sm:max-h-[min(480px,calc(100dvh-16rem))]">
                 <div className="absolute inset-x-10 inset-y-6 bg-[radial-gradient(circle_at_50%_40%,oklch(0.78_0.14_78/0.35),transparent_65%)] blur-2xl" />
                 <div className="absolute inset-x-14 top-2 bottom-16 sm:inset-x-20">
                   <div className="relative h-full w-full overflow-hidden border border-gold/40 tex-parchment hero-forge-clip-blade hero-forge-edge-gold">
@@ -815,7 +819,7 @@ export function HeroTab() {
               </div>
 
               {/* Stats strip: same width as portrait stack, strict 50/50 halves under character */}
-              <div className="relative mx-auto mb-4 mt-3 w-full max-w-[min(460px,100%)] shrink-0 border border-gold/40 bg-black/45 tex-forge hero-forge-edge-gold hero-forge-clip-blade-sm">
+              <div className="hero-powerstrip relative mx-auto mb-4 mt-3 w-full max-w-[min(460px,100%)] shrink-0 border border-gold/40 bg-black/45 tex-forge hero-forge-edge-gold hero-forge-clip-blade-sm">
                 <div className="flex min-h-[4.75rem] w-full min-w-0">
                   <div className="flex min-h-0 min-w-0 flex-[1_1_0] basis-0 flex-col items-center justify-center gap-1 border-r border-gold/35 px-2 py-3 sm:min-h-[5.25rem] sm:px-3 sm:py-3.5">
                     <p className="text-[9px] uppercase tracking-[0.22em] text-gold-dim sm:text-[10px] sm:tracking-[0.28em]">
@@ -840,7 +844,7 @@ export function HeroTab() {
               </div>
             </section>
 
-            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+            <section className="hero-col-side relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
               {accessToken && char ? (
                 <div className="relative px-2 pb-2 pt-2 sm:px-3 sm:pt-3">
                   <div className="border border-gold/25 tex-forge hero-forge-clip-blade-sm hero-forge-edge-gold p-3 sm:p-4">
