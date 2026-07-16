@@ -46,8 +46,12 @@ function Panel({ children, className = "", style }: { children: ReactNode; class
 }
 
 function SectionHeader({ kicker, title, right }: { kicker?: string; title: string; right?: ReactNode }) {
+  // data-guild-section is an inert anchor: nothing here reads it. The Guild hall
+  // is seven stacked panels — fine in a wide Discord panel, a long haul on a
+  // phone — so the mobile shell renders a jump bar that finds these and scrolls
+  // to them. Tagging the shared header once beats tagging each section.
   return (
-    <div className="section-h">
+    <div className="section-h" data-guild-section={title}>
       <div>
         {kicker ? <div className="kicker">{kicker}</div> : null}
         <h2>{title}</h2>

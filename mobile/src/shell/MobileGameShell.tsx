@@ -30,6 +30,7 @@ import { MarketTab } from "@/components/game/tabs/MarketTab";
 import { RealmTab } from "@/components/game/tabs/RealmTab";
 import { BattlePassTab } from "@/components/game/tabs/BattlePassTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
+import { GuildJumpBar } from "./GuildJumpBar";
 import { ShellModals } from "./ShellModals";
 
 /**
@@ -233,7 +234,12 @@ export function MobileGameShell() {
         {tab === "Explore" && <ExploreTab />}
         {tab === "Quests" && <QuestsTab />}
         {tab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
-        {tab === "Guild" && <GuildTab />}
+        {tab === "Guild" && (
+          <>
+            <GuildJumpBar />
+            <GuildTab />
+          </>
+        )}
         {tab === "Market" && <MarketTab />}
         {tab === "Arena" && <PvpPage />}
         {tab === "Pass" && <BattlePassTab />}

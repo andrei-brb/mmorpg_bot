@@ -128,6 +128,67 @@
   display: none;
 }
 
+/* ── Market ─────────────────────────────────────────────────────────────────
+   The mode switcher (MarketView.tsx:2108) is written
+   `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` — the author DID design it
+   responsively. But sm: is 640px and the phone is ~390px, so it is pinned at
+   one column: four stacked cards, roughly 224px of navigation above the first
+   listing, on a screen that is 844px tall.
+
+   Unlike combat, this is not a layout fighting the phone — it is the author's
+   own 4-across intent that Tailwind's breakpoints cannot reach here. Restoring
+   it as an icon row costs ~170px and no meaning: the tag line under each title
+   ("Bids · buyouts · anti-snipe") is a desktop nicety, and the icon plus title
+   already say which mode you are in. */
+
+[data-platform="mobile"] .market-modes {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+[data-platform="mobile"] .market-modes > button {
+  padding: 0.5rem 0.25rem;
+}
+
+[data-platform="mobile"] .market-mode-inner {
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+[data-platform="mobile"] .market-mode-title {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+
+/* "Bids · buyouts · anti-snipe" under a 90px-wide tab is unreadable anyway. */
+[data-platform="mobile"] .market-mode-tag {
+  display: none;
+}
+
+/* ── Guild ──────────────────────────────────────────────────────────────────
+   The hall itself needs no layout work — no fixed widths, no collapsed grids.
+   It is only long, so the shell adds a jump bar (GuildJumpBar.tsx) above it.
+   This keeps that bar in reach while the hall scrolls under it. */
+
+[data-platform="mobile"] .guild-jumpbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: linear-gradient(180deg, hsl(264 26% 7%) 62%, hsl(264 26% 7% / 0));
+  backdrop-filter: blur(6px);
+}
+
+[data-platform="mobile"] .guild-jumpbar > div::-webkit-scrollbar {
+  display: none;
+}
+
+/* Jumped-to sections shouldn't land under the sticky bar. */
+[data-platform="mobile"] [data-guild-section] {
+  scroll-margin-top: 3.25rem;
+}
+
 /* ── Touch targets ──────────────────────────────────────────────────────────
    44px is the platform floor for a comfortable tap. Applied on coarse pointers
    only, so a desktop browser opening the mobile build keeps its dense layout. */

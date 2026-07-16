@@ -1071,18 +1071,18 @@ function SegmentBtn({
           : "hover:bg-white/5",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="market-mode-inner flex items-center gap-2">
         <span
           className={cn(
-            "grid place-items-center h-7 w-7 rounded-md",
+            "market-mode-icon grid place-items-center h-7 w-7 rounded-md",
             active ? "bg-[color:var(--gold)]/30 text-[color:var(--gold-bright)]" : "bg-white/5 text-muted-foreground",
           )}
         >
           {icon}
         </span>
         <div className="min-w-0">
-          <div className={cn("font-display tracking-wider text-sm", active ? "text-[color:var(--gold-bright)]" : "text-foreground")}>{title}</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{tag}</div>
+          <div className={cn("market-mode-title font-display tracking-wider text-sm", active ? "text-[color:var(--gold-bright)]" : "text-foreground")}>{title}</div>
+          <div className="market-mode-tag text-[10px] uppercase tracking-widest text-muted-foreground truncate">{tag}</div>
         </div>
       </div>
     </button>
@@ -2105,7 +2105,11 @@ export function MarketView() {
           <GoldPill amount={gold} />
         </div>
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 rounded-lg border border-[color:var(--gold)]/30 bg-black/40 p-1">
+        {/* market-modes: inert hook. `sm:` is 640px and the Discord iframe is
+            narrower than that too, so this grid is stuck at grid-cols-1 in both —
+            four stacked cards of navigation. The mobile shell restores the
+            author's intended 4-across as a compact icon row. */}
+        <div className="market-modes mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 rounded-lg border border-[color:var(--gold)]/30 bg-black/40 p-1">
           <SegmentBtn
             active={mode === "auction"}
             onClick={() => setModeSafe("auction")}
