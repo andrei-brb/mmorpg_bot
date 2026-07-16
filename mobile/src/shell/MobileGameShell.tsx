@@ -111,7 +111,7 @@ function normalizeTabId(raw: string): GameTabId | null {
   return all.includes(norm) ? (norm as GameTabId) : null;
 }
 
-export function MobileGameShell() {
+export function MobileGameShell({ onSignOut }: { onSignOut?: () => void } = {}) {
   const [tab, setTab] = useState<GameTabId>("Hero");
   const [moreOpen, setMoreOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
@@ -274,6 +274,24 @@ export function MobileGameShell() {
             </div>
 
             <div className="space-y-4">
+              {onSignOut ? (
+                <section>
+                  <div className="mb-1.5 font-display text-[10px] uppercase tracking-[0.3em] text-gold-dim">
+                    Account
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onSignOut();
+                    }}
+                    className="w-full rounded-lg border border-border px-3 py-2.5 text-left text-[12px] text-muted-foreground"
+                  >
+                    Sign out
+                  </button>
+                </section>
+              ) : null}
+
               {MORE_GROUPS.map((group) => (
                 <section key={group.label}>
                   <div className="mb-1.5 font-display text-[10px] uppercase tracking-[0.3em] text-gold-dim">
