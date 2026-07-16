@@ -184,13 +184,8 @@ async def cors_middleware(request: web.Request, handler):
         # readable JSON 500 instead — and log the traceback so the real cause
         # is visible.
         log.exception("activity_http handler crashed: %s %s", request.method, request.path)
-        # TEMP-DEBUG: include the exception detail in the response so the mobile
-        # client surfaces it. Revert to a generic message once diagnosed.
         resp = web.HTTPInternalServerError(
-            text=json.dumps({
-                "ok": False,
-                "error": f"internal_error [{request.path}]: {type(e).__name__}: {str(e)[:300]}",
-            }),
+            text=json.dumps({"ok": False, "error": "internal_error"}),
             content_type="application/json",
         )
         resp.headers.update(_cors_headers(request))
@@ -3769,7 +3764,6 @@ async def handle_explore(request: web.Request) -> web.Response:
         # /explore). Best-effort bonus — never fail the explore action over it.
         try:
             if random.random() < 0.35:
-                from services.character.inventory_service import InventoryService
                 scrap_tid = random.choice(("weapon_scrap", "armor_scrap", "accessory_scrap"))
                 scrap_qty = random.randint(1, 2)
                 ok_s, _ = await InventoryService(db).add_item(
