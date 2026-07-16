@@ -30,7 +30,10 @@ import { MarketTab } from "@/components/game/tabs/MarketTab";
 import { RealmTab } from "@/components/game/tabs/RealmTab";
 import { BattlePassTab } from "@/components/game/tabs/BattlePassTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
+import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
+import type { StoredSession } from "@mobile/platform/sessionStore";
 import { GuildJumpBar } from "./GuildJumpBar";
+import { LinkAccountSheet } from "./LinkAccountSheet";
 import { ShellModals } from "./ShellModals";
 
 /**
@@ -111,10 +114,19 @@ function normalizeTabId(raw: string): GameTabId | null {
   return all.includes(norm) ? (norm as GameTabId) : null;
 }
 
-export function MobileGameShell({ onSignOut }: { onSignOut?: () => void } = {}) {
+export function MobileGameShell({
+  onSignOut,
+  discordAuth,
+  onSessionReplaced,
+}: {
+  onSignOut?: () => void;
+  discordAuth?: DiscordOAuthAuth;
+  onSessionReplaced?: (s: StoredSession) => void;
+} = {}) {
   const [tab, setTab] = useState<GameTabId>("Hero");
   const [moreOpen, setMoreOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const {
     displayName,
@@ -171,6 +183,17 @@ export function MobileGameShell({ onSignOut }: { onSignOut?: () => void } = {}) 
   return (
     <div className="app-bg mobile-shell flex h-[100dvh] flex-col overflow-hidden text-foreground">
       <ShellModals mailOpen={mailOpen} onMailOpenChange={setMailOpen} />
+
+      {linkOpen ? (
+        <LinkAccountSheet
+          discordAuth={discordAuth}
+          onClose={() => setLinkOpen(false)}
+          onSessionReplaced={(s) => {
+            setLinkOpen(false);
+            onSessionReplaced?.(s);
+          }}
+        />
+      ) : null}
 
       {char && !chromeHidden ? (
         <header className="mobile-shell-header flex shrink-0 items-center gap-3 px-4 py-2">
@@ -274,21 +297,37 @@ export function MobileGameShell({ onSignOut }: { onSignOut?: () => void } = {}) 
             </div>
 
             <div className="space-y-4">
-              {onSignOut ? (
+              {onSignOut || discordAuth ? (
                 <section>
                   <div className="mb-1.5 font-display text-[10px] uppercase tracking-[0.3em] text-gold-dim">
                     Account
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMoreOpen(false);
-                      onSignOut();
-                    }}
-                    className="w-full rounded-lg border border-border px-3 py-2.5 text-left text-[12px] text-muted-foreground"
-                  >
-                    Sign out
-                  </button>
+                  <div className="space-y-1.5">
+                    {discordAuth ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          setLinkOpen(true);
+                        }}
+                        className="w-full rounded-lg border border-border px-3 py-2.5 text-left text-[12px] text-muted-foreground"
+                      >
+                        Link Discord
+                      </button>
+                    ) : null}
+                    {onSignOut ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onSignOut();
+                        }}
+                        className="w-full rounded-lg border border-border px-3 py-2.5 text-left text-[12px] text-muted-foreground"
+                      >
+                        Sign out
+                      </button>
+                    ) : null}
+                  </div>
                 </section>
               ) : null}
 

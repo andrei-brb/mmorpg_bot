@@ -35,12 +35,26 @@ export class DiscordOAuthAuth implements AuthProvider {
   ) {}
 
   async authenticate(): Promise<AuthSession> {
-    const code = Capacitor.isNativePlatform()
-      ? await this.nativeCodeFlow()
-      : await this.webCodeFlow();
+    const { code } = await this.authorize();
     // Discord validates that the exchange redirect_uri matches the authorize one.
     const token = await api.exchangeDiscordCodeForSession(code, this.oauthRedirectUri);
     return { token, provider: "discord-oauth" };
+  }
+
+  /**
+   * Run the OAuth flow and stop at the code, without exchanging it for a session.
+   *
+   * Linking needs this: the player is already signed in as someone, and
+   * exchanging here would mint a *Discord* session and silently switch them to
+   * that account — the opposite of attaching Discord to the account they have.
+   * The code goes to /api/auth/link/discord instead, authenticated as who they
+   * already are.
+   */
+  async authorize(): Promise<{ code: string; redirectUri: string }> {
+    const code = Capacitor.isNativePlatform()
+      ? await this.nativeCodeFlow()
+      : await this.webCodeFlow();
+    return { code, redirectUri: this.oauthRedirectUri };
   }
 
   private buildAuthorizeUrl(): string {

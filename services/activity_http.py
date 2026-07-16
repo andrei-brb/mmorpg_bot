@@ -1000,6 +1000,169 @@ async def handle_auth_email_verify(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def _character_summary(db, player_id: int) -> Optional[dict]:
+    """Enough for a player to recognise a character they might be about to lose."""
+    row = await db.fetchrow(
+        """
+        SELECT name, level, class, specialization, gold, created_at
+        FROM characters WHERE player_id=$1 AND is_active=TRUE
+        ORDER BY created_at DESC LIMIT 1
+        """,
+        int(player_id),
+    )
+    if not row:
+        return None
+    d = dict(row)
+    return {
+        "name": d.get("name"),
+        "level": d.get("level"),
+        "class": d.get("class"),
+        "specialization": d.get("specialization"),
+        "gold": int(d.get("gold") or 0),
+        "created_at": str(d.get("created_at") or ""),
+    }
+
+
+async def handle_auth_link_status(request: web.Request) -> web.Response:
+    """GET /api/auth/link/status — what is attached to this account."""
+    user, player_id, _char, db = await _authed_discord_user_and_char(request)
+    from services.auth.identities import credentials_for_player, identities_for_player
+
+    idents = await identities_for_player(db, player_id)
+    cred = await credentials_for_player(db, player_id)
+    return web.json_response(
+        {
+            "ok": True,
+            "player_id": str(player_id),
+            "providers": [i["provider"] for i in idents],
+            "has_password": bool(cred),
+            "username": (cred or {}).get("username"),
+            "email_verified": bool((cred or {}).get("email_verified")),
+        }
+    )
+
+
+async def handle_auth_link_discord(request: web.Request) -> web.Response:
+    """POST /api/auth/link/discord — body: {code, redirect_uri?}
+
+    Attaches a Discord account to the *currently signed-in* player.
+
+    If that Discord account already has its own character, nothing is
+    overwritten: we return both characters plus a short-lived pick_token, and
+    the player decides. See handle_auth_link_resolve.
+    """
+    user, player_id, _char, db = await _authed_discord_user_and_char(request)
+
+    secret = (os.getenv("DISCORD_CLIENT_SECRET") or "").strip()
+    client_id = _client_id_for_app(request.app["bot"])
+    if not secret or not client_id:
+        return _auth_bad("Discord linking isn't configured.", "server_misconfigured", 503)
+
+    body = await _json_body(request)
+    code = body.get("code")
+    if not code or not isinstance(code, str):
+        return _auth_bad("Missing the Discord authorization code.", "missing_code")
+    redirect_hint = body.get("redirect_uri")
+    redirect_hint = redirect_hint.strip() if isinstance(redirect_hint, str) and redirect_hint.strip() else None
+
+    token_payload = await _exchange_oauth_code(code, client_id, secret, redirect_hint)
+    discord_token = token_payload.get("access_token")
+    if not discord_token:
+        return _auth_bad("Discord didn't return a token.", "no_access_token")
+    du = await _discord_user_from_token(discord_token)
+    if not du:
+        return _auth_bad("Could not read that Discord account.", "invalid_token", 401)
+
+    discord_uid = str(int(du["id"]))
+
+    from services.auth.identities import IdentityConflict, PROVIDER_DISCORD, link_identity
+    from services.auth.session_tokens import issue_link_intent
+
+    try:
+        await link_identity(db, PROVIDER_DISCORD, discord_uid, player_id)
+    except IdentityConflict as e:
+        # The interesting case. Show them both, let them choose.
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "identity_conflict",
+                "conflict": True,
+                "pick_token": issue_link_intent(player_id, PROVIDER_DISCORD, discord_uid),
+                "current": await _character_summary(db, player_id),
+                "other": await _character_summary(db, e.existing_player_id),
+                "message": "That Discord account already has a character. Choose which one to keep.",
+            },
+            status=409,
+        )
+
+    return web.json_response({"ok": True, "linked": True, "provider": "discord"})
+
+
+async def handle_auth_link_resolve(request: web.Request) -> web.Response:
+    """POST /api/auth/link/resolve — body: {pick_token, keep: "current"|"other"}
+
+    Answers "which character do I keep?" by re-pointing the identity. Nothing is
+    deleted: the player row that loses the identity keeps its character,
+    inventory and gold, and re-pointing back restores it exactly.
+    """
+    user, player_id, _char, db = await _authed_discord_user_and_char(request)
+
+    from services.auth.identities import repoint_identity, resolve_identity
+    from services.auth.session_tokens import verify_link_intent
+
+    body = await _json_body(request)
+    claims = verify_link_intent(str(body.get("pick_token") or ""))
+    keep = str(body.get("keep") or "")
+    if not claims:
+        return _auth_bad("That choice expired. Start the link again.", "invalid_token", 400)
+    if keep not in ("current", "other"):
+        return _auth_bad("Choose which character to keep.", "invalid_request")
+    # The token proves who asked. Re-check against the live session so a token
+    # cannot be replayed by a different account.
+    if int(claims["pid"]) != int(player_id):
+        return _auth_bad("That choice belongs to a different account.", "forbidden", 403)
+
+    provider, uid = str(claims["prov"]), str(claims["uid"])
+
+    if keep == "current":
+        # Discord now signs in to THIS account. The other player row keeps its
+        # character; it just isn't reachable by that Discord login any more.
+        await repoint_identity(db, provider, uid, player_id)
+        return web.json_response(
+            {"ok": True, "kept": "current", "provider": provider}
+        )
+
+    # keep == "other": abandon this account's character in favour of the Discord
+    # one. The game account's username/password must follow, or they'd sign in
+    # to an account they just chose to leave.
+    other_player_id = await resolve_identity(db, provider, uid)
+    if other_player_id is None:
+        return _auth_bad("That Discord account is no longer linked.", "invalid_state", 409)
+    try:
+        async with db.transaction() as conn:
+            await conn.execute(
+                "UPDATE player_credentials SET player_id=$2, updated_at=NOW() WHERE player_id=$1",
+                int(player_id),
+                int(other_player_id),
+            )
+            await conn.execute(
+                "UPDATE auth_identities SET player_id=$2 WHERE player_id=$1 AND provider='native'",
+                int(player_id),
+                int(other_player_id),
+            )
+    except Exception:
+        log.exception("link resolve (keep=other) failed")
+        return _auth_bad("Could not move your login over.", "resolve_failed", 500)
+
+    from services.auth.session_tokens import issue_session
+
+    # They are a different player now — issue a session for the account they kept.
+    new_token = issue_session(int(other_player_id), "native", identity={"username": user.get("username")})
+    return web.json_response(
+        {"ok": True, "kept": "other", "access_token": new_token, "player_id": str(other_player_id)}
+    )
+
+
 async def handle_inventory(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -7243,6 +7406,11 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/auth/password/forgot", handle_auth_password_forgot)
     app.router.add_post("/api/auth/password/reset", handle_auth_password_reset)
     app.router.add_post("/api/auth/email/verify", handle_auth_email_verify)
+    # Linking is session-authenticated (not credential-checking), but still
+    # rides the /api/auth/* IP throttle above.
+    app.router.add_get("/api/auth/link/status", handle_auth_link_status)
+    app.router.add_post("/api/auth/link/discord", handle_auth_link_discord)
+    app.router.add_post("/api/auth/link/resolve", handle_auth_link_resolve)
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/character/stats", handle_character_stats)
     app.router.add_get("/api/game/character/class-options", handle_character_class_options)

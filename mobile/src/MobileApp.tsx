@@ -10,6 +10,7 @@ import { MobileGameShell } from "@mobile/shell/MobileGameShell";
 import { LoginScreen } from "@mobile/shell/LoginScreen";
 import { DrawerBattle } from "@mobile/combat/DrawerBattle";
 import { StoredTokenAuth } from "@mobile/platform/StoredTokenAuth";
+import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 import {
   clearSession,
   loadSession,
@@ -95,7 +96,11 @@ const MobileApp = ({ authProvider }: { authProvider?: AuthProvider } = {}) => {
           {/* Combat renders as a phone-native drawer instead of the Activity's
               three-column arena. Layout only — same data, same skill grid. */}
           <BattleRendererProvider renderer={DrawerBattle}>
-            <MobileGameShell onSignOut={() => void onSignOut()} />
+            <MobileGameShell
+              onSignOut={() => void onSignOut()}
+              discordAuth={authProvider as DiscordOAuthAuth | undefined}
+              onSessionReplaced={(s) => void onAuthed(s)}
+            />
           </BattleRendererProvider>
         </ActivityGate>
       </TooltipProvider>

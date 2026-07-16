@@ -118,6 +118,73 @@ def verify_session(token: str, *, now: Optional[int] = None) -> Optional[Dict[st
         return None
 
 
+_LINK_TTL_SECONDS = 10 * 60
+
+
+def issue_link_intent(
+    player_id: int,
+    provider: str,
+    provider_uid: str,
+    *,
+    ttl_seconds: int = _LINK_TTL_SECONDS,
+    now: Optional[int] = None,
+) -> str:
+    """Short-lived proof of "this player proved they own this identity".
+
+    Linking can hit a conflict — the Discord account already has its own
+    character — and the player then has to choose which one to keep. This token
+    carries that pending decision across the round-trip so they don't have to
+    re-do the whole OAuth dance to answer.
+
+    SECURITY: it deliberately carries NO `sub` claim, so verify_session rejects
+    it (see the "sub" check above). A token that could both describe a pending
+    link AND authenticate as its subject would let anyone who obtained one act
+    as that player. Same key, different shape, non-interchangeable.
+    """
+    issued = int(now if now is not None else time.time())
+    claims: Dict[str, Any] = {
+        "typ": "link",
+        "pid": int(player_id),          # who is asking to link
+        "prov": str(provider),
+        "uid": str(provider_uid),       # the identity they proved they own
+        "iat": issued,
+        "exp": issued + int(ttl_seconds),
+    }
+    header = {"alg": _ALG, "typ": "JWT"}
+    h = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
+    p = _b64url_encode(json.dumps(claims, separators=(",", ":")).encode())
+    sig = hmac.new(_secret(), f"{h}.{p}".encode("ascii"), hashlib.sha256).digest()
+    return f"{h}.{p}.{_b64url_encode(sig)}"
+
+
+def verify_link_intent(token: str, *, now: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Claims for a valid link-intent token, else None. Never raises.
+
+    Requires typ == "link", so a real session token cannot be replayed here
+    either — the rejection runs in both directions.
+    """
+    if not token or token.count(".") != 2:
+        return None
+    try:
+        h, p, s = token.split(".")
+        if json.loads(_b64url_decode(h)).get("alg") != _ALG:
+            return None
+        expected = hmac.new(_secret(), f"{h}.{p}".encode("ascii"), hashlib.sha256).digest()
+        if not hmac.compare_digest(expected, _b64url_decode(s)):
+            return None
+        claims = json.loads(_b64url_decode(p))
+        if not isinstance(claims, dict) or claims.get("typ") != "link":
+            return None
+        if "pid" not in claims or "uid" not in claims:
+            return None
+        exp = int(claims.get("exp") or 0)
+        if exp and int(now if now is not None else time.time()) >= exp:
+            return None
+        return claims
+    except Exception:
+        return None
+
+
 def identity_from_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
     """Reconstruct a Discord-user-shaped dict from session claims so existing
     handlers (which read id/username/global_name/avatar) work unchanged."""
