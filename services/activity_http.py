@@ -245,11 +245,83 @@ def _rate_limit_retry_after_s(user_id: int) -> Optional[int]:
     return None
 
 
+# ── Auth throttling ──────────────────────────────────────────────────────────
+# Separate from the gameplay limiter above, and deliberately unlike it.
+#
+# That one buckets by players.id and FAILS OPEN (:263-266 below) — correct for
+# gameplay, where an unresolvable token just means the handler will 401 anyway.
+# For login it would be a hole: no token exists yet, so every request would skip
+# the limiter and password guessing would be unlimited.
+#
+# So: bucket by client IP, and fail CLOSED. The handlers add a second bucket per
+# login identifier (see _auth_login_throttle) because one attacker rotating IPs
+# against one account, and one IP spraying many accounts, are different attacks
+# and neither bucket catches both.
+_AUTH_IP_BUCKETS: Dict[str, Deque[float]] = defaultdict(deque)
+_AUTH_LOGIN_BUCKETS: Dict[str, Deque[float]] = defaultdict(deque)
+_AUTH_WINDOW_S = 900.0  # 15 minutes
+_AUTH_IP_MAX = 30       # attempts per IP per window
+_AUTH_LOGIN_MAX = 8     # attempts per username/email per window
+
+
+def _client_ip(request: web.Request) -> str:
+    """Client IP, honouring the proxy header Railway sets.
+
+    X-Forwarded-For is client-controllable in general; we take the FIRST entry
+    because that is what the edge proxy prepends. Worst case a determined
+    attacker spreads their guesses, which is exactly why the per-login bucket
+    exists alongside this one.
+    """
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    peer = request.remote or ""
+    return peer or "unknown"
+
+
+def _bucket_retry_after(buckets: Dict[str, Deque[float]], key: str, limit: int) -> Optional[int]:
+    now = time.monotonic()
+    b = buckets[key]
+    while b and b[0] <= now - _AUTH_WINDOW_S:
+        b.popleft()
+    if len(b) >= limit:
+        return max(1, int(_AUTH_WINDOW_S - (now - b[0])) + 1)
+    b.append(now)
+    return None
+
+
+def _auth_login_throttle(login: str) -> Optional[int]:
+    """Per-account attempt bucket. Call from login/forgot once the body is read."""
+    key = (login or "").strip().lower()
+    if not key:
+        return None
+    return _bucket_retry_after(_AUTH_LOGIN_BUCKETS, key, _AUTH_LOGIN_MAX)
+
+
+def _rate_limited_response(request: web.Request, retry: int) -> web.Response:
+    return web.Response(
+        status=429,
+        text=json.dumps({"ok": False, "error": "rate_limited", "retry_after_s": retry}),
+        content_type="application/json",
+        headers=_cors_headers(request),
+    )
+
+
 @web.middleware
 async def rate_limit_middleware(request: web.Request, handler):
     if request.method == "OPTIONS":
         return await handler(request)
     path = request.path or ""
+
+    # Auth endpoints: throttle by IP before the handler ever sees a password.
+    # Only the credential-checking routes — /link/* are session-authenticated and
+    # ride the gameplay limiter instead.
+    if path.startswith("/api/auth/"):
+        retry = _bucket_retry_after(_AUTH_IP_BUCKETS, _client_ip(request), _AUTH_IP_MAX)
+        if retry is not None:
+            return _rate_limited_response(request, retry)
+        return await handler(request)
+
     if not path.startswith("/api/game/"):
         return await handler(request)
     auth_header = request.headers.get("Authorization", "")
@@ -576,7 +648,356 @@ async def handle_auth_discord_exchange(request: web.Request) -> web.Response:
             "avatar": du.get("avatar"),
         },
     )
+
+    # Record the identity so this Discord account resolves through the same
+    # table as a game account. Existing players were backfilled at boot
+    # (database/db.py, initialize_schema tail); this covers anyone new.
+    try:
+        from services.auth.identities import PROVIDER_DISCORD, link_identity
+
+        await link_identity(db, PROVIDER_DISCORD, str(discord_id), discord_id)
+    except Exception as e:
+        # Never fail a working login over bookkeeping — resolution for Discord
+        # still works off players.id today.
+        log.warning("link discord identity failed for %s: %s", discord_id, e)
+
     return web.json_response({"access_token": session_jwt, "player_id": str(discord_id)})
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  GAME ACCOUNTS (username + password) — Discord not required
+#
+#  A game account resolves to a players row exactly like a Discord login does,
+#  so everything downstream (all 126 authenticated handlers) is untouched: they
+#  read players.id out of the session, and they cannot tell the difference.
+#
+#  The id is negative — see services/auth/identities.allocate_native_id.
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def _auth_bad(msg: str, code: str = "invalid_request", status: int = 400) -> web.Response:
+    return web.json_response({"ok": False, "error": code, "message": msg}, status=status)
+
+
+async def _json_body(request: web.Request) -> dict:
+    try:
+        b = await request.json()
+        return b if isinstance(b, dict) else {}
+    except Exception:
+        return {}
+
+
+async def handle_auth_native_signup(request: web.Request) -> web.Response:
+    """POST /api/auth/native/signup — create a game account.
+
+    Body: {username, email, password}
+    Returns: {access_token, player_id}
+    """
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        return _auth_bad("Database unavailable.", "database_unavailable", 503)
+
+    from services.auth.identities import (
+        PROVIDER_NATIVE,
+        allocate_native_id,
+        link_identity,
+    )
+    from services.auth.passwords import (
+        hash_password,
+        new_email_token,
+        validate_email,
+        validate_password,
+        validate_username,
+    )
+    from services.auth.session_tokens import issue_session
+
+    body = await _json_body(request)
+    username = str(body.get("username") or "").strip()
+    email = str(body.get("email") or "").strip()
+    password = str(body.get("password") or "")
+
+    ok, msg = validate_username(username)
+    if not ok:
+        return _auth_bad(msg)
+    ok, msg = validate_email(email)
+    if not ok:
+        return _auth_bad(msg)
+    ok, msg = validate_password(password)
+    if not ok:
+        return _auth_bad(msg)
+
+    username_lc = username.lower()
+    email_lc = email.lower()
+
+    # Hash before the transaction: scrypt costs ~25ms and holding a DB
+    # connection through it would let signups exhaust the pool.
+    pw_hash = hash_password(password)
+
+    try:
+        async with db.transaction() as conn:
+            taken = await conn.fetchval(
+                "SELECT 1 FROM player_credentials WHERE username_lc=$1", username_lc
+            )
+            if taken:
+                return _auth_bad("That username is taken.", "username_taken", 409)
+            taken = await conn.fetchval(
+                "SELECT 1 FROM player_credentials WHERE email_lc=$1", email_lc
+            )
+            if taken:
+                # Deliberately explicit. Hiding this only moves the disclosure to
+                # the signup attempt itself, and a player who forgot they had an
+                # account deserves to be told.
+                return _auth_bad(
+                    "That email already has an account. Try signing in instead.",
+                    "email_taken",
+                    409,
+                )
+
+            player_id = -int(await conn.fetchval("SELECT nextval('native_player_id_seq')"))
+            await conn.execute(
+                "INSERT INTO players(id, username) VALUES($1, $2)", player_id, username
+            )
+            await conn.execute(
+                """
+                INSERT INTO player_credentials
+                    (player_id, username, username_lc, email, email_lc, password_hash)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                """,
+                player_id,
+                username,
+                username_lc,
+                email,
+                email_lc,
+                pw_hash,
+            )
+            await conn.execute(
+                """
+                INSERT INTO auth_identities (provider, provider_uid, player_id)
+                VALUES ($1, $2, $3) ON CONFLICT (provider, provider_uid) DO NOTHING
+                """,
+                PROVIDER_NATIVE,
+                username_lc,
+                player_id,
+            )
+    except Exception as e:
+        log.exception("native signup failed")
+        return _auth_bad("Could not create the account.", "signup_failed", 500)
+
+    # Verification mail is best-effort: a mail outage must not cost someone the
+    # account they just made. They can play now and verify later.
+    try:
+        token, token_hash = new_email_token()
+        await db.execute(
+            """
+            INSERT INTO auth_email_tokens (token_hash, player_id, kind, expires_at)
+            VALUES ($1, $2, 'verify', NOW() + INTERVAL '7 days')
+            """,
+            token_hash,
+            player_id,
+        )
+        from services.auth.email_sender import send_email_verify
+
+        await send_email_verify(email, username, token)
+    except Exception as e:
+        log.warning("verify email not sent for %s: %s", player_id, e)
+
+    session_jwt = issue_session(player_id, "native", identity={"username": username})
+    return web.json_response({"access_token": session_jwt, "player_id": str(player_id)})
+
+
+async def handle_auth_native_login(request: web.Request) -> web.Response:
+    """POST /api/auth/native/login — body: {login, password}. `login` is a
+    username or an email; players do not remember which they used."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        return _auth_bad("Database unavailable.", "database_unavailable", 503)
+
+    from services.auth.identities import credentials_by_login
+    from services.auth.passwords import hash_password, needs_rehash, verify_password
+    from services.auth.session_tokens import issue_session
+
+    body = await _json_body(request)
+    login = str(body.get("login") or body.get("username") or "").strip()
+    password = str(body.get("password") or "")
+    if not login or not password:
+        return _auth_bad("Enter your username and password.")
+
+    # Second bucket, per-account: the IP bucket in the middleware does not stop
+    # a botnet grinding one account.
+    retry = _auth_login_throttle(login)
+    if retry is not None:
+        return _rate_limited_response(request, retry)
+
+    row = await credentials_by_login(db, login)
+    # Same message and roughly the same work whether the account exists or the
+    # password is wrong — otherwise this endpoint enumerates usernames.
+    if not row or not verify_password(password, row.get("password_hash") or ""):
+        return _auth_bad("Wrong username or password.", "invalid_credentials", 401)
+
+    player_id = int(row["player_id"])
+
+    if needs_rehash(row.get("password_hash") or ""):
+        try:
+            await db.execute(
+                "UPDATE player_credentials SET password_hash=$2, updated_at=NOW() WHERE player_id=$1",
+                player_id,
+                hash_password(password),
+            )
+        except Exception as e:
+            log.warning("rehash failed for %s: %s", player_id, e)
+
+    session_jwt = issue_session(player_id, "native", identity={"username": row.get("username")})
+    return web.json_response({"access_token": session_jwt, "player_id": str(player_id)})
+
+
+async def handle_auth_password_forgot(request: web.Request) -> web.Response:
+    """POST /api/auth/password/forgot — body: {email}.
+
+    Always reports success. Telling an anonymous caller whether an address has an
+    account is an account-enumeration oracle, and the honest-looking version of
+    this endpoint is the insecure one.
+    """
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    generic = web.json_response(
+        {"ok": True, "message": "If that email has an account, a reset link is on its way."}
+    )
+    if db is None or db.pool is None:
+        return _auth_bad("Database unavailable.", "database_unavailable", 503)
+
+    body = await _json_body(request)
+    email = str(body.get("email") or "").strip().lower()
+    if not email:
+        return _auth_bad("Enter your email address.")
+
+    retry = _auth_login_throttle(email)
+    if retry is not None:
+        return _rate_limited_response(request, retry)
+
+    try:
+        row = await db.fetchrow(
+            "SELECT player_id, username, email FROM player_credentials WHERE email_lc=$1", email
+        )
+        if row:
+            from services.auth.email_sender import send_password_reset
+            from services.auth.passwords import new_email_token
+
+            token, token_hash = new_email_token()
+            await db.execute(
+                """
+                INSERT INTO auth_email_tokens (token_hash, player_id, kind, expires_at)
+                VALUES ($1, $2, 'reset', NOW() + INTERVAL '1 hour')
+                """,
+                token_hash,
+                int(row["player_id"]),
+            )
+            await send_password_reset(row["email"], row["username"], token)
+    except Exception as e:
+        log.exception("password forgot failed: %s", e)
+
+    return generic
+
+
+async def handle_auth_password_reset(request: web.Request) -> web.Response:
+    """POST /api/auth/password/reset — body: {token, password}."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        return _auth_bad("Database unavailable.", "database_unavailable", 503)
+
+    from services.auth.passwords import hash_password, hash_email_token, validate_password
+    from services.auth.session_tokens import issue_session
+
+    body = await _json_body(request)
+    token = str(body.get("token") or "").strip()
+    password = str(body.get("password") or "")
+    if not token:
+        return _auth_bad("That reset link is incomplete.", "invalid_token", 400)
+    ok, msg = validate_password(password)
+    if not ok:
+        return _auth_bad(msg)
+
+    th = hash_email_token(token)
+    pw_hash = hash_password(password)
+
+    try:
+        async with db.transaction() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, player_id FROM auth_email_tokens
+                WHERE token_hash=$1 AND kind='reset' AND used_at IS NULL AND expires_at > NOW()
+                FOR UPDATE
+                """,
+                th,
+            )
+            if not row:
+                return _auth_bad(
+                    "That reset link has expired or was already used.", "invalid_token", 400
+                )
+            player_id = int(row["player_id"])
+            await conn.execute(
+                "UPDATE player_credentials SET password_hash=$2, updated_at=NOW() WHERE player_id=$1",
+                player_id,
+                pw_hash,
+            )
+            # Mark used inside the same transaction: a token that reset a
+            # password but stayed valid would be a replay.
+            await conn.execute("UPDATE auth_email_tokens SET used_at=NOW() WHERE id=$1", row["id"])
+            # Using a reset link proves control of the mailbox.
+            await conn.execute(
+                "UPDATE player_credentials SET email_verified=TRUE WHERE player_id=$1", player_id
+            )
+            cred = await conn.fetchrow(
+                "SELECT username FROM player_credentials WHERE player_id=$1", player_id
+            )
+    except Exception:
+        log.exception("password reset failed")
+        return _auth_bad("Could not reset the password.", "reset_failed", 500)
+
+    session_jwt = issue_session(
+        player_id, "native", identity={"username": cred["username"] if cred else None}
+    )
+    return web.json_response({"ok": True, "access_token": session_jwt, "player_id": str(player_id)})
+
+
+async def handle_auth_email_verify(request: web.Request) -> web.Response:
+    """POST /api/auth/email/verify — body: {token}."""
+    bot = request.app["bot"]
+    db = getattr(bot, "db", None)
+    if db is None or db.pool is None:
+        return _auth_bad("Database unavailable.", "database_unavailable", 503)
+
+    from services.auth.passwords import hash_email_token
+
+    body = await _json_body(request)
+    token = str(body.get("token") or "").strip()
+    if not token:
+        return _auth_bad("That link is incomplete.", "invalid_token", 400)
+
+    try:
+        async with db.transaction() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, player_id FROM auth_email_tokens
+                WHERE token_hash=$1 AND kind='verify' AND used_at IS NULL AND expires_at > NOW()
+                FOR UPDATE
+                """,
+                hash_email_token(token),
+            )
+            if not row:
+                return _auth_bad("That link has expired or was already used.", "invalid_token", 400)
+            await conn.execute(
+                "UPDATE player_credentials SET email_verified=TRUE, updated_at=NOW() WHERE player_id=$1",
+                int(row["player_id"]),
+            )
+            await conn.execute("UPDATE auth_email_tokens SET used_at=NOW() WHERE id=$1", row["id"])
+    except Exception:
+        log.exception("email verify failed")
+        return _auth_bad("Could not verify that email.", "verify_failed", 500)
+
+    return web.json_response({"ok": True})
 
 
 async def handle_inventory(request: web.Request) -> web.Response:
@@ -6794,8 +7215,18 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     """
     Bind HTTP server (OAuth + game JSON). Returns AppRunner for cleanup, or None if disabled.
     """
-    if not (os.getenv("DISCORD_CLIENT_SECRET") or "").strip():
-        log.info("DISCORD_CLIENT_SECRET not set — Activity HTTP API disabled (set it to enable /api/token).")
+    # Game accounts don't need Discord, so the API must not either. It used to
+    # refuse to start without DISCORD_CLIENT_SECRET, which made "players don't
+    # depend on Discord" false at the server level. Start if EITHER auth path is
+    # configured; the Discord routes still self-check and 503 when their secret
+    # is missing (see handle_token / handle_auth_discord_exchange).
+    _has_discord = bool((os.getenv("DISCORD_CLIENT_SECRET") or "").strip())
+    _has_native = bool((os.getenv("SESSION_JWT_SECRET") or "").strip())
+    if not _has_discord and not _has_native:
+        log.info(
+            "Neither DISCORD_CLIENT_SECRET nor SESSION_JWT_SECRET is set — HTTP API disabled. "
+            "Set DISCORD_CLIENT_SECRET for Discord login, SESSION_JWT_SECRET for game accounts."
+        )
         return None
 
     app = web.Application(middlewares=[cors_middleware, rate_limit_middleware])
@@ -6804,6 +7235,14 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/token", handle_token)
     app.router.add_post("/api/auth/discord/exchange", handle_auth_discord_exchange)
     app.router.add_get("/auth/mobile-callback", handle_auth_mobile_callback)
+    # Game accounts — no Discord required. Throttled by IP in
+    # rate_limit_middleware (fail-closed) plus a per-account bucket inside the
+    # login/forgot handlers.
+    app.router.add_post("/api/auth/native/signup", handle_auth_native_signup)
+    app.router.add_post("/api/auth/native/login", handle_auth_native_login)
+    app.router.add_post("/api/auth/password/forgot", handle_auth_password_forgot)
+    app.router.add_post("/api/auth/password/reset", handle_auth_password_reset)
+    app.router.add_post("/api/auth/email/verify", handle_auth_email_verify)
     app.router.add_get("/api/game/inventory", handle_inventory)
     app.router.add_get("/api/game/character/stats", handle_character_stats)
     app.router.add_get("/api/game/character/class-options", handle_character_class_options)

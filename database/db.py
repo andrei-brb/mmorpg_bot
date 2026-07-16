@@ -1040,6 +1040,28 @@ class Database:
                 WHERE is_active = TRUE AND COALESCE(listing_kind, 'fixed') = 'auction';
             """)
 
+            # ── Auth identities backfill ─────────────────────────────────────
+            # Every player that predates auth_identities got their row keyed on
+            # their Discord snowflake (players.id). Give each one the identity
+            # row that says so, or their next Discord login would not resolve.
+            #
+            # Data, not DDL, so it lives here rather than in _SCHEMA. Idempotent
+            # via ON CONFLICT: it re-runs harmlessly on every boot, and adding a
+            # player through the bot before this runs is self-healing.
+            #
+            # Positive ids only: a negative id is a game account, which never has
+            # a Discord identity unless the player explicitly links one.
+            try:
+                await c.execute("""
+                    INSERT INTO auth_identities (provider, provider_uid, player_id)
+                    SELECT 'discord', p.id::text, p.id
+                    FROM players p
+                    WHERE p.id > 0
+                    ON CONFLICT (provider, provider_uid) DO NOTHING;
+                """)
+            except Exception as e:
+                log.warning("auth_identities backfill skipped: %s", e)
+
         log.info("Schema initialized.")
 
 
@@ -1094,6 +1116,74 @@ CREATE TABLE IF NOT EXISTS players (
     prestige_level      SMALLINT DEFAULT 0,
     settings            JSONB DEFAULT '{}'
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- AUTH IDENTITIES (how a login resolves to a player)
+--
+-- players.id is historically the Discord snowflake, and 11 FK columns across 6
+-- tables cascade off it — so a player's id can never change once assigned.
+-- This table is the indirection that makes that workable: any number of logins
+-- (a Discord account, a game account) can point at one player_id.
+--
+-- Discord players keep their snowflake as players.id. Game-account players get
+-- a NEGATIVE synthetic id (see native_player_id_seq below); snowflakes are
+-- always positive, so the two id spaces can never collide.
+--
+-- Linking is an INSERT here, never a re-key. When a link conflicts (the Discord
+-- account already has its own character) the player picks one and we re-point
+-- the row's player_id — both player rows and both characters survive intact.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS auth_identities (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider        VARCHAR(32) NOT NULL,          -- 'discord' | 'native'
+    provider_uid    VARCHAR(190) NOT NULL,         -- snowflake, or lowercased username
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (provider, provider_uid)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PLAYER CREDENTIALS (game accounts — username to play, email to recover)
+--
+-- player_id is a plain column, NOT the primary key: resolving a link conflict
+-- re-points it, so it has to be updatable.
+-- password_hash is a versioned stdlib-scrypt string (services/auth/passwords.py).
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS player_credentials (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    username        VARCHAR(32) NOT NULL,          -- as typed, for display
+    username_lc     VARCHAR(32) NOT NULL UNIQUE,   -- lowercased, for lookup
+    email           VARCHAR(190),                  -- recovery only; never shown to other players
+    email_lc        VARCHAR(190) UNIQUE,
+    email_verified  BOOLEAN DEFAULT FALSE,
+    password_hash   TEXT NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- One game account per player.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_player_credentials_player ON player_credentials(player_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- AUTH EMAIL TOKENS (password reset + email verification)
+-- Only the HASH is stored: a leaked table must not yield usable reset links.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS auth_email_tokens (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    token_hash      CHAR(64) NOT NULL UNIQUE,      -- sha256 hex of the emailed token
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    kind            VARCHAR(16) NOT NULL,          -- 'reset' | 'verify'
+    expires_at      TIMESTAMPTZ NOT NULL,
+    used_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_email_tokens_player ON auth_email_tokens(player_id, kind);
+
+-- Synthetic ids for game accounts: id = -nextval(...). Never collides with a
+-- Discord snowflake, which is always positive.
+CREATE SEQUENCE IF NOT EXISTS native_player_id_seq START 1;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- CHARACTERS
