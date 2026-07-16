@@ -19,7 +19,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { GameTabId } from "@/components/layout/GameTabs";
 import { HeroTab } from "@/components/game/tabs/HeroTab";
-import { CraftingTab } from "@/components/game/tabs/CraftingTab";
+// The Forge renders as a phone-native Workbench instead of the Activity's
+// three stacked panels. Same useForge() hook — layout only.
+import { Workbench } from "@mobile/forge/Workbench";
 import { ExploreTab } from "@/components/game/tabs/ExploreTab";
 import { QuestsTab } from "@/components/game/tabs/QuestsTab";
 import { CombatTab } from "@/components/game/tabs/CombatTab";
@@ -227,7 +229,7 @@ export function MobileGameShell() {
         )}
       >
         {tab === "Hero" && <HeroTab />}
-        {tab === "Forge" && <CraftingTab />}
+        {tab === "Forge" && <Workbench />}
         {tab === "Explore" && <ExploreTab />}
         {tab === "Quests" && <QuestsTab />}
         {tab === "Combat" && <CombatTab focusMode={combatFocusActive} />}
