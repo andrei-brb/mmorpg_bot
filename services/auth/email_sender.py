@@ -97,14 +97,18 @@ def get_email_sender() -> EmailSender:
     return _sender
 
 
+# Static pages in activity/public — deliberately not React routes. The app's
+# router sits inside ActivityGate, which authenticates on mount, so a route
+# there would be unreachable to the one person who needs it: someone who cannot
+# log in. These are served by the same host at the top level.
 def reset_url(token: str) -> str:
     base = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
-    return f"{base}/reset?token={token}" if base else f"(set PUBLIC_APP_URL) token={token}"
+    return f"{base}/reset.html?token={token}" if base else f"(set PUBLIC_APP_URL) token={token}"
 
 
 def verify_url(token: str) -> str:
     base = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
-    return f"{base}/verify?token={token}" if base else f"(set PUBLIC_APP_URL) token={token}"
+    return f"{base}/verify.html?token={token}" if base else f"(set PUBLIC_APP_URL) token={token}"
 
 
 async def send_password_reset(to: str, username: str, token: str) -> bool:
