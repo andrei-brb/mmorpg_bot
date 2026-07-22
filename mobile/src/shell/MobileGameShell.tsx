@@ -32,6 +32,7 @@ import { BattlePassTab } from "@/components/game/tabs/BattlePassTab";
 import { PvpPage } from "@/components/pvp/PvpPage";
 import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 import type { StoredSession } from "@mobile/platform/sessionStore";
+import { remindersEnabled, setRemindersEnabled } from "@mobile/platform/notifications";
 import { GuildJumpBar } from "./GuildJumpBar";
 import { LinkAccountSheet } from "./LinkAccountSheet";
 import { ShellModals } from "./ShellModals";
@@ -127,6 +128,11 @@ export function MobileGameShell({
   const [moreOpen, setMoreOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [remindOn, setRemindOn] = useState(false);
+
+  useEffect(() => {
+    void remindersEnabled().then(setRemindOn);
+  }, []);
 
   const {
     displayName,
@@ -303,6 +309,25 @@ export function MobileGameShell({
                     Account
                   </div>
                   <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !remindOn;
+                        setRemindOn(next);
+                        void setRemindersEnabled(next);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2.5 text-left text-[12px] text-muted-foreground"
+                    >
+                      <span>Daily reminder</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                          remindOn ? "bg-gold/20 text-gold-bright" : "bg-black/40 text-muted-foreground",
+                        )}
+                      >
+                        {remindOn ? "ON" : "OFF"}
+                      </span>
+                    </button>
                     {discordAuth ? (
                       <button
                         type="button"

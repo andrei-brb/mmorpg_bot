@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { App } from "@capacitor/app";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +12,11 @@ import { LoginScreen } from "@mobile/shell/LoginScreen";
 import { DrawerBattle } from "@mobile/combat/DrawerBattle";
 import { StoredTokenAuth } from "@mobile/platform/StoredTokenAuth";
 import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
+import {
+  cancelDailyReminder,
+  ensureNotificationPermission,
+  scheduleDailyReminder,
+} from "@mobile/platform/notifications";
 import {
   clearSession,
   loadSession,
@@ -60,9 +66,27 @@ const MobileApp = ({ authProvider }: { authProvider?: AuthProvider } = {}) => {
   }, []);
 
   const onSignOut = useCallback(async () => {
+    await cancelDailyReminder();
     await clearSession();
     setBoot({ state: "anon" });
   }, []);
+
+  // Daily reminder lifecycle — only while signed in. Ask permission once, then
+  // reschedule on every foreground so the nudge only fires after a day away
+  // (see notifications.ts). Signing out cancels it above.
+  useEffect(() => {
+    if (boot.state !== "authed") return;
+    let removeResume: (() => void) | undefined;
+    void (async () => {
+      await ensureNotificationPermission();
+      await scheduleDailyReminder();
+      const handle = await App.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) void scheduleDailyReminder();
+      });
+      removeResume = () => void handle.remove();
+    })();
+    return () => removeResume?.();
+  }, [boot.state]);
 
   if (boot.state === "loading") {
     return (
