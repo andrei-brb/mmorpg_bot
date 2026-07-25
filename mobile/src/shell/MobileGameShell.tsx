@@ -117,10 +117,13 @@ function normalizeTabId(raw: string): GameTabId | null {
 
 export function MobileGameShell({
   onSignOut,
+  onTryEmber,
   discordAuth,
   onSessionReplaced,
 }: {
   onSignOut?: () => void;
+  /** Switch to the Ember redesign. */
+  onTryEmber?: () => void;
   discordAuth?: DiscordOAuthAuth;
   onSessionReplaced?: (s: StoredSession) => void;
 } = {}) {
@@ -309,6 +312,23 @@ export function MobileGameShell({
                     Account
                   </div>
                   <div className="space-y-1.5">
+                    {onTryEmber ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onTryEmber();
+                        }}
+                        className="w-full rounded-lg border border-gold/40 bg-gold/10 px-3 py-2.5 text-left"
+                      >
+                        <span className="block text-[12px] text-gold-bright">
+                          Try the Ember redesign
+                        </span>
+                        <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
+                          A different take on the whole game — same character. Switch back anytime.
+                        </span>
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {

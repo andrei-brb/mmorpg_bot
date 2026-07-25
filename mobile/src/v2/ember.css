@@ -1,0 +1,339 @@
+/* ═════════════════════════════════════════════════════════════════════════════
+   EMBER — an alternate design language for the mobile game.
+
+   Scoped to [data-ui="ember"], which MobileApp stamps on <html> when the player
+   switches to this version in Settings. The classic UI is untouched and remains
+   the default.
+
+   ── The thesis ───────────────────────────────────────────────────────────────
+   The game is called Emberlone. An ember is a small warm light that survives in
+   the dark — which is literally what this game is: your character keeps burning
+   while you are away (offline earnings), and you come back to tend the fire.
+   The existing design never uses that idea.
+
+   So temperature is the organizing principle, and it is navigation, not
+   decoration:
+
+     WARM (ember, hearth)  → your camp, your character, things ready for you
+     COLD (night)          → the world outside, enemies, risk, transactions
+
+   You should be able to tell where you are with the screen upside down.
+
+   ── What this deliberately changes ───────────────────────────────────────────
+   1. Readability. The classic UI sets almost everything in Cinzel at
+      tracking-[0.3em] uppercase, which is exhausting past a few words. Here
+      that treatment is reserved for true section labels; Chivo carries the
+      rest, sentence case, at sizes meant to be read.
+   2. Glow replaces shadow for anything actionable. A thing that wants you
+      glows like an ember. Nothing else does — so glow means something.
+   3. Rarity stays conventional (grey → green → blue → purple → gold) because
+      players read it instantly, but legendary is GOLD not orange, so it cannot
+      be confused with the ember accent.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+:root[data-ui="ember"] {
+  /* ── Night: the ground everything sits on ── */
+  --n-900: #080B11;   /* page */
+  --n-800: #0E121B;   /* panel */
+  --n-700: #151B27;   /* raised */
+  --n-600: #1E2634;   /* hover / inset */
+  --n-500: #2B3446;   /* border */
+  --n-400: #3B4658;   /* strong border */
+
+  /* ── Ember: warmth, life, "this is yours / this is ready" ── */
+  --e-300: #FFC49A;
+  --e-400: #FF9A5C;
+  --e-500: #FF7A2F;   /* the signature */
+  --e-600: #E85D18;
+  --e-700: #B8430D;
+
+  /* ── Hearth gold: currency and reward, distinct from ember ── */
+  --g-300: #FFE0A3;
+  --g-400: #F5C95C;
+  --g-500: #E0AC3A;
+
+  /* ── Ash: text, warm-biased so it never feels clinical against the ember ── */
+  --a-100: #F4F0E9;   /* primary */
+  --a-300: #CBC3B7;   /* secondary */
+  --a-500: #8D8579;   /* muted */
+  --a-700: #575148;   /* faint / disabled */
+
+  /* ── Semantic ── */
+  --vital: #4FB477;   /* health, heal, success */
+  --wound: #E2495F;   /* damage, danger, destructive */
+  --focus: #4A90D9;   /* mana / rage / resource */
+
+  /* ── Rarity (conventional on purpose — players read it without learning) ── */
+  --r-common: #8D8579;
+  --r-uncommon: #5BB86B;
+  --r-rare: #4A90D9;
+  --r-epic: #9B6BE0;
+  --r-legendary: #FFC93C;
+  --r-mythic: #FF5470;
+
+  /* ── Shape ── */
+  --r-card: 16px;
+  --r-ctl: 11px;
+  --r-pill: 999px;
+
+  color-scheme: dark;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .ember-root {
+  min-height: 100dvh;
+  background: var(--n-900);
+  color: var(--a-100);
+  font-family: Chivo, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Type roles. `label` is the only place the old all-caps treatment survives,
+   because at 10px over 3 words it genuinely helps scanning. */
+[data-ui="ember"] .e-label {
+  font-family: Cinzel, serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--a-500);
+}
+[data-ui="ember"] .e-display {
+  font-family: Cinzel, serif;
+  letter-spacing: 0.04em;   /* not 0.3em — this is meant to be read */
+  font-weight: 600;
+}
+[data-ui="ember"] .e-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ── Surfaces ─────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .e-card {
+  background: var(--n-800);
+  border: 1px solid var(--n-500);
+  border-radius: var(--r-card);
+}
+
+/* A card that belongs to the warm world — your camp, your character. The inner
+   glow reads as firelight falling on it rather than a coloured border. */
+[data-ui="ember"] .e-card--warm {
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(255, 122, 47, 0.14), transparent 62%),
+    var(--n-800);
+  border-color: rgba(255, 122, 47, 0.22);
+}
+
+/* Something is waiting for you. Used sparingly — if everything glows, nothing
+   does. Reserved for claimable rewards and completed work. */
+[data-ui="ember"] .e-card--ready {
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(255, 122, 47, 0.2), transparent 60%),
+    var(--n-800);
+  border-color: rgba(255, 154, 92, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 122, 47, 0.12), 0 8px 30px -14px rgba(255, 122, 47, 0.55);
+}
+
+/* Cold surface — the world, enemies, anything out there. */
+[data-ui="ember"] .e-card--cold {
+  background: linear-gradient(180deg, var(--n-700), var(--n-800));
+  border-color: var(--n-500);
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .e-btn {
+  border-radius: var(--r-ctl);
+  padding: 13px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid transparent;
+  transition: transform 90ms ease, filter 120ms ease;
+  min-height: 46px;                 /* comfortably past the 44px touch floor */
+}
+[data-ui="ember"] .e-btn:active { transform: scale(0.985); }
+
+/* The one primary action on a screen. Only ever one. */
+[data-ui="ember"] .e-btn--primary {
+  background: linear-gradient(180deg, var(--e-400), var(--e-600));
+  color: #2A1206;
+  box-shadow: 0 6px 22px -8px rgba(255, 122, 47, 0.75);
+}
+[data-ui="ember"] .e-btn--ghost {
+  background: var(--n-700);
+  border-color: var(--n-500);
+  color: var(--a-300);
+}
+[data-ui="ember"] .e-btn--quiet {
+  background: transparent;
+  border-color: var(--n-500);
+  color: var(--a-500);
+}
+[data-ui="ember"] .e-btn:disabled { opacity: 0.45; }
+
+[data-ui="ember"] .e-pill {
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+[data-ui="ember"] .e-pill--gold {
+  background: linear-gradient(180deg, rgba(245, 201, 92, 0.2), rgba(224, 172, 58, 0.1));
+  border: 1px solid rgba(245, 201, 92, 0.42);
+  color: var(--g-300);
+}
+[data-ui="ember"] .e-pill--ember {
+  background: rgba(255, 122, 47, 0.14);
+  border: 1px solid rgba(255, 122, 47, 0.4);
+  color: var(--e-300);
+}
+[data-ui="ember"] .e-pill--quiet {
+  background: var(--n-700);
+  border: 1px solid var(--n-500);
+  color: var(--a-500);
+}
+
+/* ── Bars ─────────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .e-bar {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: #05070B;
+  overflow: hidden;
+}
+[data-ui="ember"] .e-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-ui="ember"] .e-bar--hp > i { background: linear-gradient(90deg, #2E7A4F, var(--vital)); }
+[data-ui="ember"] .e-bar--xp > i { background: linear-gradient(90deg, var(--e-600), var(--e-400)); }
+[data-ui="ember"] .e-bar--foe > i { background: linear-gradient(90deg, #8E2438, var(--wound)); }
+[data-ui="ember"] .e-bar--focus > i { background: linear-gradient(90deg, #2C5F94, var(--focus)); }
+
+/* ── The hearth: the warm pool of light the Camp screen sits in ───────────── */
+
+[data-ui="ember"] .e-hearth {
+  background:
+    radial-gradient(80% 46% at 50% 0%, rgba(255, 122, 47, 0.22), transparent 70%),
+    radial-gradient(120% 70% at 50% 0%, rgba(184, 67, 13, 0.14), transparent 70%),
+    var(--n-900);
+}
+
+/* A slow breath, like a fire. Deliberately long and low-contrast so it reads as
+   ambience rather than an animation demanding attention. */
+@keyframes e-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.85; transform: scale(1.04); }
+}
+[data-ui="ember"] .e-glow {
+  animation: e-breathe 5.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ui="ember"] .e-glow { animation: none; opacity: 0.7; }
+  [data-ui="ember"] .e-bar > i { transition: none; }
+}
+
+/* ── Tab bar ──────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .e-tabbar {
+  background: linear-gradient(180deg, rgba(14, 18, 27, 0.92), var(--n-900));
+  border-top: 1px solid var(--n-500);
+  backdrop-filter: blur(12px);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+[data-ui="ember"] .e-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 54px;
+  padding: 7px 2px 9px;
+  color: var(--a-700);
+  position: relative;
+  transition: color 140ms ease;
+}
+[data-ui="ember"] .e-tab-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+[data-ui="ember"] .e-tab.is-active { color: var(--e-400); }
+/* The active tab glows from beneath, like the ember is under it. */
+[data-ui="ember"] .e-tab.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--e-500);
+  box-shadow: 0 0 12px 1px rgba(255, 122, 47, 0.8);
+}
+/* Unread/actionable count. */
+[data-ui="ember"] .e-tab-dot {
+  position: absolute;
+  top: 6px;
+  right: 50%;
+  margin-right: -18px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--e-500);
+  color: #2A1206;
+  font-size: 9px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+/* ── Scroll ───────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .e-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+[data-ui="ember"] .e-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+[data-ui="ember"] .e-scroll-x::-webkit-scrollbar,
+[data-ui="ember"] .e-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Rarity helpers ───────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .rar-common    { color: var(--r-common); }
+[data-ui="ember"] .rar-uncommon  { color: var(--r-uncommon); }
+[data-ui="ember"] .rar-rare      { color: var(--r-rare); }
+[data-ui="ember"] .rar-epic      { color: var(--r-epic); }
+[data-ui="ember"] .rar-legendary { color: var(--r-legendary); }
+[data-ui="ember"] .rar-mythic    { color: var(--r-mythic); }
+
+/* ── Sheet ────────────────────────────────────────────────────────────────── */
+
+[data-ui="ember"] .e-sheet {
+  background: linear-gradient(180deg, var(--n-700), var(--n-800));
+  border-top: 1px solid var(--n-400);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -18px 44px -18px #000;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+[data-ui="ember"] .e-grabber {
+  width: 38px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--n-400);
+  margin: 10px auto 12px;
+}

@@ -17,6 +17,9 @@ import {
   ensureNotificationPermission,
   scheduleDailyReminder,
 } from "@mobile/platform/notifications";
+import { EmberShell } from "@mobile/v2/EmberShell";
+import { applyUiMode, loadUiMode, saveUiMode, type UiMode } from "@mobile/v2/uiMode";
+import "@mobile/v2/ember.css";
 import {
   clearSession,
   loadSession,
@@ -47,17 +50,26 @@ type Boot = { state: "loading" } | { state: "anon" } | { state: "authed"; sessio
 
 const MobileApp = ({ authProvider }: { authProvider?: AuthProvider } = {}) => {
   const [boot, setBoot] = useState<Boot>({ state: "loading" });
+  const [uiMode, setUiMode] = useState<UiMode>("classic");
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const s = await loadSession();
+      const [s, mode] = await Promise.all([loadSession(), loadUiMode()]);
       if (cancelled) return;
+      applyUiMode(mode);
+      setUiMode(mode);
       setBoot(s ? { state: "authed", session: s } : { state: "anon" });
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const switchUi = useCallback(async (mode: UiMode) => {
+    applyUiMode(mode);
+    setUiMode(mode);
+    await saveUiMode(mode);
   }, []);
 
   const onAuthed = useCallback(async (s: StoredSession) => {
@@ -120,11 +132,23 @@ const MobileApp = ({ authProvider }: { authProvider?: AuthProvider } = {}) => {
           {/* Combat renders as a phone-native drawer instead of the Activity's
               three-column arena. Layout only — same data, same skill grid. */}
           <BattleRendererProvider renderer={DrawerBattle}>
-            <MobileGameShell
-              onSignOut={() => void onSignOut()}
-              discordAuth={authProvider as DiscordOAuthAuth | undefined}
-              onSessionReplaced={(s) => void onAuthed(s)}
-            />
+            {uiMode === "ember" ? (
+              // The redesign. Same session, same character, same live data —
+              // a different structure and visual language over the top.
+              <EmberShell
+                onSignOut={() => void onSignOut()}
+                onExitEmber={() => void switchUi("classic")}
+                discordAuth={authProvider as DiscordOAuthAuth | undefined}
+                onSessionReplaced={(s) => void onAuthed(s)}
+              />
+            ) : (
+              <MobileGameShell
+                onSignOut={() => void onSignOut()}
+                onTryEmber={() => void switchUi("ember")}
+                discordAuth={authProvider as DiscordOAuthAuth | undefined}
+                onSessionReplaced={(s) => void onAuthed(s)}
+              />
+            )}
           </BattleRendererProvider>
         </ActivityGate>
       </TooltipProvider>
