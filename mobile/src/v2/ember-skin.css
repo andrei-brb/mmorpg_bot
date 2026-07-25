@@ -1,0 +1,232 @@
+/* ═════════════════════════════════════════════════════════════════════════════
+   EMBER SKIN — repaints the CLASSIC components in Ember colours.
+
+   For Explore and Forge, whose layouts are good and stay exactly as they are.
+   This is a token override, not a fork: the classic components keep their own
+   markup and logic and simply resolve their colour variables to Ember values.
+   The practical consequence is that they inherit future classic changes for
+   free, which a rebuilt copy never would.
+
+   Same technique as the earlier Reliquary skin. Scoped to [data-ui="ember"], so
+   the classic UI is untouched.
+
+   Two token families to cover:
+     1. The Tailwind theme vars in activity/src/index.css (HSL triplets)
+     2. The "WOM"/realm design vars in style.css + wom-emergent.css (hex/oklch)
+   Miss either and the tab comes out half-repainted.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Tailwind theme (HSL triplets — the whole palette routes through these) ── */
+
+:root[data-ui="ember"] {
+  --background: 220 30% 6%;      /* #080B11 night */
+  --foreground: 40 30% 94%;
+  --card: 222 28% 8%;
+  --card-foreground: 40 30% 94%;
+  --popover: 222 28% 8%;
+  --popover-foreground: 40 30% 94%;
+
+  --primary: 22 100% 59%;        /* #FF7A2F ember */
+  --primary-foreground: 22 60% 9%;
+  --secondary: 220 22% 14%;
+  --secondary-foreground: 40 30% 94%;
+  --muted: 220 22% 14%;
+  --muted-foreground: 36 8% 52%;
+  --accent: 22 100% 59%;
+  --accent-foreground: 22 60% 9%;
+  --destructive: 351 72% 58%;
+  --destructive-foreground: 40 30% 94%;
+
+  --border: 220 22% 22%;
+  --input: 220 22% 14%;
+  --ring: 22 100% 59%;
+  --radius: 12px;
+
+  /* The classic "gold" accent becomes ember, so every gold-bordered panel,
+     button and heading in the old components turns warm. */
+  --gold: 22 100% 59%;
+  --gold-dim: 20 62% 38%;
+
+  /* Frame/bevel tokens — the old iron-plate shell becomes night with an
+     ember hairline. */
+  --frame-outer: 220 30% 5%;
+  --frame-mid: 222 26% 10%;
+  --frame-inner: 220 22% 14%;
+  --frame-highlight: 22 70% 45%;
+  --frame-rim: 22 60% 40%;
+
+  --hp-bar: 351 72% 58%;
+  --hp-bar-fill: 146 40% 51%;
+  --mana-bar: 210 62% 57%;
+  --xp-bar: 22 100% 59%;
+  --connected: 146 40% 51%;
+
+  --stone: 222 28% 8%;
+  --stone-light: 220 22% 20%;
+  --stone-dark: 220 30% 5%;
+  --parchment: 40 30% 94%;
+
+  /* Rarity stays conventional — players read it instantly — but legendary is
+     GOLD, not orange, so it can't be confused with the ember accent. */
+  --rarity-common: 36 8% 52%;
+  --rarity-uncommon: 137 40% 54%;
+  --rarity-rare: 212 64% 57%;
+  --rarity-epic: 268 66% 65%;
+  --rarity-legendary: 44 100% 62%;
+
+  --sidebar-background: 220 30% 5%;
+  --sidebar-foreground: 40 30% 94%;
+  --sidebar-primary: 22 100% 59%;
+  --sidebar-primary-foreground: 22 60% 9%;
+  --sidebar-accent: 220 22% 14%;
+  --sidebar-accent-foreground: 40 30% 94%;
+  --sidebar-border: 220 22% 22%;
+  --sidebar-ring: 22 100% 59%;
+
+  /* ── 2. WOM / realm tokens (hex + oklch) ──
+     These are what Explore and Forge actually reference — --text-muted alone
+     appears 21 times across the two files. */
+
+  --bg-void: #080B11;
+  --bg-obsidian: #0A0E16;
+  --bg-panel: #0E121B;
+  --bg-panel-raised: #151B27;
+  --bg-glass: rgba(14, 18, 27, 0.72);
+
+  --text-primary: #F4F0E9;
+  --text-secondary: #CBC3B7;
+  --text-muted: #8D8579;
+  --text-disabled: #575148;
+
+  --border-default: #2B3446;
+  --border-soft: #1E2634;
+  --border-gold: rgba(255, 122, 47, 0.38);
+  --border-gold-strong: rgba(255, 122, 47, 0.6);
+
+  /* "gold-*" is the classic accent ramp. Mapping it to the ember ramp is what
+     turns the old amber chrome warm without touching a single component. */
+  --gold-200: #FFC49A;
+  --gold-400: #FF9A5C;
+  --gold-500: #FF7A2F;
+  --gold-600: #B8430D;
+
+  --realm-gold: oklch(0.72 0.17 45);
+  --realm-gold-bright: oklch(0.82 0.14 55);
+  --realm-gold-dim: oklch(0.52 0.12 40);
+
+  --accent: #FF7A2F;
+  --accent-dim: #B8430D;
+
+  --crimson-400: #E2495F;
+  --crimson-500: #B8283C;
+  --blood: #E2495F;
+  --verdant: #4FB477;
+  --arcane: #4A90D9;
+  --arcane-glow: rgba(74, 144, 217, 0.4);
+}
+
+/* ── Structural softening ─────────────────────────────────────────────────────
+   The classic shell frames every tab in a bevelled iron panel with corner
+   brackets and repeating texture strips. That reads as a window into the game
+   rather than the game itself, and it costs real width on a phone. The Ember
+   screens have no frame, so the skinned ones shouldn't either — otherwise
+   switching tabs would feel like switching apps. */
+
+[data-ui="ember"] .game-frame,
+[data-ui="ember"] .game-frame-inner,
+[data-ui="ember"] .ornate-frame {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+[data-ui="ember"] .corner-ornament,
+[data-ui="ember"] .crest-motif,
+[data-ui="ember"] .rune-band-left,
+[data-ui="ember"] .rune-band-right {
+  display: none !important;
+}
+
+/* Forge textures: the soot-and-anvil washes are hard-coded oklch, so they can't
+   follow the tokens above. Restate them as night with a warm cast. */
+[data-ui="ember"] .tex-forge {
+  background-color: #0E121B;
+  background-image:
+    radial-gradient(at 18% 6%, rgba(255, 122, 47, 0.1), transparent 55%),
+    radial-gradient(at 86% 92%, rgba(5, 7, 11, 0.7), transparent 60%);
+}
+[data-ui="ember"] .tex-parchment {
+  background-color: #151B27;
+  background-image: radial-gradient(at 30% 16%, rgba(255, 122, 47, 0.07), transparent 58%);
+}
+[data-ui="ember"] .tex-leather {
+  background-color: #080B11;
+  background-image: radial-gradient(at 24% 22%, rgba(21, 27, 39, 0.8), transparent 55%);
+}
+
+/* Gold edges → ember edges. Also inline oklch, hence explicit. */
+[data-ui="ember"] .hero-forge-edge-gold {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 122, 47, 0.3),
+    0 8px 22px -12px rgba(0, 0, 0, 0.9);
+}
+[data-ui="ember"] .hero-forge-edge-gold-strong {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 122, 47, 0.55),
+    inset 0 0 18px rgba(255, 122, 47, 0.09),
+    0 12px 30px -14px rgba(0, 0, 0, 0.95);
+}
+
+/* Angular blade clips fight the softer Ember radii — square them off so the
+   two halves of the app agree on shape language. */
+[data-ui="ember"] .hero-forge-clip-blade,
+[data-ui="ember"] .hero-forge-clip-blade-sm,
+[data-ui="ember"] .hero-forge-clip-tag {
+  clip-path: none;
+  border-radius: 11px;
+}
+
+/* Hand-written utilities in style.css that hard-code oklch and therefore
+   out-rank the token-driven Tailwind classes of the same name. */
+[data-ui="ember"] .border-gold\/20 { border-color: rgba(255, 122, 47, 0.2); }
+[data-ui="ember"] .border-gold\/25 { border-color: rgba(255, 122, 47, 0.25); }
+[data-ui="ember"] .border-gold\/30 { border-color: rgba(255, 122, 47, 0.3); }
+[data-ui="ember"] .border-gold\/40 { border-color: rgba(255, 122, 47, 0.4); }
+[data-ui="ember"] .border-gold\/50 { border-color: rgba(255, 122, 47, 0.5); }
+[data-ui="ember"] .border-gold\/70 { border-color: rgba(255, 122, 47, 0.7); }
+[data-ui="ember"] .bg-gold\/5    { background-color: rgba(255, 122, 47, 0.05); }
+[data-ui="ember"] .bg-gold\/10   { background-color: rgba(255, 122, 47, 0.1); }
+[data-ui="ember"] .bg-gold\/15   { background-color: rgba(255, 122, 47, 0.15); }
+[data-ui="ember"] .hover\:bg-gold\/10:hover { background-color: rgba(255, 122, 47, 0.1); }
+
+/* Literal amber/yellow Tailwind classes bypass the theme entirely, so they'd
+   stay warm-but-wrong against the night ground. */
+[data-ui="ember"] [class*="text-amber-2"],
+[data-ui="ember"] [class*="text-amber-3"] { color: #FFC49A; }
+[data-ui="ember"] [class*="text-amber-4"],
+[data-ui="ember"] [class*="text-yellow-4"] { color: #FF9A5C; }
+[data-ui="ember"] [class*="border-amber-5"] { border-color: rgba(255, 122, 47, 0.4); }
+[data-ui="ember"] [class*="bg-amber-9"] { background-color: rgba(14, 18, 27, 0.6); }
+
+/* The pulse-gold flare is hot metal; here it's candlelight. */
+@keyframes ember-skin-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 122, 47, 0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(255, 122, 47, 0); }
+}
+[data-ui="ember"] .animate-pulse-gold { animation: ember-skin-pulse 2.6s ease-in-out infinite; }
+
+/* Fonts: the classic look leans on Cinzel at 0.3em tracking almost everywhere,
+   which is exhausting past a few words. Ember reserves that for short labels,
+   so relax it here to match. Headings keep Cinzel; the tracking comes down. */
+[data-ui="ember"] .font-display,
+[data-ui="ember"] .font-cinzel {
+  letter-spacing: 0.06em;
+}
+
+/* Give the skinned tabs the same breathing room the Ember screens have. */
+[data-ui="ember"] .forge-tab-root,
+[data-ui="ember"] .hero-tab-ref {
+  padding-left: 0;
+  padding-right: 0;
+}

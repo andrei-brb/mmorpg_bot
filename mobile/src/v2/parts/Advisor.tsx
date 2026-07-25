@@ -57,7 +57,7 @@ export function useSuggestion(camp: CampSnapshot): Suggestion | null {
           title: "Your work is finished",
           detail: "The forge is waiting for you to collect it.",
           cta: "Collect it",
-          tab: "hero",
+          tab: "forge",
           ready: true,
         };
       }
@@ -102,7 +102,7 @@ export function useSuggestion(camp: CampSnapshot): Suggestion | null {
         title: `${damaged} piece${damaged === 1 ? "" : "s"} of gear ${damaged === 1 ? "is" : "are"} damaged`,
         detail: `Damaged gear fights weaker. Repairing costs ${repairCost.toLocaleString()} gold.`,
         cta: "Repair",
-        tab: "hero",
+        tab: "forge",
       };
     }
 
@@ -117,7 +117,7 @@ export function useSuggestion(camp: CampSnapshot): Suggestion | null {
           title: qName || "Your story continues",
           detail: hint || "Follow the main quest onward.",
           cta: "Go",
-          tab: "venture",
+          tab: "quests",
         };
       }
     }
@@ -137,7 +137,7 @@ export function useSuggestion(camp: CampSnapshot): Suggestion | null {
             ? `${first.description}${need > 0 ? ` — ${have}/${need}` : ""}`
             : "Finish today's quest before it resets.",
         cta: "Head out",
-        tab: "venture",
+        tab: "quests",
       };
     }
 
@@ -148,7 +148,7 @@ export function useSuggestion(camp: CampSnapshot): Suggestion | null {
         title: "You can prestige",
         detail: `Reset for a permanent +${Number(camp.prestige.next_xp_bonus_pct ?? 0)}% XP bonus. This is permanent.`,
         cta: "Look at it",
-        tab: "legend",
+        tab: "hero",
       };
     }
 
@@ -158,8 +158,8 @@ export function useSuggestion(camp: CampSnapshot): Suggestion | null {
       icon: "🗺",
       title: "Nothing's waiting — go make something happen",
       detail: zone?.name ? `You're in ${zone.name}. Explore, or pick a fight.` : "Explore, or pick a fight.",
-      cta: "Venture out",
-      tab: "venture",
+      cta: "Head out",
+      tab: "explore",
     };
   }, [camp.idle, camp.daily, camp.repair, camp.prestige, inventory?.craft_job, char?.gold, quests, map]);
 }

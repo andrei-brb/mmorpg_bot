@@ -20,6 +20,9 @@ import {
 import { EmberShell } from "@mobile/v2/EmberShell";
 import { applyUiMode, loadUiMode, saveUiMode, type UiMode } from "@mobile/v2/uiMode";
 import "@mobile/v2/ember.css";
+// Repaints the CLASSIC components (Explore, Forge) in Ember colours without
+// changing their layout. Loaded after ember.css so it wins the token cascade.
+import "@mobile/v2/ember-skin.css";
 import {
   clearSession,
   loadSession,

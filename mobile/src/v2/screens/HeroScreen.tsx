@@ -6,17 +6,16 @@ import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload, InvRow } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
 import { CharacterHero } from "@mobile/v2/parts/CharacterHero";
-import { ForgePanel } from "@mobile/v2/parts/ForgePanel";
 import { ItemSheet } from "@mobile/v2/parts/ItemSheet";
 import { PowerSheet, computePower } from "@mobile/v2/parts/PowerSheet";
 
 /**
- * Hero — "I want to get stronger."
+ * Hero — gear, power and bag.
  *
- * Merges what the classic UI splits across Hero (gear + bag) and Forge
- * (crafting), because from the player's side those are one intent, not two.
+ * Keeps the classic split: Forge stays its own tab. This is the character
+ * sheet, rebuilt for a phone.
  *
- * Two deliberate changes beyond the merge:
+ * Two deliberate changes:
  *  - Combat Power is tappable and explains itself (PowerSheet). It was an
  *    opaque number.
  *  - Tapping any item shows a real upgrade/downgrade comparison (ItemSheet)
@@ -60,7 +59,6 @@ export function HeroScreen() {
   const [openItem, setOpenItem] = useState<InvRow | null>(null);
   const [powerOpen, setPowerOpen] = useState(false);
   const [filter, setFilter] = useState<BagFilter>("gear");
-  const [seg, setSeg] = useState<"gear" | "forge">("gear");
 
   const char = inventory?.character ?? null;
   const items = useMemo(() => inventory?.items ?? [], [inventory?.items]);
@@ -100,30 +98,6 @@ export function HeroScreen() {
       <CharacterHero compact />
 
       <div className="space-y-3 px-4">
-        {/* Gear and the forge are one intent — "get stronger" — so they're one
-            tab with a switch, not two tabs apart. */}
-        <div className="flex gap-2">
-          {(
-            [
-              ["gear", "Gear"],
-              ["forge", "Forge"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setSeg(k)}
-              className={cn("e-pill flex-1 py-2", seg === k ? "e-pill--ember" : "e-pill--quiet")}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {seg === "forge" ? <ForgePanel /> : null}
-
-        {seg === "gear" ? (
-          <>
           {/* ── Power, and where it comes from ── */}
           <button
             type="button"
@@ -275,14 +249,10 @@ export function HeroScreen() {
               </div>
             )}
           </div>
-          </>
-        ) : null}
 
-        {seg === "gear" ? (
-          <p className="px-1 text-center text-[11px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-            Enhancement (+N) still lives in the classic Blacksmith — switch back in Settings to reach it.
-          </p>
-        ) : null}
+        <p className="px-1 text-center text-[11px] leading-relaxed" style={{ color: "var(--a-700)" }}>
+          Crafting and repair are in the Forge tab. Enhancement (+N) is in the classic Blacksmith.
+        </p>
       </div>
 
       {openItem ? <ItemSheet item={openItem} onClose={() => setOpenItem(null)} /> : null}

@@ -1,40 +1,59 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
 import { cn } from "@/lib/utils";
-import { EMBER_TABS, type EmberTab } from "@mobile/v2/tabs";
+import { ExploreTab } from "@/components/game/tabs/ExploreTab";
+import { CraftingTab } from "@/components/game/tabs/CraftingTab";
+import {
+  MORE_GROUPS,
+  PRIMARY_TABS,
+  normalizeClassicTab,
+  tabById,
+  type EmberTab,
+  type TabDef,
+} from "@mobile/v2/tabs";
 import { useCampData } from "@mobile/v2/useCampData";
 import { CampScreen } from "@mobile/v2/screens/CampScreen";
-import { VentureScreen } from "@mobile/v2/screens/VentureScreen";
 import { HeroScreen } from "@mobile/v2/screens/HeroScreen";
+import { QuestsScreen } from "@mobile/v2/screens/QuestsScreen";
+import { CombatScreen } from "@mobile/v2/screens/CombatScreen";
+import { PassScreen } from "@mobile/v2/screens/PassScreen";
 import { RealmScreen } from "@mobile/v2/screens/RealmScreen";
-import { LegendScreen } from "@mobile/v2/screens/LegendScreen";
 import { SettingsSheet } from "@mobile/v2/screens/SettingsSheet";
+import { GuildPanel } from "@mobile/v2/parts/GuildPanel";
+import { MarketPanel } from "@mobile/v2/parts/MarketPanel";
+import { ArenaPanel } from "@mobile/v2/parts/ArenaPanel";
 import type { StoredSession } from "@mobile/platform/sessionStore";
 import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 
 /**
- * The Ember shell: 5 intent-shaped tabs instead of 10 system-shaped ones.
+ * The Ember shell.
  *
- * Deliberately NOT a fork of MobileGameShell — this is a different structure,
- * not a restyle of the same one. It consumes the same session context and the
- * same API, so both UIs drive one character on live data.
+ * Classic tab list plus Camp. Four tabs in the bar, the rest in a More sheet.
+ * Explore and Forge render the CLASSIC components on purpose — they're skinned,
+ * not rebuilt, so they pick up the Ember palette from ember-skin.css without
+ * forking their layout.
  */
 
-/** Classic tabs still fire `game:setActiveTab` (GameTabs.tsx:136-143) from
- *  Explore, Quests, Guild and Social. Those components are reused inside this
- *  shell, so their navigation has to land somewhere sensible. */
-const CLASSIC_TO_EMBER: Record<string, EmberTab> = {
-  Hero: "hero",
-  Forge: "hero",
-  Explore: "venture",
-  Quests: "venture",
-  Combat: "venture",
-  Guild: "realm",
-  Market: "realm",
-  Arena: "realm",
-  Pass: "legend",
-  Realm: "legend",
-};
+/** Ember-framed wrapper so rebuilt panels share one header treatment. */
+function Screen({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-full pb-6" style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)" }}>
+      <div className="mb-3 flex items-center gap-2 px-4">
+        <span className="e-label flex-1">{title}</span>
+        {right}
+      </div>
+      <div className="px-4">{children}</div>
+    </div>
+  );
+}
 
 export function EmberShell({
   onSignOut,
@@ -43,41 +62,57 @@ export function EmberShell({
   onSessionReplaced,
 }: {
   onSignOut?: () => void;
-  /** Switch back to the classic UI. */
   onExitEmber?: () => void;
   discordAuth?: DiscordOAuthAuth;
   onSessionReplaced?: (s: StoredSession) => void;
 }) {
   const { inventory, combatFocusActive, arenaFocusActive } = useGameSession();
   const [tab, setTab] = useState<EmberTab>("camp");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const camp = useCampData();
 
   const chromeHidden = combatFocusActive || arenaFocusActive;
 
+  const go = useCallback((t: EmberTab) => {
+    setTab(t);
+    setMoreOpen(false);
+  }, []);
+
+  // Classic components navigate by firing this (GameTabs.tsx:136-143). Explore
+  // and Quests both do, and Explore is rendered here as-is, so honouring it is
+  // required, not optional.
   useEffect(() => {
     const onSet = (ev: Event) => {
-      const raw = String((ev as CustomEvent).detail ?? "");
-      const next = CLASSIC_TO_EMBER[raw];
-      if (next) setTab(next);
+      const next = normalizeClassicTab(String((ev as CustomEvent).detail ?? ""));
+      if (next) go(next);
     };
     window.addEventListener("game:setActiveTab", onSet);
     return () => window.removeEventListener("game:setActiveTab", onSet);
-  }, []);
+  }, [go]);
 
-  const go = useCallback((t: EmberTab) => setTab(t), []);
+  useEffect(() => {
+    if (chromeHidden) setMoreOpen(false);
+  }, [chromeHidden]);
 
-  /** How many things on Camp actually want the player. Drives the tab badge —
-   *  the classic UI makes you visit every tab to discover this. */
+  /** Things on Camp that actually want the player. */
   const campCount = useMemo(() => {
     let n = 0;
     if (Number(camp.idle?.pending_gold ?? 0) > 0 || Number(camp.idle?.pending_xp ?? 0) > 0) n++;
     if (camp.daily?.is_complete) n++;
     const job = inventory?.craft_job;
-    if (job && (job.status === "ready" || (job.completes_at && Date.parse(String(job.completes_at)) <= Date.now())))
+    if (
+      job &&
+      (job.status === "ready" ||
+        (job.completes_at && Date.parse(String(job.completes_at)) <= Date.now()))
+    )
       n++;
+    const login = camp.pass?.daily_login;
+    if (camp.pass?.season?.is_live && login && !login.claimed_today) n++;
     return n;
-  }, [camp.idle, camp.daily, inventory?.craft_job]);
+  }, [camp.idle, camp.daily, camp.pass, inventory?.craft_job]);
+
+  const activeMore = MORE_GROUPS.flatMap((g) => g.tabs).find((t) => t.id === tab) ?? null;
 
   if (!inventory) {
     return (
@@ -91,13 +126,124 @@ export function EmberShell({
 
   return (
     <div className="ember-root flex h-[100dvh] flex-col overflow-hidden">
-      <main className={cn("e-scroll min-h-0 flex-1", chromeHidden && "pb-0")}>
-        {tab === "camp" && <CampScreen camp={camp} onGo={go} onOpenSettings={() => setSettingsOpen(true)} />}
-        {tab === "venture" && <VentureScreen />}
+      <main className="e-scroll min-h-0 flex-1">
+        {tab === "camp" && (
+          <CampScreen camp={camp} onGo={go} onOpenSettings={() => setSettingsOpen(true)} />
+        )}
+
+        {/* Skinned, not rebuilt — classic layout wearing the Ember palette. */}
+        {tab === "explore" && (
+          <Screen title="Explore">
+            <ExploreTab />
+          </Screen>
+        )}
+        {tab === "forge" && (
+          <Screen title="Forge">
+            <CraftingTab />
+          </Screen>
+        )}
+
+        {tab === "combat" && <CombatScreen />}
+        {tab === "quests" && <QuestsScreen />}
         {tab === "hero" && <HeroScreen />}
-        {tab === "realm" && <RealmScreen discordAuth={discordAuth} onSessionReplaced={onSessionReplaced} />}
-        {tab === "legend" && <LegendScreen camp={camp} />}
+        {tab === "pass" && <PassScreen camp={camp} />}
+        {tab === "realm" && (
+          <RealmScreen discordAuth={discordAuth} onSessionReplaced={onSessionReplaced} />
+        )}
+
+        {tab === "guild" && (
+          <Screen title="Guild">
+            <GuildPanel />
+          </Screen>
+        )}
+        {tab === "market" && (
+          <Screen title="Market">
+            <MarketPanel />
+          </Screen>
+        )}
+        {tab === "arena" && (
+          <Screen title="Arena">
+            <ArenaPanel />
+          </Screen>
+        )}
       </main>
+
+      {/* ── More ── */}
+      {moreOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setMoreOpen(false)}
+            className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+          />
+          <div
+            className="e-sheet e-scroll fixed inset-x-0 bottom-0 z-50 max-h-[76dvh] px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="More"
+          >
+            <div className="e-grabber" />
+            <div className="mb-3 flex items-center">
+              <span className="e-display flex-1 text-[15px]" style={{ color: "var(--e-300)" }}>
+                More
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  setSettingsOpen(true);
+                }}
+                className="e-pill e-pill--quiet"
+              >
+                Settings
+              </button>
+            </div>
+
+            <div className="space-y-4 pb-2">
+              {MORE_GROUPS.map((group) => (
+                <section key={group.label}>
+                  <div className="e-label mb-2">{group.label}</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {group.tabs.map((t) => {
+                      const active = tab === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => go(t.id)}
+                          aria-current={active ? "page" : undefined}
+                          className="flex flex-col items-center gap-1.5 rounded-xl px-2 py-3"
+                          style={{
+                            border: `1px solid ${active ? "var(--e-500)" : "var(--n-500)"}`,
+                            background: active ? "rgba(255,122,47,0.1)" : "rgba(0,0,0,0.28)",
+                            color: active ? "var(--e-400)" : "var(--a-300)",
+                          }}
+                        >
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d={t.icon} />
+                          </svg>
+                          <span className="text-[11px] font-semibold leading-tight">{t.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {settingsOpen ? (
         <SettingsSheet
@@ -107,18 +253,19 @@ export function EmberShell({
         />
       ) : null}
 
+      {/* ── Bar ── */}
       {!chromeHidden ? (
         <nav className="e-tabbar flex shrink-0 items-stretch" aria-label="Main">
-          {EMBER_TABS.map((t) => {
+          {PRIMARY_TABS.map((t: TabDef) => {
             const active = tab === t.id;
             const badge = t.id === "camp" ? campCount : 0;
             return (
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setTab(t.id)}
+                onClick={() => go(t.id)}
                 aria-current={active ? "page" : undefined}
-                aria-label={`${t.label} — ${t.question}`}
+                aria-label={`${t.label} — ${t.hint}`}
                 className={cn("e-tab", active && "is-active")}
               >
                 <svg
@@ -139,6 +286,32 @@ export function EmberShell({
               </button>
             );
           })}
+
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            aria-current={activeMore ? "page" : undefined}
+            className={cn("e-tab", (moreOpen || activeMore) && "is-active")}
+          >
+            <svg
+              width="21"
+              height="21"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={moreOpen || activeMore ? 2 : 1.6}
+              strokeLinecap="round"
+              aria-hidden
+            >
+              <circle cx="5" cy="12" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="19" cy="12" r="1.6" />
+            </svg>
+            {/* Shows which tab you're on when it lives in the sheet, so More
+                never reads as "nowhere". */}
+            <span className="e-tab-label">{activeMore ? activeMore.label : "More"}</span>
+          </button>
         </nav>
       ) : null}
     </div>
