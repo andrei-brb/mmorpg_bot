@@ -67,7 +67,8 @@ export function EmberShell({
   discordAuth?: DiscordOAuthAuth;
   onSessionReplaced?: (s: StoredSession) => void;
 }) {
-  const { inventory, combatFocusActive, arenaFocusActive, lostDeliveries } = useGameSession();
+  const { inventory, combatFocusActive, arenaFocusActive, lostDeliveries, refreshMap } =
+    useGameSession();
   const [tab, setTab] = useState<EmberTab>("camp");
   const [moreOpen, setMoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -96,6 +97,14 @@ export function EmberShell({
   useEffect(() => {
     if (chromeHidden) setMoreOpen(false);
   }, [chromeHidden]);
+
+  // Re-fetch the world when you open Explore. The map is now loaded at boot
+  // (GameSessionContext), but it still goes stale while you're on other tabs —
+  // world bosses spawn and despawn on their own schedule, and zone state moves
+  // when other players act. Opening the tab is the natural moment to re-check.
+  useEffect(() => {
+    if (tab === "explore") void refreshMap();
+  }, [tab, refreshMap]);
 
   /** Things on Camp that actually want the player. */
   const campCount = useMemo(() => {

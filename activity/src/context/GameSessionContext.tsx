@@ -718,6 +718,18 @@ export function GameSessionProvider({
     void refreshProgress();
   }, [phase, accessToken, refreshProgress]);
 
+  // The world map is session state — which zone you're standing in, which world
+  // bosses are up — but nothing was loading it at startup. It was only fetched
+  // as a side effect of travel(), explore(), character creation, or opening the
+  // Realm tab. So on a fresh launch `map` stayed null and Explore fell back to
+  // the hardcoded zone list (ExploreTab.tsx:576), showing no current zone and no
+  // boss state until you pressed Explore. Fetched here alongside the other
+  // post-ready loads so it is correct from the first frame.
+  useEffect(() => {
+    if (phase !== "ready" || !accessToken) return;
+    void refreshMap();
+  }, [phase, accessToken, refreshMap]);
+
   const displayName = useMemo(() => {
     const d = inventory?.discord;
     const gn = d?.global_name || d?.username;
