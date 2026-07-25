@@ -2,11 +2,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { cn } from "@/lib/utils";
-import { CharacterHero } from "@mobile/v2/parts/CharacterHero";
-import { Journal } from "@mobile/v2/parts/Journal";
-import { AdvisorCard, useSuggestion } from "@mobile/v2/parts/Advisor";
-import type { CampSnapshot } from "@mobile/v2/useCampData";
-import type { EmberTab } from "@mobile/v2/tabs";
+import { CharacterHero } from "@mobile/ui/parts/CharacterHero";
+import { Journal } from "@mobile/ui/parts/Journal";
+import { AdvisorCard, useSuggestion } from "@mobile/ui/parts/Advisor";
+import type { CampSnapshot } from "@mobile/ui/useCampData";
+import type { EmberTab } from "@mobile/ui/tabs";
 
 /**
  * Camp — the home screen, and the thesis of this redesign.
@@ -46,10 +46,15 @@ export function CampScreen({
   camp,
   onGo,
   onOpenSettings,
+  onOpenMail,
+  mailCount = 0,
 }: {
   camp: CampSnapshot;
   onGo: (t: EmberTab) => void;
   onOpenSettings: () => void;
+  onOpenMail?: () => void;
+  /** Rewards that couldn't be delivered because the bag was full. */
+  mailCount?: number;
 }) {
   const { inventory } = useGameSession();
   const char = inventory?.character ?? null;
@@ -95,6 +100,27 @@ export function CampScreen({
       >
         <span className="e-label flex-1">Camp</span>
         <span className="e-pill e-pill--gold e-num">🪙 {gold.toLocaleString()}</span>
+        {/* Only shown when something is actually undelivered — an always-present
+            empty mailbox is noise. */}
+        {onOpenMail && mailCount > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenMail}
+            aria-label={`Mailbox, ${mailCount} undelivered`}
+            className="relative grid h-8 w-8 place-items-center rounded-lg"
+            style={{ border: "1px solid rgba(255,122,47,0.45)", color: "var(--e-400)" }}
+          >
+            <span className="text-[13px]" aria-hidden>
+              ✉
+            </span>
+            <span
+              className="e-num absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold"
+              style={{ background: "var(--e-500)", color: "#2A1206" }}
+            >
+              {mailCount}
+            </span>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onOpenSettings}

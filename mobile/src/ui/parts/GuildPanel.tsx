@@ -162,7 +162,7 @@ export function GuildPanel() {
           You're not in a guild
         </p>
         <p className="text-[12px] leading-relaxed" style={{ color: "var(--a-500)" }}>
-          Founding or joining a hall happens in the classic Guild tab — switch back in Settings.
+          Founding or joining a hall isn’t on mobile yet — you can do it in Discord, then it’ll show up here.
         </p>
       </div>
     );
@@ -320,7 +320,7 @@ export function GuildPanel() {
       </div>
 
       <p className="px-1 text-center text-[10.5px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-        War council, guild tech, raids and hall chat are in the classic Guild tab.
+        War council, guild tech, raids and hall chat aren’t on mobile yet — they’re in Discord.
       </p>
     </div>
   );

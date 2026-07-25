@@ -142,7 +142,7 @@ export function ArenaPanel() {
       )}
 
       <p className="px-1 text-center text-[10.5px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-        Challenging a specific player and full match history are in the classic Arena.
+        Challenging a specific player and full match history aren’t on mobile yet — they’re in Discord.
       </p>
     </div>
   );

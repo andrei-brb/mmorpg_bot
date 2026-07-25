@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { cn } from "@/lib/utils";
-import { useCampData } from "@mobile/v2/useCampData";
+import { useCampData } from "@mobile/ui/useCampData";
 import type { QuestLogRow } from "@/lib/apiTypes";
 
 /**

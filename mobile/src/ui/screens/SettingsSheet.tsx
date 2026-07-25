@@ -45,11 +45,9 @@ function Row({
 export function SettingsSheet({
   onClose,
   onSignOut,
-  onExitEmber,
 }: {
   onClose: () => void;
   onSignOut?: () => void;
-  onExitEmber?: () => void;
 }) {
   const [remind, setRemind] = useState(false);
   useEffect(() => {
@@ -76,35 +74,6 @@ export function SettingsSheet({
         </h2>
 
         <div className="space-y-4">
-          <section>
-            <div className="e-label mb-2">Appearance</div>
-            <Row
-              title="You're using the Ember redesign"
-              detail="An alternative take on the whole game — five tabs instead of ten, a home screen, and a different visual language. Your character and data are exactly the same."
-              right={
-                <span
-                  className="e-pill"
-                  style={{
-                    background: "rgba(255,122,47,0.16)",
-                    border: "1px solid rgba(255,122,47,0.45)",
-                    color: "var(--e-300)",
-                  }}
-                >
-                  Ember
-                </span>
-              }
-            />
-            {onExitEmber ? (
-              <button
-                type="button"
-                onClick={onExitEmber}
-                className="e-btn e-btn--ghost mt-2 w-full"
-              >
-                Switch back to Classic
-              </button>
-            ) : null}
-          </section>
-
           <section>
             <div className="e-label mb-2">Notifications</div>
             <Row

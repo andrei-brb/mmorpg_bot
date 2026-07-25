@@ -10,28 +10,29 @@ import {
   tabById,
   type EmberTab,
   type TabDef,
-} from "@mobile/v2/tabs";
-import { useCampData } from "@mobile/v2/useCampData";
-import { CampScreen } from "@mobile/v2/screens/CampScreen";
-import { HeroScreen } from "@mobile/v2/screens/HeroScreen";
-import { QuestsScreen } from "@mobile/v2/screens/QuestsScreen";
-import { CombatScreen } from "@mobile/v2/screens/CombatScreen";
-import { PassScreen } from "@mobile/v2/screens/PassScreen";
-import { RealmScreen } from "@mobile/v2/screens/RealmScreen";
-import { SettingsSheet } from "@mobile/v2/screens/SettingsSheet";
-import { GuildPanel } from "@mobile/v2/parts/GuildPanel";
-import { MarketPanel } from "@mobile/v2/parts/MarketPanel";
-import { ArenaPanel } from "@mobile/v2/parts/ArenaPanel";
+} from "@mobile/ui/tabs";
+import { useCampData } from "@mobile/ui/useCampData";
+import { CampScreen } from "@mobile/ui/screens/CampScreen";
+import { HeroScreen } from "@mobile/ui/screens/HeroScreen";
+import { QuestsScreen } from "@mobile/ui/screens/QuestsScreen";
+import { CombatScreen } from "@mobile/ui/screens/CombatScreen";
+import { PassScreen } from "@mobile/ui/screens/PassScreen";
+import { RealmScreen } from "@mobile/ui/screens/RealmScreen";
+import { SettingsSheet } from "@mobile/ui/screens/SettingsSheet";
+import { GuildPanel } from "@mobile/ui/parts/GuildPanel";
+import { MarketPanel } from "@mobile/ui/parts/MarketPanel";
+import { ArenaPanel } from "@mobile/ui/parts/ArenaPanel";
+import { SessionModals } from "@mobile/ui/parts/SessionModals";
 import type { StoredSession } from "@mobile/platform/sessionStore";
 import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 
 /**
- * The Ember shell.
+ * The mobile game shell.
  *
  * Classic tab list plus Camp. Four tabs in the bar, the rest in a More sheet.
  * Explore and Forge render the CLASSIC components on purpose — they're skinned,
  * not rebuilt, so they pick up the Ember palette from ember-skin.css without
- * forking their layout.
+ * forking their layout, and inherit future changes to those tabs for free.
  */
 
 /** Ember-framed wrapper so rebuilt panels share one header treatment. */
@@ -57,19 +58,18 @@ function Screen({
 
 export function EmberShell({
   onSignOut,
-  onExitEmber,
   discordAuth,
   onSessionReplaced,
 }: {
   onSignOut?: () => void;
-  onExitEmber?: () => void;
   discordAuth?: DiscordOAuthAuth;
   onSessionReplaced?: (s: StoredSession) => void;
 }) {
-  const { inventory, combatFocusActive, arenaFocusActive } = useGameSession();
+  const { inventory, combatFocusActive, arenaFocusActive, lostDeliveries } = useGameSession();
   const [tab, setTab] = useState<EmberTab>("camp");
   const [moreOpen, setMoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mailOpen, setMailOpen] = useState(false);
   const camp = useCampData();
 
   const chromeHidden = combatFocusActive || arenaFocusActive;
@@ -126,20 +126,37 @@ export function EmberShell({
 
   return (
     <div className="ember-root flex h-[100dvh] flex-col overflow-hidden">
+      {/* Session modals live above the tabs because they're driven by session
+          state, not by which screen you're on. Without these, a new player
+          cannot create a character and nobody can accept a quest. */}
+      <SessionModals mailOpen={mailOpen} onMailOpenChange={setMailOpen} />
+
       <main className="e-scroll min-h-0 flex-1">
         {tab === "camp" && (
-          <CampScreen camp={camp} onGo={go} onOpenSettings={() => setSettingsOpen(true)} />
+          <CampScreen
+            camp={camp}
+            onGo={go}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenMail={() => setMailOpen(true)}
+            mailCount={lostDeliveries.length}
+          />
         )}
 
-        {/* Skinned, not rebuilt — classic layout wearing the Ember palette. */}
+        {/* Skinned, not rebuilt — classic layout wearing the Ember palette.
+            `classic-skin` scopes the mobile touch-target floor to markup that
+            wasn't written for a phone; Ember's own controls size themselves. */}
         {tab === "explore" && (
           <Screen title="Explore">
-            <ExploreTab />
+            <div className="classic-skin">
+              <ExploreTab />
+            </div>
           </Screen>
         )}
         {tab === "forge" && (
           <Screen title="Forge">
-            <CraftingTab />
+            <div className="classic-skin">
+              <CraftingTab />
+            </div>
           </Screen>
         )}
 
@@ -246,11 +263,7 @@ export function EmberShell({
       ) : null}
 
       {settingsOpen ? (
-        <SettingsSheet
-          onClose={() => setSettingsOpen(false)}
-          onSignOut={onSignOut}
-          onExitEmber={onExitEmber}
-        />
+        <SettingsSheet onClose={() => setSettingsOpen(false)} onSignOut={onSignOut} />
       ) : null}
 
       {/* ── Bar ── */}

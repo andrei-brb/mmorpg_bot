@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
-import type { CampSnapshot } from "@mobile/v2/useCampData";
-import type { EmberTab } from "@mobile/v2/tabs";
+import type { CampSnapshot } from "@mobile/ui/useCampData";
+import type { EmberTab } from "@mobile/ui/tabs";
 
 /**
  * "What should I do right now?"

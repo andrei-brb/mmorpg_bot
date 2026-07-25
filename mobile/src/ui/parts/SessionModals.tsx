@@ -10,12 +10,17 @@ import { QuestCompleteModal } from "@/components/game/modals/QuestCompleteModal"
 import { QuestOfferModal } from "@/components/game/modals/QuestOfferModal";
 
 /**
- * Session-driven modals for the mobile shell.
+ * Session-driven modals. Mounted once, at the shell.
+ *
+ * These are not optional chrome — without them a brand-new player cannot create
+ * a character, nobody can accept a quest or see a completion, and the
+ * specialisation choice never appears. They are driven entirely by session
+ * state, so they must live above the tabs rather than inside any one screen.
  *
  * DUPLICATION NOTICE — this mirrors the modal block of
  * activity/src/components/game/GameShell.tsx (roughly lines 145-282). The modal
  * *components* are shared; only this wiring is restated, because GameShell
- * couples the wiring to the desktop frame it also renders, and the mobile shell
+ * couples the wiring to the desktop frame it also renders, and the mobile app
  * needs the wiring without the frame.
  *
  * The cost is real: a change to quest/mail/spec handling in GameShell must be
@@ -25,12 +30,12 @@ import { QuestOfferModal } from "@/components/game/modals/QuestOfferModal";
  * brief was to keep the mobile app out of activity/src entirely.
  */
 
-export type ShellModalsProps = {
+export type SessionModalsProps = {
   mailOpen: boolean;
   onMailOpenChange: (open: boolean) => void;
 };
 
-export function ShellModals({ mailOpen, onMailOpenChange }: ShellModalsProps) {
+export function SessionModals({ mailOpen, onMailOpenChange }: SessionModalsProps) {
   const {
     displayName,
     inventory,

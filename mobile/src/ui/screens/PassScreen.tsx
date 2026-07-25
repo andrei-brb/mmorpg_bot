@@ -4,7 +4,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import * as api from "@/lib/gameApi";
 import type { BattlePassTierRow } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
-import type { CampSnapshot } from "@mobile/v2/useCampData";
+import type { CampSnapshot } from "@mobile/ui/useCampData";
 
 /**
  * Battle Pass, in Ember.

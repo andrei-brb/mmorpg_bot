@@ -340,7 +340,7 @@ export function MarketPanel() {
       )}
 
       <p className="px-1 text-center text-[10.5px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-        Auctions, the NPC shop and direct trades are in the classic Market.
+        Auctions, the NPC shop and direct trades aren’t on mobile yet — they’re in Discord.
       </p>
     </div>
   );

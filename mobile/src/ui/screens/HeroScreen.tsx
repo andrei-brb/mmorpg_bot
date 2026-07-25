@@ -5,9 +5,9 @@ import { normRarity } from "@/hooks/useForge";
 import * as api from "@/lib/gameApi";
 import type { CharacterDerivedStatsPayload, InvRow } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
-import { CharacterHero } from "@mobile/v2/parts/CharacterHero";
-import { ItemSheet } from "@mobile/v2/parts/ItemSheet";
-import { PowerSheet, computePower } from "@mobile/v2/parts/PowerSheet";
+import { CharacterHero } from "@mobile/ui/parts/CharacterHero";
+import { ItemSheet } from "@mobile/ui/parts/ItemSheet";
+import { PowerSheet, computePower } from "@mobile/ui/parts/PowerSheet";
 
 /**
  * Hero — gear, power and bag.
@@ -251,7 +251,7 @@ export function HeroScreen() {
           </div>
 
         <p className="px-1 text-center text-[11px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-          Crafting and repair are in the Forge tab. Enhancement (+N) is in the classic Blacksmith.
+          Crafting and repair are in the Forge tab. Enhancement (+N) isn’t on mobile yet — use Discord for that.
         </p>
       </div>
 

@@ -9,8 +9,8 @@ import type {
   SocialRosterPayload,
 } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
-import { TalentsPanel } from "@mobile/v2/parts/TalentsPanel";
-import { LinkAccountSheet } from "@mobile/shell/LinkAccountSheet";
+import { TalentsPanel } from "@mobile/ui/parts/TalentsPanel";
+import { LinkAccountSheet } from "@mobile/ui/parts/LinkAccountSheet";
 import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 import type { StoredSession } from "@mobile/platform/sessionStore";
 
@@ -161,7 +161,7 @@ function SocialSection() {
         </div>
         {friends.length === 0 ? (
           <p className="text-[12px] leading-relaxed" style={{ color: "var(--a-500)" }}>
-            Nobody yet. You can add people by username in the classic Realm tab.
+            Nobody yet. Adding friends by username isn’t on mobile yet — you can do it in Discord.
           </p>
         ) : (
           <ul className="space-y-1.5">
@@ -173,7 +173,7 @@ function SocialSection() {
       </div>
 
       <p className="px-1 text-center text-[10.5px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-        Whispers, adding friends and the block list are in the classic Realm tab.
+        Whispers, adding friends and the block list aren’t on mobile yet — they’re in Discord.
       </p>
     </div>
   );

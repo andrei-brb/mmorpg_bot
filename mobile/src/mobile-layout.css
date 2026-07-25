@@ -1,116 +1,25 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   Mobile layout — PHONE ONLY.
+   Mobile layout fixes for the CLASSIC components the app still renders.
 
-   Imported only by mobile/src/main.tsx and scoped to [data-platform="mobile"],
-   which main.tsx stamps on <html>. The Discord Activity never imports this file.
+   Scoped to [data-platform="mobile"], which main.tsx stamps on <html>.
 
    WHY AN ATTRIBUTE AND NOT A MEDIA QUERY
    The Discord Activity iframe is also narrower than 640px, so Tailwind's sm:
    (640) and md: (768) are inactive in BOTH the iframe and the phone. That is
    why HeroTab.tsx:751 hardcodes flex-row with no breakpoint — see the author's
    comment at :750. A width query cannot tell "phone" from "narrow desktop
-   panel", and useIsMobile() (hooks/use-mobile.tsx, 768px) has the same flaw:
-   it returns true inside the iframe. Only an explicit attribute set by the
-   native shell can carry this distinction.
+   panel", and useIsMobile() (hooks/use-mobile.tsx, 768px) has the same flaw.
+   Only an explicit attribute set by the native shell can carry it.
 
-   Companion file skin-reliquary.css owns colour; this file owns layout.
+   Scope note: the Ember UI now renders its own screens for most tabs and only
+   borrows the classic components for Explore, Forge and combat. Rules for tabs
+   Ember replaced (Hero, Market, Guild) were removed when it became the only UI
+   — they were styling markup that no longer mounts.
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* ── Hero ───────────────────────────────────────────────────────────────────
-   The reported bug: a tall empty violet column with clipped MAIN/OFF, an
-   overlapping "+163 2288", and truncated CONSU…/MATERI….
-
-   Root cause is a single line. HeroTab.tsx:751 is an unconditional flex-row, so
-   at 390px each column gets ~195px; the grid-cols-2 at :879 halves that again to
-   ~90px, and 9px uppercase text at 0.2em tracking cannot fit — hence the
-   collisions. The left column runs out of content while the right keeps going,
-   which is the void. Stacking the split fixes the whole cascade at once; the
-   individual truncations need no separate patch. */
-
-[data-platform="mobile"] .hero-split {
-  flex-direction: column;
-  /* The shell's <main> owns scrolling; the tab must grow, not trap it. */
-  overflow: visible;
-  min-height: 0;
-  border: 0;
-  background: transparent;
-  gap: 0.75rem;
-}
-
-/* Both columns become full-width bands. Their own scrollers are removed: a
-   phone scrolls the page, not a pane inside it. */
-[data-platform="mobile"] .hero-col-main,
-[data-platform="mobile"] .hero-col-side {
-  flex: 0 0 auto;
-  min-height: 0;
-  overflow: visible;
-  width: 100%;
-}
-
-/* Paperdoll-first order (user's call: the character is the product).
-   The DOM keeps its desktop order; flex `order` re-sequences for the phone
-   without touching the JSX. Identity + power live inside .hero-col-main, so the
-   two bands interleave via order on their shared parent. */
-[data-platform="mobile"] .hero-col-main {
-  order: 1;
-}
-
-[data-platform="mobile"] .hero-col-side {
-  order: 2;
-}
-
-/* Let the figure be big — it is the hero image, not a thumbnail. The desktop
-   caps height against viewport maths that assumed a side-by-side layout. */
-[data-platform="mobile"] .hero-paperdoll {
-  max-width: 100%;
-  max-height: none;
-  aspect-ratio: 4 / 5;
-  margin-top: 0.25rem;
-}
-
-/* Combat Power / Treasury: full width now that the column is not halved. */
-[data-platform="mobile"] .hero-powerstrip {
-  max-width: 100%;
-  margin-bottom: 0.75rem;
-}
-
-/* The nested grid-cols-2 at HeroTab.tsx:879 (Pending XP / Pending gold) is what
-   renders as "+163 2288". At full width the two cells have room, but the 9px
-   0.2em-tracked labels are still tight — give them a floor. */
-[data-platform="mobile"] .hero-col-side [class*="tracking-[0.2em]"],
-[data-platform="mobile"] .hero-col-side [class*="tracking-[0.22em]"] {
-  letter-spacing: 0.08em;
-}
-
-/* Segmented control (GEAR / CONSUMABLES / MATERIALS) truncates to CONSU… /
-   MATERI… only because the column was starved. Full width restores it; allow
-   it to scroll rather than clip if a longer label ever appears. */
-[data-platform="mobile"] .hero-col-side [role="tablist"] {
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-[data-platform="mobile"] .hero-col-side [role="tablist"]::-webkit-scrollbar {
-  display: none;
-}
-
-/* ── Combat — "The Drawer" ──────────────────────────────────────────────────
-   Combat is a real component now (mobile/src/combat/DrawerBattle.tsx), injected
-   via the BattleRenderer seam — not BattlePreview with overrides on top. The
-   previous ~180 lines of bp-* rules lived here and are gone: they fought a
-   three-column desktop arena locked to a 16/9 box by inline styles, and `order`
-   plus !important could move those boxes but never restructure them, which is
-   why elements kept landing on top of each other.
-
-   Only two things remain: the shell must get out of the way, and the real skill
-   grid (BattlefieldSkillGrid, passed in as `combatGrid`) is a 3-column
-   max-w-md layout that needs to be denser inside the drawer. */
-
-/* Combat/arena own the screen — no shell padding around a full-bleed battlefield. */
-[data-platform="mobile"] .mobile-shell-main.is-focus {
-  padding: 0;
-  overflow: hidden;
-}
+/* ── Combat ─────────────────────────────────────────────────────────────────
+   Combat renders through DrawerBattle (mobile/src/combat/DrawerBattle.tsx),
+   which receives the real skill grid as `combatGrid`. */
 
 /* BattlefieldSkillGrid is [grid-template-columns:repeat(3,...)] with max-w-md
    (BattlefieldSkillGrid.tsx:55-56). Its icons are stone-framed PNGs, so at
@@ -128,81 +37,24 @@
   display: none;
 }
 
-/* ── Market ─────────────────────────────────────────────────────────────────
-   The mode switcher (MarketView.tsx:2108) is written
-   `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` — the author DID design it
-   responsively. But sm: is 640px and the phone is ~390px, so it is pinned at
-   one column: four stacked cards, roughly 224px of navigation above the first
-   listing, on a screen that is 844px tall.
-
-   Unlike combat, this is not a layout fighting the phone — it is the author's
-   own 4-across intent that Tailwind's breakpoints cannot reach here. Restoring
-   it as an icon row costs ~170px and no meaning: the tag line under each title
-   ("Bids · buyouts · anti-snipe") is a desktop nicety, and the icon plus title
-   already say which mode you are in. */
-
-[data-platform="mobile"] .market-modes {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.25rem;
-}
-
-[data-platform="mobile"] .market-modes > button {
-  padding: 0.5rem 0.25rem;
-}
-
-[data-platform="mobile"] .market-mode-inner {
-  flex-direction: column;
-  gap: 0.25rem;
-  text-align: center;
-}
-
-[data-platform="mobile"] .market-mode-title {
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  line-height: 1.15;
-}
-
-/* "Bids · buyouts · anti-snipe" under a 90px-wide tab is unreadable anyway. */
-[data-platform="mobile"] .market-mode-tag {
-  display: none;
-}
-
-/* ── Guild ──────────────────────────────────────────────────────────────────
-   The hall itself needs no layout work — no fixed widths, no collapsed grids.
-   It is only long, so the shell adds a jump bar (GuildJumpBar.tsx) above it.
-   This keeps that bar in reach while the hall scrolls under it. */
-
-[data-platform="mobile"] .guild-jumpbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: linear-gradient(180deg, hsl(264 26% 7%) 62%, hsl(264 26% 7% / 0));
-  backdrop-filter: blur(6px);
-}
-
-[data-platform="mobile"] .guild-jumpbar > div::-webkit-scrollbar {
-  display: none;
-}
-
-/* Jumped-to sections shouldn't land under the sticky bar. */
-[data-platform="mobile"] [data-guild-section] {
-  scroll-margin-top: 3.25rem;
-}
-
 /* ── Touch targets ──────────────────────────────────────────────────────────
-   44px is the platform floor for a comfortable tap. Applied on coarse pointers
-   only, so a desktop browser opening the mobile build keeps its dense layout. */
+   Scoped to the classic components only.
+
+   This used to be a blanket `button { min-height: 44px }`, which also hit every
+   Ember pill and segment control and quietly inflated them well past their
+   designed size. Ember sizes its own controls (.e-btn is 46px, .e-tab is 54px),
+   so the floor is only needed where the markup wasn't written for a phone. */
 
 @media (pointer: coarse) {
-  [data-platform="mobile"] button,
-  [data-platform="mobile"] [role="tab"],
-  [data-platform="mobile"] [role="button"] {
+  [data-platform="mobile"] .classic-skin button,
+  [data-platform="mobile"] .classic-skin [role="tab"],
+  [data-platform="mobile"] .classic-skin [role="button"] {
     min-height: 44px;
   }
 
-  /* Inventory/bag cells are a grid of small squares — a 44px floor would
-     stretch them into rectangles. They are already ~56px and exempt. */
-  [data-platform="mobile"] .hero-col-side [class*="grid-cols-"] button {
+  /* Grids of small square cells (bag slots, skill tiles) would be stretched
+     into rectangles by the floor above. */
+  [data-platform="mobile"] .classic-skin [class*="grid-cols-"] button {
     min-height: 0;
   }
 }

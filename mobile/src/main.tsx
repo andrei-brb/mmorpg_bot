@@ -1,23 +1,18 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 // The shared game UI + styles live in ../activity/src (aliased as `@`). The
-// shell itself is mobile-only: MobileApp mounts a phone-native bottom-tab shell
-// around the same shared tab components.
+// shell is mobile-only: MobileApp mounts the Ember shell around the same shared
+// data layer and, for Explore and Forge, the same shared tab components.
 import MobileApp from "@mobile/MobileApp";
 import "@/index.css";
 import "@/styles/wom-emergent.css";
 import "@/style.css";
-// Mobile-only reskin. Loaded last so it overrides the shared tokens/chrome; the
-// Discord Activity never imports it, so its look is unchanged.
-import "@mobile/skin-reliquary.css";
 import "@mobile/mobile-layout.css";
 import { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 
-// Two separate signals, deliberately:
-//   data-skin     → colour (Reliquary)
-//   data-platform → layout (phone)
-// Keeping them apart means a skin could later ship to Discord, or a second skin
-// to mobile, without one dragging the other along.
+// Two signals, set synchronously so no frame paints unstyled:
+//   data-ui       → the Ember design (colour + the skin over classic tabs)
+//   data-platform → phone layout
 //
 // data-platform exists because width media queries CANNOT carry this: the
 // Discord Activity iframe is also under 640px, so every Tailwind sm:/md: rule is
@@ -25,14 +20,17 @@ import { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 // hardcoded flex-row for exactly this reason). useIsMobile() is width-based too
 // and would return true inside the iframe. Only an explicit attribute set by the
 // native shell distinguishes "phone" from "narrow desktop panel".
-document.documentElement.dataset.skin = "reliquary";
+//
+// They stay separate rather than becoming one flag: layout and colour are
+// genuinely different concerns, and merging them would make either impossible to
+// change alone.
+document.documentElement.dataset.ui = "ember";
 document.documentElement.dataset.platform = "mobile";
 
 const queryClient = new QueryClient();
 
-// Standalone Discord login (works on device and in a plain browser). Phase 2
-// adds a login screen that also offers NativeAuth (Apple/Google/email); for now
-// the app signs in with Discord and lands on the same cross-play character.
+// Discord OAuth, offered alongside game accounts on the login screen. Signing in
+// this way lands on the same cross-play character as the Discord Activity.
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID as string | undefined;
 // Discord only accepts https redirects, so we register a backend bounce page
 // there and it forwards the code into the app via the custom-scheme deep link.
