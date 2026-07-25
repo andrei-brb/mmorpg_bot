@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGameSession } from "@/context/GameSessionContext";
+import * as api from "@/lib/gameApi";
+import type { MilestonesPayload, ReputationPayload } from "@/lib/apiTypes";
 import type { CampSnapshot } from "@mobile/v2/useCampData";
 
 /**
@@ -47,8 +49,34 @@ function Row({
 }
 
 export function LegendScreen({ camp }: { camp: CampSnapshot }) {
-  const { inventory, progress } = useGameSession();
+  const { inventory, progress, accessToken, guildId } = useGameSession();
   const char = inventory?.character ?? null;
+
+  // Server-wide milestones and faction standing live behind their own calls
+  // (they're two of Realm's seven sub-tabs in classic). Best-effort — a failure
+  // just hides the section.
+  const [milestones, setMilestones] = useState<MilestonesPayload | null>(null);
+  const [rep, setRep] = useState<ReputationPayload | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void Promise.allSettled([
+      api.getMilestones(accessToken, guildId),
+      api.getReputation(accessToken, guildId),
+    ]).then(([m, r]) => {
+      if (cancelled) return;
+      setMilestones(m.status === "fulfilled" ? m.value : null);
+      setRep(r.status === "fulfilled" ? r.value : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, guildId]);
+
+  const buffs = milestones?.buffs ?? [];
+  const factions = (rep?.factions ?? []).filter((f) => Number(f.reputation ?? 0) > 0);
+  const mult = milestones?.multipliers ?? null;
 
   const pass = camp.pass ?? null;
   const season = pass?.season ?? null;
@@ -222,9 +250,53 @@ export function LegendScreen({ camp }: { camp: CampSnapshot }) {
           )}
         </div>
 
+        {/* ── Realm-wide buffs ── */}
+        {buffs.length > 0 || (mult && (Number(mult.xp_bonus_pct ?? 0) > 0 || Number(mult.gold_bonus_pct ?? 0) > 0)) ? (
+          <div className="e-card e-card--warm p-4">
+            <div className="e-label mb-2">Realm bonuses</div>
+            {mult ? (
+              <div className="mb-2 flex gap-2">
+                {Number(mult.xp_bonus_pct ?? 0) > 0 ? (
+                  <span className="e-pill e-pill--ember e-num">+{mult.xp_bonus_pct}% XP</span>
+                ) : null}
+                {Number(mult.gold_bonus_pct ?? 0) > 0 ? (
+                  <span className="e-pill e-pill--gold e-num">+{mult.gold_bonus_pct}% gold</span>
+                ) : null}
+              </div>
+            ) : null}
+            <p className="text-[11.5px] leading-relaxed" style={{ color: "var(--a-500)" }}>
+              Earned by the whole server hitting milestones together — these apply to everyone.
+            </p>
+          </div>
+        ) : null}
+
+        {/* ── Faction standing ── */}
+        {factions.length > 0 ? (
+          <div className="e-card p-4">
+            <div className="e-label mb-3">Reputation</div>
+            <ul className="space-y-2">
+              {factions.slice(0, 8).map((f) => (
+                <li key={f.faction_id} className="flex items-baseline gap-2.5">
+                  <span className="shrink-0 text-[13px]" aria-hidden>
+                    {f.emoji || "◆"}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: "var(--a-100)" }}>
+                    {f.name}
+                  </span>
+                  <span className="shrink-0 text-[11px]" style={{ color: "var(--a-500)" }}>
+                    {f.level?.name || ""}
+                  </span>
+                  <span className="e-num shrink-0 text-[11px]" style={{ color: "var(--a-300)" }}>
+                    {Number(f.reputation ?? 0).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <p className="px-1 text-center text-[11px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-          Talents, reputation and story deeds live in the classic Realm tab —
-          switch back in Settings to reach them.
+          The talent tree and story deeds live in the classic Realm tab — switch back in Settings.
         </p>
       </div>
     </div>

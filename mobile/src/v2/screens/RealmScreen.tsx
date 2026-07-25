@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { GuildTab } from "@/components/game/tabs/GuildTab";
-import { MarketTab } from "@/components/game/tabs/MarketTab";
-import { PvpPage } from "@/components/pvp/PvpPage";
 import { cn } from "@/lib/utils";
+import { ArenaPanel } from "@mobile/v2/parts/ArenaPanel";
+import { GuildPanel } from "@mobile/v2/parts/GuildPanel";
+import { MarketPanel } from "@mobile/v2/parts/MarketPanel";
 import { LinkAccountSheet } from "@mobile/shell/LinkAccountSheet";
 import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
 import type { StoredSession } from "@mobile/platform/sessionStore";
@@ -13,12 +13,11 @@ import type { StoredSession } from "@mobile/platform/sessionStore";
  * Guild, market and arena were three separate top-level tabs; they're one
  * intent, so they're one tab with a segment switch.
  *
- * HONEST NOTE: the bodies here are the existing views (MarketView alone is
- * 2,410 lines, GuildTab 1,463). They're embedded rather than rebuilt, so they
- * still carry the classic styling inside the Ember frame. Rebuilding them
- * wouldn't demonstrate anything the rest of this redesign doesn't already —
- * the argument being made is about structure and the home screen, and faking
- * a market would prove less than shipping the real one.
+ * All three are rebuilt in Ember over the real APIs — the everyday 80% of each
+ * system. The weekly, officer-gated or rarely-touched parts (auctions, NPC shop,
+ * trades; war council, guild tech, raids, hall chat; specific-player challenges
+ * and full match history) stay in classic, and each panel says so rather than
+ * pretending they don't exist.
  */
 
 type Seg = "guild" | "market" | "arena";
@@ -63,10 +62,10 @@ export function RealmScreen({
         ))}
       </div>
 
-      <div className="px-2">
-        {seg === "guild" ? <GuildTab /> : null}
-        {seg === "market" ? <MarketTab /> : null}
-        {seg === "arena" ? <PvpPage /> : null}
+      <div className="px-4">
+        {seg === "guild" ? <GuildPanel /> : null}
+        {seg === "market" ? <MarketPanel /> : null}
+        {seg === "arena" ? <ArenaPanel /> : null}
       </div>
 
       {linkOpen ? (
