@@ -216,12 +216,87 @@
 }
 [data-ui="ember"] .animate-pulse-gold { animation: ember-skin-pulse 2.6s ease-in-out infinite; }
 
-/* Fonts: the classic look leans on Cinzel at 0.3em tracking almost everywhere,
-   which is exhausting past a few words. Ember reserves that for short labels,
-   so relax it here to match. Headings keep Cinzel; the tracking comes down. */
+/* ── Typography ───────────────────────────────────────────────────────────────
+   The classic look sets almost everything in Cinzel at wide tracking — headings,
+   buttons, stat labels, body copy. Ember uses Cinzel deliberately and sparingly:
+   short uppercase labels and headings only, with Chivo carrying everything
+   meant to be read.
+
+   So the rule here isn't "make it smaller", it's "give Cinzel a job". Anything
+   that is a label or a heading keeps it, tightened. Anything you actually read —
+   buttons, values, descriptions — moves to Chivo. */
+
 [data-ui="ember"] .font-display,
 [data-ui="ember"] .font-cinzel {
   letter-spacing: 0.06em;
+}
+
+/* Buttons are read, not scanned — and a wide-tracked serif call-to-action is the
+   single most dated thing about the classic chrome. */
+[data-ui="ember"] .classic-skin button,
+[data-ui="ember"] .classic-skin .btn-gold,
+[data-ui="ember"] .classic-skin .btn-ghost,
+[data-ui="ember"] .classic-skin .btn-danger,
+[data-ui="ember"] .classic-skin [role="tab"] {
+  font-family: Chivo, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Values, descriptions and log lines: sans, normal tracking, actually legible. */
+[data-ui="ember"] .classic-skin .font-crimson,
+[data-ui="ember"] .classic-skin p,
+[data-ui="ember"] .classic-skin li {
+  font-family: Chivo, "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+/* Small uppercase labels keep Cinzel — this is exactly what .e-label does on the
+   Ember screens, so the two halves agree. */
+[data-ui="ember"] .classic-skin .text-label,
+[data-ui="ember"] .classic-skin .kicker {
+  font-family: Cinzel, serif;
+  letter-spacing: 0.2em;
+  color: var(--a-500);
+}
+
+/* Section headings: Cinzel, but at a size and tracking meant to be read rather
+   than admired. */
+[data-ui="ember"] .classic-skin .section-h h2,
+[data-ui="ember"] .classic-skin h2,
+[data-ui="ember"] .classic-skin h3 {
+  letter-spacing: 0.05em;
+}
+
+/* ── Skill icons in the drawer ────────────────────────────────────────────────
+   .skill-btn draws a stone frame as a stretched background image and holds a
+   FIXED 32px icon inside 8px of padding (style.css:2255-2263,
+   CombatSkillButton.tsx: w-8 h-8). In a small grid cell the frame dominates and
+   the art shrinks into the middle of it — which is the "png doesn't fit" you
+   saw. Trim the padding and let the icon scale with its cell instead. */
+
+[data-ui="ember"] .drawer-grid .skill-btn {
+  padding: 2px;
+  min-height: 0;
+  border-radius: 10px;
+  /* The frame art is a JPEG stretched to 100% 100%; `cover` keeps it square
+     rather than smeared when the cell isn't. */
+  background-size: cover;
+  background-position: center;
+}
+
+[data-ui="ember"] .drawer-grid .skill-btn img {
+  width: 82% !important;
+  height: 82% !important;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+
+/* Emoji fallbacks (abilities with no PNG) should match the new icon size. */
+[data-ui="ember"] .drawer-grid .skill-btn > span:not(.sr-only) {
+  font-size: 26px;
+  line-height: 1;
 }
 
 /* Give the skinned tabs the same breathing room the Ember screens have. */

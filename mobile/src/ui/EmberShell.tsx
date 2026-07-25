@@ -3,6 +3,7 @@ import { useGameSession } from "@/context/GameSessionContext";
 import { cn } from "@/lib/utils";
 import { ExploreTab } from "@/components/game/tabs/ExploreTab";
 import { CraftingTab } from "@/components/game/tabs/CraftingTab";
+import { CombatTab } from "@/components/game/tabs/CombatTab";
 import {
   MORE_GROUPS,
   PRIMARY_TABS,
@@ -15,7 +16,6 @@ import { useCampData } from "@mobile/ui/useCampData";
 import { CampScreen } from "@mobile/ui/screens/CampScreen";
 import { HeroScreen } from "@mobile/ui/screens/HeroScreen";
 import { QuestsScreen } from "@mobile/ui/screens/QuestsScreen";
-import { CombatScreen } from "@mobile/ui/screens/CombatScreen";
 import { PassScreen } from "@mobile/ui/screens/PassScreen";
 import { RealmScreen } from "@mobile/ui/screens/RealmScreen";
 import { SettingsSheet } from "@mobile/ui/screens/SettingsSheet";
@@ -30,9 +30,11 @@ import type { DiscordOAuthAuth } from "@mobile/platform/DiscordOAuthAuth";
  * The mobile game shell.
  *
  * Classic tab list plus Camp. Four tabs in the bar, the rest in a More sheet.
- * Explore and Forge render the CLASSIC components on purpose — they're skinned,
- * not rebuilt, so they pick up the Ember palette from ember-skin.css without
- * forking their layout, and inherit future changes to those tabs for free.
+ * Explore, Forge and Combat render the CLASSIC components on purpose — they're
+ * skinned, not rebuilt, so they pick up the Ember palette from ember-skin.css
+ * without forking their layout, and inherit future changes for free. Combat's
+ * selector in particular is already good; only the fight it launches is
+ * replaced, by DrawerBattle.
  */
 
 /** Ember-framed wrapper so rebuilt panels share one header treatment. */
@@ -159,8 +161,17 @@ export function EmberShell({
             </div>
           </Screen>
         )}
+        {/* Combat keeps the classic selector — zone picker, foe roster with risk
+            tiers, preview. It's good, and rebuilding it gained nothing. The
+            fight it launches still renders through DrawerBattle. */}
+        {tab === "combat" && (
+          <Screen title="Combat">
+            <div className="classic-skin">
+              <CombatTab />
+            </div>
+          </Screen>
+        )}
 
-        {tab === "combat" && <CombatScreen />}
         {tab === "quests" && <QuestsScreen />}
         {tab === "hero" && <HeroScreen />}
         {tab === "pass" && <PassScreen camp={camp} />}

@@ -23,12 +23,14 @@
 
 /* BattlefieldSkillGrid is [grid-template-columns:repeat(3,...)] with max-w-md
    (BattlefieldSkillGrid.tsx:55-56). Its icons are stone-framed PNGs, so at
-   3-wide on a phone they render huge. Five across keeps them ~62px — past the
-   44px touch floor, and the drawer stays shallow. */
+   3-wide on a phone they render huge.
+   Four across, not five: each icon is a framed illustration, and at 5-across the
+   frame ate the art. ~78px cells give the PNG room to actually read, and still
+   fit two rows of nine abilities without deepening the drawer. */
 [data-platform="mobile"] .drawer-grid > div {
   max-width: 100% !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  gap: 0.375rem !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.4rem !important;
 }
 
 /* The drawer renders Flee/Potion itself (via extraActions), so the default row
