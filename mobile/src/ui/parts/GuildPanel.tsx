@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
+import { GuildTech } from "@mobile/ui/parts/GuildTech";
 import * as api from "@/lib/gameApi";
 import type { GuildMePayload, GuildQuestRow } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
@@ -13,9 +14,13 @@ import { cn } from "@/lib/utils";
  * one long scroll. This covers what a member touches on a normal day: are we
  * doing well, have I checked in, what's claimable, and can I give gold.
  *
- * War council, tech, raids and chat stay in classic; they're weekly, officer-
- * gated systems and cramming them here would recreate the scroll this is meant
- * to fix.
+ * War council, raids and chat stay in classic; they're weekly, officer-gated
+ * systems and cramming them here would recreate the scroll this is meant to fix.
+ *
+ * Tech is the exception and now lives here (GuildTech.tsx). It is the game's
+ * largest gold sink and the only mechanic where spending gold makes other
+ * people stronger — leaving it Discord-only meant phone players could earn gold
+ * for the guild but never decide what it bought.
  */
 
 function QuestRow({
@@ -319,8 +324,10 @@ export function GuildPanel() {
         )}
       </div>
 
+      <GuildTech me={me} onChanged={async () => { await Promise.all([load(), refreshInventory()]); }} />
+
       <p className="px-1 text-center text-[10.5px] leading-relaxed" style={{ color: "var(--a-700)" }}>
-        War council, guild tech, raids and hall chat aren’t on mobile yet — they’re in Discord.
+        War council, raids and hall chat aren’t on mobile yet — they’re in Discord.
       </p>
     </div>
   );
