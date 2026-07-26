@@ -71,6 +71,17 @@ export function ItemSheet({
   const rarity = normRarity(item.rarity);
   const color = RARITY_VAR[rarity] ?? RARITY_VAR.common;
 
+  /** If this piece belongs to a set, how that set is going.
+   *
+   *  Deliberately shown HERE rather than in a separate codex screen: the moment
+   *  you care which set a piece belongs to is the moment you're looking at it
+   *  deciding whether to equip, sell or salvage. A codex would also be thin —
+   *  only two sets exist today. */
+  const setState = useMemo(() => {
+    if (!item.set_id) return null;
+    return (inventory?.item_sets ?? []).find((s) => s.set_id === item.set_id) ?? null;
+  }, [item.set_id, inventory?.item_sets]);
+
   /** What's currently worn in this item's slot — the thing to compare against. */
   const worn = useMemo(() => {
     if (equipped) return null;
@@ -147,6 +158,45 @@ export function ItemSheet({
             {equipped ? <span className="e-pill e-pill--ember mt-2 inline-block">Equipped</span> : null}
           </div>
         </div>
+
+        {/* ── Set membership ── */}
+        {item.set_id ? (
+          <div
+            className="mb-3 rounded-xl p-3"
+            style={{
+              border: "1px solid rgba(255,122,47,0.3)",
+              background: "rgba(255,122,47,0.07)",
+            }}
+          >
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <span className="text-[12.5px] font-semibold" style={{ color: "var(--e-300)" }}>
+                {setState?.name ?? String(item.set_id).replace(/_/g, " ")}
+              </span>
+              {setState ? (
+                <span className="e-num shrink-0 text-[11.5px]" style={{ color: "var(--a-300)" }}>
+                  {setState.equipped}
+                  {setState.max_pieces ? ` / ${setState.max_pieces}` : ""} worn
+                </span>
+              ) : null}
+            </div>
+            {setState?.active_bonus ? (
+              <p className="text-[11.5px] leading-relaxed" style={{ color: "var(--vital)" }}>
+                ✓ {setState.active_bonus}
+              </p>
+            ) : null}
+            {setState?.next_bonus && setState.pieces_to_next ? (
+              <p className="mt-0.5 text-[11.5px] leading-relaxed" style={{ color: "var(--a-500)" }}>
+                {setState.pieces_to_next} more → {setState.next_bonus}
+              </p>
+            ) : !setState ? (
+              /* Not wearing any of it yet — so item_sets has no entry, and the
+                 only honest thing to say is that this is part of a set. */
+              <p className="text-[11.5px] leading-relaxed" style={{ color: "var(--a-500)" }}>
+                Part of a set — wearing more pieces together grants bonuses.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* ── The comparison ── */}
         {worn ? (

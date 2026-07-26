@@ -5157,9 +5157,68 @@ async def handle_shop_catalog(request: web.Request) -> web.Response:
                ORDER BY level_req, vendor_buy"""
         )
         items = [dict(row) for row in rows]
-        return web.json_response({"ok": True, "items": _json_safe(items)})
+        # Quote the price we will actually charge. Showing full price here and
+        # charging less at checkout turns a reward into a surprise — the player
+        # should be able to SEE their reputation working before they commit.
+        discount, discount_faction = 0.0, ""
+        try:
+            char = await CharacterService(db).get_character(int(user["id"]))
+            if char:
+                discount, discount_faction = await _rep_shop_discount(db, _uuid_from_any(char["id"]))
+        except Exception as e:
+            log.warning("shop catalog discount lookup failed: %s", e)
+        if discount > 0:
+            for it in items:
+                base = int(it.get("vendor_buy") or 0)
+                if base > 0:
+                    it["vendor_buy_base"] = base
+                    it["vendor_buy"] = _apply_discount(base, discount)
+        return web.json_response(
+            {
+                "ok": True,
+                "items": _json_safe(items),
+                "discount_pct": int(round(discount * 100)),
+                "discount_faction": discount_faction,
+            }
+        )
     except Exception as e:
         return web.json_response({"ok": False, "error": str(e), "message": "Failed to fetch shop catalog."}, status=500)
+
+
+async def _rep_shop_discount(db, char_id) -> tuple[float, str]:
+    """Best vendor discount the character's faction standing earns them.
+
+    REPUTATION_LEVELS has promised "5% / 10% / 15% / 20% shop discount" since it
+    was written, and get_rep_discount() computes exactly that — but nothing ever
+    called it, so the shop charged full price at every standing. Reputation was
+    a bar that filled up and bought nothing.
+
+    Best-standing-wins rather than per-faction: the shop is generic, so tying the
+    price to one arbitrary faction would be unexplainable. "Your best standing
+    gets you the best price" is a rule a player can hold in their head, and it
+    means effort in any faction counts.
+    """
+    from services.quest.npc_quest_service import NPCQuestService, get_rep_discount
+
+    try:
+        factions = await NPCQuestService(db).get_all_reputation(char_id)
+    except Exception as e:
+        # A discount lookup must never block a purchase.
+        log.warning("reputation discount lookup failed: %s", e)
+        return 0.0, ""
+    best, best_name = 0.0, ""
+    for f in factions or []:
+        d = float(get_rep_discount(int(f.get("reputation") or 0)) or 0.0)
+        if d > best:
+            best, best_name = d, str(f.get("name") or "")
+    return best, best_name
+
+
+def _apply_discount(base_cost: int, discount: float) -> int:
+    """Discounted price, never below 1 gold so nothing becomes free."""
+    if discount <= 0:
+        return int(base_cost)
+    return max(1, int(round(int(base_cost) * (1.0 - discount))))
 
 
 async def handle_shop_buy(request: web.Request) -> web.Response:
@@ -5206,7 +5265,11 @@ async def handle_shop_buy(request: web.Request) -> web.Response:
     if vendor_buy <= 0:
         return web.json_response({"ok": False, "error": "not_for_sale", "message": "Item is not for sale."}, status=400)
 
-    total_cost = vendor_buy * qty
+    # Faction standing finally does something. Computed server-side so the price
+    # charged is always our own maths, never a number the client sent.
+    discount, discount_faction = await _rep_shop_discount(db, _uuid_from_any(char["id"]))
+    base_cost = vendor_buy * qty
+    total_cost = _apply_discount(base_cost, discount)
     player_gold = int(char.get("gold") or 0)
     if player_gold < total_cost:
         return web.json_response(
@@ -5226,7 +5289,19 @@ async def handle_shop_buy(request: web.Request) -> web.Response:
         await char_svc.add_gold(char["id"], total_cost, "refund: vendor purchase failed")
         return web.json_response({"ok": False, "error": "add_failed", "message": add_msg}, status=500)
 
-    return web.json_response({"ok": True, "message": f"Purchased {tmpl['name']} x{qty}."})
+    saved = base_cost - total_cost
+    msg = f"Purchased {tmpl['name']} x{qty}."
+    if saved > 0:
+        msg += f" {discount_faction or 'Your standing'} saved you {saved:,} gold ({int(round(discount * 100))}% off)."
+    return web.json_response(
+        {
+            "ok": True,
+            "message": msg,
+            "base_cost": base_cost,
+            "paid": total_cost,
+            "discount_pct": int(round(discount * 100)),
+        }
+    )
 
 
 async def handle_market_history(request: web.Request) -> web.Response:

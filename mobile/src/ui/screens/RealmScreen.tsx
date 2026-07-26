@@ -269,17 +269,27 @@ function WorldSection() {
           <div className="e-label mb-3">Reputation</div>
           <ul className="space-y-2">
             {factions.map((f) => (
-              <li key={f.faction_id} className="flex items-baseline gap-2.5">
-                <span aria-hidden>{f.emoji || "◆"}</span>
-                <span className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: "var(--a-100)" }}>
-                  {f.name}
-                </span>
-                <span className="shrink-0 text-[11px]" style={{ color: "var(--a-500)" }}>
-                  {f.level?.name || ""}
-                </span>
-                <span className="e-num shrink-0 text-[11px]" style={{ color: "var(--a-300)" }}>
-                  {Number(f.reputation ?? 0).toLocaleString()}
-                </span>
+              <li key={f.faction_id}>
+                <div className="flex items-baseline gap-2.5">
+                  <span aria-hidden>{f.emoji || "◆"}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px]" style={{ color: "var(--a-100)" }}>
+                    {f.name}
+                  </span>
+                  <span className="shrink-0 text-[11px]" style={{ color: "var(--a-500)" }}>
+                    {f.level?.name || ""}
+                  </span>
+                  <span className="e-num shrink-0 text-[11px]" style={{ color: "var(--a-300)" }}>
+                    {Number(f.reputation ?? 0).toLocaleString()}
+                  </span>
+                </div>
+                {/* What the standing actually buys. The perk text has always
+                    been in the payload; it was never rendered, so reputation
+                    read as a bar that filled up and did nothing. */}
+                {f.level?.perks ? (
+                  <p className="mt-0.5 pl-6 text-[10.5px] leading-snug" style={{ color: "var(--e-400)" }}>
+                    {f.level.perks}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
