@@ -1803,6 +1803,30 @@ CREATE TABLE IF NOT EXISTS character_presets (
 
 CREATE INDEX IF NOT EXISTS idx_presets_char_kind ON character_presets(character_id, kind);
 
+-- Weekly scoreboard. An aggregate row per character per week rather than an
+-- event log: the only question anyone asks is "who is top this week", and a
+-- log would grow without bound to answer it.
+--
+-- `week_start` is the Monday 00:00 UTC of the week, computed in Python so the
+-- boundary is one definition rather than one per query.
+CREATE TABLE IF NOT EXISTS weekly_scores (
+    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    week_start      DATE NOT NULL,
+    kills           INT NOT NULL DEFAULT 0,
+    bosses          INT NOT NULL DEFAULT 0,
+    xp_earned       BIGINT NOT NULL DEFAULT 0,
+    gold_earned     BIGINT NOT NULL DEFAULT 0,
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (character_id, week_start)
+);
+
+-- One index per rankable metric: the board is read far more often than it is
+-- written, and a partial ordering by week is exactly what the query does.
+CREATE INDEX IF NOT EXISTS idx_weekly_kills  ON weekly_scores(week_start, kills DESC);
+CREATE INDEX IF NOT EXISTS idx_weekly_bosses ON weekly_scores(week_start, bosses DESC);
+CREATE INDEX IF NOT EXISTS idx_weekly_xp     ON weekly_scores(week_start, xp_earned DESC);
+CREATE INDEX IF NOT EXISTS idx_weekly_gold   ON weekly_scores(week_start, gold_earned DESC);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────

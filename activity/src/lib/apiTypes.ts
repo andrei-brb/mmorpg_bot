@@ -1159,3 +1159,33 @@ export type SocialWhispersPayload = {
   ok?: boolean;
   messages?: SocialWhisperMessage[];
 };
+
+/** GET /api/game/leaderboard — this week's scoreboard.
+ *
+ *  `you` is present even when the viewer is off the bottom of the board; a
+ *  board that only shows the top 25 tells almost everyone nothing about
+ *  themselves. */
+export type LeaderboardEntry = {
+  rank: number;
+  character_id?: string;
+  name?: string;
+  level?: number;
+  class?: string;
+  prestige?: number;
+  guild_tag?: string | null;
+  score: number;
+  is_you?: boolean;
+  off_board?: boolean;
+};
+
+export type LeaderboardPayload = {
+  ok?: boolean;
+  metric: string;
+  metric_label: string;
+  unit?: string;
+  metrics: { key: string; label: string }[];
+  week_start: string;
+  resets_at: string;
+  entries: LeaderboardEntry[];
+  you?: (Partial<LeaderboardEntry> & { rank: number | null; score: number }) | null;
+};

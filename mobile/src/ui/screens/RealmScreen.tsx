@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Leaderboard } from "@mobile/ui/parts/Leaderboard";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import * as api from "@/lib/gameApi";
@@ -625,7 +626,12 @@ export function RealmScreen({
         {seg === "social" && <SocialSection />}
         {seg === "world" && <WorldSection />}
         {seg === "talents" && <TalentsPanel />}
-        {seg === "records" && <RecordsSection />}
+        {seg === "records" && (
+          <div className="space-y-3">
+            <Leaderboard />
+            <RecordsSection />
+          </div>
+        )}
         {seg === "story" && <StorySection />}
         {seg === "goals" && <GoalsSection />}
         {seg === "roadmap" && <AheadSection />}

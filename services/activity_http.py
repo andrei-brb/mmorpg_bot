@@ -76,6 +76,7 @@ from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.combat import risk as combat_risk
 from services import camp_upgrades
+from services import leaderboards
 from services.character import presets_service
 from services.character.presets_service import PresetsService
 from services.achievement.achievement_service import AchievementService
@@ -3565,6 +3566,19 @@ async def handle_idle_claim_post(request: web.Request) -> web.Response:
             }
         )
     )
+
+
+async def handle_leaderboard(request: web.Request) -> web.Response:
+    """This week's scoreboard, plus where the viewer sits on it."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+
+    metric = leaderboards.normalize_metric(request.query.get("metric"))
+    char_id = _uuid_from_any(char["id"]) if char else None
+    payload = await leaderboards.board(db, metric, character_id=char_id)
+    return web.json_response(_json_safe({"ok": True, **payload}))
 
 
 async def handle_presets_list(request: web.Request) -> web.Response:
@@ -7798,6 +7812,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/oaths", handle_combat_oaths)
     app.router.add_post("/api/game/idle/upgrade", handle_idle_cap_upgrade)
+    app.router.add_get("/api/game/leaderboard", handle_leaderboard)
     app.router.add_get("/api/game/presets", handle_presets_list)
     app.router.add_post("/api/game/presets/save", handle_presets_save)
     app.router.add_post("/api/game/presets/apply", handle_presets_apply)

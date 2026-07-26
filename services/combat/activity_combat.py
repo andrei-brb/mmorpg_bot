@@ -33,6 +33,7 @@ from services.combat.consumables import (
 )
 from services.combat.elements import ability_element, effectiveness, enemy_element, enemy_element_payload
 from services.combat import risk
+from services import leaderboards
 from services.lore.lore_gate_service import LoreGateService
 from services.combat.combat_engine import (
     ABILITIES,
@@ -2006,6 +2007,16 @@ async def _finish_victory(
     xp_result = await char_svc.award_xp(char["id"], int(rewards["xp"] * oath_mult), xp_mult)
     gold_earned = int(rewards["gold"] * gold_mult * oath_mult)
     await char_svc.add_gold(char["id"], gold_earned, "combat drop")
+
+    # Weekly scoreboard. Deliberately after the rewards are banked and wrapped
+    # so it can never cost a player their loot — see services/leaderboards.py.
+    await leaderboards.record(
+        db, char["id"],
+        kills=1,
+        bosses=1 if session.is_boss else 0,
+        xp=int(xp_result.get("xp_gained", rewards["xp"]) or 0),
+        gold=gold_earned,
+    )
     await char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
 
     # Class mastery progression (victory-based; boss fights grant more).

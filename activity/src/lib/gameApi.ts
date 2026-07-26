@@ -16,6 +16,7 @@ import type {
   ProgressPayload,
   DeedsPayload,
   IdleRewardsPayload,
+  LeaderboardPayload,
   QuestLogPayload,
   SpecGatePayload,
   GuildMePayload,
@@ -296,6 +297,18 @@ export async function postIdleCapUpgrade(
     body: JSON.stringify({ guild_id: guildId ? String(guildId) : undefined }),
   });
   return (await res.json()) as { ok?: boolean; message?: string; error?: string };
+}
+
+export async function getLeaderboard(
+  token: string,
+  metric: string,
+  guildId?: string,
+): Promise<LeaderboardPayload | null> {
+  const res = await fetch(apiUrl(`/api/game/leaderboard?metric=${encodeURIComponent(metric)}`), {
+    headers: authHeaders(token, guildId),
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as LeaderboardPayload;
 }
 
 export async function getCombatOaths(token: string, guildId?: string): Promise<CombatOath[]> {
