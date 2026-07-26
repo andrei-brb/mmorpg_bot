@@ -16,6 +16,7 @@ import type {
   ProgressPayload,
   DeedsPayload,
   IdleRewardsPayload,
+  GuildSeasonPayload,
   LeaderboardPayload,
   WardrobeLook,
   QuestLogPayload,
@@ -376,6 +377,18 @@ export async function postTransmogClear(
     body: JSON.stringify({ item_id: itemId }),
   });
   return (await res.json()) as { ok?: boolean; message?: string };
+}
+
+export async function getGuildSeason(
+  token: string,
+  metric: string,
+  guildId?: string,
+): Promise<GuildSeasonPayload | null> {
+  const res = await fetch(apiUrl(`/api/game/guild/season?metric=${encodeURIComponent(metric)}`), {
+    headers: authHeaders(token, guildId),
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as GuildSeasonPayload;
 }
 
 export async function getCombatOaths(token: string, guildId?: string): Promise<CombatOath[]> {

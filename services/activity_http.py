@@ -79,6 +79,7 @@ from services import camp_upgrades
 from services.economy.pricing import check_market_price
 from services import leaderboards
 from services.exploration import expeditions
+from services import guild_seasons
 from services.character import presets_service
 from services.character.presets_service import PresetsService
 from services.character import transmog
@@ -3631,6 +3632,28 @@ async def handle_transmog_wardrobe(request: web.Request) -> web.Response:
     return web.json_response(
         _json_safe({"ok": True, "slot": slot, "looks": looks, "cost": transmog.TRANSMOG_COST})
     )
+
+
+async def handle_guild_season(request: web.Request) -> web.Response:
+    """Guild-versus-guild standings for the current season."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+
+    metric = leaderboards.normalize_metric(request.query.get("metric"))
+    gid = _uuid_from_any(char.get("guild_id")) if char and char.get("guild_id") else None
+
+    # There is no scheduler in this project, so the previous season is sealed
+    # lazily here. Idempotent by primary key, so concurrent requests are safe.
+    try:
+        await guild_seasons.seal_finished_season(db, metric)
+    except Exception:
+        log.debug("season seal skipped", exc_info=True)
+
+    payload = await guild_seasons.standings(db, metric, guild_id=gid)
+    payload["last_champion"] = await guild_seasons.champion(db)
+    return web.json_response(_json_safe({"ok": True, **payload}))
 
 
 async def handle_expedition_focuses(request: web.Request) -> web.Response:
@@ -7913,6 +7936,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/idle/upgrade", handle_idle_cap_upgrade)
     app.router.add_get("/api/game/leaderboard", handle_leaderboard)
     app.router.add_get("/api/game/explore/focuses", handle_expedition_focuses)
+    app.router.add_get("/api/game/guild/season", handle_guild_season)
     app.router.add_post("/api/game/transmog/apply", handle_transmog_apply)
     app.router.add_post("/api/game/transmog/clear", handle_transmog_clear)
     app.router.add_get("/api/game/transmog/wardrobe", handle_transmog_wardrobe)

@@ -1837,6 +1837,17 @@ CREATE INDEX IF NOT EXISTS idx_weekly_bosses ON weekly_scores(week_start, bosses
 CREATE INDEX IF NOT EXISTS idx_weekly_xp     ON weekly_scores(week_start, xp_earned DESC);
 CREATE INDEX IF NOT EXISTS idx_weekly_gold   ON weekly_scores(week_start, gold_earned DESC);
 
+-- Sealed guild season winners. Standings themselves are DERIVED from
+-- weekly_scores (see services/guild_seasons.py) — only the finished result is
+-- persisted, because a past season must not change when someone leaves a guild.
+CREATE TABLE IF NOT EXISTS guild_season_champions (
+    season_key      VARCHAR(7) PRIMARY KEY,   -- YYYY-MM
+    guild_id        UUID REFERENCES guilds(id) ON DELETE SET NULL,
+    metric          VARCHAR(16) NOT NULL,
+    score           BIGINT NOT NULL DEFAULT 0,
+    sealed_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────

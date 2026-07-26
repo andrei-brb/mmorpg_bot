@@ -1206,3 +1206,31 @@ export type WardrobeLook = {
   icon?: string | null;
   rarity?: string | null;
 };
+
+/** GET /api/game/guild/season — guild-versus-guild standings.
+ *
+ *  Derived from member weekly scores, so a guild's number is by definition the
+ *  sum of what its people did this month. */
+export type GuildSeasonEntry = {
+  rank: number;
+  guild_id?: string;
+  name?: string;
+  tag?: string | null;
+  guild_level?: number;
+  score: number;
+  contributors?: number;
+  is_yours?: boolean;
+  off_board?: boolean;
+};
+
+export type GuildSeasonPayload = {
+  ok?: boolean;
+  season: string;
+  ends_at: string;
+  metric: string;
+  metric_label: string;
+  metrics: { key: string; label: string }[];
+  entries: GuildSeasonEntry[];
+  yours?: (Partial<GuildSeasonEntry> & { rank: number | null; score: number }) | null;
+  last_champion?: { season: string; name?: string; tag?: string | null; score: number } | null;
+};

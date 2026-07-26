@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { GuildTech } from "@mobile/ui/parts/GuildTech";
+import { GuildSeason } from "@mobile/ui/parts/GuildSeason";
 import * as api from "@/lib/gameApi";
 import type { GuildMePayload, GuildQuestRow } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
@@ -323,6 +324,8 @@ export function GuildPanel() {
           </button>
         )}
       </div>
+
+      <GuildSeason />
 
       <GuildTech me={me} onChanged={async () => { await Promise.all([load(), refreshInventory()]); }} />
 
