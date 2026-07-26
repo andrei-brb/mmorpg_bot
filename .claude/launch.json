@@ -6,6 +6,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "mobile"],
       "port": 5174
+    },
+    {
+      "name": "activity",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "preview", "--port", "4173", "--strictPort"],
+      "cwd": "activity",
+      "port": 4173
     }
   ]
 }

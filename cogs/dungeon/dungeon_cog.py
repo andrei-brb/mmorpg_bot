@@ -122,6 +122,11 @@ def _make_enemy(enemy_key: str, level: int) -> Combatant:
         dmg_max=int(tmpl.damage_max * scale),
         armor=int(tmpl.armor * scale),
         crit_chance=tmpl.crit_chance,
+        # Enemies had no spell power, so any armour-ignoring move would have
+        # lost the `power * 0.12` term and hit softer than a plain swing. Boss
+        # elemental abilities need it, and it is what makes `resistance` — a
+        # stat that has always been on gear and never mattered — do something.
+        spell_power=int(tmpl.attack_power * scale),
     )
 
 

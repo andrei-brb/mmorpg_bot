@@ -88,6 +88,7 @@ class Combatant:
     shadow_stacks:      int  = 0             # shadow priest passive
     talent_spec_passive_rank: int = 0        # max spec_passive talent ranks invested
     talent_procs:       Dict[str, float] = field(default_factory=dict)  # proc_id -> chance
+    intent:             Optional[str] = None  # telegraphed next ability (see plan_enemy_turn)
 
     @property
     def hp_pct(self) -> float:
@@ -364,7 +365,98 @@ ABILITIES: Dict[str, Ability] = {
     "kill_command": Ability(
         "kill_command","Kill Command","💀","Command your beast to kill.",
         "mana",35,1,"enemy", dmg_mult=1.5),
+
+    # ── Shared / Defensive ────────────────────────────────────────────────────
+    # Brace is the answer to a telegraphed hit. Every class has it, it costs
+    # nothing, and it is only ever the right move when you can see what is
+    # coming — which is the whole point of enemy intent. The absorb is a share
+    # of your own max HP (applied in use_ability) so it stays meaningful at
+    # every level rather than being a flat number that ages out.
+    "brace": Ability(
+        "brace","Brace","🛡️","Absorb a share of the next hit and catch your breath.",
+        "none",0,2,"self",
+        applies=StatusEffect.SHIELD, effect_val=0, effect_dur=1),
 }
+
+# Boss signature moves. Every boss template in config/settings.py declares a kit;
+# until this merge, 37 of the 39 keys had no entry here and silently resolved to
+# auto_attack via the `.get(key, ABILITIES["auto_attack"])` default below.
+# See services/combat/enemy_abilities.py for the design rules.
+def _build_enemy_abilities() -> Dict[str, Ability]:
+    from services.combat.enemy_abilities import ENEMY_ABILITY_SPECS
+
+    # `applies` lands on whoever the ability targets, so a buff must target the
+    # caster and a hit must target the players — an ability may never be both.
+    self_buffs = {"shield", "power_up", "regen"}
+
+    built: Dict[str, Ability] = {}
+    for key, s in ENEMY_ABILITY_SPECS.items():
+        if s["applies"] in self_buffs:
+            target = "self"
+        elif s["aoe"]:
+            target = "all_enemies"
+        else:
+            target = "enemy"
+        built[key] = Ability(
+            key, s["name"], s["emoji"], s["desc"],
+            "none", 0, int(s["cooldown"]), target,
+            dmg_mult=float(s["dmg"]),
+            applies=StatusEffect(s["applies"]) if s["applies"] else None,
+            effect_val=int(s["val"]),
+            effect_dur=int(s["dur"]),
+            is_aoe=bool(s["aoe"]),
+            # NOT ignores_armor — see design rule 3 in enemy_abilities.py. These
+            # cut through armour via armor_pen_pct instead, because no item in
+            # the game grants resistance, so the armour-ignoring branch would
+            # apply no mitigation whatsoever.
+            ignores_armor=False,
+        )
+    return built
+
+
+ABILITIES.update(_build_enemy_abilities())
+
+#: Brace absorbs this share of the bracing combatant's maximum health.
+BRACE_ABSORB_PCT = 0.25
+
+#: Brace also returns this share of maximum resource — so spending a turn
+#: defending is never a completely wasted turn for a caster.
+BRACE_RESOURCE_PCT = 0.15
+
+
+def intent_payload(enemy: "Combatant") -> Optional[Dict[str, Any]]:
+    """What the player is told about the enemy's telegraphed move.
+
+    Deliberately no damage number: the real figure depends on a damage roll,
+    crit, armour or resistance, and any vulnerability, so a printed number would
+    be wrong more often than right. The player gets the move's name, what it
+    does, and how bad it is on a three-point scale — enough to decide whether to
+    brace, heal, or race it down, which is all the decision needs.
+    """
+    key = getattr(enemy, "intent", None)
+    if not key:
+        return None
+    ab = ABILITIES.get(key)
+    if not ab:
+        return None
+
+    from services.combat.enemy_abilities import ELEMENTAL_KEYS, TELLS, classify_intent
+
+    shape = classify_intent(ab)
+    return {
+        "key": key,
+        "name": ab.name,
+        "emoji": ab.emoji,
+        "description": ab.description,
+        "tell": TELLS.get(key, "readies its next move"),
+        "kind": shape["kind"],
+        "severity": shape["severity"],
+        "is_aoe": bool(ab.is_aoe),
+        # Read from ELEMENTAL_KEYS, not `ignores_armor`: elemental moves cut
+        # through armour via armor_pen_pct, so the flag on the Ability is false
+        # by design and would report every move as physical.
+        "elemental": key in ELEMENTAL_KEYS or bool(ab.ignores_armor),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -556,6 +648,10 @@ class CombatEngine:
                 if ability.key == "aimed_shot" and random.random() < 0.25:
                     armor_pen_pct = max(armor_pen_pct, 0.30)
                     r.log += " 🏹 Piercing hit!"
+                # Elemental boss moves cut through plate rather than ignore it.
+                from services.combat.enemy_abilities import ELEMENTAL_KEYS
+                if ability.key in ELEMENTAL_KEYS:
+                    armor_pen_pct = max(armor_pen_pct, ELEMENTAL_KEYS[ability.key])
 
                 # Power-up buff
                 pu = attacker.get_status(StatusEffect.POWER_UP)
@@ -704,6 +800,21 @@ class CombatEngine:
             # ── Apply status ──────────────────────────────────────────────────
             if ability.applies:
                 effect_val = ability.effect_val
+                # Enemy signature effects scale off the combatant instead of a
+                # flat number, so a level-60 boss's poison is not the same tick
+                # as a level-5 one's. See services/combat/enemy_abilities.py.
+                from services.combat.enemy_abilities import DOT_SCALE_BY_KEY, SHIELD_SCALE
+
+                dot_scale = DOT_SCALE_BY_KEY.get(ability.key)
+                if dot_scale:
+                    effect_val = max(1, int(attacker.attack_power * dot_scale))
+                shield_scale = SHIELD_SCALE.get(ability.key)
+                if shield_scale:
+                    effect_val = max(1, int(attacker.max_hp * shield_scale))
+                # Brace absorbs a share of the bracing combatant's own health,
+                # so it is worth the same turn at level 5 and at level 60.
+                if ability.key == "brace":
+                    effect_val = max(1, int(target.max_hp * BRACE_ABSORB_PCT))
                 # Assassination passive: stronger bleed/poison effects.
                 if attacker.specialization == "assassination" and ability.applies in {StatusEffect.BLEED, StatusEffect.POISON}:
                     effect_val = int(effect_val * (1 + 0.25 * spm))
@@ -714,6 +825,17 @@ class CombatEngine:
                     if random.random() < min(0.55, 0.30 * spm):
                         target.add_status(StatusEffect.BURN, max(6, int((effect_val or 10) * 0.8 * spm)), 3, attacker.name)
                         r.effects_added.append("ignite")
+
+            # Brace also returns a little resource. A defensive turn should cost
+            # you tempo, not leave a caster with nothing to spend next turn.
+            if ability.key == "brace":
+                sh = attacker.get_status(StatusEffect.SHIELD)
+                bits = [f"Absorbing up to **{sh.value}** damage"] if sh else []
+                if attacker.max_res > 0:
+                    gain = max(1, int(attacker.max_res * BRACE_RESOURCE_PCT))
+                    attacker.current_res = min(attacker.max_res, attacker.current_res + gain)
+                    bits.append(f"+{gain} {attacker.res_type}")
+                r.log = (" · ".join(bits) + ".") if bits else r.log
 
             r.narrative = self._narrative(r, ability)
             results.append(r)
@@ -793,9 +915,72 @@ class CombatEngine:
         phase: int = 1,
         enemy_key: Optional[str] = None,
     ) -> Tuple[str, List[Combatant]]:
+        """Resolve the enemy's action for this turn.
+
+        If a move was telegraphed with `plan_enemy_turn`, that is the move that
+        executes — the whole value of showing intent is that it cannot be a
+        bluff. Otherwise the action is rolled here, which is the original
+        behaviour and what the Discord cogs still do.
+        """
         alive = [t for t in targets if not t.is_dead]
         if not alive:
+            enemy.intent = None
             return "auto_attack", []
+
+        planned = enemy.intent
+        if planned:
+            enemy.intent = None
+            if planned in ABILITIES and planned not in enemy.ability_cooldowns:
+                ab = ABILITIES[planned]
+                if ab.target == "self":
+                    return planned, [enemy]
+                if ab.is_aoe:
+                    return planned, alive
+                # Re-resolve the target: the one we telegraphed may have died,
+                # or threat may have moved during the party's turn.
+                return planned, [max(alive, key=lambda t: t.threat)]
+            # Telegraphed something we can no longer do (cooldown changed under
+            # us). Fall through and roll fresh rather than fake it.
+
+        return self._roll_enemy_action(enemy, alive, is_boss, phase, enemy_key)
+
+    def plan_enemy_turn(
+        self,
+        enemy: Combatant,
+        targets: List[Combatant],
+        is_boss: bool = False,
+        phase: int = 1,
+        enemy_key: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Decide the enemy's *next* move now, so the player can see it coming.
+
+        This is what turns a turn into a decision. Combat used to be: press your
+        biggest button, read what happened. Now the enemy commits first and the
+        player answers — brace the heavy hit, burn the boss down while it is
+        buffing itself, stun it mid-wind-up to cancel the move outright (a stun
+        makes `use_ability` bail at the top, so the telegraphed turn is simply
+        lost).
+
+        Returns the intent payload for the UI, or None if there is nothing to
+        telegraph.
+        """
+        alive = [t for t in targets if not t.is_dead]
+        if not alive or enemy.is_dead:
+            enemy.intent = None
+            return None
+
+        key, _ = self._roll_enemy_action(enemy, alive, is_boss, phase, enemy_key)
+        enemy.intent = key
+        return intent_payload(enemy)
+
+    def _roll_enemy_action(
+        self,
+        enemy: Combatant,
+        alive: List[Combatant],
+        is_boss: bool,
+        phase: int,
+        enemy_key: Optional[str],
+    ) -> Tuple[str, List[Combatant]]:
 
         # Highest-threat target (tank priority)
         target = max(alive, key=lambda t: t.threat)
@@ -874,6 +1059,10 @@ class CombatEngine:
     def _narrative(self, r: CombatResult, ability: Ability) -> str:
         if r.is_dodge:
             return f"💨 **{r.target}** dodges **{r.attacker}**'s {ability.emoji} **{ability.name}**!"
+        if ability.key == "brace":
+            # The most-pressed defensive button in the game deserves better than
+            # "applying *shield*".
+            return f"🛡️ **{r.attacker}** braces for impact. {r.log}".strip()
         parts = [f"{ability.emoji} **{r.attacker}** uses **{ability.name}**"]
         if r.damage:
             crit = " *(CRIT!)*" if r.is_crit else ""

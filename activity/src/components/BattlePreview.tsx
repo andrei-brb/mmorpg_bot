@@ -7,6 +7,26 @@ export interface CharacterStat {
   value: string | number;
 }
 
+/** A telegraphed move: what this combatant is winding up for its next turn. */
+export interface IntentView {
+  name: string;
+  emoji: string;
+  /** Present tense, describes the body not the number — "its throat glows red". */
+  tell: string;
+  kind: "heavy" | "sweep" | "strike" | "control" | "empower" | "guard";
+  /** 1–3. */
+  severity: number;
+  isAoe?: boolean;
+  elemental?: boolean;
+}
+
+/** An active buff or debuff, straight from the engine's status list. */
+export interface StatusView {
+  effect: string;
+  value: number;
+  duration: number;
+}
+
 export interface CharacterData {
   name: string;
   portraitUrl: string;
@@ -18,6 +38,8 @@ export interface CharacterData {
   isBoss?: boolean;
   weakness?: string;
   indicators?: string[];
+  intent?: IntentView | null;
+  statuses?: StatusView[];
 }
 
 export interface GridUnit {
@@ -362,6 +384,121 @@ function PanelOrnament({ className }: { className?: string }) {
   );
 }
 
+/** Severity 3 reads as danger, 2 as caution, 1 as ordinary. Three levels only —
+ *  the underlying damage is a roll against your armour, so any finer grading
+ *  would be a precision we do not have. */
+const INTENT_TONE: Record<number, { border: string; bg: string; ink: string }> = {
+  3: { border: "rgba(190,45,45,0.75)", bg: "rgba(120,20,20,0.42)", ink: "#ffb0a8" },
+  2: { border: "rgba(190,140,45,0.7)", bg: "rgba(110,75,15,0.36)", ink: "#f4cd86" },
+  1: { border: "rgba(150,150,165,0.45)", bg: "rgba(50,50,62,0.4)", ink: "#cfd2dd" },
+};
+
+const INTENT_LABEL: Record<IntentView["kind"], string> = {
+  heavy: "Heavy blow",
+  sweep: "Hits everyone",
+  strike: "Attack",
+  control: "Disabling",
+  empower: "Powering up",
+  guard: "Shielding",
+};
+
+function IntentBand({ intent }: { intent: IntentView }) {
+  const tone = INTENT_TONE[intent.severity] ?? INTENT_TONE[1];
+  const label = INTENT_LABEL[intent.kind] ?? "Next move";
+  return (
+    <div
+      className="mb-1.5 rounded-sm px-2 py-1.5"
+      style={{ background: tone.bg, border: `1px solid ${tone.border}` }}
+      role="status"
+    >
+      {/* The move's name gets its own row and shares it with nothing. These
+          panels are ~150px wide on a phone, and when the AoE/Pierce chips sat
+          on this row they took their width first and truncated the name to
+          nothing — leaving a band that said "AOE PIE…" and never what was
+          coming. The chips are secondary, so they moved down to the tell. */}
+      <div className="flex items-center gap-1.5">
+        <span aria-hidden className="shrink-0 text-sm leading-none">
+          {intent.emoji}
+        </span>
+        {/* Wraps rather than truncates. The character name above it truncates
+            because a name is identity and the portrait already carries that;
+            this is the one string the player has to actually read before
+            choosing, and "LA…" tells them nothing. Move names are two or three
+            words, so a second line is the worst case. */}
+        <span
+          className="min-w-0 flex-1 text-[11px] font-bold uppercase leading-tight tracking-wide"
+          style={{ color: tone.ink }}
+        >
+          {intent.name}
+        </span>
+      </div>
+      <p className="mt-0.5 text-[10px] leading-snug" style={{ color: "rgba(255,255,255,0.72)" }}>
+        {intent.isAoe ? (
+          <span
+            className="mr-1 inline-block rounded-sm px-1 align-[1px] text-[9px] font-bold uppercase"
+            style={{ background: "rgba(0,0,0,0.35)", color: tone.ink }}
+          >
+            AoE
+          </span>
+        ) : null}
+        {intent.elemental ? (
+          <span
+            className="mr-1 inline-block rounded-sm px-1 align-[1px] text-[9px] font-bold uppercase"
+            style={{ background: "rgba(0,0,0,0.35)", color: tone.ink }}
+            title="Cuts through part of your armour"
+          >
+            Pierce
+          </span>
+        ) : null}
+        {label} — {intent.tell}.
+      </p>
+    </div>
+  );
+}
+
+/** Debuffs read red, buffs read green. A player who cannot see that they are
+ *  bleeding has no way to explain their own health bar. */
+const HARMFUL = new Set(["burn", "bleed", "poison", "stun", "slow", "vulnerability", "silenced"]);
+
+const STATUS_LABEL: Record<string, string> = {
+  burn: "Burning",
+  bleed: "Bleeding",
+  poison: "Poisoned",
+  stun: "Stunned",
+  slow: "Slowed",
+  shield: "Shielded",
+  regen: "Regenerating",
+  power_up: "Empowered",
+  vulnerability: "Vulnerable",
+  dodge_up: "Evasive",
+  silenced: "Silenced",
+  stealth: "Stealthed",
+};
+
+function StatusPills({ statuses }: { statuses: StatusView[] }) {
+  return (
+    <div className="mb-1 flex flex-wrap gap-1">
+      {statuses.map((s, i) => {
+        const bad = HARMFUL.has(s.effect);
+        return (
+          <span
+            key={`${s.effect}-${i}`}
+            className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+            style={{
+              background: bad ? "rgba(120,25,25,0.4)" : "rgba(25,90,55,0.4)",
+              color: bad ? "#ff9a9a" : "#8ae0ab",
+              border: `1px solid ${bad ? "rgba(150,40,40,0.5)" : "rgba(40,120,75,0.5)"}`,
+            }}
+            title={`${STATUS_LABEL[s.effect] ?? s.effect} — ${s.duration} turn${s.duration === 1 ? "" : "s"} left`}
+          >
+            {STATUS_LABEL[s.effect] ?? s.effect} {s.duration}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function StatPanel({ character }: { character: CharacterData }) {
   return (
     <div
@@ -420,6 +557,11 @@ function StatPanel({ character }: { character: CharacterData }) {
           {[character.class, character.title].filter(Boolean).join(" — ")}
         </p>
       )}
+
+      {character.intent ? <IntentBand intent={character.intent} /> : null}
+      {character.statuses && character.statuses.length > 0 ? (
+        <StatusPills statuses={character.statuses} />
+      ) : null}
 
       <div className="mb-1 h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(180,150,80,0.4), transparent)" }} />
 

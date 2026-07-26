@@ -1,4 +1,4 @@
-import type { BattlePreviewData, CharacterData, CharacterStat, Item } from "@/components/BattlePreview";
+import type { BattlePreviewData, CharacterData, CharacterStat, IntentView, Item } from "@/components/BattlePreview";
 import type { CombatAbility, CombatStatePayload, ExploreZone, InventoryPayload } from "@/lib/apiTypes";
 import { classIconUrl } from "@/lib/classAndSpecIconUrl";
 import { AVAILABLE_SPEC_PORTRAITS } from "@/lib/specPortraitCatalog";
@@ -120,6 +120,22 @@ function buildEnemyStats(state: CombatStatePayload, enemyLevel?: number): Charac
   return rows;
 }
 
+/** The enemy's telegraphed move, only while it is actually your turn to answer
+ *  it. Showing a wind-up you cannot respond to is just noise. */
+function buildIntent(state: CombatStatePayload, canAct: boolean): IntentView | null {
+  const it = state.enemy_intent;
+  if (!it || !canAct) return null;
+  return {
+    name: it.name,
+    emoji: it.emoji,
+    tell: it.tell,
+    kind: it.kind,
+    severity: it.severity,
+    isAoe: it.is_aoe,
+    elemental: it.elemental,
+  };
+}
+
 export function buildBattlePreviewDataFromCombat(args: {
   state: CombatStatePayload;
   inventory: InventoryPayload | null;
@@ -210,6 +226,7 @@ export function buildBattlePreviewDataFromCombat(args: {
       title: specTitle,
       element: playerElement,
       stats: buildPlayerStats(state, abilities, playerLevel),
+      statuses: state.player.statuses,
     },
     enemy: {
       name: state.enemy.name,
@@ -220,6 +237,8 @@ export function buildBattlePreviewDataFromCombat(args: {
       title: enemyKind === "boss" ? "The Unyielding" : undefined,
       element: enemyElement,
       stats: buildEnemyStats(state, enemyLevel),
+      intent: buildIntent(state, canAct),
+      statuses: state.enemy.statuses,
     },
   };
 }

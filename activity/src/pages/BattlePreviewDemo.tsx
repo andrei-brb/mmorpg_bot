@@ -137,6 +137,10 @@ const mockBattle: BattlePreviewData = {
       { label: "Defense", value: 25 },
       { label: "Accuracy", value: "100%" },
     ],
+    statuses: [
+      { effect: "bleed", value: 12, duration: 2 },
+      { effect: "shield", value: 240, duration: 1 },
+    ],
   },
   enemy: {
     name: "Greg Ironheart",
@@ -148,6 +152,16 @@ const mockBattle: BattlePreviewData = {
     portraitUrl: `${base}placeholder.svg`,
     weakness: "WEAK",
     indicators: ["???", "???", "???"],
+    intent: {
+      name: "Lava Breath",
+      emoji: "🌋",
+      tell: "its throat glows red",
+      kind: "sweep",
+      severity: 3,
+      isAoe: true,
+      elemental: true,
+    },
+    statuses: [{ effect: "power_up", value: 30, duration: 2 }],
     stats: [
       { label: "HP", value: "150 / 150" },
       { label: "Attack Power", value: 35 },

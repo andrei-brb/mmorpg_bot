@@ -26,7 +26,14 @@ from config.settings import (
     _boss_hp_scale_for_zone,
 )
 from services.lore.lore_gate_service import LoreGateService
-from services.combat.combat_engine import ABILITIES, CombatEngine, CombatSession, Combatant, ability_tooltip_payload
+from services.combat.combat_engine import (
+    ABILITIES,
+    CombatEngine,
+    CombatSession,
+    Combatant,
+    ability_tooltip_payload,
+    intent_payload,
+)
 
 log = logging.getLogger("activity_combat")
 
@@ -167,6 +174,11 @@ def _make_enemy(key: str, char_level: int, zone=None, party_size: int = 1) -> Co
         dmg_max=int(tmpl.damage_max * scale),
         armor=int(tmpl.armor * scale),
         crit_chance=tmpl.crit_chance,
+        # Enemies had no spell power, so any armour-ignoring move would have
+        # lost the `power * 0.12` term and hit softer than a plain swing. Boss
+        # elemental abilities need it, and it is what makes `resistance` — a
+        # stat that has always been on gear and never mattered — do something.
+        spell_power=int(tmpl.attack_power * scale),
     )
 
 
@@ -243,6 +255,39 @@ async def dissolve_party_dungeon_combat_for_user(bot, discord_id: int) -> None:
     _clear_party_dungeon_session(ac)
 
 
+def _plan_enemy_intent(engine: CombatEngine, session: CombatSession) -> None:
+    """Decide and store the enemy's next move so the client can telegraph it.
+
+    Called once when combat opens and again after every enemy turn. Keeping it
+    in one helper means the "what happens next" question has exactly one answer
+    for the solo and party paths alike.
+    """
+    enemy = session.alive_enemies[0] if session.alive_enemies else None
+    if not enemy or session.over:
+        return
+    if session.is_boss:
+        session.boss_phase = engine.boss_phase(enemy)
+    try:
+        engine.plan_enemy_turn(
+            enemy, session.alive_players, session.is_boss, session.boss_phase,
+            enemy_key=session.enemy_key,
+        )
+    except Exception:
+        # Intent is a UI affordance, never a gate on the fight. If planning
+        # fails, enemy_turn rolls fresh exactly as it always did.
+        log.exception("enemy intent planning failed")
+        enemy.intent = None
+
+
+def _status_payload(c: Combatant) -> List[Dict[str, Any]]:
+    """Active buffs/debuffs. Already tracked on every combatant and never shown —
+    without it a player cannot tell why they are suddenly taking more damage."""
+    return [
+        {"effect": s.effect.value, "value": int(s.value), "duration": int(s.duration)}
+        for s in c.status_effects
+    ]
+
+
 def _serialize_combatant(c: Combatant) -> Dict[str, Any]:
     return {
         "id": c.id,
@@ -252,12 +297,15 @@ def _serialize_combatant(c: Combatant) -> Dict[str, Any]:
         "current_res": c.current_res,
         "max_res": c.max_res,
         "res_type": c.res_type,
+        "statuses": _status_payload(c),
     }
 
 
 def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
     cls = CLASSES[char["class"]]
-    keys = ["auto_attack"] + list(cls.starter_abilities)
+    # Brace is on every class: enemy intent is only a decision if every class has
+    # something to do about it. It costs no resource and has no level gate.
+    keys = ["auto_attack", "brace"] + list(cls.starter_abilities)
     if char.get("specialization"):
         from config.settings import SPECIALIZATIONS
 
@@ -383,6 +431,7 @@ def serialize_activity_state(
             "turn": session.turn,
             "player": player_payload,
             "enemy": _serialize_combatant(enemy),
+        "enemy_intent": intent_payload(enemy) if not session.over else None,
             "log": ac.log_lines[-12:],
             "abilities": ab_list,
             "can_potion": pot_ok and your_turn,
@@ -412,6 +461,7 @@ def serialize_activity_state(
         "turn": session.turn,
         "player": player_payload,
         "enemy": _serialize_combatant(enemy),
+        "enemy_intent": intent_payload(enemy) if not session.over else None,
         "log": ac.log_lines[-12:],
         "abilities": _ability_options(char, player),
         "can_potion": can_potion and not ac.potion_used,
@@ -699,6 +749,10 @@ async def start_activity_combat(
     )
     ACTIVE_ACTIVITY[discord_id] = ac
 
+    # Telegraph the opening move before the player has taken a turn — otherwise
+    # the first round is the one round they cannot read.
+    _plan_enemy_intent(engine, session)
+
     has_potion = await _has_healing_potion(db, char["id"])
     can_potion = bool(has_potion)
 
@@ -855,6 +909,8 @@ async def start_party_dungeon_combat(
     PARTY_DUNGEON_SESSIONS[run_id] = ac
     for did in discord_order:
         DISCORD_TO_PARTY_RUN[did] = run_id
+
+    _plan_enemy_intent(engine, session)
 
     has_potion = await _has_healing_potion(db, leader_char["id"])
     can_potion = bool(has_potion) and not ac.potion_by_discord.get(leader_discord_id, False)
@@ -1109,6 +1165,9 @@ async def _process_activity_action_impl(
         return await _finish_defeat(bot, guild_id, discord_id, char, player, char_svc, db, log_lines, ac)
 
     session.turn += 1
+    # Telegraph the next move. Done after the turn counter advances so the
+    # cooldowns ticked in tick_turn are already reflected in what we promise.
+    _plan_enemy_intent(engine, session)
     fresh = await char_svc.get_character(discord_id)
     player2 = session.alive_players[0]
     ticks2 = engine.tick_turn(player2)
@@ -1388,6 +1447,9 @@ async def _party_enemy_round(
     if not alive_order:
         return await _finish_party_defeat(bot, guild_id, ac, char_svc, db, log_lines, acting_discord_id)
     ac.party_turn_idx = 0
+    # Telegraph the next move to the whole party — everyone acts before the
+    # enemy does again, so everyone gets to plan around the same information.
+    _plan_enemy_intent(engine, session)
     return None
 
 

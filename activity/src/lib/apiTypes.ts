@@ -231,6 +231,36 @@ export type PartyCombatRow = {
   your_turn?: boolean;
 };
 
+/** An active buff or debuff. Tracked on every combatant by the engine and,
+ *  until now, never sent to the client — so a player had no way to tell why
+ *  they had started taking more damage. */
+export type CombatStatusRow = {
+  effect: string;
+  value: number;
+  duration: number;
+};
+
+/** The enemy's next move, decided before your turn so you can answer it.
+ *
+ *  Deliberately carries no damage number: the real figure depends on a damage
+ *  roll, crit, armour and any vulnerability, so a printed number would be wrong
+ *  more often than right. `kind` and `severity` are honest and are enough to
+ *  decide whether to brace, heal, or race it down. */
+export type EnemyIntent = {
+  key: string;
+  name: string;
+  emoji: string;
+  description: string;
+  /** Wind-up line, present tense — "its throat glows red". */
+  tell: string;
+  kind: 'heavy' | 'sweep' | 'strike' | 'control' | 'empower' | 'guard';
+  /** 1–3. Three levels only; more would imply a precision we do not have. */
+  severity: number;
+  is_aoe: boolean;
+  /** Cuts through part of your armour. */
+  elemental: boolean;
+};
+
 export type CombatStatePayload = {
   turn: number;
   player: {
@@ -243,6 +273,7 @@ export type CombatStatePayload = {
     /** Class key (e.g. `warrior`) — from combat state so icons work without waiting on inventory. */
     class?: string | null;
     specialization?: string | null;
+    statuses?: CombatStatusRow[];
   };
   enemy: {
     name: string;
@@ -252,7 +283,10 @@ export type CombatStatePayload = {
     current_res?: number;
     max_res?: number;
     res_type?: string;
+    statuses?: CombatStatusRow[];
   };
+  /** What the enemy is winding up. Null once the fight is over. */
+  enemy_intent?: EnemyIntent | null;
   log: string[];
   abilities: CombatAbility[];
   can_potion: boolean;
