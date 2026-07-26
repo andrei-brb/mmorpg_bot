@@ -59,6 +59,60 @@ PROTECTION_ITEMS = {
 }
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  COST SCALING
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# The `cost` in ENHANCEMENT_CONFIG is a flat number: +9 -> +10 costs 100,000 gold
+# whether the item is a level-5 common or a level-60 legendary. That is wrong in
+# both directions at once.
+#
+# Early, it is prohibitive — a level-10 character will never see 100,000 gold, so
+# the top of the enhancement ladder does not exist for them.
+#
+# Late, it is trivial. Gold accumulates faster than anything consumes it (see the
+# note in services/camp_upgrades.py), so at level 60 a flat 100,000 is a rounding
+# error and enhancing everything to +10 becomes an errand rather than a choice.
+#
+# Scaling by the item's own level and rarity fixes both ends: the ladder becomes
+# reachable on cheap gear early, and expensive where the gold actually is.
+
+#: Multiplier applied per level of item requirement. A level-60 item costs about
+#: 4x a level-1 one at the same enhancement step.
+LEVEL_COST_SLOPE = 0.05
+
+#: Rarity multipliers. Enhancing a legendary should cost more than enhancing the
+#: common you are about to replace.
+RARITY_COST_MULT = {
+    "common": 1.0,
+    "uncommon": 1.3,
+    "rare": 1.8,
+    "epic": 2.5,
+    "legendary": 3.5,
+    "mythic": 5.0,
+    "artifact": 6.0,
+}
+
+
+def enhancement_cost(target_level: int, item_level_req, rarity) -> int:
+    """Gold to attempt `target_level` on an item of this level and rarity.
+
+    Tolerant of missing values: an item template with a null level or an
+    unrecognised rarity falls back to the base cost rather than raising, because
+    this sits directly in front of a gold deduction.
+    """
+    base = int(ENHANCEMENT_CONFIG.get(int(target_level), {}).get("cost", 0) or 0)
+    if base <= 0:
+        return 0
+    try:
+        lvl = max(1, int(item_level_req or 1))
+    except (TypeError, ValueError):
+        lvl = 1
+    mult = 1.0 + LEVEL_COST_SLOPE * (lvl - 1)
+    mult *= RARITY_COST_MULT.get(str(rarity or "common").lower(), 1.0)
+    return max(1, int(round(base * mult)))
+
+
 class BlacksmithService:
     def __init__(self, db):
         self.db = db
@@ -90,7 +144,8 @@ class BlacksmithService:
         # Get item
         item = await self.db.fetchrow(
             """SELECT i.*, t.name, t.s_str, t.s_agi, t.s_int, t.s_spi, t.s_sta,
-                      t.s_armor, t.s_dmg_min, t.s_dmg_max, t.item_type, t.rarity
+                      t.s_armor, t.s_dmg_min, t.s_dmg_max, t.item_type, t.rarity,
+                      t.level_req
                FROM inventory i
                JOIN item_templates t ON i.template_id = t.id
                WHERE i.id = $1 AND i.character_id = $2""",
@@ -112,13 +167,16 @@ class BlacksmithService:
         
         target_level = current_level + 1
         config = ENHANCEMENT_CONFIG[target_level]
-        
+        cost = enhancement_cost(
+            target_level, item.get("level_req"), item.get("rarity")
+        )
+
         # Check if character has enough gold
         char = await self.db.fetchrow("SELECT gold FROM characters WHERE id = $1", char_id)
-        if char["gold"] < config["cost"]:
+        if char["gold"] < cost:
             return {
                 "success": False,
-                "message": f"Not enough gold. Need {config['cost']:,}🪙, you have {char['gold']:,}🪙."
+                "message": f"Not enough gold. Need {cost:,}🪙, you have {char['gold']:,}🪙."
             }
         
         # Apply protection effects
@@ -171,7 +229,7 @@ class BlacksmithService:
         # Deduct gold cost
         await self.db.execute(
             "UPDATE characters SET gold = gold - $2 WHERE id = $1",
-            char_id, config["cost"]
+            char_id, cost
         )
         
         # Roll for success
@@ -182,7 +240,7 @@ class BlacksmithService:
             "old_level": current_level,
             "target_level": target_level,
             "success_rate": success_rate * 100,
-            "cost": config["cost"],
+            "cost": cost,
             "stat_boost": config["stat_boost"],
             "broke": False,
             "downgraded": False,
@@ -202,7 +260,7 @@ class BlacksmithService:
             # Log success
             await self._log_enhancement(
                 char_id, item_id, item["name"], current_level, target_level,
-                True, config["cost"], protection_used
+                True, cost, protection_used
             )
             
             # Check for server announcement (legendary +10)
@@ -245,7 +303,7 @@ class BlacksmithService:
             # Log failure
             await self._log_enhancement(
                 char_id, item_id, item["name"], current_level, target_level,
-                False, config["cost"], protection_used
+                False, cost, protection_used
             )
         
         return result
@@ -364,7 +422,7 @@ class BlacksmithService:
         """Get detailed enhancement information for an item."""
         item = await self.db.fetchrow(
             """SELECT i.*, t.name, t.s_str, t.s_agi, t.s_int, t.s_spi, t.s_sta,
-                      t.s_armor, t.s_dmg_min, t.s_dmg_max, t.rarity
+                      t.s_armor, t.s_dmg_min, t.s_dmg_max, t.rarity, t.level_req
                FROM inventory i
                JOIN item_templates t ON i.template_id = t.id
                WHERE i.id = $1 AND i.character_id = $2""",
@@ -397,7 +455,15 @@ class BlacksmithService:
             "current_stats": current_stats,
             "next_level": current_level + 1 if next_config else None,
             "next_stats": next_stats,
-            "next_config": next_config,
+            # The quoted price must be the price charged. `next_config["cost"]`
+            # is the flat base; the real cost scales with the item's level and
+            # rarity, so it is computed here rather than left to the client.
+            "next_config": (
+                {**next_config, "cost": enhancement_cost(
+                    current_level + 1, item.get("level_req"), item.get("rarity")
+                )}
+                if next_config else None
+            ),
         }
 
     # ── Leaderboard ───────────────────────────────────────────────────────────
