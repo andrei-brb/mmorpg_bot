@@ -80,6 +80,8 @@ from services.economy.pricing import check_market_price
 from services import leaderboards
 from services.character import presets_service
 from services.character.presets_service import PresetsService
+from services.character import transmog
+from services.character.transmog import TransmogService
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.crafting.crafting_service import CraftingService
@@ -3566,6 +3568,67 @@ async def handle_idle_claim_post(request: web.Request) -> web.Response:
                 **idle_pending_to_json(after, dict(fresh) if fresh else char_dict),
             }
         )
+    )
+
+
+async def handle_transmog_apply(request: web.Request) -> web.Response:
+    """Make one item look like another you own."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    item_id = _uuid_from_any((body or {}).get("item_id"))
+    source_id = _uuid_from_any((body or {}).get("source_item_id"))
+    if not item_id or not source_id:
+        return web.json_response(_json_safe({"ok": False, "message": "Pick an item and a look."}), status=400)
+
+    ok, message, detail = await TransmogService(db).apply(_uuid_from_any(char["id"]), item_id, source_id)
+    fresh = await CharacterService(db).get_character(discord_id) if ok else None
+    return web.json_response(
+        _json_safe({"ok": ok, "message": message, "transmog": detail,
+                    "character": dict(fresh) if fresh else None}),
+        status=200 if ok else 400,
+    )
+
+
+async def handle_transmog_clear(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    item_id = _uuid_from_any((body or {}).get("item_id"))
+    if not item_id:
+        return web.json_response(_json_safe({"ok": False, "message": "Missing item."}), status=400)
+    ok, message = await TransmogService(db).clear(_uuid_from_any(char["id"]), item_id)
+    return web.json_response(_json_safe({"ok": ok, "message": message}), status=200 if ok else 400)
+
+
+async def handle_transmog_wardrobe(request: web.Request) -> web.Response:
+    """Appearances you hold for one slot."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+    slot = (request.query.get("slot") or "").strip()
+    if not slot:
+        return web.json_response(_json_safe({"ok": False, "message": "Missing slot."}), status=400)
+    looks = await TransmogService(db).wardrobe(_uuid_from_any(char["id"]), slot)
+    return web.json_response(
+        _json_safe({"ok": True, "slot": slot, "looks": looks, "cost": transmog.TRANSMOG_COST})
     )
 
 
@@ -7833,6 +7896,9 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/combat/oaths", handle_combat_oaths)
     app.router.add_post("/api/game/idle/upgrade", handle_idle_cap_upgrade)
     app.router.add_get("/api/game/leaderboard", handle_leaderboard)
+    app.router.add_post("/api/game/transmog/apply", handle_transmog_apply)
+    app.router.add_post("/api/game/transmog/clear", handle_transmog_clear)
+    app.router.add_get("/api/game/transmog/wardrobe", handle_transmog_wardrobe)
     app.router.add_get("/api/game/presets", handle_presets_list)
     app.router.add_post("/api/game/presets/save", handle_presets_save)
     app.router.add_post("/api/game/presets/apply", handle_presets_apply)

@@ -38,6 +38,11 @@ export type InvRow = {
   enhancement_level?: number | null;
   /** Set this piece belongs to, from item_templates.set_id. */
   set_id?: string | null;
+  /** Transmog — appearance only, never read by any stat calculation. The icon
+   *  is the borrowed one; `name` above stays the real item's. */
+  transmog_template_id?: string | null;
+  transmog_icon?: string | null;
+  transmog_name?: string | null;
   locked?: boolean | null;
   soulbound?: boolean | null;
   /** From item_templates; false = cannot list on market. */
@@ -1191,4 +1196,13 @@ export type LeaderboardPayload = {
   resets_at: string;
   entries: LeaderboardEntry[];
   you?: (Partial<LeaderboardEntry> & { rank: number | null; score: number }) | null;
+};
+
+/** GET /api/game/transmog/wardrobe */
+export type WardrobeLook = {
+  item_id: string;
+  template_id: string;
+  name: string;
+  icon?: string | null;
+  rarity?: string | null;
 };

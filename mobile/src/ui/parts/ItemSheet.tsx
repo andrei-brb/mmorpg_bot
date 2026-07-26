@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { ItemIcon } from "@/components/game/ItemIcon";
 import { normRarity } from "@/hooks/useForge";
-import type { InvRow } from "@/lib/apiTypes";
+import type { InvRow, WardrobeLook } from "@/lib/apiTypes";
+import * as api from "@/lib/gameApi";
 import { cn } from "@/lib/utils";
 
 /**
@@ -64,7 +65,8 @@ export function ItemSheet({
   item: InvRow;
   onClose: () => void;
 }) {
-  const { inventory, itemPost, refreshInventory, refreshProgress } = useGameSession();
+  const { inventory, itemPost, refreshInventory, refreshProgress, accessToken, guildId } =
+    useGameSession();
   const [busy, setBusy] = useState(false);
 
   const equipped = Boolean(item.is_equipped);
@@ -99,6 +101,59 @@ export function ItemSheet({
   }, [item, worn]);
 
   const netBetter = rows.reduce((a, r) => a + r.delta, 0);
+
+  // ── Transmog ──
+  // Offered here because this is where you are already looking at the piece and
+  // deciding what to do with it. A separate wardrobe screen would mean choosing
+  // an appearance without the item in front of you.
+  const [mogOpen, setMogOpen] = useState(false);
+  const [looks, setLooks] = useState<WardrobeLook[]>([]);
+  const [mogCost, setMogCost] = useState(500);
+  const slot = slotOf(item);
+  const wearing = item.transmog_template_id ? item.transmog_name : null;
+
+  const loadLooks = useCallback(async () => {
+    if (!accessToken || !slot) return;
+    const j = await api.getWardrobe(accessToken, slot, guildId);
+    // Your own template is not a "look" you can apply to yourself.
+    setLooks((j?.looks ?? []).filter((l) => l.template_id !== item.template_id));
+    if (typeof j?.cost === "number") setMogCost(j.cost);
+  }, [accessToken, guildId, slot, item.template_id]);
+
+  useEffect(() => {
+    if (mogOpen) void loadLooks();
+  }, [mogOpen, loadLooks]);
+
+  async function applyLook(sourceItemId: string) {
+    if (!accessToken || busy) return;
+    setBusy(true);
+    try {
+      const j = await api.postTransmogApply(accessToken, item.id, sourceItemId, guildId);
+      if (j?.ok === false) toast.error(j.message || "Could not change the look.");
+      else {
+        toast.success(j?.message?.replace(/\*\*/g, "") || "Appearance changed.");
+        setMogOpen(false);
+        await refreshInventory();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearLook() {
+    if (!accessToken || busy) return;
+    setBusy(true);
+    try {
+      const j = await api.postTransmogClear(accessToken, item.id, guildId);
+      if (j?.ok === false) toast.error(j.message || "Could not restore.");
+      else {
+        toast.success("Appearance restored.");
+        await refreshInventory();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function act(endpoint: string, label: string) {
     if (busy) return;
@@ -246,6 +301,64 @@ export function ItemSheet({
             This item has no combat stats.
           </p>
         )}
+
+        {/* ── Appearance ── */}
+        {slot ? (
+          <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--n-500)" }}>
+            <div className="mb-1.5 flex items-baseline justify-between gap-2">
+              <span className="e-label">Appearance</span>
+              {wearing ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void clearLook()}
+                  className="text-[11px] font-semibold"
+                  style={{ color: "var(--a-500)" }}
+                >
+                  Restore
+                </button>
+              ) : null}
+            </div>
+            <p className="mb-2 text-[11.5px]" style={{ color: "var(--a-500)" }}>
+              {wearing ? `Looks like ${wearing}.` : "Looks like itself."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setMogOpen((v) => !v)}
+              className="e-btn e-btn--ghost w-full text-[12px]"
+            >
+              {mogOpen ? "Cancel" : `Change look · ${mogCost.toLocaleString()}g`}
+            </button>
+
+            {mogOpen ? (
+              looks.length === 0 ? (
+                <p className="mt-2 text-[11.5px] leading-relaxed" style={{ color: "var(--a-500)" }}>
+                  You don't hold another {slot.replace(/_/g, " ")} to borrow a look from. Keep a
+                  piece you like instead of selling it.
+                </p>
+              ) : (
+                <div className="mt-2 grid grid-cols-5 gap-1.5">
+                  {looks.map((l) => (
+                    <button
+                      key={l.item_id}
+                      type="button"
+                      disabled={busy}
+                      title={l.name}
+                      onClick={() => void applyLook(l.item_id)}
+                      className="grid aspect-square place-items-center rounded-lg text-lg"
+                      style={{
+                        border: `1px solid ${RARITY_VAR[normRarity(l.rarity)] ?? "var(--n-500)"}`,
+                        background: "rgba(0,0,0,0.3)",
+                      }}
+                    >
+                      {l.icon || "🎽"}
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-4 flex gap-2">
           {equipped ? (

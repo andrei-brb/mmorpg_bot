@@ -236,6 +236,16 @@ class Database:
                 ADD COLUMN IF NOT EXISTS rarity item_rarity;
             """)
             
+            # Transmog: which template this item LOOKS like. NULL means it
+            # looks like itself, so every existing row is already correct and
+            # no backfill is needed. Appearance only — never read by any stat
+            # calculation. See services/character/transmog.py.
+            await c.execute("""
+                ALTER TABLE inventory
+                ADD COLUMN IF NOT EXISTS transmog_template_id VARCHAR(64)
+                    REFERENCES item_templates(id) ON DELETE SET NULL;
+            """)
+
             # Add enhancement_level to inventory
             await c.execute("""
                 ALTER TABLE inventory

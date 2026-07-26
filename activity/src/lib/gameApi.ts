@@ -17,6 +17,7 @@ import type {
   DeedsPayload,
   IdleRewardsPayload,
   LeaderboardPayload,
+  WardrobeLook,
   QuestLogPayload,
   SpecGatePayload,
   GuildMePayload,
@@ -311,6 +312,44 @@ export async function getLeaderboard(
   });
   if (!res.ok) return null;
   return (await res.json()) as LeaderboardPayload;
+}
+
+export async function getWardrobe(
+  token: string,
+  slot: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; looks?: WardrobeLook[]; cost?: number }> {
+  const res = await fetch(apiUrl(`/api/game/transmog/wardrobe?slot=${encodeURIComponent(slot)}`), {
+    headers: authHeaders(token, guildId),
+  });
+  return (await res.json()) as { ok?: boolean; looks?: WardrobeLook[]; cost?: number };
+}
+
+export async function postTransmogApply(
+  token: string,
+  itemId: string,
+  sourceItemId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/transmog/apply"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ item_id: itemId, source_item_id: sourceItemId }),
+  });
+  return (await res.json()) as { ok?: boolean; message?: string };
+}
+
+export async function postTransmogClear(
+  token: string,
+  itemId: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string }> {
+  const res = await fetch(apiUrl("/api/game/transmog/clear"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ item_id: itemId }),
+  });
+  return (await res.json()) as { ok?: boolean; message?: string };
 }
 
 export async function getCombatOaths(token: string, guildId?: string): Promise<CombatOath[]> {

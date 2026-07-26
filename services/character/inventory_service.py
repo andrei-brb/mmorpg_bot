@@ -556,9 +556,17 @@ class InventoryService:
                      i.r_str,i.r_agi,i.r_int,i.r_spi,i.r_sta,
                      i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating,
                      COALESCE(i.rarity, t.rarity) as rarity,
-                     COALESCE(i.enhancement_level, 0) as enhancement_level
+                     COALESCE(i.enhancement_level, 0) as enhancement_level,
+                     -- Transmog: appearance only. The icon the client draws is
+                     -- the borrowed one when a look is applied; the NAME stays
+                     -- the real item's, so a player can never be confused about
+                     -- what they are actually wearing.
+                     i.transmog_template_id,
+                     tm.icon AS transmog_icon,
+                     tm.name AS transmog_name
                FROM inventory i
                JOIN item_templates t ON i.template_id=t.id
+               LEFT JOIN item_templates tm ON tm.id = i.transmog_template_id
                LEFT JOIN market_listings ml ON i.id=ml.item_id AND ml.is_active=TRUE
                WHERE i.character_id=$1 AND ml.id IS NULL
                ORDER BY i.is_equipped DESC, COALESCE(i.rarity, t.rarity) DESC, t.name""",
