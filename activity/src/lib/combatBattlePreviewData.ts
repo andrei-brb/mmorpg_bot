@@ -38,14 +38,18 @@ function inferEnemyElement(
   return "dark";
 }
 
-function itemsFromInventory(inventory: InventoryPayload | null): Item[] {
-  const rows = (inventory?.items || []).filter((r) => !r.is_equipped).slice(0, 6);
-  return rows.map((r, i) => ({
-    id: r.id || `bag-${i}`,
+/** Consumables the server says are usable right now.
+ *
+ *  This grid used to show the first six unequipped things in the bag — swords,
+ *  ore, quest tokens — with a `cursor-pointer` and no click handler. It looked
+ *  like an inventory you could act on and was pure decoration. */
+function combatItems(state: CombatStatePayload): Item[] {
+  return (state.items ?? []).map((r) => ({
+    id: r.id,
     name: r.name,
-    icon: (r.icon && String(r.icon).trim()) || "📦",
+    icon: (r.icon && String(r.icon).trim()) || "🧪",
     quantity: Math.max(0, Number(r.quantity ?? 1)),
-    description: r.item_type ? String(r.item_type) : "Inventory item",
+    description: r.description || "",
   }));
 }
 
@@ -151,6 +155,7 @@ export function buildBattlePreviewDataFromCombat(args: {
   opponentTurnLabel: string;
   playerPortraitUrl?: string;
   enemyPortraitUrl?: string;
+  onUseItem?: (id: string) => void;
 }): BattlePreviewData {
   const {
     state,
@@ -167,6 +172,7 @@ export function buildBattlePreviewDataFromCombat(args: {
     opponentTurnLabel,
     playerPortraitUrl: playerOverride,
     enemyPortraitUrl: enemyOverride,
+    onUseItem,
   } = args;
 
   const battleZone = battleZoneOverride ?? zoneLabel?.key ?? "volcano";
@@ -199,7 +205,9 @@ export function buildBattlePreviewDataFromCombat(args: {
     ? `Your Turn${turnBannerSeconds != null ? ` — ${turnBannerSeconds}s` : ""}`
     : opponentTurnLabel.replace(/^\s*⏳\s*/u, "").trim() || "Waiting…";
 
-  const bagItems = itemsFromInventory(inventory);
+  const bagItems = combatItems(state);
+  const itemsUsed = Number(state.items_used ?? 0);
+  const itemsMax = Number(state.items_max ?? 0);
   const specTitle =
     inventory?.character?.specialization_name?.trim() ||
     displaySpecOrClassTitle(state.player.specialization ?? undefined);
@@ -217,6 +225,9 @@ export function buildBattlePreviewDataFromCombat(args: {
     gridRows: 3,
     gridCols: 3,
     items: bagItems.length > 0 ? bagItems : undefined,
+    onUseItem: canAct ? onUseItem : undefined,
+    itemsNote: itemsMax > 0 ? `${itemsUsed} of ${itemsMax} items used this fight` : undefined,
+    itemsDisabled: itemsMax > 0 && itemsUsed >= itemsMax,
     showRpgPanel: true,
     player: {
       name: state.player.name,

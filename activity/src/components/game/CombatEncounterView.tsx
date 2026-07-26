@@ -82,6 +82,8 @@ export type CombatEncounterViewProps = {
   onAbility: (key: string) => void;
   onFlee: () => void;
   onPotion: () => void;
+  /** Use a specific combat consumable. Omitted where items are not offered. */
+  onUseItem?: (itemId: string) => void;
   /** Discord /dungeon DB run — show party placeholders */
   showDiscordDungeonBanner?: boolean;
   /** Optional custom chrome above the encounter (default: none). */
@@ -129,6 +131,7 @@ export function CombatEncounterView({
   onAbility,
   onFlee,
   onPotion,
+  onUseItem,
   showDiscordDungeonBanner,
   topBar,
   battleZoneOverride,
@@ -315,6 +318,7 @@ export function CombatEncounterView({
       opponentTurnLabel,
       playerPortraitUrl: battlePreviewPlayerPortraitUrl,
       enemyPortraitUrl: battlePreviewEnemyPortraitUrl,
+      onUseItem,
     });
   }, [
     useBattlePreview,
@@ -332,6 +336,7 @@ export function CombatEncounterView({
     opponentTurnLabel,
     battlePreviewPlayerPortraitUrl,
     battlePreviewEnemyPortraitUrl,
+    onUseItem,
   ]);
   const abilitiesList = state.abilities || [];
   const primaryAbility =

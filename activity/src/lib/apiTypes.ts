@@ -265,6 +265,16 @@ export type EnemyIntent = {
   elemental: boolean;
 };
 
+export type CombatItem = {
+  id: string;
+  name: string;
+  icon: string;
+  quantity: number;
+  /** heal_hp | combat_cure | combat_restore | combat_shield | combat_damage */
+  effect_type: string;
+  description: string;
+};
+
 export type CombatStatePayload = {
   turn: number;
   player: {
@@ -291,6 +301,12 @@ export type CombatStatePayload = {
   };
   /** What the enemy is winding up. Null once the fight is over. */
   enemy_intent?: EnemyIntent | null;
+  /** Consumables usable in this fight. Not the whole bag — the server filters
+   *  to things that actually do something mid-combat. */
+  items?: CombatItem[];
+  items_used?: number;
+  /** 0 in a party dungeon: that path keeps its per-member potion budget. */
+  items_max?: number;
   /** 1–3 for bosses, null otherwise. Rises as the boss loses health, and the
    *  boss leans on its signature kit harder in each one. */
   boss_phase?: number | null;

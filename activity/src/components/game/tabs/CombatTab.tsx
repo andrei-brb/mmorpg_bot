@@ -600,6 +600,18 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     } finally { setLoading(false); }
   };
 
+  /** Use a specific consumable. The server refuses an item that would do
+   *  nothing (an antidote with nothing to cure) without consuming it, so the
+   *  refusal comes back as a log line rather than a lost item. */
+  const onUseItem = async (itemId: string) => {
+    setLoading(true);
+    try {
+      const json = await combatAction({ item_id: itemId });
+      if (json.state) setState(json.state);
+      await refreshInventory();
+    } finally { setLoading(false); }
+  };
+
   const onRest = async () => {
     setLoading(true);
     try {
@@ -872,6 +884,7 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
           onAbility={onAbility}
           onFlee={onFlee}
           onPotion={onPotion}
+          onUseItem={onUseItem}
           showDiscordDungeonBanner={Boolean(state.in_dungeon)}
           enemyKey={activeEnemy?.key || undefined}
           enemyKind={activeEnemy?.kind || undefined}

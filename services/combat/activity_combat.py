@@ -25,6 +25,12 @@ from config.settings import (
     ZONES,
     _boss_hp_scale_for_zone,
 )
+from services.combat.consumables import (
+    MAX_ITEMS_PER_FIGHT,
+    apply_combat_consumable,
+    is_combat_usable,
+    usable_combat_items,
+)
 from services.combat.elements import ability_element, effectiveness, enemy_element, enemy_element_payload
 from services.lore.lore_gate_service import LoreGateService
 from services.combat.combat_engine import (
@@ -75,6 +81,14 @@ class ActivityCombatState:
     session: CombatSession
     log_lines: List[str] = field(default_factory=list)
     potion_used: bool = False
+    #: Combat consumables spent this fight. Replaces the single-potion limit;
+    #: `potion_used` is kept because the party path keys off it per member.
+    items_used: int = 0
+    #: Usable consumables, cached on the session rather than threaded through
+    #: all twelve serializer call sites. It can only change when the fight
+    #: starts or when an item is spent, and both refresh it — loot arrives only
+    #: after the fight is over.
+    combat_items: List[Dict[str, Any]] = field(default_factory=list)
     dungeon_key: Optional[str] = None
     dungeon_floor: Optional[int] = None
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -465,13 +479,21 @@ def serialize_activity_state(
             "turn": session.turn,
             "player": player_payload,
             "enemy": _serialize_combatant(enemy),
-        "enemy_intent": intent_payload(enemy) if not session.over else None,
-        # Phase has always been computed and used to weight the boss AI, and
-        # never sent — so the fight got harder at 50% and 25% health with no
-        # signal that anything had changed.
-        "boss_phase": int(session.boss_phase) if session.is_boss else None,
-        "boss_phase_label": PHASE_LABEL.get(int(session.boss_phase)) if session.is_boss else None,
-        "enemy_element": enemy_element_payload(session.enemy_key),
+            "enemy_intent": intent_payload(enemy) if not session.over else None,
+            # Phase has always been computed and used to weight the boss AI,
+            # and never sent — so the fight got harder at 50% and 25% health
+            # with no signal that anything had changed.
+            "boss_phase": int(session.boss_phase) if session.is_boss else None,
+            "boss_phase_label": PHASE_LABEL.get(int(session.boss_phase)) if session.is_boss else None,
+            "enemy_element": enemy_element_payload(session.enemy_key),
+            # Empty in a party dungeon on purpose. The item budget here is
+            # per-member (`potion_by_discord`), and a single shared counter
+            # would let one player spend the whole party's allowance. Party
+            # members keep the original one-healing-potion rule until that
+            # accounting exists.
+            "items": [],
+            "items_used": 0,
+            "items_max": 0,
             "log": ac.log_lines[-12:],
             "abilities": ab_list,
             "can_potion": pot_ok and your_turn,
@@ -508,6 +530,9 @@ def serialize_activity_state(
         "boss_phase": int(session.boss_phase) if session.is_boss else None,
         "boss_phase_label": PHASE_LABEL.get(int(session.boss_phase)) if session.is_boss else None,
         "enemy_element": enemy_element_payload(session.enemy_key),
+        "items": list(ac.combat_items),
+        "items_used": int(ac.items_used),
+        "items_max": MAX_ITEMS_PER_FIGHT,
         "log": ac.log_lines[-12:],
         "abilities": _ability_options(char, player, session.enemy_key),
         "can_potion": can_potion and not ac.potion_used,
@@ -794,6 +819,7 @@ async def start_activity_combat(
         guild_raid_run_id=guild_raid_run_id,
     )
     ACTIVE_ACTIVITY[discord_id] = ac
+    ac.combat_items = await usable_combat_items(db, char["id"])
 
     # Telegraph the opening move before the player has taken a turn — otherwise
     # the first round is the one round they cannot read.
@@ -957,6 +983,7 @@ async def start_party_dungeon_combat(
         DISCORD_TO_PARTY_RUN[did] = run_id
 
     _plan_enemy_intent(engine, session)
+    ac.combat_items = await usable_combat_items(db, leader_char["id"])
 
     has_potion = await _has_healing_potion(db, leader_char["id"])
     can_potion = bool(has_potion) and not ac.potion_by_discord.get(leader_discord_id, False)
@@ -979,10 +1006,85 @@ def _queue_party_outcomes(
         PARTY_PENDING_OUTCOME[did] = payload
 
 
+async def _use_combat_item(
+    db,
+    inv_svc,
+    char_svc,
+    ac: "ActivityCombatState",
+    char_id,
+    player: Combatant,
+    enemy: Optional[Combatant],
+    log_lines: List[str],
+    *,
+    item_id: str = "",
+) -> bool:
+    """Use one consumable mid-fight. Returns whether anything actually happened.
+
+    Order matters here: the effect is resolved against the live combatants
+    *before* the item is consumed, so a consumable that would do nothing (an
+    antidote with no poison on you, a draught at full mana) is refused without
+    costing the item. Getting this backwards is how players lose things to a
+    misclick.
+    """
+    if ac.items_used >= MAX_ITEMS_PER_FIGHT:
+        log_lines.append(f"❌ You have already used {MAX_ITEMS_PER_FIGHT} items this fight.")
+        return False
+
+    if item_id:
+        row = await db.fetchrow(
+            """SELECT i.id, i.quantity, t.name, t.effect_type, t.effect_value
+               FROM inventory i JOIN item_templates t ON i.template_id = t.id
+               WHERE i.id = $1 AND i.character_id = $2 AND i.quantity > 0""",
+            _as_uuid(item_id), char_id,
+        )
+        if not row:
+            log_lines.append("❌ You don't have that item.")
+            return False
+        if not is_combat_usable(row["effect_type"]):
+            log_lines.append(f"❌ **{row['name']}** can't be used in a fight.")
+            return False
+    else:
+        # Legacy `potion: true` — the best healing potion in the bag.
+        row = await _has_healing_potion(db, char_id)
+        if not row:
+            log_lines.append("❌ You don't have any healing potions!")
+            return False
+
+    effect_type = row["effect_type"] or "heal_hp"
+    changed, line = apply_combat_consumable(
+        effect_type, int(row["effect_value"] or 0), row["name"], player, enemy,
+    )
+    if not changed:
+        log_lines.append(f"❌ {line}")
+        return False
+
+    ok, _msg, _effect = await inv_svc.use_consumable(char_id, row["id"])
+    if not ok:
+        # The bag refused it after we already applied the effect — undo nothing
+        # and say so plainly rather than silently granting a free use.
+        log_lines.append("❌ That item could not be used.")
+        return False
+
+    log_lines.append(line)
+    ac.items_used += 1
+    ac.combat_items = await usable_combat_items(db, char_id)
+    # heal_hp is the only one that changes persisted character state.
+    if effect_type in ("heal_hp", "combat_restore"):
+        await char_svc.set_current_hp_res(char_id, player.current_hp, player.current_res)
+    return True
+
+
+def _as_uuid(value: str):
+    try:
+        return UUID(str(value))
+    except Exception:
+        return value
+
+
 async def _has_healing_potion(db, char_id) -> Optional[Any]:
     return await db.fetchrow(
         """
-        SELECT i.id, t.name, t.effect_value
+        SELECT i.id, t.name, t.effect_value, t.effect_type
         FROM inventory i
         JOIN item_templates t ON i.template_id = t.id
         WHERE i.character_id = $1
@@ -1052,6 +1154,7 @@ async def _process_activity_action_impl(
 
     flee = bool(body.get("flee"))
     potion = bool(body.get("potion"))
+    item_id = (body.get("item_id") or "").strip()
     ability_key = (body.get("ability") or body.get("ability_key") or "").strip()
 
     # ── Flee ───────────────────────────────────────────────────────────────
@@ -1081,31 +1184,20 @@ async def _process_activity_action_impl(
             "state": serialize_activity_state(ac, fresh, awaiting_action=True, can_potion=can_potion),
         }
 
-    # ── Potion ────────────────────────────────────────────────────────────
-    if potion:
-        has_potion_row = await _has_healing_potion(db, char_id)
-        if not has_potion_row:
-            log_lines.append("❌ You don't have any healing potions!")
-        elif ac.potion_used:
-            log_lines.append("❌ You already used a potion this fight.")
-        elif player.current_hp >= player.max_hp:
-            log_lines.append("❌ You are already at full health.")
-        else:
-            potion_id = has_potion_row["id"]
-            ok, msg_text, effect = await inv_svc.use_consumable(char_id, potion_id)
-            healed = 0
-            if ok and effect and effect.get("type") == "heal_hp":
-                base_val = int(effect.get("value") or 80)
-                heal_val = max(base_val, player.max_hp // 4)
-                room = max(0, player.max_hp - player.current_hp)
-                healed = min(heal_val, room)
-                player.current_hp += healed
-                if healed > 0:
-                    await char_svc.set_current_hp_res(char_id, player.current_hp, player.current_res)
-                log_lines.append(f"🧪 {msg_text} Restored **{healed}** HP.")
-            else:
-                log_lines.append(f"🧪 {msg_text}")
-            ac.potion_used = ok or ac.potion_used
+    # ── Item ──────────────────────────────────────────────────────────────
+    # `potion: true` is the original contract (the one healing potion) and still
+    # works; `item_id` is how anything else in the bag gets used. Using an item
+    # does not end your turn — that has always been true of the healing potion,
+    # and the per-fight cap is what bounds it.
+    if potion or item_id:
+        used_ok = await _use_combat_item(
+            db, inv_svc, char_svc, ac, char_id, player, enemy, log_lines,
+            item_id=item_id,
+        )
+        if used_ok and enemy.is_dead:
+            return await _finish_victory(
+                bot, guild_id, discord_id, char, session, player, char_svc, inv_svc, engine, db, log_lines, ac
+            )
 
         session.turn += 1
         ticks = engine.tick_turn(player)

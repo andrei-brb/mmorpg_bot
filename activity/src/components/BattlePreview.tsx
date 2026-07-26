@@ -104,6 +104,11 @@ export interface BattlePreviewData {
   playerSkills?: Skill[];
   enemySkills?: Skill[];
   items?: Item[];
+  /** Supplied only in a live fight. Without it the item grid is a display. */
+  onUseItem?: (id: string) => void;
+  /** e.g. "1 of 3 items used this fight". */
+  itemsNote?: string;
+  itemsDisabled?: boolean;
   buffs?: BuffDebuff[];
   /** When true, shows Items/Status panel even if empty. When undefined, panel shows only if items or buffs exist. */
   showRpgPanel?: boolean;
@@ -857,20 +862,52 @@ function RPGTab({ label, isActive, onClick }: { label: string; isActive: boolean
   );
 }
 
-function ItemsTabContent({ items }: { items: Item[] }) {
+function ItemsTabContent({
+  items,
+  onUseItem,
+  itemsNote,
+  disabled,
+}: {
+  items: Item[];
+  onUseItem?: (id: string) => void;
+  itemsNote?: string;
+  disabled?: boolean;
+}) {
   if (items.length === 0) {
     return (
       <p className="p-4 text-center text-[11px] text-muted-foreground" style={{ animation: "tab-fade-in 0.3s ease-out" }}>
-        No items.
+        {onUseItem ? "Nothing you can use in a fight." : "No items."}
       </p>
     );
   }
+  // Clickable only when a handler is supplied. This grid used to be
+  // `cursor-pointer` with no onClick, listing whatever happened to be in the
+  // bag — swords, ore, quest tokens — none of it usable in a fight.
+  const Cell = onUseItem ? "button" : "div";
   return (
-    <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6" style={{ animation: "tab-fade-in 0.3s ease-out" }}>
+    <div style={{ animation: "tab-fade-in 0.3s ease-out" }}>
+      {itemsNote ? (
+        <p className="px-3 pt-2 text-[10px]" style={{ color: "var(--bp-ink-dim)" }}>
+          {itemsNote}
+        </p>
+      ) : null}
+      <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6">
       {items.map((item) => (
-        <div
+        <Cell
           key={item.id}
-          className="group/item relative flex cursor-pointer flex-col items-center rounded-sm p-2 transition-all duration-200 hover:scale-105"
+          {...(onUseItem
+            ? {
+                type: "button" as const,
+                disabled,
+                onClick: () => onUseItem(item.id),
+                "aria-label": `Use ${item.name}`,
+              }
+            : {})}
+          className={cn(
+            "group/item relative flex flex-col items-center rounded-sm p-2 transition-all duration-200",
+            onUseItem && !disabled ? "cursor-pointer hover:scale-105" : "",
+            disabled ? "cursor-not-allowed opacity-50" : "",
+          )}
           style={{
             background: "linear-gradient(180deg, rgba(25,18,10,0.95) 0%, rgba(18,12,8,0.98) 100%)",
             border: "1px solid rgb(var(--bp-gold-rgb) / 0.25)",
@@ -907,8 +944,9 @@ function ItemsTabContent({ items }: { items: Item[] }) {
               </span>
             </div>
           </div>
-        </div>
+        </Cell>
       ))}
+      </div>
     </div>
   );
 }
@@ -1000,7 +1038,14 @@ function BattleTabPanel({ data }: { data: BattlePreviewData }) {
       </div>
 
       <div className="min-h-[120px]">
-        {activeTab === "items" && <ItemsTabContent items={items} />}
+        {activeTab === "items" && (
+          <ItemsTabContent
+            items={items}
+            onUseItem={data.onUseItem}
+            itemsNote={data.itemsNote}
+            disabled={data.itemsDisabled}
+          />
+        )}
         {activeTab === "status" && <StatusTabContent character={data.player} buffs={buffs} />}
       </div>
     </div>

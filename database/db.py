@@ -1912,7 +1912,26 @@ VALUES
     ('the_eternal_frequency','The Eternal Frequency','A standing wave against silence.','weapon','artifact','main_hand',58,
      32,18,14,8,16,0,62,98, NULL,0,0, 2000,800,'〰️'),
     ('vance_blood_token','Vance Blood Token','Proof the blood-debt was answered in steel.','quest','rare',NULL,30,
-     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🩸')
+     0,0,0,0,0,0,0,0, NULL,0,0, 0,0,'🩸'),
+
+    -- ── Combat consumables ───────────────────────────────────────────────────
+    -- Until now the only thing you could use in a fight was one healing potion,
+    -- and every other consumable in the game was a ten-minute out-of-combat
+    -- buff. Each of these answers something the fight itself now creates:
+    --   cure    -> the damage-over-time bosses apply (burn, bleed, poison)
+    --   draught -> running dry after a defensive turn
+    --   ward    -> a telegraphed heavy hit you would rather not eat
+    --   flask   -> a burst for physical classes, who have no elemental answer
+    -- effect_value carries the magnitude; percentages are resolved server-side
+    -- so they scale with the character instead of ageing out.
+    ('antidote','Antidote','Purges every burn, bleed and poison on you.','consumable','common',NULL,1,
+     0,0,0,0,0,0,0,0, 'combat_cure',0,0, 18,7,'🧯'),
+    ('focus_draught','Focus Draught','Restores 40% of your resource.','consumable','common',NULL,1,
+     0,0,0,0,0,0,0,0, 'combat_restore',40,0, 20,8,'🔷'),
+    ('warding_stone','Warding Stone','Absorbs the next hit, up to 35% of your health.','consumable','uncommon',NULL,5,
+     0,0,0,0,0,0,0,0, 'combat_shield',35,0, 45,18,'🪬'),
+    ('alchemists_fire','Alchemist''s Fire','Hurled flame — always burns, whatever you wear.','consumable','uncommon',NULL,5,
+     0,0,0,0,0,0,0,0, 'combat_damage',0,0, 40,16,'💥')
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,

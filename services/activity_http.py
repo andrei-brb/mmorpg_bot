@@ -10,7 +10,7 @@ Endpoints:
   GET  /api/game/combat/enemies — Bearer token → enemies/bosses (current zone; optional ?zone_key= for preview)
   GET  /api/game/combat/state   — Bearer token → active iframe combat (if any)
   POST /api/game/combat/start  — JSON { enemy_key, guild_id?, force? }
-  POST /api/game/combat/action — JSON { ability, flee?, potion?, guild_id? }
+  POST /api/game/combat/action — JSON { ability, flee?, potion?, item_id?, guild_id? }
   POST /api/game/rest           — Bearer token → full HP/resource restore (rest cooldown; clears iframe combat)
   GET  /api/game/idle/rewards  — Bearer token → pending offline XP/gold (capped window; preview only)
   POST /api/game/idle/claim    — Bearer JSON { guild_id? } → award pending rewards, reset accrual timer

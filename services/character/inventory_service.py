@@ -676,6 +676,14 @@ class InventoryService:
             "boost_spi",
             "boost_max_hp",
             "boost_resistance",
+            # Combat consumables. Resolved against the live combatants by
+            # services/combat/consumables.py before this is called, so by the
+            # time we get here the effect has already been judged useful — this
+            # call only spends the item.
+            "combat_cure",
+            "combat_restore",
+            "combat_shield",
+            "combat_damage",
         ):
             return False, "This consumable can't be used directly.", None
 
