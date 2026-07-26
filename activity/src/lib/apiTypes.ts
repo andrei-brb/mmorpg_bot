@@ -217,6 +217,10 @@ export type CombatAbility = {
   heal_estimate?: number | null;
   crit_pct?: number | null;
   is_aoe?: boolean;
+  /** fire | frost | nature | shadow | holy | physical. Physical is always neutral. */
+  element?: string;
+  /** How this ability fares against the enemy you are actually fighting. */
+  effectiveness?: 'strong' | 'weak' | 'neutral';
 };
 
 export type PartyCombatRow = {
@@ -287,6 +291,20 @@ export type CombatStatePayload = {
   };
   /** What the enemy is winding up. Null once the fight is over. */
   enemy_intent?: EnemyIntent | null;
+  /** 1–3 for bosses, null otherwise. Rises as the boss loses health, and the
+   *  boss leans on its signature kit harder in each one. */
+  boss_phase?: number | null;
+  boss_phase_label?: string | null;
+  /** The enemy's element and what beats it. `weak_to` is null for mundane
+   *  enemies — a bandit has no elemental weakness and we do not invent one. */
+  enemy_element?: {
+    element: string;
+    element_label: string;
+    element_emoji: string;
+    weak_to: string | null;
+    weak_to_label: string | null;
+    weak_to_emoji: string | null;
+  } | null;
   log: string[];
   abilities: CombatAbility[];
   can_potion: boolean;

@@ -234,11 +234,18 @@ export function buildBattlePreviewDataFromCombat(args: {
       level: enemyLevel,
       class: enemyClassDisplay || (enemyKind === "boss" ? "Warlord" : undefined),
       isBoss: enemyKind === "boss",
-      title: enemyKind === "boss" ? "The Unyielding" : undefined,
+      // The boss's phase, not a fixed epithet. "The Unyielding" was the same
+      // words on every boss in the game; "Cornered" tells you it just got worse.
+      title: state.boss_phase_label ?? (enemyKind === "boss" ? "The Unyielding" : undefined),
       element: enemyElement,
       stats: buildEnemyStats(state, enemyLevel),
       intent: buildIntent(state, canAct),
       statuses: state.enemy.statuses,
+      // Server-computed from the enemy's own kit. Null for mundane enemies —
+      // the previous value here was a hardcoded "WEAK" that meant nothing.
+      weakness: state.enemy_element?.weak_to_label
+        ? `WEAK: ${state.enemy_element.weak_to_emoji ?? ""}${state.enemy_element.weak_to_label}`.trim()
+        : undefined,
     },
   };
 }

@@ -21,6 +21,36 @@ function cooldownOverlayText(a: CombatAbility): string | null {
   return null;
 }
 
+/** A corner marker on the button itself, not just in the tooltip.
+ *
+ *  The matchup is only a decision if you can see it while choosing, and on a
+ *  phone the tooltip needs a long-press — by which point you have already
+ *  decided. Two glyphs, no text: the grid is six ~56px cells wide. */
+function EffectivenessMark({ ability: a }: { ability: CombatAbility }) {
+  if (a.effectiveness !== "strong" && a.effectiveness !== "weak") return null;
+  const strong = a.effectiveness === "strong";
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute right-0.5 top-0.5 z-[2] rounded-sm px-1 text-[9px] font-bold leading-tight"
+      style={{
+        background: strong ? "rgba(30,110,60,0.85)" : "rgba(110,40,40,0.85)",
+        color: strong ? "#9ff0bd" : "#ffb3ac",
+        border: `1px solid ${strong ? "rgba(60,170,100,0.7)" : "rgba(170,70,70,0.7)"}`,
+      }}
+      title={strong ? "Strong against this enemy" : "Resisted by this enemy"}
+    >
+      {strong ? "▲" : "▼"}
+    </span>
+  );
+}
+
+function effectivenessLine(a: CombatAbility): string | null {
+  if (a.effectiveness === "strong") return "▲ Strong against this enemy (+20% damage)";
+  if (a.effectiveness === "weak") return "▼ Resisted by this enemy (−15% damage)";
+  return null;
+}
+
 function abilityMetaLine(a: CombatAbility): string | null {
   const parts: string[] = [];
   if (a.dmg_min != null && a.dmg_max != null) {
@@ -55,6 +85,7 @@ export function CombatSkillButton({
 
   return (
     <div className="combat-skill-slot relative min-w-0">
+      <EffectivenessMark ability={a} />
       <button
         type="button"
         aria-disabled={disabled}
@@ -88,6 +119,14 @@ export function CombatSkillButton({
               style={{ color: "hsl(var(--gold))", textShadow: "0 0 6px hsl(var(--gold) / 0.25)" }}
             >
               {meta}
+            </p>
+          ) : null}
+          {effectivenessLine(a) ? (
+            <p
+              className="text-[10px] font-semibold leading-snug"
+              style={{ color: a.effectiveness === "strong" ? "#8ae0ab" : "#ff9a9a" }}
+            >
+              {effectivenessLine(a)}
             </p>
           ) : null}
           <div className="text-[9px] text-muted-foreground space-y-0.5 border-t border-[hsl(var(--frame-mid)_/_0.5)] pt-1.5 mt-1">
@@ -166,6 +205,7 @@ export function CombatSkillGridButton({
 
   return (
     <div className="combat-skill-slot group/cell relative h-full w-full min-w-0 flex flex-col">
+      <EffectivenessMark ability={a} />
       <button
         type="button"
         aria-disabled={disabled}
@@ -211,6 +251,14 @@ export function CombatSkillGridButton({
               style={{ color: "hsl(var(--gold))", textShadow: "0 0 6px hsl(var(--gold) / 0.25)" }}
             >
               {meta}
+            </p>
+          ) : null}
+          {effectivenessLine(a) ? (
+            <p
+              className="text-[10px] font-semibold leading-snug"
+              style={{ color: a.effectiveness === "strong" ? "#8ae0ab" : "#ff9a9a" }}
+            >
+              {effectivenessLine(a)}
             </p>
           ) : null}
           <div className="space-y-0.5 border-t border-[hsl(var(--frame-mid)_/_0.5)] pt-1.5 text-[9px] text-muted-foreground mt-1">

@@ -25,9 +25,12 @@ from config.settings import (
     ZONES,
     _boss_hp_scale_for_zone,
 )
+from services.combat.elements import ability_element, effectiveness, enemy_element, enemy_element_payload
 from services.lore.lore_gate_service import LoreGateService
 from services.combat.combat_engine import (
     ABILITIES,
+    PHASE_ANNOUNCE,
+    PHASE_LABEL,
     CombatEngine,
     CombatSession,
     Combatant,
@@ -255,6 +258,27 @@ async def dissolve_party_dungeon_combat_for_user(bot, discord_id: int) -> None:
     _clear_party_dungeon_session(ac)
 
 
+def _advance_boss_phase(
+    engine: CombatEngine, session: CombatSession, enemy: Combatant, log_lines: List[str]
+) -> None:
+    """Recompute the boss phase and announce a crossing.
+
+    The phase has always been computed and used to weight the AI, and never
+    told to anyone — so a boss got harder at 50% and 25% health with no signal
+    that anything had changed. One line in the log is what turns an invisible
+    difficulty curve into a moment.
+    """
+    if not session.is_boss:
+        return
+    was = int(getattr(session, "boss_phase", 1) or 1)
+    now = engine.boss_phase(enemy)
+    session.boss_phase = now
+    # Only ever announce going *down*: a heal or an absorb barrier can push a
+    # boss back above a threshold, and "is wounded" twice reads like a bug.
+    if now > was and now in PHASE_ANNOUNCE:
+        log_lines.append(PHASE_ANNOUNCE[now].format(name=enemy.name))
+
+
 def _plan_enemy_intent(engine: CombatEngine, session: CombatSession) -> None:
     """Decide and store the enemy's next move so the client can telegraph it.
 
@@ -265,8 +289,9 @@ def _plan_enemy_intent(engine: CombatEngine, session: CombatSession) -> None:
     enemy = session.alive_enemies[0] if session.alive_enemies else None
     if not enemy or session.over:
         return
-    if session.is_boss:
-        session.boss_phase = engine.boss_phase(enemy)
+    # The phase is already current: _advance_boss_phase runs right after the
+    # player acts, and nothing has damaged the boss since. Recomputing here
+    # would only risk consuming the transition before it could be announced.
     try:
         engine.plan_enemy_turn(
             enemy, session.alive_players, session.is_boss, session.boss_phase,
@@ -301,7 +326,9 @@ def _serialize_combatant(c: Combatant) -> Dict[str, Any]:
     }
 
 
-def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
+def _ability_options(
+    char: dict, player: Combatant, enemy_key: Optional[str] = None
+) -> List[Dict[str, Any]]:
     cls = CLASSES[char["class"]]
     # Brace is on every class: enemy intent is only a decision if every class has
     # something to do about it. It costs no resource and has no level gate.
@@ -315,6 +342,9 @@ def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
 
     cost_mult = getattr(Settings, "RESOURCE_COST_MULT", {}).get(char["class"], 1.0)
     char_level = char.get("level", 1)
+    # Matchup against *this* enemy, so the answer to "which button" can differ
+    # between fights instead of being the same one forever.
+    foe_element = enemy_element(enemy_key)
     out: List[Dict[str, Any]] = []
     seen = set()
     for key in keys:
@@ -334,6 +364,7 @@ def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
             disabled = f"Cooldown: {cd}"
         elif ab.cost_type in ("mana", "energy", "rage") and eff_cost and player.current_res < eff_cost:
             disabled = f"Not enough {ab.cost_type}"
+        el = ability_element(key)
         row = {
             "key": key,
             "name": ab.name,
@@ -343,6 +374,9 @@ def _ability_options(char: dict, player: Combatant) -> List[Dict[str, Any]]:
             "cost": eff_cost,
             "cooldown": cd,
             "disabled": disabled,
+            "element": el,
+            # Only meaningful for damage; a heal has no matchup to report.
+            "effectiveness": effectiveness(el, foe_element) if ab.dmg_mult > 0 else "neutral",
             **ability_tooltip_payload(player, ab),
         }
         out.append(row)
@@ -423,7 +457,7 @@ def serialize_activity_state(
 
         ab_list: List[Dict[str, Any]] = []
         if your_turn:
-            ab_list = _ability_options(char, viewer_player)
+            ab_list = _ability_options(char, viewer_player, session.enemy_key)
         pot_ok = bool(can_potion) and not ac.potion_by_discord.get(viewer_did, False)
 
         return {
@@ -432,6 +466,12 @@ def serialize_activity_state(
             "player": player_payload,
             "enemy": _serialize_combatant(enemy),
         "enemy_intent": intent_payload(enemy) if not session.over else None,
+        # Phase has always been computed and used to weight the boss AI, and
+        # never sent — so the fight got harder at 50% and 25% health with no
+        # signal that anything had changed.
+        "boss_phase": int(session.boss_phase) if session.is_boss else None,
+        "boss_phase_label": PHASE_LABEL.get(int(session.boss_phase)) if session.is_boss else None,
+        "enemy_element": enemy_element_payload(session.enemy_key),
             "log": ac.log_lines[-12:],
             "abilities": ab_list,
             "can_potion": pot_ok and your_turn,
@@ -462,8 +502,14 @@ def serialize_activity_state(
         "player": player_payload,
         "enemy": _serialize_combatant(enemy),
         "enemy_intent": intent_payload(enemy) if not session.over else None,
+        # Phase has always been computed and used to weight the boss AI, and
+        # never sent — so the fight got harder at 50% and 25% health with no
+        # signal that anything had changed.
+        "boss_phase": int(session.boss_phase) if session.is_boss else None,
+        "boss_phase_label": PHASE_LABEL.get(int(session.boss_phase)) if session.is_boss else None,
+        "enemy_element": enemy_element_payload(session.enemy_key),
         "log": ac.log_lines[-12:],
-        "abilities": _ability_options(char, player),
+        "abilities": _ability_options(char, player, session.enemy_key),
         "can_potion": can_potion and not ac.potion_used,
         "is_boss": session.is_boss,
         "zone_key": session.zone_key,
@@ -1148,8 +1194,7 @@ async def _process_activity_action_impl(
         log_lines.extend(e_ticks)
 
     if not enemy.is_dead:
-        if session.is_boss:
-            session.boss_phase = engine.boss_phase(enemy)
+        _advance_boss_phase(engine, session, enemy, log_lines)
         e_ab, e_targets = engine.enemy_turn(
             enemy, session.alive_players, session.is_boss, session.boss_phase, enemy_key=session.enemy_key
         )
@@ -1418,8 +1463,7 @@ async def _party_enemy_round(
         log_lines.extend(e_ticks)
 
     if not enemy.is_dead:
-        if session.is_boss:
-            session.boss_phase = engine.boss_phase(enemy)
+        _advance_boss_phase(engine, session, enemy, log_lines)
         # Party dungeon design: enemy damage applies to all alive party members.
         # Let engine choose the enemy ability, but always target the whole party.
         e_ab, _ = engine.enemy_turn(

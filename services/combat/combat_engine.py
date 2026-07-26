@@ -416,6 +416,25 @@ def _build_enemy_abilities() -> Dict[str, Ability]:
 
 ABILITIES.update(_build_enemy_abilities())
 
+#: Health percentage at or below which a boss enters each phase.
+PHASE_THRESHOLDS = {2: 50.0, 3: 25.0}
+
+#: How often a boss reaches for its own signature kit, by phase. Rising with
+#: the phase is what makes a phase change *felt* rather than merely computed:
+#: the same boss that opened with a swing every other turn starts leading with
+#: Lava Breath once it is cornered.
+SIGNATURE_RATE_BY_PHASE = {1: 0.35, 2: 0.50, 3: 0.65}
+
+#: What the player is told when a boss crosses a threshold. Phase 1 has no line
+#: because there is no transition into it.
+PHASE_ANNOUNCE = {
+    2: "⚠️ **{name}** is wounded and fighting harder.",
+    3: "🔥 **{name}** is cornered — it has stopped holding back.",
+}
+
+PHASE_LABEL = {1: "Opening", 2: "Wounded", 3: "Cornered"}
+
+
 #: Brace absorbs this share of the bracing combatant's maximum health.
 BRACE_ABSORB_PCT = 0.25
 
@@ -652,6 +671,17 @@ class CombatEngine:
                 from services.combat.enemy_abilities import ELEMENTAL_KEYS
                 if ability.key in ELEMENTAL_KEYS:
                     armor_pen_pct = max(armor_pen_pct, ELEMENTAL_KEYS[ability.key])
+
+                # Elemental matchup — the player's offence only, so the choice
+                # of which ability to press matters without also making every
+                # boss hit harder. See services/combat/elements.py.
+                if attacker.is_player and session is not None:
+                    from services.combat.elements import ability_element, enemy_element, matchup
+
+                    mm = matchup(ability_element(ability.key), enemy_element(getattr(session, "enemy_key", None)))
+                    if mm != 1.0:
+                        raw = int(raw * mm)
+                        r.log += " 🔺 Super effective!" if mm > 1.0 else " 🔻 Resisted."
 
                 # Power-up buff
                 pu = attacker.get_status(StatusEffect.POWER_UP)
@@ -993,7 +1023,12 @@ class CombatEngine:
                 tmpl = ENEMIES.get(enemy_key)
                 if tmpl and tmpl.abilities:
                     usable = [k for k in tmpl.abilities if k not in enemy.ability_cooldowns]
-                    if usable and random.random() < 0.35:
+                    # A cornered boss reaches for its signature moves more often.
+                    # This rate used to be a flat 0.35 regardless of phase, so a
+                    # boss at 5% health fought exactly like one at 100% — the
+                    # phase machinery below only ever governed the fallback kit,
+                    # never the boss's own.
+                    if usable and random.random() < SIGNATURE_RATE_BY_PHASE.get(phase, 0.35):
                         return random.choice(usable), [target]
             except Exception:
                 pass
@@ -1018,8 +1053,8 @@ class CombatEngine:
             return "auto_attack", alive
 
     def boss_phase(self, boss: Combatant) -> int:
-        if boss.hp_pct <= 25: return 3
-        if boss.hp_pct <= 50: return 2
+        if boss.hp_pct <= PHASE_THRESHOLDS[3]: return 3
+        if boss.hp_pct <= PHASE_THRESHOLDS[2]: return 2
         return 1
 
     # ── Rewards ───────────────────────────────────────────────────────────────
