@@ -2,7 +2,18 @@
 """
 Generate 10 items per rarity for each equipment slot.
 Outputs SQL INSERT statements.
+
+Vendor prices come from services/economy/pricing.py, not from a table in here.
+This file used to carry its own VENDOR_BUY grid and a magic `* 0.4`, which meant
+generated items and the hand-authored seed in database/db.py priced themselves
+by two unrelated rules that nothing kept in step.
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from services.economy.pricing import vendor_prices
 
 # Slot configurations: (slot_key, item_type, icon, base_stats_template)
 # Base values are multiplied by rarity and index
@@ -95,8 +106,9 @@ LEVEL_REQS = {
     "legendary": [40, 42, 45, 48, 50, 52, 55, 58, 60, 60],
 }
 
-# Vendor prices (buy/sell ratio ~2.5:1)
-VENDOR_BUY = {
+# RETIRED — superseded by services/economy/pricing.py. Kept for one release so
+# the old numbers can be diffed against the formula if anything looks off.
+_RETIRED_VENDOR_BUY = {
     "common": [10, 12, 15, 18, 20, 22, 25, 28, 30, 35],
     "uncommon": [25, 30, 35, 40, 45, 50, 55, 60, 65, 70],
     "rare": [80, 90, 100, 110, 120, 130, 140, 150, 160, 170],
@@ -134,9 +146,10 @@ def generate_item(slot_key, rarity, index):
     # Item ID
     item_id = f"{slot_key}_{rarity}_{index+1}"
     
-    # Vendor prices
-    vendor_buy_price = VENDOR_BUY[rarity][index]
-    vendor_sell_price = int(vendor_buy_price * 0.4)  # 40% of buy price
+    # Vendor prices — one formula, shared with everything else that prices items.
+    prices = vendor_prices(item_type, rarity, level_req)
+    vendor_buy_price = prices["buy"]
+    vendor_sell_price = prices["sell"]
     
     # Build SQL values
     return (
