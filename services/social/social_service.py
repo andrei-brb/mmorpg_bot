@@ -654,6 +654,24 @@ class SocialService:
             "DELETE FROM player_whispers WHERE created_at < $1",
             cutoff,
         )
+        # Push, if the recipient has a device registered. Wrapped and awaited
+        # after the message is durably stored, so a notification failure can
+        # never lose a whisper.
+        try:
+            from services.notifications import push
+
+            sender = await self.db.fetchval(
+                "SELECT name FROM characters WHERE player_id=$1 ORDER BY level DESC LIMIT 1", from_id
+            )
+            await push.notify_player(
+                self.db, to_id,
+                title=f"{sender or 'Someone'} whispered you",
+                body=body[:120],
+                data={"kind": "whisper", "from_player_id": str(from_id)},
+            )
+        except Exception:
+            log.debug("whisper push skipped", exc_info=True)
+
         return True, "Sent.", {
             "id": str(row["id"]),
             "created_at": row["created_at"].isoformat() if row.get("created_at") else None,

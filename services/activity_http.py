@@ -80,6 +80,7 @@ from services.economy.pricing import check_market_price
 from services import leaderboards
 from services.exploration import expeditions
 from services import guild_seasons
+from services.notifications import push
 from services.character import presets_service
 from services.character.presets_service import PresetsService
 from services.character import transmog
@@ -3632,6 +3633,45 @@ async def handle_transmog_wardrobe(request: web.Request) -> web.Response:
     return web.json_response(
         _json_safe({"ok": True, "slot": slot, "looks": looks, "cost": transmog.TRANSMOG_COST})
     )
+
+
+async def handle_push_register(request: web.Request) -> web.Response:
+    """Register this device for remote notifications."""
+    try:
+        _user, discord_id, _char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    token = str((body or {}).get("token") or "").strip()
+    platform = str((body or {}).get("platform") or "ios").strip()
+    if not token:
+        return web.json_response(_json_safe({"ok": False, "message": "Missing device token."}), status=400)
+
+    ok = await push.register_device(db, int(discord_id), token, platform)
+    # `enabled` tells the client whether pushes can actually be delivered, so it
+    # can say "notifications are not set up yet" instead of promising silence.
+    return web.json_response(
+        _json_safe({"ok": ok, "enabled": not isinstance(push.get_pusher(), push.LogPusher)}),
+        status=200 if ok else 400,
+    )
+
+
+async def handle_push_unregister(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, _char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    token = str((body or {}).get("token") or "").strip()
+    if token:
+        await push.unregister_device(db, token)
+    return web.json_response(_json_safe({"ok": True}))
 
 
 async def handle_guild_season(request: web.Request) -> web.Response:
@@ -7937,6 +7977,8 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/leaderboard", handle_leaderboard)
     app.router.add_get("/api/game/explore/focuses", handle_expedition_focuses)
     app.router.add_get("/api/game/guild/season", handle_guild_season)
+    app.router.add_post("/api/game/push/register", handle_push_register)
+    app.router.add_post("/api/game/push/unregister", handle_push_unregister)
     app.router.add_post("/api/game/transmog/apply", handle_transmog_apply)
     app.router.add_post("/api/game/transmog/clear", handle_transmog_clear)
     app.router.add_get("/api/game/transmog/wardrobe", handle_transmog_wardrobe)

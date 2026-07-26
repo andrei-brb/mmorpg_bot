@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { remindersEnabled, setRemindersEnabled } from "@mobile/platform/notifications";
+import { disablePush, enablePush, pushSupported } from "@mobile/platform/pushRegistration";
+import { useGameSession } from "@/context/GameSessionContext";
+import { toast } from "sonner";
 
 /**
  * Settings, including the way back to the classic UI.
@@ -50,6 +53,38 @@ export function SettingsSheet({
   onSignOut?: () => void;
 }) {
   const [remind, setRemind] = useState(false);
+  const { accessToken, guildId } = useGameSession();
+  // Remote push. The permission prompt is deliberately deferred to this toggle:
+  // iOS asks once, and a prompt shown before the player knows what the game is
+  // gets denied close to permanently.
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  async function togglePush() {
+    if (!accessToken || pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushOn) {
+        await disablePush(accessToken, guildId);
+        setPushOn(false);
+        return;
+      }
+      const r = await enablePush(accessToken, guildId);
+      if (r === "enabled") {
+        setPushOn(true);
+        toast.success("Alerts on.");
+      } else if (r === "denied") {
+        toast.error("iOS is blocking notifications for this app — turn them on in Settings.");
+      } else if (r === "unsupported") {
+        toast.error("Alerts only work in the installed app.");
+      } else {
+        toast.error("Could not turn alerts on. Try again in a moment.");
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
   useEffect(() => {
     void remindersEnabled().then(setRemind);
   }, []);
@@ -99,6 +134,31 @@ export function SettingsSheet({
               }
             />
           </section>
+
+          {pushSupported() ? (
+            <section>
+              <div className="e-label mb-2">Alerts</div>
+              <Row
+                title="Whispers and guild news"
+                detail="Reach you even when the app is closed. Asked for only when you turn it on."
+                right={
+                  <button
+                    type="button"
+                    disabled={pushBusy}
+                    onClick={() => void togglePush()}
+                    className="e-pill"
+                    style={{
+                      background: pushOn ? "rgba(255,122,47,0.18)" : "var(--n-700)",
+                      border: `1px solid ${pushOn ? "rgba(255,122,47,0.5)" : "var(--n-500)"}`,
+                      color: pushOn ? "var(--e-300)" : "var(--a-500)",
+                    }}
+                  >
+                    {pushBusy ? "…" : pushOn ? "On" : "Off"}
+                  </button>
+                }
+              />
+            </section>
+          ) : null}
 
           {onSignOut ? (
             <section>

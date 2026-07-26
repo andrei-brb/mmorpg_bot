@@ -1840,6 +1840,20 @@ CREATE INDEX IF NOT EXISTS idx_weekly_gold   ON weekly_scores(week_start, gold_e
 -- Sealed guild season winners. Standings themselves are DERIVED from
 -- weekly_scores (see services/guild_seasons.py) — only the finished result is
 -- persisted, because a past season must not change when someone leaves a guild.
+-- Registered push devices. Keyed by TOKEN, not by player: one player can hold
+-- several devices, and Apple invalidates a token whenever the app is
+-- reinstalled. Keying this way means a dead token is a row to delete rather
+-- than a player whose notifications silently stop.
+CREATE TABLE IF NOT EXISTS push_devices (
+    token           VARCHAR(200) PRIMARY KEY,
+    player_id       BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    platform        VARCHAR(16) NOT NULL DEFAULT 'ios',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_devices_player ON push_devices(player_id);
+
 CREATE TABLE IF NOT EXISTS guild_season_champions (
     season_key      VARCHAR(7) PRIMARY KEY,   -- YYYY-MM
     guild_id        UUID REFERENCES guilds(id) ON DELETE SET NULL,
