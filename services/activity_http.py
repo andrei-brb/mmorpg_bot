@@ -76,6 +76,8 @@ from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.combat import risk as combat_risk
 from services import camp_upgrades
+from services.character import presets_service
+from services.character.presets_service import PresetsService
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.crafting.crafting_service import CraftingService
@@ -3562,6 +3564,123 @@ async def handle_idle_claim_post(request: web.Request) -> web.Response:
                 **idle_pending_to_json(after, dict(fresh) if fresh else char_dict),
             }
         )
+    )
+
+
+async def handle_presets_list(request: web.Request) -> web.Response:
+    """Saved gear sets and talent builds."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    svc = PresetsService(db)
+    char_id = _uuid_from_any(char["id"])
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "presets": await svc.list_presets(char_id),
+                "max_per_kind": presets_service.MAX_PRESETS,
+            }
+        )
+    )
+
+
+async def handle_presets_save(request: web.Request) -> web.Response:
+    """Snapshot what is worn / allocated right now under a name."""
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    kind = str(body.get("kind") or "").strip().lower()
+    name = presets_service.clean_name(body.get("name"))
+    ok, message, preset = await PresetsService(db).save(_uuid_from_any(char["id"]), kind, name)
+    return web.json_response(
+        _json_safe({"ok": ok, "message": message, "preset": preset}), status=200 if ok else 400
+    )
+
+
+async def handle_presets_delete(request: web.Request) -> web.Response:
+    try:
+        _user, _discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    preset_id = _uuid_from_any((body or {}).get("preset_id"))
+    if not preset_id:
+        return web.json_response(_json_safe({"ok": False, "message": "Missing preset."}), status=400)
+
+    ok, message = await PresetsService(db).delete(_uuid_from_any(char["id"]), preset_id)
+    return web.json_response(_json_safe({"ok": ok, "message": message}), status=200 if ok else 404)
+
+
+async def handle_presets_apply(request: web.Request) -> web.Response:
+    """Equip a saved set, or respec into a saved build."""
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    preset_id = _uuid_from_any((body or {}).get("preset_id"))
+    if not preset_id:
+        return web.json_response(_json_safe({"ok": False, "message": "Missing preset."}), status=400)
+
+    char_dict = dict(char)
+    char_id = _uuid_from_any(char_dict["id"])
+    svc = PresetsService(db)
+
+    row = await db.fetchrow(
+        "SELECT kind FROM character_presets WHERE id=$1 AND character_id=$2", preset_id, char_id
+    )
+    if not row:
+        return web.json_response(_json_safe({"ok": False, "message": "Preset not found."}), status=404)
+
+    if row["kind"] == presets_service.KIND_GEAR:
+        ok, message, detail = await svc.apply_gear(char_id, preset_id)
+    else:
+        from services.talents.talent_service import TalentService
+
+        char_dict["id"] = char_id
+        ok, message, detail = await svc.apply_talents(
+            char_dict, preset_id, TalentService(db), CharacterService(db)
+        )
+
+    fresh = await CharacterService(db).get_character(discord_id)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": ok,
+                "message": message,
+                "detail": detail,
+                "character": dict(fresh) if fresh else None,
+            }
+        ),
+        status=200 if ok else 400,
     )
 
 
@@ -7679,6 +7798,10 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/oaths", handle_combat_oaths)
     app.router.add_post("/api/game/idle/upgrade", handle_idle_cap_upgrade)
+    app.router.add_get("/api/game/presets", handle_presets_list)
+    app.router.add_post("/api/game/presets/save", handle_presets_save)
+    app.router.add_post("/api/game/presets/apply", handle_presets_apply)
+    app.router.add_post("/api/game/presets/delete", handle_presets_delete)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)
     app.router.add_get("/api/game/dungeon/party/status", handle_dungeon_party_status)
     app.router.add_post("/api/game/dungeon/party/create", handle_dungeon_party_create)

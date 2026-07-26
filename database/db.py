@@ -1781,6 +1781,28 @@ CREATE TABLE IF NOT EXISTS character_talent_allocations (
 
 CREATE INDEX IF NOT EXISTS idx_talent_alloc_char ON character_talent_allocations(character_id);
 
+-- Saved gear sets and talent builds. One table for both because they are the
+-- same shape — a named snapshot you can restore — and keeping them together
+-- means the naming, the per-character limit and the delete cascade are written
+-- once. `kind` separates them; `payload` is the snapshot itself.
+--
+-- Gear stores INVENTORY ROW IDS, not template ids: two copies of the same sword
+-- are different items with different enhancement levels, and a loadout that
+-- restored "a steel sword" rather than "this steel sword" would silently
+-- downgrade you.
+CREATE TABLE IF NOT EXISTS character_presets (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    character_id    UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    kind            VARCHAR(16) NOT NULL,   -- gear | talents
+    name            VARCHAR(32) NOT NULL,
+    payload         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (character_id, kind, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_presets_char_kind ON character_presets(character_id, kind);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SEED DATA
 -- ─────────────────────────────────────────────────────────────────────────────
