@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
+import * as api from "@/lib/gameApi";
 import { ZONES as DATA_ZONES } from "@/data/zones";
 import { zoneMapImageUrl } from "@/data/zoneMapArt";
 import type { ExploreResultPayload } from "@/lib/apiTypes";
@@ -567,11 +568,16 @@ function ZoneMap({
 }
 
 export function ExploreTab() {
-  const { map, explore, travel, npcInteract, accessToken, startCombat, setQuickFightIntent, lastExplore } = useGameSession();
+  const { map, explore, travel, npcInteract, accessToken, guildId, startCombat, setQuickFightIntent, lastExplore } =
+    useGameSession();
   const [currentZoneId, setCurrentZoneId] = useState(EXPLORE_ZONES[0].id);
   const [travelTargetId, setTravelTargetId] = useState(EXPLORE_ZONES[0].id);
   const [isTravelling, setIsTravelling] = useState(false);
   const [exploring, setExploring] = useState(false);
+  // What you came out for. Reshapes the odds toward it and away from
+  // everything else — see services/exploration/expeditions.py.
+  const [focus, setFocus] = useState("wander");
+  const [focuses, setFocuses] = useState<api.ExpeditionFocus[]>([]);
   const [cooldownActive, setCooldownActive] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(30);
   const [cooldownKey, setCooldownKey] = useState(0);
@@ -705,6 +711,11 @@ export function ExploreTab() {
     }
   }, [latestResult, lastExplore, accessToken, setQuickFightIntent, startCombat, setTab]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    void api.getExpeditionFocuses(accessToken, guildId).then(setFocuses);
+  }, [accessToken, guildId]);
+
   const handleExplore = useCallback(async () => {
     if (cooldownActive || exploring) return;
     if (!accessToken) {
@@ -713,7 +724,7 @@ export function ExploreTab() {
     }
     setExploring(true);
     try {
-      const json = await explore();
+      const json = await explore(focus);
       if (!json.ok) {
         if (json.error === "cooldown" && json.cooldown_s != null) {
           setCooldownSeconds(Math.max(1, Math.ceil(json.cooldown_s)));
@@ -738,7 +749,7 @@ export function ExploreTab() {
     } finally {
       setExploring(false);
     }
-  }, [accessToken, cooldownActive, exploring, explore]);
+  }, [accessToken, cooldownActive, exploring, explore, focus]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-0" ref={topRef}>
@@ -794,6 +805,34 @@ export function ExploreTab() {
             </button>
           ) : null}
         </div>
+
+        {/* What you came out for. Every focus takes probability from the other
+            outcomes rather than adding any, so this is a question about what you
+            want, not a button that makes exploring better. */}
+        {focuses.length > 1 ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-1">
+            {focuses.map((f) => {
+              const on = f.id === focus;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFocus(f.id)}
+                  aria-pressed={on}
+                  title={f.description}
+                  className={cn(
+                    "rounded border px-2 py-1 font-serif text-[10px] font-bold uppercase tracking-wider transition-all",
+                    on
+                      ? "border-gold bg-gold/20 text-gold"
+                      : "border-gold/25 bg-transparent text-gold/50 hover:text-gold/80",
+                  )}
+                >
+                  <span aria-hidden>{f.emoji}</span> {f.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         <div className="flex shrink-0 items-center gap-3 bg-panel-bg border border-gold/40 rounded px-4 py-3.5 panel-inset shadow-[0_0_16px_oklch(0.74_0.13_80/0.2)]">
           {cooldownActive ? (

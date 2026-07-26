@@ -78,6 +78,7 @@ from services.combat import risk as combat_risk
 from services import camp_upgrades
 from services.economy.pricing import check_market_price
 from services import leaderboards
+from services.exploration import expeditions
 from services.character import presets_service
 from services.character.presets_service import PresetsService
 from services.character import transmog
@@ -3632,6 +3633,11 @@ async def handle_transmog_wardrobe(request: web.Request) -> web.Response:
     )
 
 
+async def handle_expedition_focuses(request: web.Request) -> web.Response:
+    """The aims a player can declare before exploring."""
+    return web.json_response(_json_safe({"ok": True, "focuses": expeditions.catalog()}))
+
+
 async def handle_leaderboard(request: web.Request) -> web.Response:
     """This week's scoreboard, plus where the viewer sits on it."""
     try:
@@ -4635,11 +4641,21 @@ async def handle_explore(request: web.Request) -> web.Response:
     world_key = await wbs.active_window_boss_for_zone(guild_id, char.get("current_zone") or "")
     if world_key:
         boss_add = min(boss_add + 0.08, 0.15)
+    # What the player came out here for. Reshapes the odds; never improves the
+    # total. See services/exploration/expeditions.py.
+    try:
+        _explore_body = await request.json()
+    except Exception:
+        _explore_body = {}
+    focus = expeditions.normalize(
+        (_explore_body or {}).get("focus") if isinstance(_explore_body, dict) else None
+    )
     outcome = roll_explore_outcome(
         zone,
         boss_add,
         zone_patrol_boss_alive=zone_patrol,
         world_boss_key=world_key,
+        focus=focus,
     )
 
     cooldown = Settings.EXPLORE_COOLDOWN if outcome["type"] in ("enemy", "boss") else 10
@@ -7896,6 +7912,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_get("/api/game/combat/oaths", handle_combat_oaths)
     app.router.add_post("/api/game/idle/upgrade", handle_idle_cap_upgrade)
     app.router.add_get("/api/game/leaderboard", handle_leaderboard)
+    app.router.add_get("/api/game/explore/focuses", handle_expedition_focuses)
     app.router.add_post("/api/game/transmog/apply", handle_transmog_apply)
     app.router.add_post("/api/game/transmog/clear", handle_transmog_clear)
     app.router.add_get("/api/game/transmog/wardrobe", handle_transmog_wardrobe)

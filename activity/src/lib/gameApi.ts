@@ -209,13 +209,39 @@ export async function postTravel(
   return res.json() as Promise<{ ok?: boolean; error?: string; message?: string }>;
 }
 
-export async function postExplore(token: string, guildId?: string): Promise<ExploreResultPayload> {
+/** `focus` declares what you came out for and reshapes the odds — it never
+ *  improves them. Omitted means "wander", the historical roll. */
+export async function postExplore(
+  token: string,
+  guildId?: string,
+  focus?: string,
+): Promise<ExploreResultPayload> {
   const res = await fetch(apiUrl("/api/game/explore"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify(focus ? { focus } : {}),
   });
   return res.json() as Promise<ExploreResultPayload>;
+}
+
+export type ExpeditionFocus = {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  shifts: { enemy: number; boss: number; loot: number };
+};
+
+export async function getExpeditionFocuses(
+  token: string,
+  guildId?: string,
+): Promise<ExpeditionFocus[]> {
+  const res = await fetch(apiUrl("/api/game/explore/focuses"), {
+    headers: authHeaders(token, guildId),
+  });
+  if (!res.ok) return [];
+  const j = (await res.json()) as { focuses?: ExpeditionFocus[] };
+  return j.focuses ?? [];
 }
 
 export async function getIdleRewards(token: string, guildId?: string): Promise<IdleRewardsPayload> {

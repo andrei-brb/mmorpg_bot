@@ -67,7 +67,8 @@ type GameSessionValue = {
   /** Create first character (Activity); same rules as `/character create` in Discord. */
   createCharacter: (name: string, classKey: string) => Promise<{ ok: boolean; message?: string }>;
   travel: (zoneKey: string) => Promise<{ ok: boolean; message?: string }>;
-  explore: () => Promise<ExploreResultPayload>;
+  /** `focus` reshapes the odds toward what you came for; it never improves them. */
+  explore: (focus?: string) => Promise<ExploreResultPayload>;
   /** After explore encounter — Combat tab consumes to auto-start. */
   pendingCombatEnemyKey: React.MutableRefObject<string | null>;
   loadCombatSnapshot: (opts?: { enemiesZoneKey?: string }) => Promise<{
@@ -319,9 +320,9 @@ export function GameSessionProvider({
     [accessToken, guildId, refreshInventory, refreshMap],
   );
 
-  const explore = useCallback(async () => {
+  const explore = useCallback(async (focus?: string) => {
     if (!accessToken) return { ok: false, error: "no token" } as ExploreResultPayload;
-    const json = await api.postExplore(accessToken, guildId);
+    const json = await api.postExplore(accessToken, guildId, focus);
     setLastExplore(json);
     pendingCombatEnemyKey.current = null;
     if (json.outcome && "key" in json.outcome && typeof json.outcome.key === "string") {

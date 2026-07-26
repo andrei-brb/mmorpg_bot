@@ -17,6 +17,7 @@ def roll_explore_outcome(
     *,
     zone_patrol_boss_alive: bool = True,
     world_boss_key: Optional[str] = None,
+    focus: str = "wander",
 ) -> Dict[str, Any]:
     """
     Roll loot / safe / enemy / boss. boss_chance_add expands the boss band (capped),
@@ -29,9 +30,17 @@ def roll_explore_outcome(
     add = min(max(float(boss_chance_add), 0.0), 0.15)
     r = random.random()
 
+    # Expedition focus reshapes the bands. The base numbers below are the
+    # historical ones and remain exactly what "wander" produces, so an
+    # unfocused explore is bit-for-bit the roll this has always been.
+    from services.exploration.expeditions import apply_to_bands
+
+    shares = apply_to_bands(focus, enemy=0.40, boss=0.15 + add, loot=0.20 + add)
+
     boss_band_active = bool(zone_patrol_boss_alive) or bool(world_boss_key)
-    boss_lo = 0.40
-    boss_hi = 0.55 + add
+    boss_lo = shares["enemy"]
+    boss_hi = boss_lo + shares["boss"]
+    loot_hi = boss_hi + shares["loot"]
 
     if boss_band_active:
         if r < boss_lo:
@@ -55,7 +64,7 @@ def roll_explore_outcome(
                 "name": e.name if e else key.replace("_", " ").title(),
                 "emoji": e.emoji if e else "💀",
             }
-        if r < 0.75 + add:
+        if r < loot_hi:
             return {"type": "loot"}
         return {"type": "safe"}
 
@@ -69,6 +78,6 @@ def roll_explore_outcome(
             "name": e.name if e else key.replace("_", " ").title(),
             "emoji": e.emoji if e else "👾",
         }
-    if r < 0.75 + add:
+    if r < loot_hi:
         return {"type": "loot"}
     return {"type": "safe"}
