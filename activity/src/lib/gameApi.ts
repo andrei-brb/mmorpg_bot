@@ -284,6 +284,20 @@ export type CombatOath = {
   reward_bonus_pct: number;
 };
 
+/** Buy the next idle-cap rank. Gold path — the server re-reads the rank under
+ *  a row lock, so a double-tap cannot buy two ranks for one price. */
+export async function postIdleCapUpgrade(
+  token: string,
+  guildId?: string,
+): Promise<{ ok?: boolean; message?: string; error?: string }> {
+  const res = await fetch(apiUrl("/api/game/idle/upgrade"), {
+    method: "POST",
+    headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
+    body: JSON.stringify({ guild_id: guildId ? String(guildId) : undefined }),
+  });
+  return (await res.json()) as { ok?: boolean; message?: string; error?: string };
+}
+
 export async function getCombatOaths(token: string, guildId?: string): Promise<CombatOath[]> {
   const res = await fetch(apiUrl("/api/game/combat/oaths"), { headers: authHeaders(token, guildId) });
   if (!res.ok) return [];

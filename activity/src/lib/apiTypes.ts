@@ -515,7 +515,16 @@ export type IdleRewardsPayload = {
   effective_hours?: number;
   pending_xp?: number;
   pending_gold?: number;
+  /** The player's own cap, base plus purchased ranks — not the global constant. */
   max_hours?: number;
+  /** The purchasable extension ladder. `next` is null at the top rank. */
+  cap_upgrade?: {
+    rank: number;
+    max_rank: number;
+    cap_hours: number;
+    base_cap_hours: number;
+    next: { rank: number; cost: number; extra_hours: number; cap_hours_after: number } | null;
+  } | null;
   gold_gained?: number;
   xp_result?: Record<string, unknown>;
   character?: Record<string, unknown>;

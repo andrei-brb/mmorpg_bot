@@ -40,6 +40,22 @@ export type TabDef = {
   hint: string;
   /** True for tabs that keep classic layout and only wear the Ember palette. */
   skinnedOnly?: boolean;
+  /**
+   * Level at which this tab appears. Absent means level 1.
+   *
+   * A new character used to land on eleven tabs at once, most of which lead
+   * somewhere they cannot act: an empty guild, a market they cannot afford, an
+   * arena that will kill them. Showing everything up front reads as "here is
+   * how much you do not have" — and it wastes the only lever the game has for
+   * making a level-up feel like something, which is giving you something new.
+   *
+   * Levels are set to the point where the tab has something real behind it,
+   * not spaced arbitrarily. Nothing that blocks the core loop is ever gated —
+   * Camp, Explore, Combat, Quests and Hero are all available from the start.
+   */
+  unlockLevel?: number;
+  /** One line shown while locked. Says what is behind it, not just the level. */
+  lockedHint?: string;
 };
 
 /** The bottom bar. */
@@ -84,6 +100,8 @@ export const MORE_GROUPS: { label: string; tabs: TabDef[] }[] = [
       },
       {
         id: "forge",
+        unlockLevel: 5,
+        lockedHint: "Crafting is worth opening once you have materials and gold to spend.",
         label: "Forge",
         hint: "Craft and repair",
         skinnedOnly: true,
@@ -96,18 +114,24 @@ export const MORE_GROUPS: { label: string; tabs: TabDef[] }[] = [
     tabs: [
       {
         id: "guild",
+        unlockLevel: 10,
+        lockedHint: "Guilds expect members who can hold their own in a fight.",
         label: "Guild",
         hint: "Hall, quests, treasury",
         icon: "M3 21V9l9-6 9 6v12M9 21v-6h6v6M3 21h18",
       },
       {
         id: "market",
+        unlockLevel: 8,
+        lockedHint: "Trading needs gold and gear you can spare — both come with a few levels.",
         label: "Market",
         hint: "Buy and sell",
         icon: "M4 8h16l-1 12H5L4 8Zm4 0V6a4 4 0 0 1 8 0v2",
       },
       {
         id: "arena",
+        unlockLevel: 15,
+        lockedHint: "Arena puts you against other players' geared characters.",
         label: "Arena",
         hint: "PvP matches",
         icon: "M14.5 3.5 20 9m0-5.5L14.5 9M6 21l6-6m-6 0 3 3m-6-9 9 9M4 4l7 7",
@@ -119,6 +143,8 @@ export const MORE_GROUPS: { label: string; tabs: TabDef[] }[] = [
     tabs: [
       {
         id: "pass",
+        unlockLevel: 5,
+        lockedHint: "The season track needs a few levels of progress to show you anything.",
         label: "Battle Pass",
         hint: "Season rewards",
         icon: "M4 6h16v5a3 3 0 0 0 0 6v1H4v-1a3 3 0 0 0 0-6V6Zm6 0v12",

@@ -69,6 +69,10 @@ export function EmberShell({
 }) {
   const { inventory, combatFocusActive, arenaFocusActive, lostDeliveries, refreshMap } =
     useGameSession();
+  // Defaults high, not low: if the level has not loaded yet, briefly showing a
+  // tab that is really locked is a far smaller error than briefly locking a tab
+  // a level-60 player uses every day.
+  const charLevel = inventory?.character?.level ?? 999;
   const [tab, setTab] = useState<EmberTab>("camp");
   const [moreOpen, setMoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -244,19 +248,34 @@ export function EmberShell({
                   <div className="grid grid-cols-3 gap-2">
                     {group.tabs.map((t) => {
                       const active = tab === t.id;
+                      // Locked tabs stay visible rather than disappearing: the
+                      // point is to show what is coming, not to hide the game.
+                      const locked = Boolean(t.unlockLevel && charLevel < t.unlockLevel);
                       return (
                         <button
                           key={t.id}
                           type="button"
-                          onClick={() => go(t.id)}
+                          onClick={() => (locked ? undefined : go(t.id))}
                           aria-current={active ? "page" : undefined}
-                          className="flex flex-col items-center gap-1.5 rounded-xl px-2 py-3"
+                          aria-disabled={locked}
+                          title={locked ? `${t.lockedHint ?? ""} Unlocks at level ${t.unlockLevel}.`.trim() : t.hint}
+                          className="relative flex flex-col items-center gap-1.5 rounded-xl px-2 py-3"
                           style={{
                             border: `1px solid ${active ? "var(--e-500)" : "var(--n-500)"}`,
                             background: active ? "rgba(255,122,47,0.1)" : "rgba(0,0,0,0.28)",
                             color: active ? "var(--e-400)" : "var(--a-300)",
+                            opacity: locked ? 0.42 : 1,
+                            cursor: locked ? "not-allowed" : undefined,
                           }}
                         >
+                          {locked ? (
+                            <span
+                              className="e-num absolute right-1 top-1 rounded px-1 text-[9px] font-bold"
+                              style={{ background: "rgba(0,0,0,0.6)", color: "var(--a-500)" }}
+                            >
+                              Lv{t.unlockLevel}
+                            </span>
+                          ) : null}
                           <svg
                             width="20"
                             height="20"

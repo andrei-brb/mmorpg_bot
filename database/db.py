@@ -254,6 +254,14 @@ class Database:
                 ADD COLUMN IF NOT EXISTS idle_last_claim_at TIMESTAMPTZ DEFAULT NOW();
             """)
 
+            # Purchased extensions to the idle cap. 0 = the base 24 hours every
+            # character starts with, so existing rows need no backfill.
+            # See services/camp_upgrades.py.
+            await c.execute("""
+                ALTER TABLE characters
+                ADD COLUMN IF NOT EXISTS idle_cap_rank SMALLINT NOT NULL DEFAULT 0;
+            """)
+
             await c.execute("""
                 ALTER TABLE characters
                 ADD COLUMN IF NOT EXISTS crafting_level SMALLINT DEFAULT 1;

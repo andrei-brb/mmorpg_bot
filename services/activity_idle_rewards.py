@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from config.settings import Settings
+from services.camp_upgrades import idle_cap_hours, idle_cap_payload
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,9 @@ def compute_idle_pending(char: Dict[str, Any]) -> IdlePending:
     last = _as_utc_dt(char.get("idle_last_claim_at"))
     now = _utc_now()
     elapsed = max(0.0, (now - last).total_seconds())
-    max_s = max(0.0, float(Settings.IDLE_REWARDS_MAX_HOURS)) * 3600.0
+    # The cap used to be a constant for every character alive. It is now the
+    # base plus whatever the player has bought — see services/camp_upgrades.py.
+    max_s = max(0.0, idle_cap_hours(char.get("idle_cap_rank"))) * 3600.0
     capped_s = min(float(elapsed), max_s) if max_s > 0 else 0.0
     effective_hours = capped_s / 3600.0
     xp_rate = float(Settings.IDLE_XP_PER_HOUR_BASE) + float(Settings.IDLE_XP_PER_HOUR_PER_LEVEL) * float(level)
@@ -63,11 +66,15 @@ def compute_idle_pending(char: Dict[str, Any]) -> IdlePending:
     )
 
 
-def idle_pending_to_json(p: IdlePending) -> Dict[str, Any]:
+def idle_pending_to_json(p: IdlePending, char: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    rank = (char or {}).get("idle_cap_rank")
     return {
         "elapsed_seconds": round(p.elapsed_seconds, 3),
         "effective_hours": round(p.effective_hours, 4),
         "pending_xp": p.pending_xp,
         "pending_gold": p.pending_gold,
-        "max_hours": float(Settings.IDLE_REWARDS_MAX_HOURS),
+        # The player's own cap, not the global constant — otherwise a purchased
+        # upgrade would accrue correctly and still be reported as 24 hours.
+        "max_hours": idle_cap_hours(rank),
+        "cap_upgrade": idle_cap_payload(rank),
     }

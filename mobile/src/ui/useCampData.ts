@@ -26,6 +26,7 @@ export type CampSnapshot = {
   refresh: () => Promise<void>;
   claimIdle: () => Promise<{ ok: boolean; gold?: number; message?: string }>;
   claimDailyLogin: () => Promise<{ ok: boolean; message?: string }>;
+  upgradeIdleCap: () => Promise<{ ok: boolean; message?: string }>;
 };
 
 export function useCampData(): CampSnapshot {
@@ -74,6 +75,21 @@ export function useCampData(): CampSnapshot {
     }
   }, [accessToken, guildId, refresh, refreshInventory, refreshProgress]);
 
+  const upgradeIdleCap = useCallback(async () => {
+    if (!accessToken) return { ok: false, message: "Not signed in." };
+    try {
+      const j = await api.postIdleCapUpgrade(accessToken, guildId);
+      const ok = j?.ok !== false;
+      if (ok) {
+        await Promise.all([refreshInventory(), refreshProgress()]);
+        await refresh();
+      }
+      return { ok, message: j?.message };
+    } catch (e) {
+      return { ok: false, message: String(e) };
+    }
+  }, [accessToken, guildId, refresh, refreshInventory, refreshProgress]);
+
   const claimDailyLogin = useCallback(async () => {
     if (!accessToken) return { ok: false, message: "Not signed in." };
     try {
@@ -89,5 +105,5 @@ export function useCampData(): CampSnapshot {
     }
   }, [accessToken, guildId, refresh, refreshInventory, refreshProgress]);
 
-  return { idle, daily, repair, prestige, pass, loading, refresh, claimIdle, claimDailyLogin };
+  return { idle, daily, repair, prestige, pass, loading, refresh, claimIdle, claimDailyLogin, upgradeIdleCap };
 }

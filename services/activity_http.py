@@ -75,6 +75,7 @@ from services.market_auction import (
 from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.combat import risk as combat_risk
+from services import camp_upgrades
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.crafting.crafting_service import CraftingService
@@ -3488,7 +3489,7 @@ async def handle_idle_rewards_get(request: web.Request) -> web.Response:
     from services.activity_idle_rewards import compute_idle_pending, idle_pending_to_json
 
     pending = compute_idle_pending(dict(char))
-    return web.json_response(_json_safe({"ok": True, **idle_pending_to_json(pending)}))
+    return web.json_response(_json_safe({"ok": True, **idle_pending_to_json(pending, dict(char))}))
 
 
 async def handle_idle_claim_post(request: web.Request) -> web.Response:
@@ -3523,7 +3524,7 @@ async def handle_idle_claim_post(request: web.Request) -> web.Response:
                     "ok": True,
                     "claimed": False,
                     "message": "Nothing to claim yet.",
-                    **idle_pending_to_json(pending),
+                    **idle_pending_to_json(pending, char_dict),
                 }
             )
         )
@@ -3558,7 +3559,71 @@ async def handle_idle_claim_post(request: web.Request) -> web.Response:
                 "xp_result": xp_result,
                 "gold_gained": gold_gained,
                 "character": dict(fresh) if fresh else None,
-                **idle_pending_to_json(after),
+                **idle_pending_to_json(after, dict(fresh) if fresh else char_dict),
+            }
+        )
+    )
+
+
+async def handle_idle_cap_upgrade(request: web.Request) -> web.Response:
+    """Buy the next idle-cap rank.
+
+    Gold path, so it follows the project convention: one transaction, the row
+    locked FOR UPDATE, and the rank re-read inside the lock. Without the lock
+    two concurrent requests could each read rank 1, each pay once, and both
+    write rank 2 — a rank bought for half price.
+    """
+    try:
+        _user, discord_id, char, db = await _authed_discord_user_and_char(request)
+    except web.HTTPException:
+        raise
+    if not char:
+        return web.json_response(_json_safe({"ok": False, "error": "no_character"}), status=400)
+
+    char_svc = CharacterService(db)
+    char_id = _uuid_from_any(char["id"])
+
+    async with db.transaction() as tx:
+        row = await tx.fetchrow(
+            "SELECT idle_cap_rank FROM characters WHERE id=$1 FOR UPDATE", char_id
+        )
+        current = int((row or {}).get("idle_cap_rank") or 0)
+        nxt = camp_upgrades.next_idle_cap_rank(current)
+        if not nxt:
+            return web.json_response(
+                _json_safe({"ok": False, "error": "max_rank", "message": "Your camp is already fully expanded."}),
+                status=400,
+            )
+
+        paid = await CharacterService(tx).deduct_gold(char_id, int(nxt["cost"]), "idle cap upgrade")
+        if not paid:
+            return web.json_response(
+                _json_safe(
+                    {
+                        "ok": False,
+                        "error": "insufficient_gold",
+                        "message": f"You need {int(nxt['cost']):,} gold.",
+                    }
+                ),
+                status=400,
+            )
+
+        await tx.execute(
+            "UPDATE characters SET idle_cap_rank=$2 WHERE id=$1", char_id, int(nxt["rank"])
+        )
+
+    fresh = await char_svc.get_character(discord_id)
+    new_rank = int((fresh or {}).get("idle_cap_rank") or 0)
+    return web.json_response(
+        _json_safe(
+            {
+                "ok": True,
+                "message": (
+                    f"Camp expanded — you now bank up to "
+                    f"{int(camp_upgrades.idle_cap_hours(new_rank))} hours while away."
+                ),
+                "cap_upgrade": camp_upgrades.idle_cap_payload(new_rank),
+                "character": dict(fresh) if fresh else None,
             }
         )
     )
@@ -7613,6 +7678,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/guild/raid/complete", handle_guild_raid_complete)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
     app.router.add_get("/api/game/combat/oaths", handle_combat_oaths)
+    app.router.add_post("/api/game/idle/upgrade", handle_idle_cap_upgrade)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)
     app.router.add_get("/api/game/dungeon/party/status", handle_dungeon_party_status)
     app.router.add_post("/api/game/dungeon/party/create", handle_dungeon_party_create)

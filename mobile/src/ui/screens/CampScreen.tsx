@@ -75,12 +75,25 @@ export function CampScreen({
 
   const daily = camp.daily;
 
+  const capUpgrade = camp.idle?.cap_upgrade ?? null;
+  const nextCap = capUpgrade?.next ?? null;
+  const canAffordCap = nextCap ? gold >= nextCap.cost : false;
+
   async function collectIdle() {
     setBusy("idle");
     const r = await camp.claimIdle();
     setBusy(null);
     if (r.ok) toast.success(`Collected ${Number(r.gold ?? 0).toLocaleString()} gold.`);
     else toast.error(r.message || "Nothing to collect.");
+  }
+
+  async function buyCapUpgrade() {
+    if (!nextCap) return;
+    setBusy("cap");
+    const r = await camp.upgradeIdleCap();
+    setBusy(null);
+    if (r.ok) toast.success(r.message || "Camp expanded.");
+    else toast.error(r.message || "Could not expand your camp.");
   }
 
   async function collectLogin() {
@@ -200,6 +213,33 @@ export function CampScreen({
               >
                 {busy === "idle" ? "Collecting…" : "Collect"}
               </button>
+
+              {/* Offered here, and only when you are actually at the cap. This
+                  is the one moment the limit is costing you something real —
+                  advertising it the rest of the time would be a shop, not an
+                  answer to a problem you are having. */}
+              {atCap && nextCap ? (
+                <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--n-500)" }}>
+                  <p className="mb-2 text-[11.5px] leading-relaxed" style={{ color: "var(--a-300)" }}>
+                    Expand your camp to bank{" "}
+                    <strong style={{ color: "var(--a-100)" }}>{nextCap.cap_hours_after}h</strong> instead of{" "}
+                    {maxHours}h — permanently.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy === "cap" || !canAffordCap}
+                    onClick={() => void buyCapUpgrade()}
+                    className="e-btn e-btn--ghost w-full"
+                    style={{ opacity: canAffordCap ? 1 : 0.55 }}
+                  >
+                    {busy === "cap"
+                      ? "Expanding…"
+                      : canAffordCap
+                        ? `Expand · ${nextCap.cost.toLocaleString()}g`
+                        : `Need ${(nextCap.cost - gold).toLocaleString()}g more`}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
