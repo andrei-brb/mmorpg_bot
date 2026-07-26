@@ -245,6 +245,9 @@ export function buildBattlePreviewDataFromCombat(args: {
       level: enemyLevel,
       class: enemyClassDisplay || (enemyKind === "boss" ? "Warlord" : undefined),
       isBoss: enemyKind === "boss",
+      // Oaths ride in the indicator row, which already exists for exactly this
+      // kind of at-a-glance flag. It previously held three literal "???".
+      indicators: (state.risk?.oaths ?? []).map((o) => `${o.emoji} ${o.name.replace(/\s*Oath$/, "")}`),
       // The boss's phase, not a fixed epithet. "The Unyielding" was the same
       // words on every boss in the game; "Cornered" tells you it just got worse.
       title: state.boss_phase_label ?? (enemyKind === "boss" ? "The Unyielding" : undefined),

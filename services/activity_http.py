@@ -74,6 +74,7 @@ from services.market_auction import (
 )
 from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
+from services.combat import risk as combat_risk
 from services.achievement.achievement_service import AchievementService
 from services.blacksmith.blacksmith_service import BlacksmithService
 from services.crafting.crafting_service import CraftingService
@@ -1870,6 +1871,16 @@ def _uuid_from_any(val: Any) -> UUID:
     return UUID(str(val))
 
 
+async def handle_combat_oaths(request: web.Request) -> web.Response:
+    """The oaths a player may swear before a fight.
+
+    Served rather than hardcoded in the client so the list, the wording and the
+    reward each oath pays can only ever come from one place — the same file the
+    combat code reads them from.
+    """
+    return web.json_response(_json_safe({"oaths": combat_risk.catalog()}))
+
+
 async def handle_combat_enemies(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -2701,6 +2712,9 @@ async def handle_combat_start(request: web.Request) -> web.Response:
     enemy_key = (body.get("enemy_key") or body.get("enemy") or "").strip() or None
 
     force = bool(body.get("force"))
+    # Opt-in handicaps chosen before the fight. Unknown ids are dropped rather
+    # than rejected, so an older client cannot be locked out by a rename.
+    oaths = combat_risk.normalize(body.get("oaths"))
     guild_id = _guild_id_from_request(request, body)
 
     char_svc = CharacterService(db)
@@ -2714,11 +2728,12 @@ async def handle_combat_start(request: web.Request) -> web.Response:
         except (TypeError, ValueError):
             raise web.HTTPBadRequest(text=json.dumps({"error": "invalid_floor"}), content_type="application/json")
         result = await activity_combat_api.start_activity_combat(
-            bot, discord_id, guild_id, force=force, dungeon_key=dungeon_key, dungeon_floor=dungeon_floor
+            bot, discord_id, guild_id, force=force, dungeon_key=dungeon_key,
+            dungeon_floor=dungeon_floor, oaths=oaths,
         )
     elif enemy_key:
         result = await activity_combat_api.start_activity_combat(
-            bot, discord_id, guild_id, force=force, enemy_key=enemy_key
+            bot, discord_id, guild_id, force=force, enemy_key=enemy_key, oaths=oaths
         )
     else:
         raise web.HTTPBadRequest(text=json.dumps({"error": "missing_enemy_key"}), content_type="application/json")
@@ -7597,6 +7612,7 @@ async def start_activity_http(bot) -> Optional["web.AppRunner"]:
     app.router.add_post("/api/game/guild/raid/cancel", handle_guild_raid_cancel)
     app.router.add_post("/api/game/guild/raid/complete", handle_guild_raid_complete)
     app.router.add_get("/api/game/combat/enemies", handle_combat_enemies)
+    app.router.add_get("/api/game/combat/oaths", handle_combat_oaths)
     app.router.add_get("/api/game/dungeons", handle_game_dungeons)
     app.router.add_get("/api/game/dungeon/party/status", handle_dungeon_party_status)
     app.router.add_post("/api/game/dungeon/party/create", handle_dungeon_party_create)

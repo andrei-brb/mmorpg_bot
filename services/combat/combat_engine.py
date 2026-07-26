@@ -513,6 +513,11 @@ class CombatSession:
     apply_lore_gates: bool = True
     lore_gate_by_char: Dict[str, bool] = field(default_factory=dict)
     lore_gate_hint: Optional[str] = None
+    #: Multiplier on damage dealt TO players. 1.0 normally; raised by the
+    #: Brittle Oath (see services/combat/risk.py). Lives on the session rather
+    #: than the combatant so it cannot leak into PvP, where both sides are
+    #: players and "damage to a player" is every hit in the fight.
+    player_damage_taken_mult: float = 1.0
 
     @property
     def alive_players(self): return [p for p in self.players if not p.is_dead]
@@ -706,6 +711,14 @@ class CombatEngine:
                 vu = target.get_status(StatusEffect.VULNERABILITY)
                 if vu:
                     raw = int(raw * (1 + vu.value / 100))
+
+                # Brittle Oath. Applied only when a non-player is hitting a
+                # player, so it cannot touch PvP (where every hit lands on a
+                # player) or a player's own damage output.
+                if session is not None and target.is_player and not attacker.is_player:
+                    dm = float(getattr(session, "player_damage_taken_mult", 1.0) or 1.0)
+                    if dm != 1.0:
+                        raw = int(raw * dm)
 
                 # Hit rating check (accuracy) — before shield consumption so misses don't waste shields
                 hit_chance = 95.0 + getattr(attacker, 'hit_rating', 0) * 0.1

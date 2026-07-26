@@ -32,6 +32,7 @@ from services.combat.consumables import (
     usable_combat_items,
 )
 from services.combat.elements import ability_element, effectiveness, enemy_element, enemy_element_payload
+from services.combat import risk
 from services.lore.lore_gate_service import LoreGateService
 from services.combat.combat_engine import (
     ABILITIES,
@@ -89,6 +90,8 @@ class ActivityCombatState:
     #: starts or when an item is spent, and both refresh it — loot arrives only
     #: after the fight is over.
     combat_items: List[Dict[str, Any]] = field(default_factory=list)
+    #: Oaths accepted before the fight. See services/combat/risk.py.
+    oaths: List[str] = field(default_factory=list)
     dungeon_key: Optional[str] = None
     dungeon_floor: Optional[int] = None
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -523,7 +526,12 @@ def serialize_activity_state(
         "turn": session.turn,
         "player": player_payload,
         "enemy": _serialize_combatant(enemy),
-        "enemy_intent": intent_payload(enemy) if not session.over else None,
+        # A Blind Oath means the telegraph is exactly what you gave up.
+        "enemy_intent": (
+            None if (session.over or risk.hides_intent(ac.oaths))
+            else intent_payload(enemy)
+        ),
+        "risk": risk.summary(ac.oaths),
         # Phase has always been computed and used to weight the boss AI, and
         # never sent — so the fight got harder at 50% and 25% health with no
         # signal that anything had changed.
@@ -622,6 +630,7 @@ async def start_activity_combat(
     dungeon_key: Optional[str] = None,
     dungeon_floor: Optional[int] = None,
     guild_raid_run_id: Optional[UUID] = None,
+    oaths: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Begin iframe combat or return existing session.
 
@@ -818,8 +827,15 @@ async def start_activity_combat(
         hp_start=player_c.current_hp,
         guild_raid_run_id=guild_raid_run_id,
     )
+    ac.oaths = risk.normalize(oaths)
+    session.player_damage_taken_mult = risk.damage_taken_multiplier(ac.oaths)
     ACTIVE_ACTIVITY[discord_id] = ac
-    ac.combat_items = await usable_combat_items(db, char["id"])
+    # An oath that forbids items should not show you a bag you cannot open.
+    ac.combat_items = [] if risk.forbids_items(ac.oaths) else await usable_combat_items(db, char["id"])
+    if risk.starts_enraged(ac.oaths) and session.is_boss:
+        # Skip straight to the final phase, so the boss opens at its highest
+        # signature rate instead of easing into it.
+        session.boss_phase = 3
 
     # Telegraph the opening move before the player has taken a turn — otherwise
     # the first round is the one round they cannot read.
@@ -1026,6 +1042,9 @@ async def _use_combat_item(
     costing the item. Getting this backwards is how players lose things to a
     misclick.
     """
+    if risk.forbids_items(ac.oaths):
+        log_lines.append("❌ You swore a Bare Oath — no consumables this fight.")
+        return False
     if ac.items_used >= MAX_ITEMS_PER_FIGHT:
         log_lines.append(f"❌ You have already used {MAX_ITEMS_PER_FIGHT} items this fight.")
         return False
@@ -1980,8 +1999,12 @@ async def _finish_victory(
     xp_mult, gold_mult, _boss_add = await get_combined_reward_multipliers(db, guild_id, ingame_guild_id=ig)
 
     rewards = engine.calculate_rewards(session)
-    xp_result = await char_svc.award_xp(char["id"], rewards["xp"], xp_mult)
-    gold_earned = int(rewards["gold"] * gold_mult)
+    # Oaths pay in XP and gold only — never in loot. A handicap that improved
+    # drop rarity would make oaths mandatory for anyone chasing an item, and
+    # optional is the entire point. See services/combat/risk.py.
+    oath_mult = risk.reward_multiplier(ac.oaths)
+    xp_result = await char_svc.award_xp(char["id"], int(rewards["xp"] * oath_mult), xp_mult)
+    gold_earned = int(rewards["gold"] * gold_mult * oath_mult)
     await char_svc.add_gold(char["id"], gold_earned, "combat drop")
     await char_svc.sync_combat_hp(char["id"], player.current_hp, player.current_res)
 

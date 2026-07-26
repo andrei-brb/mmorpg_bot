@@ -301,6 +301,12 @@ export type CombatStatePayload = {
   };
   /** What the enemy is winding up. Null once the fight is over. */
   enemy_intent?: EnemyIntent | null;
+  /** Handicaps accepted before the fight, and what they pay. */
+  risk?: {
+    oaths: { id: string; name: string; emoji: string }[];
+    reward_mult: number;
+    reward_bonus_pct: number;
+  } | null;
   /** Consumables usable in this fight. Not the whole bag — the server filters
    *  to things that actually do something mid-combat. */
   items?: CombatItem[];

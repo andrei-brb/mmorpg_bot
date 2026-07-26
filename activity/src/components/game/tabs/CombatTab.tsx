@@ -361,6 +361,10 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
   const [enemies, setEnemies] = useState<CombatEnemy[]>([]);
   const [state, setState] = useState<CombatStatePayload | null>(null);
   const [enemyPick, setEnemyPick] = useState("");
+  // Optional handicaps for a bigger payout. The catalogue is fetched rather
+  // than hardcoded so the wording and the bonus can only come from the server.
+  const [oathCatalog, setOathCatalog] = useState<api.CombatOath[]>([]);
+  const [pickedOaths, setPickedOaths] = useState<string[]>([]);
   const [outcome, setOutcome] = useState<RichOutcome | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -540,11 +544,26 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
     return () => setCombatFocusActive(false);
   }, [setCombatFocusActive]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    void api.getCombatOaths(accessToken, guildId).then(setOathCatalog);
+  }, [accessToken, guildId]);
+
+  const oathBonusPct = useMemo(() => {
+    // Multiplicative, matching the server — quoting a sum here would promise a
+    // number the fight does not pay.
+    const mult = pickedOaths.reduce((acc, id) => {
+      const o = oathCatalog.find((c) => c.id === id);
+      return o ? acc * (1 + o.reward_bonus_pct / 100) : acc;
+    }, 1);
+    return Math.round((mult - 1) * 100);
+  }, [pickedOaths, oathCatalog]);
+
   const onStart = async () => {
     if (!enemyPick) return;
     setLoading(true);
     try {
-      const r = await startCombat({ kind: "zone", enemyKey: enemyPick });
+      const r = await startCombat({ kind: "zone", enemyKey: enemyPick, oaths: pickedOaths });
       if (r.state) {
         const picked = enemies.find((e) => e.key === enemyPick);
         setActiveEnemy({ key: enemyPick, kind: picked?.kind === "boss" ? "boss" : "enemy" });
@@ -1099,6 +1118,50 @@ export function CombatTab({ focusMode }: { focusMode?: boolean }) {
                     Rest
                   </button>
                 </div>
+
+                {/* Oaths — accept a handicap for a bigger payout. Placed with
+                    the start button because it must be decided before the
+                    fight, not during it. */}
+                {oathCatalog.length > 0 ? (
+                  <div className="flex shrink-0 flex-col gap-1.5 lg:w-[190px] lg:border-r lg:border-white/10 lg:pr-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
+                        Oaths
+                      </span>
+                      {oathBonusPct > 0 ? (
+                        <span className="text-[10px] font-bold tabular-nums text-emerald-300">
+                          +{oathBonusPct}% XP &amp; gold
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {oathCatalog.map((o) => {
+                        const on = pickedOaths.includes(o.id);
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            title={`${o.description} (+${o.reward_bonus_pct}%)`}
+                            aria-pressed={on}
+                            onClick={() =>
+                              setPickedOaths((prev) =>
+                                prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id],
+                              )
+                            }
+                            className="rounded-sm px-1.5 py-1 text-[10px] font-semibold transition-colors"
+                            style={{
+                              background: on ? "rgba(120,30,30,0.55)" : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${on ? "rgba(190,60,60,0.8)" : "rgba(255,255,255,0.12)"}`,
+                              color: on ? "#ffc4bd" : "hsl(var(--muted-foreground))",
+                            }}
+                          >
+                            <span aria-hidden>{o.emoji}</span> {o.name.replace(/\s*Oath$/, "")}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex min-h-0 flex-1 flex-col">
               <div className="text-[10px] font-cinzel font-semibold uppercase tracking-wider text-muted-foreground">
                 Preview

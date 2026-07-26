@@ -250,9 +250,11 @@ export async function getCombatEnemies(token: string, guildId?: string, zoneKey?
 }
 
 /** Overworld: pick an enemy from the current zone. Dungeon tab: server resolves enemy from `config.settings.DUNGEONS`. */
+/** Optional handicaps accepted before the fight, for a bigger XP/gold payout.
+ *  Ids come from GET /api/game/combat/oaths — never hardcode them here. */
 export type StartCombatParams =
-  | { kind: "zone"; enemyKey: string }
-  | { kind: "dungeon"; dungeonKey: string; floor: number };
+  | { kind: "zone"; enemyKey: string; oaths?: string[] }
+  | { kind: "dungeon"; dungeonKey: string; floor: number; oaths?: string[] };
 
 export async function postCombatStart(
   token: string,
@@ -266,8 +268,27 @@ export async function postCombatStart(
   return fetch(apiUrl("/api/game/combat/start"), {
     method: "POST",
     headers: { ...authHeaders(token, guildId), "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, guild_id: guildId ? String(guildId) : undefined }),
+    body: JSON.stringify({
+      ...body,
+      oaths: params.oaths?.length ? params.oaths : undefined,
+      guild_id: guildId ? String(guildId) : undefined,
+    }),
   });
+}
+
+export type CombatOath = {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  reward_bonus_pct: number;
+};
+
+export async function getCombatOaths(token: string, guildId?: string): Promise<CombatOath[]> {
+  const res = await fetch(apiUrl("/api/game/combat/oaths"), { headers: authHeaders(token, guildId) });
+  if (!res.ok) return [];
+  const json = (await res.json()) as { oaths?: CombatOath[] };
+  return json.oaths ?? [];
 }
 
 export async function getDungeons(
