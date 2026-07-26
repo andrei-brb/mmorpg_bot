@@ -159,6 +159,52 @@ export function PowerSheet({
           </p>
         </div>
 
+        {/* Mastery is tracked server-side and was returned by this very endpoint
+            without ever being rendered — a progression axis the game paid to
+            maintain and no player could see. */}
+        {derived?.class_mastery || (derived?.top_ability_mastery?.length ?? 0) > 0 ? (
+          <div className="e-card mt-2 p-4">
+            <div className="e-label mb-2">Mastery</div>
+            {derived?.class_mastery ? (
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-[13px] capitalize" style={{ color: "var(--a-100)" }}>
+                  {String(derived.class_mastery.class_key || "Class").replace(/_/g, " ")}
+                </span>
+                <span className="e-num text-[12px]" style={{ color: "var(--e-400)" }}>
+                  Level {Number(derived.class_mastery.level ?? 1)}
+                  <span style={{ color: "var(--a-700)" }}>
+                    {" · "}
+                    {Number(derived.class_mastery.xp ?? 0).toLocaleString()} xp
+                  </span>
+                </span>
+              </div>
+            ) : null}
+
+            {(derived?.top_ability_mastery ?? []).length > 0 ? (
+              <>
+                <p className="mb-1.5 text-[11px]" style={{ color: "var(--a-700)" }}>
+                  Your most-practised abilities
+                </p>
+                <ul className="space-y-1">
+                  {(derived?.top_ability_mastery ?? []).slice(0, 5).map((a, i) => (
+                    <li
+                      key={a.ability_key ?? i}
+                      className="flex items-baseline justify-between text-[12px]"
+                    >
+                      <span className="min-w-0 flex-1 truncate capitalize" style={{ color: "var(--a-300)" }}>
+                        {String(a.ability_key || "Ability").replace(/_/g, " ")}
+                      </span>
+                      <span className="e-num shrink-0" style={{ color: "var(--a-500)" }}>
+                        Lv {Number(a.level ?? 1)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         <button type="button" onClick={onClose} className="e-btn e-btn--quiet mt-4 w-full">
           Close
         </button>

@@ -466,6 +466,20 @@ function ZoneMap({
               </div>
             ) : null}
             {currentZone.regionHint && <p className="text-[10px] text-muted-foreground/70 italic max-w-[220px] leading-relaxed mt-1">{currentZone.regionHint}</p>}
+            {/* The API has always sent a per-zone player count and this component
+                has always merged it into playersNearby — it was simply never
+                rendered. In a multiplayer game where you otherwise never feel
+                another person, that was a presence signal sitting in a discarded
+                variable. Hidden at zero rather than showing "0 others", which
+                reads worse than saying nothing. */}
+            {currentZone.playersNearby > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-connected" />
+                {currentZone.playersNearby === 1
+                  ? "1 other adventurer here"
+                  : `${currentZone.playersNearby} other adventurers here`}
+              </p>
+            )}
           </div>
         )}
 
