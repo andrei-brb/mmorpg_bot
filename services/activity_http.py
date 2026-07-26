@@ -76,6 +76,7 @@ from services.combat import activity_combat as activity_combat_api
 from services.combat import activity_pvp as activity_pvp_api
 from services.combat import risk as combat_risk
 from services import camp_upgrades
+from services.economy.pricing import check_market_price
 from services import leaderboards
 from services.character import presets_service
 from services.character.presets_service import PresetsService
@@ -5702,7 +5703,8 @@ async def handle_list_item_on_market(request: web.Request) -> web.Response:
 
     # Fetch item and validate
     inv_row = await db.fetchrow(
-        """SELECT i.*, it.soulbound, it.tradeable, it.item_type, it.vendor_buy
+        """SELECT i.*, it.soulbound, it.tradeable, it.item_type, it.vendor_buy,
+                  it.rarity, it.level_req
            FROM inventory i
            JOIN item_templates it ON i.template_id = it.id
            WHERE i.id=$1 AND i.character_id=$2""",
@@ -5721,6 +5723,23 @@ async def handle_list_item_on_market(request: web.Request) -> web.Response:
 
     if not inv_row["tradeable"]:
         return web.json_response({"ok": False, "error": "item_not_tradeable", "message": "This item cannot be traded."}, status=400)
+
+    # Price bounds, derived from the item's own value. Before this the only
+    # check was `price > 0`, which allowed both a listing below what a vendor
+    # already pays (a strictly worse deal, so only ever a mistake) and a potion
+    # listed for a billion gold (nobody buys it, but it anchors the price page).
+    ok_price, price_msg, price_bounds = check_market_price(
+        price,
+        inv_row["item_type"],
+        inv_row["rarity"],
+        inv_row["level_req"],
+        vendor_buy=inv_row["vendor_buy"],
+    )
+    if not ok_price:
+        return web.json_response(
+            {"ok": False, "error": "price_out_of_bounds", "message": price_msg, "bounds": price_bounds},
+            status=400,
+        )
 
     # Whitelist item types: only weapon, armor, accessory, material, gear
     item_type = (inv_row["item_type"] or "").lower()

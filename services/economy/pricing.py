@@ -42,7 +42,7 @@ you reverse costs you the spread. Ten accidental values meant that spread varied
 by item for no reason anyone chose.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 #: What a vendor pays for an item, as a fraction of its buy price. One number,
 #: chosen: it matches the generator's existing 0.4 and the median of the
@@ -144,6 +144,105 @@ def sell_price_for(buy_price: Any) -> int:
     if buy <= 0:
         return 0
     return max(1, int(round(buy * SELL_RATIO)))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  MARKET BOUNDS
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# The market accepted any price above zero. That allowed two bad listings, in
+# opposite directions:
+#
+#   * Below vendor value — a strictly worse deal than walking to a vendor. Either
+#     a fat-finger the seller loses money to, or bait that makes a browser stop
+#     trusting the listing page.
+#   * Absurdly high — a Health Potion for 999,999,999 gold. Nobody buys it, but
+#     it sits at the top of a price-sorted page, it anchors what people think
+#     things are worth, and it fills the seller's listing slots as spam.
+#
+# Bounds are derived from the item's own value rather than being flat, so they
+# scale with the game and need no maintenance.
+
+#: A listing may not go below the vendor's own offer. Selling to a vendor is
+#: always available, so any price under it is a worse deal that exists only by
+#: mistake.
+MARKET_FLOOR_OF_VENDOR_SELL = 1.0
+
+#: A listing may not exceed this multiple of the item's base value.
+#:
+#: Very generous on purpose. This is a guard against nonsense, NOT an attempt to
+#: set the market price — the market is player-driven and should stay that way.
+#: One copy of an item can legitimately be worth many times the template: +10
+#: enhancement alone doubles its stats, rolled stats stack on top, and scarcity
+#: does the rest. A tight ceiling would block real trades to prevent fake ones.
+#:
+#: At 250x a level-60 legendary tops out around 258,000 gold, which is far above
+#: any honest asking price and far below the billion-gold troll listing this
+#: exists to stop.
+MARKET_CEILING_MULT = 250.0
+
+#: Nothing is ever bounded below this, so cheap items stay listable.
+MARKET_ABSOLUTE_FLOOR = 1
+
+
+def market_price_bounds(
+    item_type: str,
+    rarity: str,
+    level_req: Any = 1,
+    *,
+    vendor_buy: Any = None,
+) -> Dict[str, int]:
+    """``{"min": int, "max": int}`` — the prices a listing may use.
+
+    ``vendor_buy`` is the item template's own stored price when there is one;
+    the formula is the fallback for items that carry none. Preferring the stored
+    value means the floor matches what the vendor will actually pay today rather
+    than what the formula thinks it should be.
+    """
+    try:
+        stored = int(vendor_buy or 0)
+    except (TypeError, ValueError):
+        stored = 0
+
+    value = stored if stored > 0 else item_value(item_type, rarity, level_req)
+    if value <= 0:
+        # Unpriced items (quest rewards, oddities) get a floor of 1 and a
+        # ceiling generous enough not to block a legitimate sale.
+        return {"min": MARKET_ABSOLUTE_FLOOR, "max": 1_000_000}
+
+    floor = max(MARKET_ABSOLUTE_FLOOR, int(round(value * SELL_RATIO * MARKET_FLOOR_OF_VENDOR_SELL)))
+    ceiling = max(floor, int(round(value * MARKET_CEILING_MULT)))
+    return {"min": floor, "max": ceiling}
+
+
+def check_market_price(
+    price: Any,
+    item_type: str,
+    rarity: str,
+    level_req: Any = 1,
+    *,
+    vendor_buy: Any = None,
+) -> Tuple[bool, str, Dict[str, int]]:
+    """Validate a listing price. Returns ``(ok, message, bounds)``.
+
+    The message names the number the seller should use, not just that they were
+    wrong — a rejection that does not say what would be accepted costs the
+    player another round trip to find out.
+    """
+    bounds = market_price_bounds(item_type, rarity, level_req, vendor_buy=vendor_buy)
+    try:
+        p = int(price)
+    except (TypeError, ValueError):
+        return False, "That is not a price.", bounds
+    if p < bounds["min"]:
+        return (
+            False,
+            f"Too low — a vendor already pays {bounds['min']:,} gold for this. Ask at least that.",
+            bounds,
+        )
+    if p > bounds["max"]:
+        return False, f"Too high — the most this can be listed for is {bounds['max']:,} gold.", bounds
+    return True, "", bounds
 
 
 def ratio_of(buy: Any, sell: Any) -> Optional[float]:
