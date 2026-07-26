@@ -1163,6 +1163,35 @@ async def handle_auth_link_resolve(request: web.Request) -> web.Response:
     )
 
 
+async def _equipped_set_summary(db, items: list) -> list:
+    """What sets the character is wearing, and what the next tier would give.
+
+    `max_pieces` comes from the templates table rather than a constant, so a
+    designer adding a fifth piece to a set changes the player-facing "3 / 4"
+    without touching code — and so we never advertise a tier that no amount of
+    farming could reach.
+    """
+    from services.character.item_sets import summarize_sets
+
+    equipped_set_ids = [
+        it.get("set_id") for it in items if it.get("is_equipped") and it.get("set_id")
+    ]
+    if not equipped_set_ids:
+        return []
+    try:
+        rows = await db.fetch(
+            "SELECT set_id, count(*) AS n FROM item_templates WHERE set_id = ANY($1::text[]) GROUP BY set_id",
+            list({str(s) for s in equipped_set_ids}),
+        )
+        sizes = {r["set_id"]: int(r["n"]) for r in rows}
+    except Exception as e:
+        # Losing the sizes only costs us the "x / y" denominator; the active
+        # bonus is still correct, so degrade rather than fail the whole payload.
+        log.warning("set size lookup failed: %s", e)
+        sizes = {}
+    return summarize_sets(equipped_set_ids, sizes)
+
+
 async def handle_inventory(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     db = getattr(bot, "db", None)
@@ -1252,6 +1281,12 @@ async def handle_inventory(request: web.Request) -> web.Response:
                 "bag_slots_used": bag_slots_used,
                 "bag_slots_max": int(bag_slots_max),
                 "items": items,
+                # Set bonuses have been applied to stats since forever
+                # (CharacterService.get_derived_stats) but were never exposed, so
+                # the client could not show what a player was already receiving —
+                # or what they were two pieces away from. Same table that grants
+                # them, so the display cannot drift from the maths.
+                "item_sets": await _equipped_set_summary(db, items),
                 "craft_job": _json_safe(craft_job),
                 "craft_recipes": _json_safe(craft_recipes),
                 "forge_rarity_rules": _json_safe(forge_rarity_rules),

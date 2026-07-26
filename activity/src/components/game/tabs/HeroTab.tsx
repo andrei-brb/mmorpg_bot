@@ -507,12 +507,17 @@ export function HeroTab() {
     };
   }, [enhanceItemId, getEnhanceInfo]);
 
-  const setBonusDisplay = useMemo(() => {
-    const n = items.filter(
-      (i) => i.is_equipped && ["epic", "legendary"].includes(rarityKey(i.rarity)),
-    ).length;
-    return `${Math.min(n, 5)}/5`;
-  }, [items]);
+  // Real set state, computed server-side from item_templates.set_id and the
+  // same tier table that grants the bonus (services/character/item_sets.py).
+  // This previously counted equipped epic+legendary pieces and called the result
+  // "SET BONUS x/5" — a number that had nothing to do with sets, while actual
+  // set bonuses were being applied invisibly.
+  const wornSet = useMemo(() => {
+    const sets = inventory?.item_sets ?? [];
+    if (sets.length === 0) return null;
+    // Most-complete set first; that's the one a player is working toward.
+    return [...sets].sort((a, b) => b.equipped - a.equipped)[0];
+  }, [inventory?.item_sets]);
 
   const blacksmithCandidates = useMemo(() => {
     const out: InvRow[] = [];
@@ -760,11 +765,23 @@ export function HeroTab() {
                     HERO · LV.{char?.level ?? "—"}
                   </span>
                 </div>
-                <div className="hero-forge-clip-tag border border-gold/25 bg-black/50 px-3 py-1">
-                  <span className="font-display text-[10px] tracking-[0.3em] text-gold-600">
-                    SET BONUS · {setBonusDisplay}
-                  </span>
-                </div>
+                {wornSet ? (
+                  <div
+                    className="hero-forge-clip-tag border border-gold/25 bg-black/50 px-3 py-1"
+                    title={
+                      wornSet.active_bonus
+                        ? `${wornSet.active_tier}-piece bonus: ${wornSet.active_bonus}`
+                        : wornSet.next_bonus
+                          ? `${wornSet.pieces_to_next} more for ${wornSet.next_bonus}`
+                          : undefined
+                    }
+                  >
+                    <span className="font-display text-[10px] tracking-[0.3em] text-gold-600">
+                      {wornSet.name.toUpperCase()} · {wornSet.equipped}
+                      {wornSet.max_pieces ? `/${wornSet.max_pieces}` : ""}
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="px-5 pt-4">

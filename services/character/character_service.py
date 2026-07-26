@@ -421,19 +421,12 @@ class CharacterService:
             if it.get("set_id"):
                 set_counts[it["set_id"]] = set_counts.get(it["set_id"], 0) + 1
         
-        # Apply set bonuses
-        for set_id, count in set_counts.items():
-            if count >= 6:
-                stats["strength"] += 15
-                stats["agility"] += 15
-                stats["intellect"] += 15
-                stats["armor"] += 30
-            elif count >= 4:
-                stats["strength"] += 10
-                stats["agility"] += 10
-                stats["intellect"] += 10
-            elif count >= 2:
-                stats["armor"] += 15
+        # Apply set bonuses. The tiers live in item_sets so the endpoint that
+        # SHOWS a player their set bonus reads the same table that GRANTS it —
+        # two copies of these numbers could silently disagree.
+        from services.character.item_sets import apply_set_bonuses
+
+        apply_set_bonuses(stats, set_counts)
 
         # Spec multipliers
         if char["specialization"]:

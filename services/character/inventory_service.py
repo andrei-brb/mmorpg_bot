@@ -552,6 +552,7 @@ class InventoryService:
                      t.s_str,t.s_agi,t.s_int,t.s_spi,t.s_sta,t.s_armor,
                      t.s_dmg_min,t.s_dmg_max,
                      t.s_haste,t.s_lifesteal,t.s_resistance,t.s_hit_rating,
+                     t.set_id,
                      i.r_str,i.r_agi,i.r_int,i.r_spi,i.r_sta,
                      i.r_haste,i.r_lifesteal,i.r_resistance,i.r_hit_rating,
                      COALESCE(i.rarity, t.rarity) as rarity,

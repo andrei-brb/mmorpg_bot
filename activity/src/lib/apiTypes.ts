@@ -36,6 +36,8 @@ export type InvRow = {
   r_resistance?: number | null;
   r_hit_rating?: number | null;
   enhancement_level?: number | null;
+  /** Set this piece belongs to, from item_templates.set_id. */
+  set_id?: string | null;
   locked?: boolean | null;
   soulbound?: boolean | null;
   /** From item_templates; false = cannot list on market. */
@@ -111,6 +113,21 @@ export type CraftJobRow = {
   status?: string;
 };
 
+/** GET /api/game/inventory -> item_sets. Server-computed so the bonus shown is
+ *  the same table that grants it (services/character/item_sets.py). */
+export type ItemSetState = {
+  set_id: string;
+  name: string;
+  equipped: number;
+  /** How many pieces exist in the world. Null if the lookup failed. */
+  max_pieces?: number | null;
+  active_tier: number;
+  active_bonus?: string | null;
+  next_tier?: number | null;
+  next_bonus?: string | null;
+  pieces_to_next?: number | null;
+};
+
 export type InventoryPayload = {
   discord?: { id?: string; username?: string; global_name?: string | null; avatar?: string | null; avatar_url?: string | null };
   character: {
@@ -136,6 +153,8 @@ export type InventoryPayload = {
   bag_slots_used?: number;
   bag_slots_max?: number;
   items: InvRow[];
+  /** Sets currently worn, with active and next bonus. */
+  item_sets?: ItemSetState[];
   craft_job?: CraftJobRow | null;
   craft_recipes?: CraftRecipeRow[];
   forge_rarity_rules?: ForgeRarityRuleRow[];

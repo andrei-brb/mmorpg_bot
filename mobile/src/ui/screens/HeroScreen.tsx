@@ -7,6 +7,7 @@ import type { CharacterDerivedStatsPayload, InvRow } from "@/lib/apiTypes";
 import { cn } from "@/lib/utils";
 import { CharacterHero } from "@mobile/ui/parts/CharacterHero";
 import { ItemSheet } from "@mobile/ui/parts/ItemSheet";
+import { SetBonuses } from "@mobile/ui/parts/SetBonuses";
 import { PowerSheet, computePower } from "@mobile/ui/parts/PowerSheet";
 
 /**
@@ -129,6 +130,8 @@ export function HeroScreen() {
               ) : null}
             </div>
           </button>
+
+          <SetBonuses />
 
           {/* ── Equipment ── */}
           <div className="e-card p-4">
