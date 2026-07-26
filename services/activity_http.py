@@ -3576,8 +3576,9 @@ async def handle_leaderboard(request: web.Request) -> web.Response:
         raise
 
     metric = leaderboards.normalize_metric(request.query.get("metric"))
+    scope = leaderboards.normalize_scope(request.query.get("scope"))
     char_id = _uuid_from_any(char["id"]) if char else None
-    payload = await leaderboards.board(db, metric, character_id=char_id)
+    payload = await leaderboards.board(db, metric, character_id=char_id, scope=scope)
     return web.json_response(_json_safe({"ok": True, **payload}))
 
 

@@ -302,9 +302,11 @@ export async function postIdleCapUpgrade(
 export async function getLeaderboard(
   token: string,
   metric: string,
+  scope: string,
   guildId?: string,
 ): Promise<LeaderboardPayload | null> {
-  const res = await fetch(apiUrl(`/api/game/leaderboard?metric=${encodeURIComponent(metric)}`), {
+  const q = `metric=${encodeURIComponent(metric)}&scope=${encodeURIComponent(scope)}`;
+  const res = await fetch(apiUrl(`/api/game/leaderboard?${q}`), {
     headers: authHeaders(token, guildId),
   });
   if (!res.ok) return null;

@@ -14,9 +14,12 @@ from services import leaderboards
 from services.leaderboards import (
     BOARD_SIZE,
     DEFAULT_METRIC,
+    DEFAULT_SCOPE,
     METRICS,
+    SCOPES,
     next_reset,
     normalize_metric,
+    normalize_scope,
     week_start,
 )
 
@@ -82,6 +85,34 @@ class TestMetrics(unittest.TestCase):
     def test_the_board_fits_on_a_phone(self):
         self.assertGreaterEqual(BOARD_SIZE, 10)
         self.assertLessEqual(BOARD_SIZE, 50)
+
+
+class TestScopes(unittest.TestCase):
+    """`friends` is the scope that motivates: you will never be rank 1 of the
+    world and you know it, but you might beat the person who got you playing."""
+
+    def test_unknown_scopes_fall_back(self):
+        for junk in (None, "", "nonsense", "; DROP TABLE", 7, []):
+            self.assertIn(normalize_scope(junk), SCOPES)
+        self.assertEqual(normalize_scope("nonsense"), DEFAULT_SCOPE)
+
+    def test_known_scopes_survive(self):
+        for s in SCOPES:
+            self.assertEqual(normalize_scope(s), s)
+            self.assertEqual(normalize_scope(s.upper()), s)
+
+    def test_scope_never_reaches_sql_as_text(self):
+        """The clause is chosen from a closed set; the scope string itself is
+        never interpolated."""
+        src = inspect.getsource(leaderboards.board)
+        self.assertNotIn("{scope}", src)
+
+    def test_every_scope_has_a_clause_or_is_the_default(self):
+        src = inspect.getsource(leaderboards.board)
+        for s in SCOPES:
+            if s == DEFAULT_SCOPE:
+                continue
+            self.assertIn(f'"{s}"', src, f"{s} has no branch")
 
 
 class TestDesignInvariants(unittest.TestCase):

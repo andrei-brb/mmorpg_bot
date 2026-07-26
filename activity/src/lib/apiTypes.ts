@@ -1181,6 +1181,9 @@ export type LeaderboardEntry = {
 export type LeaderboardPayload = {
   ok?: boolean;
   metric: string;
+  /** world | friends | guild. `friends` is the one that motivates people. */
+  scope?: string;
+  scopes?: string[];
   metric_label: string;
   unit?: string;
   metrics: { key: string; label: string }[];

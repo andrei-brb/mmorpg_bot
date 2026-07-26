@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GuildActivity } from "@mobile/ui/parts/GuildActivity";
 import { toast } from "sonner";
 import { useGameSession } from "@/context/GameSessionContext";
 import { cn } from "@/lib/utils";
@@ -242,6 +243,8 @@ export function CampScreen({
               ) : null}
             </div>
           ) : null}
+
+          <GuildActivity onOpenGuild={() => onGo("guild")} />
 
           {canClaimLogin ? (
             <div className="e-card e-card--ready flex items-center gap-3 p-4">

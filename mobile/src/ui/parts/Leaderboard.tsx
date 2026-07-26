@@ -34,6 +34,7 @@ function untilReset(iso: string): string {
 export function Leaderboard() {
   const { accessToken, guildId } = useGameSession();
   const [metric, setMetric] = useState("kills");
+  const [scope, setScope] = useState("world");
   const [data, setData] = useState<LeaderboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,13 +42,13 @@ export function Leaderboard() {
     if (!accessToken) return;
     setLoading(true);
     try {
-      setData(await api.getLeaderboard(accessToken, metric, guildId));
+      setData(await api.getLeaderboard(accessToken, metric, scope, guildId));
     } catch {
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, guildId, metric]);
+  }, [accessToken, guildId, metric, scope]);
 
   useEffect(() => {
     void load();
@@ -65,6 +66,31 @@ export function Leaderboard() {
             {untilReset(data.resets_at)}
           </span>
         ) : null}
+      </div>
+
+      {/* Who you're measured against. Friends is the scope that actually
+          motivates: you will never be rank 1 of the world and you know it, but
+          you might beat the person who talked you into playing. */}
+      <div className="mb-2 flex gap-1.5">
+        {(["world", "friends", "guild"] as const).map((sc) => {
+          const on = sc === scope;
+          return (
+            <button
+              key={sc}
+              type="button"
+              onClick={() => setScope(sc)}
+              aria-pressed={on}
+              className="flex-1 rounded-lg px-2 py-1 text-[11px] font-semibold capitalize"
+              style={{
+                border: `1px solid ${on ? "var(--e-500)" : "var(--n-500)"}`,
+                background: on ? "rgba(255,122,47,0.12)" : "rgba(0,0,0,0.28)",
+                color: on ? "var(--e-400)" : "var(--a-500)",
+              }}
+            >
+              {sc}
+            </button>
+          );
+        })}
       </div>
 
       <div className="mb-3 flex flex-wrap gap-1.5">
@@ -95,7 +121,11 @@ export function Leaderboard() {
         </p>
       ) : !data || !data.entries.length ? (
         <p className="py-6 text-center text-[12px] leading-relaxed" style={{ color: "var(--a-500)" }}>
-          Nobody's on the board yet this week. Win a fight and you'll be first.
+          {scope === "friends"
+            ? "None of your friends have fought yet this week."
+            : scope === "guild"
+              ? "Nobody in your guild has fought yet this week."
+              : "Nobody's on the board yet this week. Win a fight and you'll be first."}
         </p>
       ) : (
         <ol className="space-y-1">

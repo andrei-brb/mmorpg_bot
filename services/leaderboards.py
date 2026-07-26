@@ -108,11 +108,26 @@ async def record(
         logging.getLogger("leaderboards").debug("weekly score write failed", exc_info=True)
 
 
+#: Who a board is drawn from.
+#:
+#: `friends` is the one that actually motivates people. You will never be rank 1
+#: of the world and you know it, but you might beat the person who talked you
+#: into playing — and that is a race you can win this week.
+SCOPES = ("world", "friends", "guild")
+DEFAULT_SCOPE = "world"
+
+
+def normalize_scope(raw: Any) -> str:
+    key = str(raw or "").strip().lower()
+    return key if key in SCOPES else DEFAULT_SCOPE
+
+
 async def board(
     db,
     metric: str = DEFAULT_METRIC,
     *,
     character_id: Optional[UUID] = None,
+    scope: str = DEFAULT_SCOPE,
     limit: int = BOARD_SIZE,
 ) -> Dict[str, Any]:
     """Top players this week, plus where the viewer sits.
@@ -122,8 +137,34 @@ async def board(
     about themselves, which is the opposite of the point.
     """
     metric = normalize_metric(metric)
+    scope = normalize_scope(scope)
     col = METRICS[metric]["column"]
     ws = week_start()
+
+    # Scope is a fixed clause chosen from a closed set, never interpolated user
+    # input — same rule as the metric column.
+    where = ""
+    params: List[Any] = [ws]
+    if scope in ("friends", "guild") and character_id is not None:
+        if scope == "friends":
+            where = """
+              AND (c.player_id IN (
+                    SELECT CASE WHEN f.player_a_id = me.player_id THEN f.player_b_id
+                                ELSE f.player_a_id END
+                    FROM player_friendships f, characters me
+                    WHERE me.id = $2
+                      AND (f.player_a_id = me.player_id OR f.player_b_id = me.player_id)
+                  )
+                  OR c.id = $2)
+            """
+        else:
+            where = """
+              AND c.guild_id IS NOT NULL
+              AND c.guild_id = (SELECT guild_id FROM characters WHERE id = $2)
+            """
+        params.append(character_id)
+    params.append(int(max(1, min(limit, 100))))
+    limit_ph = f"${len(params)}"
 
     rows = await db.fetch(
         f"""
@@ -133,10 +174,11 @@ async def board(
         JOIN characters c ON c.id = w.character_id
         LEFT JOIN guilds g ON g.id = c.guild_id
         WHERE w.week_start = $1 AND w.{col} > 0
+        {where}
         ORDER BY w.{col} DESC, c.name ASC
-        LIMIT $2
+        LIMIT {limit_ph}
         """,
-        ws, int(max(1, min(limit, 100))),
+        *params,
     )
 
     entries = [
@@ -155,7 +197,10 @@ async def board(
     ]
 
     you: Optional[Dict[str, Any]] = next((e for e in entries if e["is_you"]), None)
-    if you is None and character_id is not None:
+    # Only computed for the world board. Counting how many friends are ahead of
+    # you would need the friend set again; and on a friends board of five people
+    # you are never off the bottom anyway.
+    if you is None and character_id is not None and scope == "world":
         # Off the board — one extra query rather than fetching every row.
         own = await db.fetchrow(
             f"SELECT {col} AS score FROM weekly_scores WHERE character_id=$1 AND week_start=$2",
@@ -173,6 +218,8 @@ async def board(
 
     return {
         "metric": metric,
+        "scope": scope,
+        "scopes": list(SCOPES),
         "metric_label": METRICS[metric]["label"],
         "unit": METRICS[metric]["unit"],
         "metrics": [{"key": k, "label": v["label"]} for k, v in METRICS.items()],
